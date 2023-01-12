@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -13,6 +15,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 sealed class ErrorSection(name: String) : Section(name) {
     /** Use this section to add additional trait implementations to the generated operation errors */
     data class OperationErrorAdditionalTraitImpls(val errorType: RuntimeType) : ErrorSection("OperationErrorAdditionalTraitImpls")
+
+    /** Use this section to add additional trait implementations to the generated service error */
+    class ServiceErrorAdditionalTraitImpls(val allErrors: List<StructureShape>) :
+        ErrorSection("ServiceErrorAdditionalTraitImpls")
+
+    /** Use this section to add additional trait implementations to the generated error structures */
+    class ErrorAdditionalTraitImpls(val errorType: Symbol) : ErrorSection("ErrorAdditionalTraitImpls")
 }
 
 /** Customizations for generated errors */

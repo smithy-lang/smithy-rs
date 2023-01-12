@@ -6,7 +6,9 @@
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_types::error::{Builder as GenericErrorBuilder, Error as GenericError};
+use aws_smithy_types::error::{
+    Builder as GenericErrorBuilder, Error as GenericError, ErrorMetadata, Unhandled,
+};
 use http::{HeaderMap, HeaderValue};
 
 /// Constant for the [`aws_smithy_types::error::Error`] extra field that contains the request ID
@@ -34,6 +36,12 @@ where
 impl RequestId for GenericError {
     fn request_id(&self) -> Option<&str> {
         self.extra(AWS_REQUEST_ID)
+    }
+}
+
+impl RequestId for Unhandled {
+    fn request_id(&self) -> Option<&str> {
+        self.meta().request_id()
     }
 }
 

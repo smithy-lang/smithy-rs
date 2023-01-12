@@ -97,7 +97,7 @@ internal class ServiceErrorGeneratorTest {
             }
             for (shape in model.structureShapes) {
                 if (shape.id.namespace == "com.example") {
-                    StructureGenerator(model, symbolProvider, this, shape, emptyList()).render(CodegenTarget.CLIENT)
+                    StructureGenerator(model, symbolProvider, this, shape, emptyList()).render()
                 }
             }
         }

@@ -6,7 +6,9 @@
 use aws_smithy_client::SdkError;
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
-use aws_smithy_types::error::{Builder as GenericErrorBuilder, Error as GenericError};
+use aws_smithy_types::error::{
+    Builder as GenericErrorBuilder, Error as GenericError, ErrorMetadata, Unhandled,
+};
 use http::{HeaderMap, HeaderValue};
 
 const EXTENDED_REQUEST_ID: &str = "s3_extended_request_id";
@@ -35,6 +37,12 @@ where
 impl RequestIdExt for GenericError {
     fn extended_request_id(&self) -> Option<&str> {
         self.extra(EXTENDED_REQUEST_ID)
+    }
+}
+
+impl RequestIdExt for Unhandled {
+    fn extended_request_id(&self) -> Option<&str> {
+        self.meta().extended_request_id()
     }
 }
 

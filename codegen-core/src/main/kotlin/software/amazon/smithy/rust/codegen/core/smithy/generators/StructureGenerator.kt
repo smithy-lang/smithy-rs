@@ -22,14 +22,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -64,18 +62,15 @@ open class StructureGenerator(
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
-    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
+    private val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    protected val name = symbolProvider.toSymbol(shape).name
+    protected val name: String = symbolProvider.toSymbol(shape).name
 
-    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
+    fun render() {
         renderStructure()
-        errorTrait?.also { errorTrait ->
-            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
-        }
     }
 
     /**

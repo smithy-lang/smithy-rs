@@ -103,7 +103,7 @@ fun StructureShape.renderWithModelBuilder(
     writer: RustWriter,
     forWhom: CodegenTarget = CodegenTarget.CLIENT,
 ) {
-    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render(forWhom)
+    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
     val modelBuilder = BuilderGenerator(model, symbolProvider, this, emptyList())
     modelBuilder.render(writer)
     writer.implBlock(symbolProvider.toSymbol(this)) {

@@ -206,8 +206,8 @@ class HttpBoundProtocolTraitImplGenerator(
                             val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
-                                "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
-                                "})},",
+                                "$errorCode => #1T::$variantName({",
+                                "}),",
                                 errorSymbol,
                             ) {
                                 Attribute.AllowUnusedMut.render(this)
@@ -218,7 +218,14 @@ class HttpBoundProtocolTraitImplGenerator(
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
                                             errorSymbol,
-                                            listOf(),
+                                            listOf(object : OperationCustomization() {
+                                                override fun section(section: OperationSection): Writable = writable {
+                                                    if (section is OperationSection.MutateOutput) {
+                                                        rust("let output = output._meta(generic);")
+                                                    }
+                                                }
+                                            },
+                                            ),
                                         )
                                     }
                                 }

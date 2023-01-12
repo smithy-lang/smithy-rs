@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::error::GetObjectErrorKind;
+use aws_sdk_s3::error::GetObjectError;
 use aws_sdk_s3::operation::{GetObject, ListBuckets};
 use aws_sdk_s3::types::{RequestId, RequestIdExt};
 use aws_smithy_http::body::SdkBody;
@@ -30,7 +30,7 @@ fn get_request_id_from_modeled_error() {
     let err = GetObject::new()
         .parse_loaded(&resp.map(Bytes::from))
         .expect_err("status was 404, this is an error");
-    assert!(matches!(err.kind, GetObjectErrorKind::NoSuchKey(_)));
+    assert!(matches!(err, GetObjectError::NoSuchKey(_)));
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
     assert_eq!(
@@ -62,7 +62,7 @@ fn get_request_id_from_unmodeled_error() {
     let err = GetObject::new()
         .parse_loaded(&resp.map(Bytes::from))
         .expect_err("status 500");
-    assert!(matches!(err.kind, GetObjectErrorKind::Unhandled(_)));
+    assert!(matches!(err, GetObjectError::Unhandled(_)));
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
     assert_eq!(

@@ -10,6 +10,34 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod display;
+mod unhandled;
+
+pub use unhandled::Unhandled;
+
+/// Trait to retrieve error metadata from a result
+pub trait ErrorMetadata {
+    /// Returns error metadata, which includes the error code, message,
+    /// request ID, and potentially additional information.
+    fn meta(&self) -> &Error;
+
+    /// Returns the error code if it's available.
+    fn code(&self) -> Option<&str> {
+        self.meta().code()
+    }
+
+    /// Returns the error message, if there is one.
+    fn message(&self) -> Option<&str> {
+        self.meta().message()
+    }
+}
+
+/// Empty generic error metadata
+#[doc(hidden)]
+pub const EMPTY_GENERIC_ERROR: Error = Error {
+    code: None,
+    message: None,
+    extras: None,
+};
 
 /// Generic Error type
 ///
@@ -20,7 +48,7 @@ pub mod display;
 pub struct Error {
     code: Option<String>,
     message: Option<String>,
-    extras: HashMap<&'static str, String>,
+    extras: Option<HashMap<&'static str, String>>,
 }
 
 /// Builder for [`Error`].
@@ -68,7 +96,14 @@ impl Builder {
     /// }
     /// ```
     pub fn custom(mut self, key: &'static str, value: impl Into<String>) -> Self {
-        self.inner.extras.insert(key, value.into());
+        if self.inner.extras.is_none() {
+            self.inner.extras = Some(HashMap::new());
+        }
+        self.inner
+            .extras
+            .as_mut()
+            .unwrap()
+            .insert(key, value.into());
         self
     }
 
@@ -89,7 +124,9 @@ impl Error {
     }
     /// Returns additional information about the error if it's present.
     pub fn extra(&self, key: &'static str) -> Option<&str> {
-        self.extras.get(key).map(|k| k.as_str())
+        self.extras
+            .as_ref()
+            .and_then(|extras| extras.get(key).map(|k| k.as_str()))
     }
 
     /// Creates an `Error` builder.
@@ -122,8 +159,10 @@ impl fmt::Display for Error {
         if let Some(message) = &self.message {
             fmt.field("message", message);
         }
-        for (k, v) in &self.extras {
-            fmt.field(k, &v);
+        if let Some(extras) = &self.extras {
+            for (k, v) in extras {
+                fmt.field(k, &v);
+            }
         }
         fmt.finish()
     }

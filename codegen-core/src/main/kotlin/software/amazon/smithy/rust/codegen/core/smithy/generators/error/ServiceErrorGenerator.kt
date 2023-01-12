@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -108,25 +109,34 @@ class ServiceErrorGenerator(
                 ) {
                     rustBlock("match err") {
                         rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
-                        rust("_ => Error::Unhandled(#T::new(err.into())),", unhandledError())
+                        rustTemplate(
+                            """
+                            _ => {
+                                use #{ErrorMetadata};
+                                Error::Unhandled(#{Unhandled}::builder().meta(err.meta().clone()).source(err).build())
+                            }
+                            """,
+                            "ErrorMetadata" to RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig),
+                            "Unhandled" to unhandledError(codegenContext.runtimeConfig),
+                        )
                     }
                 }
             }
 
             rustBlock("impl From<#T> for Error", errorSymbol) {
                 rustBlock("fn from(err: #T) -> Self", errorSymbol) {
-                    rustBlock("match err.kind") {
+                    rustBlock("match err") {
                         operationErrors.forEach { errorShape ->
                             val errSymbol = symbolProvider.toSymbol(errorShape)
                             rust(
-                                "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
+                                "#T::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
                                 errorSymbol,
                             )
                         }
                         rustTemplate(
-                            "#{errorSymbol}Kind::Unhandled(inner) => Error::Unhandled(#{unhandled}::new(inner.into())),",
+                            "#{errorSymbol}::Unhandled(inner) => Error::Unhandled(inner),",
                             "errorSymbol" to errorSymbol,
-                            "unhandled" to unhandledError(),
+                            "unhandled" to unhandledError(codegenContext.runtimeConfig),
                         )
                     }
                 }
@@ -147,8 +157,8 @@ class ServiceErrorGenerator(
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
             }
-            docs(UNHANDLED_ERROR_DOCS)
-            rust("Unhandled(#T)", unhandledError())
+            docs("An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).")
+            rust("Unhandled(#T)", unhandledError(codegenContext.runtimeConfig))
         }
     }
 }

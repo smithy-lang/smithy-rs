@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMe
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -33,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -187,26 +190,40 @@ class ClientCodegenVisitor(
      * This function _does not_ generate any serializers
      */
     override fun structureShape(shape: StructureShape) {
-        logger.fine("generating a structure...")
         rustCrate.useShapeWriter(shape) {
-            StructureGenerator(
-                model,
-                symbolProvider,
-                this,
-                shape,
-                codegenDecorator.structureCustomizations(codegenContext, emptyList()),
-            ).render()
-            if (!shape.hasTrait<SyntheticInputTrait>()) {
-                val builderGenerator =
-                    BuilderGenerator(
-                        codegenContext.model,
-                        codegenContext.symbolProvider,
+            when (val errorTrait = shape.getTrait<ErrorTrait>()) {
+                null -> {
+                    StructureGenerator(
+                        model,
+                        symbolProvider,
+                        this,
                         shape,
-                        codegenDecorator.builderCustomizations(codegenContext, emptyList()),
-                    )
-                builderGenerator.render(this)
-                implBlock(symbolProvider.toSymbol(shape)) {
-                    builderGenerator.renderConvenienceMethod(this)
+                        codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                    ).render()
+
+                    if (!shape.hasTrait<SyntheticInputTrait>()) {
+                        val builderGenerator =
+                            BuilderGenerator(
+                                codegenContext.model,
+                                codegenContext.symbolProvider,
+                                shape,
+                                codegenDecorator.builderCustomizations(codegenContext, emptyList()),
+                            )
+                        builderGenerator.render(this)
+                        implBlock(symbolProvider.toSymbol(shape)) {
+                            builderGenerator.renderConvenienceMethod(this)
+                        }
+                    }
+                }
+                else -> {
+                    ErrorGenerator(
+                        model,
+                        symbolProvider,
+                        this,
+                        shape,
+                        errorTrait,
+                        codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                    ).render(CodegenTarget.CLIENT)
                 }
             }
         }

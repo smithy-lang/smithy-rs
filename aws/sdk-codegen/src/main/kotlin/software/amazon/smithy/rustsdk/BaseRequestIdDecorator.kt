@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -94,7 +95,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         """
                         impl #{AccessorTrait} for #{error} {
                             fn $accessorFunctionName(&self) -> Option<&str> {
-                                self.meta.$accessorFunctionName()
+                                self.meta().$accessorFunctionName()
                             }
                         }
                         """,
@@ -103,6 +104,28 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                     )
                 }
 
+                is ErrorSection.ServiceErrorAdditionalTraitImpls -> {
+                    rustBlock("impl #T for Error", accessorTrait(codegenContext)) {
+                        rustBlock("fn $accessorFunctionName(&self) -> Option<&str>") {
+                            rustBlock("match self") {
+                                section.allErrors.forEach { error ->
+                                    val sym = codegenContext.symbolProvider.toSymbol(error)
+                                    rust("Self::${sym.name}(e) => e.$accessorFunctionName(),")
+                                }
+                                rust("Self::Unhandled(e) => e.$accessorFunctionName(),")
+                            }
+                        }
+                    }
+                }
+
+                is ErrorSection.ErrorAdditionalTraitImpls -> {
+                    rustBlock("impl #1T for #2T", accessorTrait(codegenContext), section.errorType) {
+                        rustBlock("fn $accessorFunctionName(&self) -> Option<&str>") {
+                            rust("use #T;", RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig))
+                            rust("self.meta().$accessorFunctionName()")
+                        }
+                    }
+                }
                 else -> {}
             }
         }
