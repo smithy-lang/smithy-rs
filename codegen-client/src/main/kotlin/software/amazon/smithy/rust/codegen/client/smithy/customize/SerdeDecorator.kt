@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
  *
  */
 class SerdeDecorator : ClientCodegenDecorator {
-    override val name: String = "Required"
+    override val name: String = "SerdeDecorator"
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
