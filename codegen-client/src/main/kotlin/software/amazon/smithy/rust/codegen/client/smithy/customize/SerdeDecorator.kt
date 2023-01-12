@@ -34,8 +34,13 @@ class SerdeDecorator : ClientCodegenDecorator {
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        rustCrate.mergeFeature(Feature("serde-serialize", false, listOf("aws-sdk-types/serde-serialize")))
-        rustCrate.mergeFeature(Feature("serde-deserialize", false, listOf("aws-sdk-types/serde-deserialize")))
+        fun _feature(feature_name: String, crate_name: String): Feature {
+            return Feature(feature_name, false, listOf(crate_name+"/"+feature_name))
+        }
+        rustCrate.mergeFeature(_feature("serde-serialize", "aws-sdk-types"))
+        rustCrate.mergeFeature(_feature("serde-deserialize", "aws-sdk-types"))
+        rustCrate.mergeFeature(_feature("serde-serialize", "aws-sdk-http"))
+        rustCrate.mergeFeature(_feature("serde-deserialize", "aws-sdk-http"))
     }
 
 }
