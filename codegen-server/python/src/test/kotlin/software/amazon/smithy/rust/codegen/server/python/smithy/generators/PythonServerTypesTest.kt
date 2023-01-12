@@ -55,14 +55,14 @@ internal class PythonServerTypesTest {
                 """
                     assert input.value == 42
                     output = EchoOutput(value=input.value)
-                """
+                """,
             ),
             Pair(
                 """ { "value": "foobar" } """,
                 """
                     assert input.value == "foobar"
                     output = EchoOutput(value=input.value)
-                """
+                """,
             ),
             Pair(
                 """
@@ -83,9 +83,9 @@ internal class PythonServerTypesTest {
                     }
                 """,
                 """
-                    assert input.value == [True, False, 42, 42.0, -42, dict(nested="value"), dict(nested=[1, 2, 3])]
+                    assert input.value == [True, False, 42, 42.0, -42, {"nested": "value"}, {"nested": [1, 2, 3]}]
                     output = EchoOutput(value=input.value)
-                """
+                """,
             ),
         )
 
@@ -99,7 +99,7 @@ internal class PythonServerTypesTest {
                 use crate::{input, output};
                 
                 pyo3::prepare_freethreaded_python();
-                """.trimIndent()
+                """.trimIndent(),
             )
 
             testCases.forEach {
@@ -132,9 +132,10 @@ internal class PythonServerTypesTest {
                         .unwrap();
                         
                     let res = service.call(req).await.unwrap();
+                    assert!(res.status().is_success());
                     let body = body::to_bytes(res.into_body()).await.unwrap();
                     assert_eq!(body, ${payload.dq()});
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }
