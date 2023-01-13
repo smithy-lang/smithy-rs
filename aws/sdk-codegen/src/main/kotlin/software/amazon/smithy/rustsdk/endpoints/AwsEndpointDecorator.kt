@@ -140,7 +140,6 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                     rust(
                         """
                         ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
-                        ${section.serviceConfigBuilder}.set_endpoint_url(${section.sdkConfig}.endpoint_url().map(|url|url.to_string()));
                         """,
                     )
                 }
