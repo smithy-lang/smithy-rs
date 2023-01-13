@@ -7,7 +7,7 @@ on:
 jobs:
   update-next:
     name: Update `next`
-    runs-on: ubuntu-latest
+    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
     steps:
     - name: Check out `smithy-rs`
       uses: actions/checkout@v3

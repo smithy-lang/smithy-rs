@@ -10,7 +10,7 @@ on:
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
   group: ci-yaml-${{ github.ref }}
-  cancel-in-progress: true
+#  cancel-in-progress: true
 
 jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
@@ -18,7 +18,7 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
-    runs-on: ubuntu-latest
+    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
     steps:
     - uses: actions/checkout@v3
       with:
