@@ -43,7 +43,7 @@ jobs:
     name: Acquire Base Image
     needs:
     - main-branch-check
-    runs-on: temporary-sizing-testing_ubuntu-latest_8-core
+    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
     steps:
     - uses: actions/checkout@v3
       with:
@@ -72,7 +72,7 @@ jobs:
     needs:
     - acquire-base-image
     - release-ci
-    runs-on: temporary-sizing-testing_ubuntu-latest_8-core
+    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
     steps:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master

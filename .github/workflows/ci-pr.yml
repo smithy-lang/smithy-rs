@@ -18,7 +18,7 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
-    runs-on: temporary-sizing-testing_ubuntu-latest_8-core
+    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
     steps:
     - uses: actions/checkout@v3
       with:
