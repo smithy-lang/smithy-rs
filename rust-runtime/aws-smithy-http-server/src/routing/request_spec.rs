@@ -181,13 +181,18 @@ impl RequestSpec {
 
         match req.uri().query() {
             Some(query) => {
-                // We can't use `HashMap<&str, &str>` because a query string key can appear more
+                // We can't use `HashMap<Cow<str>, Cow<str>>` because a query string key can appear more
                 // than once e.g. `/?foo=bar&foo=baz`. We _could_ use a multiset e.g. the `hashbag`
                 // crate.
-                let res = serde_urlencoded::from_str::<Vec<(&str, &str)>>(query);
+                // We must deserialize into `Cow<str>`s because `serde_urlencoded` might need to
+                // return an owned allocated `String` if it has to percent-decode a slice of the query string.
+                let res = serde_urlencoded::from_str::<Vec<(Cow<str>, Cow<str>)>>(query);
 
                 match res {
-                    Err(_) => Match::No,
+                    Err(error) => {
+                        tracing::debug!(query, %error, "failed to deserialize query string");
+                        Match::No
+                    }
                     Ok(query_map) => {
                         for query_segment in self.uri_spec.path_and_query.query_segments.0.iter() {
                             match query_segment {
@@ -364,6 +369,17 @@ mod tests {
         assert_eq!(
             Match::No,
             key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz", None))
+        );
+    }
+
+    #[test]
+    fn encoded_query_string() {
+        let request_spec =
+            RequestSpec::from_parts(Method::DELETE, Vec::new(), vec![QuerySegment::Key("foo".to_owned())]);
+
+        assert_eq!(
+            Match::Yes,
+            request_spec.matches(&req(&Method::DELETE, "/?foo=hello%20world", None))
         );
     }
 
