@@ -8,8 +8,8 @@ on:
   pull_request:
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
-concurrency:
-  group: ci-yaml-${{ github.ref }}
+#concurrency:
+#  group: ci-yaml-${{ github.ref }}
 #  cancel-in-progress: true
 
 jobs:
