@@ -171,7 +171,7 @@ COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
 COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
 COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
 COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
-COPY --chown=build:build --from=cargo_nextest /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-nextest
+COPY --chown=build:build --from=cargo_nextest /opt/cargo/bin/cargo-nextest /opt/cargo/bin/cargo-nextest
 COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
