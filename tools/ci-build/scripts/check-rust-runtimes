@@ -20,8 +20,14 @@ do
     echo -e "## ${C_YELLOW}Running 'cargo clippy' on ${runtime_path}...${C_RESET}"
     cargo clippy --all-features
 
-    echo -e "## ${C_YELLOW}Running 'cargo nextest run' on ${runtime_path}...${C_RESET}"
-    cargo nextest run --all-features
+    echo -e "## ${C_YELLOW}Running tests on on ${runtime_path}...${C_RESET}"
+    if [[ runtime_path == "rust-runtime" ]]; then
+      cargo nextest run --all-features --workspace --exclude aws-smithy-http-server-python
+      cargo test --all-features --manifest-path aws-smithy-http-server-python/Cargo.toml
+    else
+      cargo nextest run --all-features
+    fi
+    cargo test --doc
 
     echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
     cargo doc --no-deps --document-private-items --all-features
