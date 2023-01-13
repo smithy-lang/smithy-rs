@@ -1,0 +1,7 @@
+tab_spaces = 4
+reorder_imports = true
+space_after_colon = true
+force_multiline_blocks = true
+remove_nested_parens = true
+reorder_impl_items = true
+reorder_modules = true
