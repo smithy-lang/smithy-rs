@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "`@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported"
+references = ["smithy-rs#2213"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
