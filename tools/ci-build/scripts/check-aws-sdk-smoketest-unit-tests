@@ -6,4 +6,4 @@
 
 set -eux
 cd aws-sdk-smoketest
-cargo test --all-features
+cargo nextest run --all-features

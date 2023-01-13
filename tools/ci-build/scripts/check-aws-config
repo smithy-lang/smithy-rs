@@ -20,8 +20,8 @@ pushd "aws/rust-runtime/aws-config" &>/dev/null
 echo "${C_YELLOW}## Running 'cargo clippy'${C_RESET}"
 cargo clippy --all-features
 
-echo "${C_YELLOW}## Running 'cargo test'${C_RESET}"
-cargo test --all-features
+echo "${C_YELLOW}## Running 'cargo nextest run'${C_RESET}"
+cargo nextest run --all-features
 
 echo "${C_YELLOW}## Running 'cargo doc'${C_RESET}"
 cargo doc --no-deps --document-private-items --all-features
@@ -36,6 +36,6 @@ echo "${C_YELLOW}## Checking for duplicate dependency versions in the normal dep
 cargo tree -d --edges normal --all-features
 
 echo "${C_YELLOW}## Testing every combination of features${C_RESET}"
-cargo hack test --feature-powerset --exclude-all-features
+cargo hack nextest run --feature-powerset --exclude-all-features
 
 popd &>/dev/null
