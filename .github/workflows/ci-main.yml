@@ -21,7 +21,7 @@ env:
 jobs:
   # Rebuild and upload the Docker build image
   rebuild-docker-build-image:
-    runs-on: temporary-sizing-testing_ubuntu-latest_4-core
+    runs-on: temporary-sizing-testing_ubuntu-latest_8-core
     name: Rebuild image
     permissions:
       id-token: write
