@@ -137,7 +137,7 @@ ARG maturin_version=0.14.1
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
 
-FROM install_rust AS nextest
+FROM install_rust AS cargo_nextest
 ARG nextest_version=0.9.48
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-nextest --locked --version ${nextest_version}
