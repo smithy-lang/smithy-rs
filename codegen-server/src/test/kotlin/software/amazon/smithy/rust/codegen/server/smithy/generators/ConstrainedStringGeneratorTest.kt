@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -20,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
@@ -183,5 +185,27 @@ class ConstrainedStringGeneratorTest {
         }
 
         project.compileAndTest()
+    }
+
+    @Test
+    fun `A regex that is accepted by Smithy but not by the regex crate causes tests to fail`() {
+        val model = """
+            namespace test
+
+            @pattern("import (?!static).+")
+            string PatternStringWithLookahead
+        """.asSmithyModel()
+
+        val constrainedStringShape = model.lookup<StringShape>("test#PatternStringWithLookahead")
+        val codegenContext = serverTestCodegenContext(model)
+        val project = TestWorkspace.testProject(codegenContext.symbolProvider)
+
+        project.withModule(ModelsModule) {
+            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+        }
+
+        assertThrows<CommandFailed> {
+            project.compileAndTest()
+        }
     }
 }

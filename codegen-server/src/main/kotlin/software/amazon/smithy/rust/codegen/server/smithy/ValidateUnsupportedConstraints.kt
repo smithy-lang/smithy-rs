@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.EnumShape
@@ -25,6 +24,7 @@ import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -143,7 +143,7 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     // `ValidationException` attached in `errors`. https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
-    val walker = Walker(model)
+    val walker = DirectedWalker(model)
     val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
         .filterIsInstance<OperationShape>()
         .asSequence()
@@ -188,7 +188,7 @@ fun validateUnsupportedConstraints(
     codegenConfig: ServerCodegenConfig,
 ): ValidationResult {
     // Traverse the model and error out if:
-    val walker = Walker(model)
+    val walker = DirectedWalker(model)
 
     // 1. Constraint traits on member shapes are used. [Constraint trait precedence] has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)

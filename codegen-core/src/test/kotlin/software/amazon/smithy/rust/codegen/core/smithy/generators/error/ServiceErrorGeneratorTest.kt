@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
@@ -80,7 +81,7 @@ internal class ServiceErrorGeneratorTest {
         )
 
         rustCrate.lib {
-            Attribute.AllowDeprecated.copy(container = true).render(this)
+            Attribute.AllowDeprecated.render(this, AttributeKind.Inner)
         }
         rustCrate.withModule(RustModule.Error) {
             for (operation in model.operationShapes) {

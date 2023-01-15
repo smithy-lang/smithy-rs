@@ -82,15 +82,15 @@ class ConstrainedNumberGenerator(
             Visibility.PUBCRATE
         }
         val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(
-                setOf(
-                    RuntimeType.Debug,
-                    RuntimeType.Clone,
-                    RuntimeType.PartialEq,
-                    RuntimeType.Eq,
-                    RuntimeType.Hash,
-                ),
+
+            setOf(
+                RuntimeType.Debug,
+                RuntimeType.Clone,
+                RuntimeType.PartialEq,
+                RuntimeType.Eq,
+                RuntimeType.Hash,
             ),
+
             visibility = constrainedTypeVisibility,
         )
 
