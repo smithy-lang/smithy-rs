@@ -9,9 +9,12 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientBuilderGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
@@ -19,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 
 fun clientTestRustSettings(
@@ -69,3 +73,17 @@ fun testCodegenContext(
     settings,
     codegenTarget,
 )
+
+/**
+ * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
+ */
+fun StructureShape.renderWithModelBuilder(
+    model: Model,
+    symbolProvider: RustSymbolProvider,
+    writer: RustWriter,
+    forWhom: CodegenTarget = CodegenTarget.CLIENT,
+) {
+    val modelBuilder = ClientBuilderGenerator(model, symbolProvider, this)
+
+    renderWithModelBuilder(model, symbolProvider, writer, modelBuilder, forWhom)
+}

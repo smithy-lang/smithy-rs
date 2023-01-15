@@ -32,7 +32,7 @@ class TestCasesProvider : ArgumentsProvider {
         EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
 }
 
-abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
+abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext, ClientBuilderGenerator> {
     override fun createCodegenContext(
         model: Model,
         serviceShape: ServiceShape,
@@ -46,6 +46,9 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         clientTestRustSettings(),
         CombinedClientCodegenDecorator(emptyList()),
     )
+
+    override fun createBuilderGenerator(model: Model, symbolProvider: RustSymbolProvider, structureShape: StructureShape): ClientBuilderGenerator =
+        ClientBuilderGenerator(model, symbolProvider, structureShape)
 
     override fun renderBuilderForShape(
         writer: RustWriter,

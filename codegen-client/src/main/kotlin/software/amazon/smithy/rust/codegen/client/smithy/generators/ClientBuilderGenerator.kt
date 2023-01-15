@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.testutil.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -46,7 +47,7 @@ class ClientBuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
-) {
+) : BuilderGenerator {
     companion object {
         /**
          * Returns whether a structure shape, whose builder has been generated with [ClientBuilderGenerator], requires a
@@ -72,7 +73,7 @@ class ClientBuilderGenerator(
     private val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
     private val builderName = "Builder"
 
-    fun render(writer: RustWriter) {
+    override fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
@@ -105,7 +106,7 @@ class ClientBuilderGenerator(
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
-    fun renderConvenienceMethod(implBlock: RustWriter) {
+    override fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)

@@ -417,7 +417,7 @@ class XmlBindingTraitSerializerGenerator(
                     val members = unionShape.members()
                     members.forEach { member ->
                         val variantName = if (member.isTargetUnit()) {
-                            "${symbolProvider.toMemberName(member)}"
+                            symbolProvider.toMemberName(member)
                         } else {
                             "${symbolProvider.toMemberName(member)}(inner)"
                         }

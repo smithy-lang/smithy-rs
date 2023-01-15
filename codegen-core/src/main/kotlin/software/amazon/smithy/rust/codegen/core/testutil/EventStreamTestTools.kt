@@ -48,7 +48,7 @@ enum class EventStreamTestVariety {
     Unmarshall
 }
 
-interface EventStreamTestRequirements<C : CodegenContext> {
+interface EventStreamTestRequirements<C : CodegenContext, B : BuilderGenerator> {
     /** Create a codegen context for the tests */
     fun createCodegenContext(
         model: Model,
@@ -56,6 +56,8 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): C
+
+    fun createBuilderGenerator(model: Model, symbolProvider: RustSymbolProvider, structureShape: StructureShape): B
 
     /** Render the event stream marshall/unmarshall code generator */
     fun renderGenerator(
@@ -82,9 +84,9 @@ interface EventStreamTestRequirements<C : CodegenContext> {
 }
 
 object EventStreamTestTools {
-    fun <C : CodegenContext> runTestCase(
+    fun <C : CodegenContext, B : BuilderGenerator> runTestCase(
         testCase: EventStreamTestModels.TestCase,
-        requirements: EventStreamTestRequirements<C>,
+        requirements: EventStreamTestRequirements<C, B>,
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
     ) {
@@ -109,8 +111,8 @@ object EventStreamTestTools {
         test.project.compileAndTest()
     }
 
-    private fun <C : CodegenContext> generateTestProject(
-        requirements: EventStreamTestRequirements<C>,
+    private fun <C : CodegenContext, B : BuilderGenerator> generateTestProject(
+        requirements: EventStreamTestRequirements<C, B>,
         codegenContext: C,
         codegenTarget: CodegenTarget,
     ): TestEventStreamProject {
@@ -132,10 +134,12 @@ object EventStreamTestTools {
         }
         project.withModule(ModelsModule) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, this, codegenTarget)
+            recursivelyGenerateModels(requirements, model, symbolProvider, inputOutput, this, codegenTarget)
         }
         project.withModule(RustModule.Output) {
-            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+            val outputShape = operationShape.outputShape(model)
+            val builderGenerator = requirements.createBuilderGenerator(model, symbolProvider, outputShape)
+            outputShape.renderWithModelBuilder(model, symbolProvider, this, builderGenerator)
         }
         return TestEventStreamProject(
             model,
@@ -147,7 +151,8 @@ object EventStreamTestTools {
         )
     }
 
-    private fun recursivelyGenerateModels(
+    private fun <C : CodegenContext, B : BuilderGenerator> recursivelyGenerateModels(
+        requirements: EventStreamTestRequirements<C, B>,
         model: Model,
         symbolProvider: RustSymbolProvider,
         shape: Shape,
@@ -160,7 +165,10 @@ object EventStreamTestTools {
             }
             val target = model.expectShape(member.target)
             when (target) {
-                is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
+                is StructureShape -> {
+                    val builderGenerator = requirements.createBuilderGenerator(model, symbolProvider, target)
+                    target.renderWithModelBuilder(model, symbolProvider, writer, builderGenerator)
+                }
                 is UnionShape -> UnionGenerator(
                     model,
                     symbolProvider,
@@ -170,7 +178,7 @@ object EventStreamTestTools {
                 ).render()
                 else -> TODO("EventStreamTestTools doesn't support rendering $target")
             }
-            recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
+            recursivelyGenerateModels(requirements, model, symbolProvider, target, writer, mode)
         }
     }
 }
