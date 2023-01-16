@@ -86,7 +86,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
  * [constraint traits]: https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html
  * [derive_builder]: https://docs.rs/derive_builder/latest/derive_builder/index.html
  */
-class ServerBuilderGenerator(
+open class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
 ) : BuilderGenerator {

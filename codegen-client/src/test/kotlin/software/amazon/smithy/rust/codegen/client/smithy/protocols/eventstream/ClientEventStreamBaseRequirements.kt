@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import java.util.stream.Stream
@@ -49,19 +48,6 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
 
     override fun createBuilderGenerator(codegenContext: ClientCodegenContext, structureShape: StructureShape): ClientBuilderGenerator =
         ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, structureShape)
-
-    override fun renderBuilderForShape(
-        writer: RustWriter,
-        codegenContext: ClientCodegenContext,
-        shape: StructureShape,
-    ) {
-        ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
-            render(writer)
-            writer.implBlock(shape, codegenContext.symbolProvider) {
-                renderConvenienceMethod(writer)
-            }
-        }
-    }
 
     override fun renderOperationError(
         writer: RustWriter,

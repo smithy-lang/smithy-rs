@@ -16,7 +16,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -66,29 +65,11 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         codegenContext: ServerCodegenContext,
         structureShape: StructureShape,
     ): ServerBuilderGenerator =
-        ServerBuilderGenerator(codegenContext, structureShape)
-
-    override fun renderBuilderForShape(
-        writer: RustWriter,
-        codegenContext: ServerCodegenContext,
-        shape: StructureShape,
-    ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-            ServerBuilderGenerator(codegenContext, shape).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
-                    renderConvenienceMethod(writer)
-                }
-            }
+            ServerBuilderGenerator(codegenContext, structureShape)
         } else {
-            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
-                    renderConvenienceMethod(writer)
-                }
-            }
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, structureShape)
         }
-    }
 
     override fun renderOperationError(
         writer: RustWriter,

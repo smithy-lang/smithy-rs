@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -66,13 +67,6 @@ interface EventStreamTestRequirements<C : CodegenContext, B : BuilderGenerator> 
         protocol: Protocol,
     ): RuntimeType
 
-    /** Render a builder for the given shape */
-    fun renderBuilderForShape(
-        writer: RustWriter,
-        codegenContext: C,
-        shape: StructureShape,
-    )
-
     /** Render an operation error for the given operation and error shapes */
     fun renderOperationError(
         writer: RustWriter,
@@ -111,6 +105,21 @@ object EventStreamTestTools {
         test.project.compileAndTest()
     }
 
+    private fun <C : CodegenContext, B : BuilderGenerator> renderBuilderForShape(
+        requirements: EventStreamTestRequirements<C, B>,
+        writer: RustWriter,
+        codegenContext: C, structureShape: StructureShape,
+    ) {
+        val builderGenerator = requirements.createBuilderGenerator(codegenContext, structureShape)
+
+        builderGenerator.apply {
+            render(writer)
+            writer.implBlock(structureShape, codegenContext.symbolProvider) {
+                renderConvenienceMethod(writer)
+            }
+        }
+    }
+
     private fun <C : CodegenContext, B : BuilderGenerator> generateTestProject(
         requirements: EventStreamTestRequirements<C, B>,
         codegenContext: C,
@@ -129,7 +138,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
             for (shape in errors) {
                 StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
-                requirements.renderBuilderForShape(this, codegenContext, shape)
+                renderBuilderForShape(requirements, this, codegenContext, shape)
             }
         }
         project.withModule(ModelsModule) {
