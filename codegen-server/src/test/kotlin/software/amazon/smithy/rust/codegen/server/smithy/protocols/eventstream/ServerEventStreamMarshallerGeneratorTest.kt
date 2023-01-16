@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -17,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 class ServerEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
@@ -27,12 +25,6 @@ class ServerEventStreamMarshallerGeneratorTest {
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
-
-                override fun createBuilderGenerator(
-                    codegenContext: ServerCodegenContext,
-                    structureShape: StructureShape,
-                ): ServerBuilderGenerator =
-                    ServerBuilderGenerator(codegenContext, structureShape)
 
                 override fun renderGenerator(
                     codegenContext: ServerCodegenContext,

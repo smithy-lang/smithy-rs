@@ -62,6 +62,12 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         protocolShapeId,
     )
 
+    override fun createBuilderGenerator(
+        codegenContext: ServerCodegenContext,
+        structureShape: StructureShape,
+    ): ServerBuilderGenerator =
+        ServerBuilderGenerator(codegenContext, structureShape)
+
     override fun renderBuilderForShape(
         writer: RustWriter,
         codegenContext: ServerCodegenContext,
