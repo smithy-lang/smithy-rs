@@ -127,7 +127,7 @@ internal class ClientBuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val structGenerator = StructureGenerator(model, provider, writer, secretStructure)
-        val builderGenerator = BuilderGenerator(model, provider, secretStructure)
+        val builderGenerator = ClientBuilderGenerator(model, provider, secretStructure)
         structGenerator.render()
         builderGenerator.render(writer)
         writer.implBlock(secretStructure, provider) {
