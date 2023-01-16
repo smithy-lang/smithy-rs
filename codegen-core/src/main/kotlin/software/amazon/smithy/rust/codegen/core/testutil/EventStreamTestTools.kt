@@ -58,6 +58,7 @@ interface EventStreamTestRequirements<C : CodegenContext, B : BuilderGenerator> 
         codegenTarget: CodegenTarget,
     ): C
 
+    /** Create a builder generator for the tests */
     fun createBuilderGenerator(codegenContext: C, structureShape: StructureShape): B
 
     /** Render the event stream marshall/unmarshall code generator */
