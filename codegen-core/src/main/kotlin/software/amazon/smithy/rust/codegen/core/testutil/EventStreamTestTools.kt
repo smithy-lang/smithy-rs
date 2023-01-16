@@ -57,7 +57,7 @@ interface EventStreamTestRequirements<C : CodegenContext, B : BuilderGenerator> 
         codegenTarget: CodegenTarget,
     ): C
 
-    fun createBuilderGenerator(model: Model, symbolProvider: RustSymbolProvider, structureShape: StructureShape): B
+    fun createBuilderGenerator(codegenContext: C, structureShape: StructureShape): B
 
     /** Render the event stream marshall/unmarshall code generator */
     fun renderGenerator(
@@ -134,11 +134,11 @@ object EventStreamTestTools {
         }
         project.withModule(ModelsModule) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(requirements, model, symbolProvider, inputOutput, this, codegenTarget)
+            recursivelyGenerateModels(requirements, codegenContext, inputOutput, this, codegenTarget)
         }
         project.withModule(RustModule.Output) {
             val outputShape = operationShape.outputShape(model)
-            val builderGenerator = requirements.createBuilderGenerator(model, symbolProvider, outputShape)
+            val builderGenerator = requirements.createBuilderGenerator(codegenContext, outputShape)
             outputShape.renderWithModelBuilder(model, symbolProvider, this, builderGenerator)
         }
         return TestEventStreamProject(
@@ -153,12 +153,13 @@ object EventStreamTestTools {
 
     private fun <C : CodegenContext, B : BuilderGenerator> recursivelyGenerateModels(
         requirements: EventStreamTestRequirements<C, B>,
-        model: Model,
-        symbolProvider: RustSymbolProvider,
+        codegenContext: C,
         shape: Shape,
         writer: RustWriter,
         mode: CodegenTarget,
     ) {
+        val model = codegenContext.model
+        val symbolProvider = codegenContext.symbolProvider
         for (member in shape.members()) {
             if (member.target.namespace == "smithy.api") {
                 continue
@@ -166,7 +167,7 @@ object EventStreamTestTools {
             val target = model.expectShape(member.target)
             when (target) {
                 is StructureShape -> {
-                    val builderGenerator = requirements.createBuilderGenerator(model, symbolProvider, target)
+                    val builderGenerator = requirements.createBuilderGenerator(codegenContext, target)
                     target.renderWithModelBuilder(model, symbolProvider, writer, builderGenerator)
                 }
                 is UnionShape -> UnionGenerator(
@@ -178,7 +179,7 @@ object EventStreamTestTools {
                 ).render()
                 else -> TODO("EventStreamTestTools doesn't support rendering $target")
             }
-            recursivelyGenerateModels(requirements, model, symbolProvider, target, writer, mode)
+            recursivelyGenerateModels(requirements, codegenContext, target, writer, mode)
         }
     }
 }

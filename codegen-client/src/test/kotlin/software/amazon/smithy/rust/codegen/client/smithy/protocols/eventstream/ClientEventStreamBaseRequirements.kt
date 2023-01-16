@@ -47,8 +47,8 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         CombinedClientCodegenDecorator(emptyList()),
     )
 
-    override fun createBuilderGenerator(model: Model, symbolProvider: RustSymbolProvider, structureShape: StructureShape): ClientBuilderGenerator =
-        ClientBuilderGenerator(model, symbolProvider, structureShape)
+    override fun createBuilderGenerator(codegenContext: ClientCodegenContext, structureShape: StructureShape): ClientBuilderGenerator =
+        ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, structureShape)
 
     override fun renderBuilderForShape(
         writer: RustWriter,

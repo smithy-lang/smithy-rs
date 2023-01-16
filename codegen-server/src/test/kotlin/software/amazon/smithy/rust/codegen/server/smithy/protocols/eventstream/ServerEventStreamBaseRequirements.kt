@@ -46,7 +46,7 @@ class TestCasesProvider : ArgumentsProvider {
             }.map { Arguments.of(it) }.stream()
 }
 
-abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext> {
+abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext, ServerBuilderGenerator> {
     abstract val publicConstrainedTypes: Boolean
 
     override fun createCodegenContext(

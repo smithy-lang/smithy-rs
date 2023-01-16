@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.testutil.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -88,7 +89,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
 class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
-) {
+) : BuilderGenerator {
     companion object {
         /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
@@ -151,7 +152,7 @@ class ServerBuilderGenerator(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(writer: RustWriter) {
+    override fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
         writer.withInlineModule(builderSymbol.module()) {
             renderBuilder(this)
@@ -282,7 +283,7 @@ class ServerBuilderGenerator(
         }
     }
 
-    fun renderConvenienceMethod(implBlock: RustWriter) {
+    override fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)
