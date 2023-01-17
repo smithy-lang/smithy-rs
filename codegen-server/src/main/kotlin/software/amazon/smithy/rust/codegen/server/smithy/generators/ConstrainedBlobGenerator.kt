@@ -55,13 +55,14 @@ class ConstrainedBlobGenerator(
         val inner = RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
+        // TODO Delegate RustMetadata entirely to the symbol provider
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
         } else {
             Visibility.PUBCRATE
         }
         val constrainedTypeMetadata = RustMetadata(
-            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq),
+            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash),
             visibility = constrainedTypeVisibility,
         )
 

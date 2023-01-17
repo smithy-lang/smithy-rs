@@ -10,3 +10,5 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+TODO DateTime, Blob now implement PartialEq, Hash

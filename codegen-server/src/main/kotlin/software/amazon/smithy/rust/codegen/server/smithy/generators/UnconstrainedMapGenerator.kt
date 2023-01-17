@@ -14,7 +14,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -67,13 +70,13 @@ class UnconstrainedMapGenerator(
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
-        val valueSymbol = unconstrainedShapeSymbolProvider.toSymbol(valueShape)
+        val valueMemberSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape.value)
 
         unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
+                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueMemberSymbol}>);
 
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
@@ -83,7 +86,7 @@ class UnconstrainedMapGenerator(
 
                 """,
                 "KeySymbol" to keySymbol,
-                "ValueSymbol" to valueSymbol,
+                "ValueMemberSymbol" to valueMemberSymbol,
                 "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             )
 
@@ -102,6 +105,11 @@ class UnconstrainedMapGenerator(
                             !valueShape.isDirectlyConstrained(symbolProvider) &&
                             valueShape !is StructureShape &&
                             valueShape !is UnionShape
+                    val constrainedMemberValueSymbol = if (resolvesToNonPublicConstrainedValueType) {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
+                    } else {
+                        constrainedShapeSymbolProvider.toSymbol(shape.value)
+                    }
                     val constrainedValueSymbol = if (resolvesToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
@@ -109,6 +117,7 @@ class UnconstrainedMapGenerator(
                     }
 
                     val constrainedKeySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
+                    val epilogueWritable = writable { rust("Ok((k, v))") }
                     val constrainKeyWritable = writable {
                         rustTemplate(
                             "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;",
@@ -116,17 +125,37 @@ class UnconstrainedMapGenerator(
                         )
                     }
                     val constrainValueWritable = writable {
-                        rustTemplate(
-                            """
-                            match #{ConstrainedValueSymbol}::try_from(v) {
-                                Ok(v) => Ok((k, v)),
-                                Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                        if (constrainedMemberValueSymbol.isOptional()) {
+                            // The map is `@sparse`.
+                            rustBlock("match v") {
+                                rust("None => Ok((k, None)),")
+                                withBlock("Some(v) =>", ",") {
+                                    // DRYing this up with the else branch below would make this less understandable.
+                                    rustTemplate(
+                                        """
+                                        match #{ConstrainedValueSymbol}::try_from(v) {
+                                            Ok(v) => Ok((k, Some(v))),
+                                            Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                                        }
+                                        """,
+                                        "ConstrainedValueSymbol" to constrainedValueSymbol,
+                                        "Epilogue" to epilogueWritable,
+                                    )
+                                }
                             }
-                            """,
-                            "ConstrainedValueSymbol" to constrainedValueSymbol,
-                        )
+                        } else {
+                            rustTemplate(
+                                """
+                                match #{ConstrainedValueSymbol}::try_from(v) {
+                                    Ok(v) => #{Epilogue:W},
+                                    Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                                }
+                                """,
+                                "ConstrainedValueSymbol" to constrainedValueSymbol,
+                                "Epilogue" to epilogueWritable,
+                            )
+                        }
                     }
-                    val epilogueWritable = writable { rust("Ok((k, v))") }
 
                     val constrainKVWritable = if (
                         isKeyConstrained(keyShape, symbolProvider) &&
@@ -143,7 +172,7 @@ class UnconstrainedMapGenerator(
 
                     rustTemplate(
                         """
-                        let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
+                        let res: Result<#{HashMap}<#{ConstrainedKeySymbol}, #{ConstrainedMemberValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
                                 #{ConstrainKVWritable:W}
@@ -151,8 +180,9 @@ class UnconstrainedMapGenerator(
                             .collect();
                         let hm = res?;
                         """,
+                        "HashMap" to RuntimeType.HashMap,
                         "ConstrainedKeySymbol" to constrainedKeySymbol,
-                        "ConstrainedValueSymbol" to constrainedValueSymbol,
+                        "ConstrainedMemberValueSymbol" to constrainedMemberValueSymbol,
                         "ConstrainKVWritable" to constrainKVWritable,
                     )
 

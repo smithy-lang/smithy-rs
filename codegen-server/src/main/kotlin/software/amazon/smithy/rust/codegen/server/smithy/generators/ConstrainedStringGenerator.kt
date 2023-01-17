@@ -71,6 +71,7 @@ class ConstrainedStringGenerator(
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
+        // TODO Delegate RustMetadata entirely to the symbol provider
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
         } else {
@@ -157,7 +158,7 @@ class ConstrainedStringGenerator(
             """
             ##[derive(Debug, PartialEq)]
             pub enum ${constraintViolation.name} {
-              #{Variants:W}
+                #{Variants:W}
             }
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
@@ -198,12 +199,12 @@ class ConstrainedStringGenerator(
 }
 private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo = TraitInfo(
-        { rust("Self::check_length(&value)?;") },
-        {
+        tryFromCheck = { rust("Self::check_length(&value)?;") },
+        constraintViolationVariant = {
             docs("Error when a string doesn't satisfy its `@length` requirements.")
             rust("Length(usize)")
         },
-        {
+        asValidationExceptionField = {
             rust(
                 """
                 Self::Length(length) => crate::model::ValidationExceptionField {
@@ -213,7 +214,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 """,
             )
         },
-        this::renderValidationFunction,
+        validationFunctionDefinition = this::renderValidationFunction,
     )
 
     /**
@@ -243,13 +244,13 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) :
         val pattern = patternTrait.pattern
 
         return TraitInfo(
-            { rust("let value = Self::check_pattern(value)?;") },
-            {
+            tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
+            constraintViolationVariant = {
                 docs("Error when a string doesn't satisfy its `@pattern`.")
                 docs("Contains the String that failed the pattern.")
                 rust("Pattern(String)")
             },
-            {
+            asValidationExceptionField = {
                 rust(
                     """
                     Self::Pattern(string) => crate::model::ValidationExceptionField {

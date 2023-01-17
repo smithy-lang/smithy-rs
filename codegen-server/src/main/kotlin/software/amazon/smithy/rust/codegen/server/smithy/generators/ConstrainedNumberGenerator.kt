@@ -76,6 +76,7 @@ class ConstrainedNumberGenerator(
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
 
+        // TODO Delegate RustMetadata entirely to the symbol provider
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
         } else {
