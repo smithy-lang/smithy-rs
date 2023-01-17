@@ -7,7 +7,7 @@ RFC: Providing fallback credentials on external timeout
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-This RFC proposes a fallback mechanism for credentials providers on external timeout (see the [Terminology](#terminology) section), allowing them to continue serving (possibly stale) credentials for the sake of overall reliability of the intended service; the IMDS credentials provider is an example that must fulfill such a requirement to support static stability.
+This RFC proposes a fallback mechanism for credentials providers on external timeout (see the [Terminology](#terminology) section), allowing them to continue serving (possibly stale) credentials for the sake of overall reliability of the intended service; The IMDS credentials provider is an example that must fulfill such a requirement to support static stability.
 
 Terminology
 -----------
