@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Structure
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -50,7 +51,13 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId) =
         shape.let { model.expectShape(it.toShapeId()) }.members()
-            .map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
+            .map {
+                if (it.isStreaming(model)) {
+                    HttpBindingDescriptor(it, HttpLocation.PAYLOAD, "document")
+                } else {
+                    HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document")
+                }
+            }
             .toList()
 
     override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait

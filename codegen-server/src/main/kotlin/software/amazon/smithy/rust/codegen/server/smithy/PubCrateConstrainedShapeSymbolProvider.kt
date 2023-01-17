@@ -97,9 +97,6 @@ class PubCrateConstrainedShapeSymbolProvider(
             }
 
             is MemberShape -> {
-                require(model.expectShape(shape.container).isStructureShape) {
-                    "This arm is only exercised by `ServerBuilderGenerator`"
-                }
                 require(!shape.hasConstraintTraitOrTargetHasConstraintTrait(model, base)) { errorMessage(shape) }
 
                 val targetShape = model.expectShape(shape.target)
