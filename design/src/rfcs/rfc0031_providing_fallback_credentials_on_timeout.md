@@ -120,7 +120,7 @@ How to actually implement this RFC
 
 Almost all credentials providers do not have to implement their own `on_timeout` except for `CredentialsProviderChain` (`ImdsCredentialsProvider` also needs to implement `on_timeout` when we are adding static stability support to it but that is outside the scope of this RFC).
 
-Considering the two cases we analyzed above, implementing `CredentialsProviderChain::on_timeout` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has ocurred is a challening task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
+Considering the two cases we analyzed above, implementing `CredentialsProviderChain::on_timeout` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
 
 With all that taken into account, we can consider starting with the following simple approach:
 ```rust
