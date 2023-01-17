@@ -13,7 +13,7 @@ Terminology
 -----------
 
 - External timeout: The name of the timeout that occurs when a duration elapses before an async call to `provide_credentials` returns. In this case, `provide_credentials` returns no credentials.
-- Internal timeout: A timeout imposed on functions/methods internally called by `provide_credentials` that, when failing to meet any of them, renders `provide_credentials` return an `CredentialsError`. For instance, internal timeout includes connection timeout, TLS negotiation timeout, and HTTP request timeout, if `provide_credentials` needs to fetch credentials via HTTP(S). This is a kind of timeout `provide_credentials` can react and handle it accordingly, i.e. returning fallback credentials or an `CredentialsError`.
+- Internal timeout: The name of the timeout that occurs when a duration elapses before an async call to some function, inside the implementation of `provide_credentials`, returns. Examples include connection timeouts, TLS negotiation timeouts, and HTTP request timeouts. Implementations of `provide_credentials` may handle these failures at their own discretion e.g. by returning _(possibly expired)_ credentials or a `CredentialsError`.
 
 Assumption
 ----------
