@@ -508,6 +508,8 @@ class Attribute(val inner: Writable) {
         fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
         fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
 
+        fun feature(feature: String) = writable("feature = ${feature.dq()}")
+
         fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()
             if (!note.isNullOrEmpty()) {

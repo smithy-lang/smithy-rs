@@ -262,40 +262,26 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 }
 
 fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
-    docs: String? = null,
+    docString: String? = null,
     autoSuppressMissingDocs: Boolean = true,
     note: String? = null,
 ): T {
-    when (docs?.isNotBlank()) {
-        // If docs are modeled, then place them on the code generated shape
-        true -> {
-            docsOrFallback({ docs(normalizeHtml(escape(docs))) }, autoSuppressMissingDocs, note)
-            this.docs(normalizeHtml(escape(docs)))
-            note?.also {
-                // Add a blank line between the docs and the note to visually differentiate
-                write("///")
-                docs("_Note: ${it}_")
-            }
-        }
-        // Otherwise, suppress the missing docs lint for this shape since
-        // the lack of documentation is a modeling issue rather than a codegen issue.
-        else -> if (autoSuppressMissingDocs) {
-            rust("##[allow(missing_docs)] // documentation missing in model")
-        }
+    val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
+        true -> { { docs(normalizeHtml(escape(docString))) } }
+        else -> null
     }
-
-    return this
+    return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
 }
 
 fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
-    docs: (T.() -> Unit)? = null,
+    docsWritable: (T.() -> Unit)? = null,
     autoSuppressMissingDocs: Boolean = true,
     note: String? = null,
 ): T {
-    if (docs != null) {
+    if (docsWritable != null) {
         // If docs are modeled, then place them on the code generated shape
 
-        docs(this)
+        docsWritable(this)
         note?.also {
             // Add a blank line between the docs and the note to visually differentiate
             write("///")

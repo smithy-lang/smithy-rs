@@ -13,9 +13,11 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -42,6 +44,7 @@ class OperationInputTestDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val endpointTests = EndpointTypesGenerator.fromContext(codegenContext).tests.nonEmptyOrNull() ?: return
         rustCrate.integrationTest("endpoint_tests") {
+            Attribute(Attribute.cfg("feature = \"${TestUtilFeature.name}\"")).render(this, AttributeKind.Inner)
             val tests = endpointTests.flatMap { test ->
                 val generator = OperationInputTestGenerator(codegenContext, test)
                 test.operationInputs.filterNot { usesUnsupportedBuiltIns(it) }.map { operationInput ->

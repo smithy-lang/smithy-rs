@@ -11,6 +11,7 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -239,15 +240,19 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
 
-            Attribute.allow("unused_mut")
+            val testUtilOnly =
+                Attribute(Attribute.cfg(Attribute.any(Attribute.feature(TestUtilFeature.name), writable("test"))))
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
             docs("Apply test defaults to the builder")
             rustBlock("pub fn set_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
                 rust("self")
             }
 
-            // Attribute.CfgTest.render(this)
-            Attribute.allow("unused_mut")
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
             docs("Apply test defaults to the builder")
             rustBlock("pub fn with_test_defaults(mut self) -> Self") {
                 rust("self.set_test_defaults(); self")
