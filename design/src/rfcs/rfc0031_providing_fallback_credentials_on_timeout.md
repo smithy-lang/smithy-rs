@@ -18,7 +18,7 @@ Terminology
 Assumption
 ----------
 
-This RFC is concerned only with external timeout, as the cost of designing APIs poorly is much higher than that for internal timeout. The former will affect a public trait implemented by all credentials providers whereas the latter can be handled locally by individual credentials providers without affecting one another.
+This RFC is concerned only with external timeouts, as the cost of poor API design is much higher than in this case than for internal timeouts. The former will affect a public trait implemented by all credentials providers whereas the latter can be handled locally by individual credentials providers without affecting one another.
 
 Problem
 -------
