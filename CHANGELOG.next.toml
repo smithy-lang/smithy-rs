@@ -11,6 +11,12 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "`@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported"
+references = ["smithy-rs#2213"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
+
 [[aws-sdk-rust]]
 message = """Integrate Endpoints 2.0 into the Rust SDK. Endpoints 2.0 enables features like S3 virtual addressing & S3
 object lambda. As part of this change, there are several breaking changes although efforts have been made to deprecate

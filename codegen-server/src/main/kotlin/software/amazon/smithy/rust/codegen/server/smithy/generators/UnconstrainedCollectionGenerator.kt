@@ -10,10 +10,13 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -65,14 +68,13 @@ class UnconstrainedCollectionGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val innerShape = model.expectShape(shape.member.target)
-        val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
+        val innerMemberSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape.member)
 
         unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerUnconstrainedSymbol}>);
+                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerMemberSymbol}>);
 
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
@@ -80,7 +82,7 @@ class UnconstrainedCollectionGenerator(
                     }
                 }
                 """,
-                "InnerUnconstrainedSymbol" to innerUnconstrainedSymbol,
+                "InnerMemberSymbol" to innerMemberSymbol,
                 "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             )
 
@@ -99,26 +101,35 @@ class UnconstrainedCollectionGenerator(
                             !innerShape.isDirectlyConstrained(symbolProvider) &&
                             innerShape !is StructureShape &&
                             innerShape !is UnionShape
-                    val innerConstrainedSymbol = if (resolvesToNonPublicConstrainedValueType) {
-                        pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+                    val constrainedMemberSymbol = if (resolvesToNonPublicConstrainedValueType) {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
                     } else {
-                        constrainedShapeSymbolProvider.toSymbol(innerShape)
+                        constrainedShapeSymbolProvider.toSymbol(shape.member)
                     }
                     val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
+                    val constrainValueWritable = writable {
+                        conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
+                            rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
+                        }
+                    }
+
                     rustTemplate(
                         """
-                        let res: Result<std::vec::Vec<#{InnerConstrainedSymbol}>, (usize, #{InnerConstraintViolationSymbol})> = value
+                        let res: Result<#{Vec}<#{ConstrainedMemberSymbol}>, (usize, #{InnerConstraintViolationSymbol}) > = value
                             .0
                             .into_iter()
                             .enumerate()
-                            .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
+                            .map(|(idx, inner)| {
+                                #{ConstrainValueWritable:W}
+                            })
                             .collect();
                         let inner = res.map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
                         """,
-                        "InnerConstrainedSymbol" to innerConstrainedSymbol,
+                        "Vec" to RuntimeType.Vec,
+                        "ConstrainedMemberSymbol" to constrainedMemberSymbol,
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
-                        "TryFrom" to RuntimeType.TryFrom,
+                        "ConstrainValueWritable" to constrainValueWritable,
                     )
                 } else {
                     rust("let inner = value.0;")
