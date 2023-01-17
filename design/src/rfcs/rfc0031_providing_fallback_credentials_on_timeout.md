@@ -68,7 +68,7 @@ The figure above illustrates an example. This `CredentialsProviderChain` consist
 <img width="750" alt="chain-provider-ext-timeout-2" src="https://user-images.githubusercontent.com/15333866/212421712-8c6eab11-a0c1-4229-8ba3-67b0bb6056e7.png">
 </p>
 
-The figure above illustrates an example with the same setting as the previous figure. Again, when `CredentialsProviderChain::provide_credentials` is called the first time, provider 1 does not find credentials but provider 2 does. The next time the method is called, provider 1 is still executing `provide_credentials` and then an external time by `timeout_future` kicked in. Consequently, the execution of `CredentialsProviderChain::provide_credentials` has been terminated. Given the functional requirements, provider 2 should return the previously available credentials but today the code snippet from `LazyCredentialsCache` returns `CredentialsError::ProviderTimedOut` instead.
+The figure above illustrates an example with the same setting as the previous figure. Again, when `CredentialsProviderChain::provide_credentials` is called the first time, provider 1 does not find credentials but provider 2 does. The next time the method is called, provider 1 is still executing `provide_credentials` and then an external timeout by `timeout_future` kicked in. Consequently, the execution of `CredentialsProviderChain::provide_credentials` has been terminated. Given the functional requirements, provider 2 should return the previously available credentials but today the code snippet from `LazyCredentialsCache` returns `CredentialsError::ProviderTimedOut` instead.
 
 
 Proposal
