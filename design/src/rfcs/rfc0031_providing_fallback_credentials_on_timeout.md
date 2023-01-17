@@ -39,13 +39,11 @@ let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.l
 // --snip--
 let future = Timeout::new(provider.provide_credentials(), timeout_future);
 let result = cache
-   .get_or_load(|| {
-        async move {
-            let credentials = future.await.map_err(|_err| {
-                CredentialsError::provider_timed_out(load_timeout)
-            })??;
-            // --snip--
-        }
+   .get_or_load(|| async move {
+        let credentials = future.await.map_err(|_err| {
+            CredentialsError::provider_timed_out(load_timeout)
+        })??;
+        // --snip--
     }).await;
 // --snip--
 ```
