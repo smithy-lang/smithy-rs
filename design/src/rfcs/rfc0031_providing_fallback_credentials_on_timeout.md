@@ -12,7 +12,7 @@ This RFC proposes a fallback mechanism for credentials providers on external tim
 Terminology
 -----------
 
-- External timeout: A timeout within which a call to the `provide_credentials` method must complete. `provide_credentials` returns a future and if it does not complete within this timeout, it gets dropped on the floor and there is no output retrieved from the future.
+- External timeout: The name of the timeout that occurs when a duration elapses before an async call to `provide_credentials` returns. In this case, `provide_credentials` returns no credentials.
 - Internal timeout: A timeout imposed on functions/methods internally called by `provide_credentials` that, when failing to meet any of them, renders `provide_credentials` return an `CredentialsError`. For instance, internal timeout includes connection timeout, TLS negotiation timeout, and HTTP request timeout, if `provide_credentials` needs to fetch credentials via HTTP(S). This is a kind of timeout `provide_credentials` can react and handle it accordingly, i.e. returning fallback credentials or an `CredentialsError`.
 
 Assumption
