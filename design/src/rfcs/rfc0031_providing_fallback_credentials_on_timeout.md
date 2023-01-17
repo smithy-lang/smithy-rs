@@ -149,7 +149,7 @@ Should we have more than one provider in the chain that can potentially return f
 Alternative
 -----------
 
-In this section, we will describe our alternative approach that we ended up dismissing as unworkable.
+In this section, we will describe an alternative approach that we ended up dismissing as unworkable.
 
 Instead of `on_timeout`, we considered the following method to be added to the `ProvideCredentials` trait:
 ```rust
