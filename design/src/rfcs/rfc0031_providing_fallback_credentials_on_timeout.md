@@ -32,7 +32,7 @@ fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
 where
     Self: 'a,
 ```
-This method can be used in async contexts, which means that nothing stops it from being raced against a timeout future, as demonstrated by the following code snippet from `LazyCredentialsCache`:
+This method returns a future, which can be raced against a timeout future as demonstrated by the following code snippet from `LazyCredentialsCache`:
 
 ```rust
 let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
