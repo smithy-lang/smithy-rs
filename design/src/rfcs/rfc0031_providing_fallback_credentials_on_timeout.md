@@ -122,7 +122,7 @@ Almost all credentials providers do not have to implement their own `on_timeout`
 
 Considering the two cases we analyzed above, implementing `CredentialsProviderChain::on_timeout` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
 
-With all that taken into account, we can consider starting with the following simple approach:
+With that in mind, consider instead the following approach:
 ```rust
 impl ProvideCredentials for CredentialsProviderChain {
     // --snip--
