@@ -80,7 +80,7 @@ class ConstrainedMapGenerator(
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rustTemplate(
             """
