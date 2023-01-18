@@ -20,7 +20,7 @@ internal object EventStreamUnmarshallTestCases {
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
             use aws_smithy_types::{Blob, DateTime};
-            use crate::error::*;
+            use crate::error::TestStreamError;
             use crate::model::*;
 
             fn msg(
@@ -210,10 +210,6 @@ internal object EventStreamUnmarshallTestCases {
             """,
         )
 
-        val (someError, kindSuffix) = when (codegenTarget) {
-            CodegenTarget.CLIENT -> "TestStreamErrorKind::SomeError" to ".kind"
-            CodegenTarget.SERVER -> "TestStreamError::SomeError" to ""
-        }
         unitTest(
             "some_error",
             """
@@ -225,8 +221,8 @@ internal object EventStreamUnmarshallTestCases {
             );
             let result = ${format(generator)}().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
-            match expect_error(result.unwrap())$kindSuffix {
-                $someError(err) => assert_eq!(Some("some error"), err.message()),
+            match expect_error(result.unwrap()) {
+                TestStreamError::SomeError(err) => assert_eq!(Some("some error"), err.message()),
                 kind => panic!("expected SomeError, but got {:?}", kind),
             }
             """,
@@ -244,8 +240,8 @@ internal object EventStreamUnmarshallTestCases {
                 );
                 let result = ${format(generator)}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                match expect_error(result.unwrap())$kindSuffix {
-                    TestStreamErrorKind::Unhandled(err) => {
+                match expect_error(result.unwrap()) {
+                    TestStreamError::Unhandled(err) => {
                         let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
                         let expected = "message: \"unmodeled error\"";
                         assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");

@@ -96,20 +96,11 @@ class EventStreamErrorMarshallerGenerator(
             ) {
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
-                val kind = when (target) {
-                    CodegenTarget.CLIENT -> ".kind"
-                    CodegenTarget.SERVER -> ""
-                }
                 if (errorsShape.errorMembers.isEmpty()) {
                     rust("let payload = Vec::new();")
                 } else {
-                    rustBlock("let payload = match _input$kind") {
-                        val symbol = operationErrorSymbol
-                        val errorName = when (target) {
-                            CodegenTarget.CLIENT -> "${symbol}Kind"
-                            CodegenTarget.SERVER -> "$symbol"
-                        }
-
+                    rustBlock("let payload = match _input") {
+                        val errorName = operationErrorSymbol.name
                         errorsShape.errorMembers.forEach { error ->
                             val errorSymbol = symbolProvider.toSymbol(error)
                             val errorString = error.memberName

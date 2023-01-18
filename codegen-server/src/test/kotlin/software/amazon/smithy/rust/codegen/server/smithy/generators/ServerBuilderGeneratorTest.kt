@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -43,7 +42,7 @@ class ServerBuilderGeneratorTest {
             writer,
             shape,
             emptyList(),
-        ).render(CodegenTarget.SERVER)
+        ).render()
         val builderGenerator = ServerBuilderGenerator(codegenContext, shape)
         builderGenerator.render(writer)
         writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {

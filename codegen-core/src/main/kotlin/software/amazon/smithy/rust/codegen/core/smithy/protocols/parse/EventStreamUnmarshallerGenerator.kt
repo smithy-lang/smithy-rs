@@ -343,11 +343,9 @@ class EventStreamUnmarshallerGenerator(
                                         .map_err(|err| {
                                             #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
                                         })?;
+                                    builder._set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::new(
-                                            #{OpError}Kind::${member.target.name}(builder.build()),
-                                            generic,
-                                        )
+                                        #{OpError}::${member.target.name}(builder.build())
                                     ))
                                     """,
                                     "parser" to parser,
