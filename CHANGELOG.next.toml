@@ -11,4 +11,8 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-TODO DateTime, Blob now implement PartialEq, Hash
+[[smithy-rs]]
+message = "`aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `PartialEq` and `Hash` traits"
+references = ["smithy-rs#2223"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+author = "david-perez"
