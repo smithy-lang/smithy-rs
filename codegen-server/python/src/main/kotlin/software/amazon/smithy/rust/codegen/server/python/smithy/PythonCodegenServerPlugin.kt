@@ -77,10 +77,10 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                 .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
-                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
-                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
+                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
+                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { PythonStreamingShapeMetadataProvider(it, model) }
                 // Derive `Eq` and `Hash` if possible.
