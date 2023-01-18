@@ -58,7 +58,7 @@ class PythonServerSymbolVisitor(
         val target = model.expectShape(shape.target)
         val container = model.expectShape(shape.container)
 
-        // We are only targetting non syntetic inputs and outputs.
+        // We are only targeting non-synthetic inputs and outputs.
         if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
             return initial
         }
