@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldNotContain
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -24,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymb
 import java.util.stream.Stream
 
 internal class DeriveEqAndHashSymbolMetadataProviderTest {
-    private val model=
+    private val model =
         """
         namespace test
 
@@ -206,9 +205,9 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
 
             return (
                 shapesWithNeitherEqNorHash.map { Arguments.of(it, emptyList<RuntimeType>()) } +
-                shapesWithEqAndHash.map { Arguments.of(it, listOf(RuntimeType.Eq, RuntimeType.Hash)) } +
-                shapesWithOnlyEq.map { Arguments.of(it, listOf(RuntimeType.Eq)) }
-            ).stream()
+                    shapesWithEqAndHash.map { Arguments.of(it, listOf(RuntimeType.Eq, RuntimeType.Hash)) } +
+                    shapesWithOnlyEq.map { Arguments.of(it, listOf(RuntimeType.Eq)) }
+                ).stream()
         }
     }
 
@@ -216,7 +215,7 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
     @MethodSource("getShapes")
     fun `it should derive Eq and Hash when possible`(
         shapeId: String,
-        expectedTraits: Collection<RuntimeType>
+        expectedTraits: Collection<RuntimeType>,
     ) {
         val shape = model.lookup<Shape>(shapeId)
         val derives = deriveEqAndHashSymbolMetadataProvider.toSymbol(shape).expectRustMetadata().derives
