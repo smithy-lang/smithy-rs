@@ -70,7 +70,7 @@ class ConstrainedCollectionGenerator(
         }
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "std::vec::Vec<#{ValueSymbol}>"
+        val inner = "std::vec::Vec<#{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
         val constrainedTypeMetadata = RustMetadata(
@@ -79,7 +79,7 @@ class ConstrainedCollectionGenerator(
         )
 
         val codegenScope = arrayOf(
-            "ValueSymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.member.target)),
+            "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.member),
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
