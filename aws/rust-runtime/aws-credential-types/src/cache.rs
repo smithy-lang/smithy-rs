@@ -24,13 +24,13 @@ pub trait ProvideCachedCredentials: Send + Sync + std::fmt::Debug {
 
 /// Credentials cache wrapper that may be shared
 ///
-/// Newtype wrapper around ProvideCachedCredentials that implements Clone using an internal
-/// Arc.
+/// Newtype wrapper around `ProvideCachedCredentials` that implements `Clone` using an internal
+/// `Arc`.
 #[derive(Clone, Debug)]
 pub struct SharedCredentialsCache(Arc<dyn ProvideCachedCredentials>);
 
 impl SharedCredentialsCache {
-    /// Create a new `SharedCredentialsCache` from `ProvideCredentialsCache`
+    /// Create a new `SharedCredentialsCache` from `ProvideCachedCredentials`
     ///
     /// The given `cache` will be wrapped in an internal `Arc`. If your
     /// cache is already in an `Arc`, use `SharedCredentialsCache::from(cache)` instead.
