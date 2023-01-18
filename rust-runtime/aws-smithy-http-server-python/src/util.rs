@@ -9,6 +9,7 @@ pub mod error;
 use pyo3::{PyAny, PyObject, PyResult, PyTypeInfo, Python};
 
 // Captures some information about a Python function.
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[derive(Debug, PartialEq)]
 pub struct FuncMetadata {
     pub name: String,
@@ -131,6 +132,7 @@ async def async_func():
         })
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn check_if_is_optional_of() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();

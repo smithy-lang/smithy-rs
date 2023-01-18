@@ -199,6 +199,7 @@ impl From<TimeoutConfig> for TimeoutConfigBuilder {
 /// );
 /// # }
 /// ```
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Debug)]
 pub struct TimeoutConfig {
@@ -276,6 +277,7 @@ impl TimeoutConfig {
 }
 
 /// Configuration subset of [`TimeoutConfig`] for operation timeouts
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Debug)]
 pub struct OperationTimeoutConfig {

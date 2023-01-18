@@ -16,6 +16,7 @@ use tower::Service;
 use thiserror::Error;
 
 /// An AWS REST routing error.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Error, PartialEq)]
 pub enum Error {
     /// Operation not found.

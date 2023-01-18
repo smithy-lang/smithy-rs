@@ -137,6 +137,7 @@ impl fmt::Display for RetryModeParseError {
 impl std::error::Error for RetryModeParseError {}
 
 /// Builder for [`RetryConfig`].
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct RetryConfigBuilder {
@@ -224,6 +225,7 @@ impl RetryConfigBuilder {
 }
 
 /// Retry configuration for requests.
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct RetryConfig {

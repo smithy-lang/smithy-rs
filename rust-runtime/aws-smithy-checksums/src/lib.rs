@@ -379,8 +379,7 @@ mod tests {
     fn test_checksum_algorithm_returns_error_for_unknown() {
         let error = "some invalid checksum algorithm"
             .parse::<ChecksumAlgorithm>()
-            .err()
-            .expect("it should error");
+            .expect_err("it should error");
         assert_eq!(
             "some invalid checksum algorithm",
             error.checksum_algorithm()

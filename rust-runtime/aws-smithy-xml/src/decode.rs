@@ -77,6 +77,7 @@ impl XmlDecodeError {
     }
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)] // TODO: derive Eq?
 #[derive(PartialEq, Debug)]
 pub struct Name<'a> {
     pub prefix: &'a str,
