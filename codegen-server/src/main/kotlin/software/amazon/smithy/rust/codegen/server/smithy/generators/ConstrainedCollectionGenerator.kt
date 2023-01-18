@@ -95,7 +95,7 @@ class ConstrainedCollectionGenerator(
             *codegenScope,
         )
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
 
         writer.rustTemplate(

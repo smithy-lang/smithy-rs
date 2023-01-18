@@ -23,6 +23,7 @@ import software.amazon.smithy.rustsdk.endpoints.OperationInputTestDecorator
 
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
+    CredentialsCacheDecorator(),
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),
