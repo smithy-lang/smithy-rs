@@ -101,7 +101,7 @@ let future = Timeout::new(provider.provide_credentials(), timeout_future);
 let result = cache
     .get_or_load(|| {
         async move {
-           let credentials= match future.await {
+           let credentials = match future.await {
                 Ok(creds) => creds?,
                 Err(_err) => match provider.on_timeout().await { // can provide fallback credentials
                     Some(creds) => creds,
