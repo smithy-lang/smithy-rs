@@ -12,6 +12,7 @@ import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -539,7 +540,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
         // Fallback to the default code of `@http`, 200.
-        val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: HttpTrait.builder().build().code
+        val httpTraitDefaultStatusCode = HttpTrait
+            .builder().method("GET").uri(UriPattern.parse("/")) /* Required to build */
+            .build()
+            .code
+        val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
                 serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
