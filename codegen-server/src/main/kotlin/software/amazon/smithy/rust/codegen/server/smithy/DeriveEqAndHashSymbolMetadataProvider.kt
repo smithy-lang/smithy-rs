@@ -21,8 +21,26 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-// TODO Docs
-// TODO Test
+/**
+ * This symbol metadata provider adds derives to implement the [`Eq`] and [`Hash`] traits for shapes, whenever
+ * possible.
+ *
+ * These traits can be implemented by any shape _except_ if the shape's closure contains:
+ *
+ *     1. A `float`, `double`, or `document` shape: floating point types in Rust do not implement `Eq`. Similarly,
+ *        [`document` shapes] may contain arbitrary JSON-like data containing floating point values.
+ *     2. A [@streaming] shape: all the streaming data would need to be buffered first to compare it.
+ *
+ * Additionally, the `Hash` trait cannot be implemented by shapes whose closure contains:
+ *
+ *     1. A `map` shape: we render `map` shapes as `std::collections::HashMap`, which _do not_ implement `Hash`.
+ *        See https://github.com/awslabs/smithy/issues/1567.
+ *
+ * [`Eq`]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
+ * [`Hash`]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+ * [`document` shapes]: https://smithy.io/2.0/spec/simple-types.html#document
+ * [@streaming]: https://smithy.io/2.0/spec/streaming.html
+ */
 class DeriveEqAndHashSymbolMetadataProvider(
     private val base: RustSymbolProvider,
     val model: Model,
@@ -32,7 +50,7 @@ class DeriveEqAndHashSymbolMetadataProvider(
     private fun addDeriveEqAndHashIfPossible(shape: Shape): RustMetadata {
         check(shape !is MemberShape)
         val baseMetadata = base.toSymbol(shape).expectRustMetadata()
-        // TODO Justify
+        // See class-level documentation for why we filter these out.
         return if (walker.walkShapes(shape)
             .any { it is FloatShape || it is DoubleShape || it is DocumentShape || it.hasTrait<StreamingTrait>() }
         ) {
@@ -42,7 +60,9 @@ class DeriveEqAndHashSymbolMetadataProvider(
             if (ret.derives.contains(RuntimeType.PartialEq)) {
                 // We can only derive `Eq` if the type implements `PartialEq`. Not every shape that does not reach a
                 // floating point or a document shape does; for example, streaming shapes cannot be `PartialEq`, see
-                // [StreamingShapeMetadataProvider].
+                // [StreamingShapeMetadataProvider]. This is just a defensive check in case other symbol providers
+                // want to remove the `PartialEq` trait, since we've also just checked that we do not reach a streaming
+                // shape.
                 ret = ret.withDerives(RuntimeType.Eq)
             }
 

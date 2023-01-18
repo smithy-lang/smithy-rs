@@ -32,7 +32,7 @@ class ConstrainedShapeSymbolMetadataProvider(
         check(shape is ListShape || shape is MapShape || shape is StringShape || shape is NumberShape)
 
         val baseMetadata = base.toSymbol(shape).expectRustMetadata()
-        var derives = baseMetadata.derives
+        val derives = baseMetadata.derives.toMutableSet()
         val additionalAttributes = baseMetadata.additionalAttributes.toMutableList()
 
         if (shape.canReachConstrainedShape(model, base)) {

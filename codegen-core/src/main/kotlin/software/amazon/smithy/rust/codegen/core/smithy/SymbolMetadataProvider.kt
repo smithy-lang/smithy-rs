@@ -163,12 +163,6 @@ class BaseSymbolMetadataProvider(
     override fun mapMeta(mapShape: MapShape) = defaultRustMetadata
     override fun stringMeta(stringShape: StringShape) = defaultRustMetadata
     override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata
-
-    companion object {
-        private val defaultDerives by lazy {
-            setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
-        }
-    }
 }
 
 private const val META_KEY = "meta"
