@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErr
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectory
@@ -97,7 +99,19 @@ internal class ServiceErrorGeneratorTest {
             }
             for (shape in model.structureShapes) {
                 if (shape.id.namespace == "com.example") {
-                    StructureGenerator(model, symbolProvider, this, shape, emptyList()).render()
+                    val errorTrait = shape.getTrait<ErrorTrait>()
+                    if (errorTrait != null) {
+                        ErrorGenerator(
+                            model,
+                            symbolProvider,
+                            this,
+                            shape,
+                            errorTrait,
+                            listOf(),
+                        ).render(CodegenTarget.CLIENT)
+                    } else {
+                        StructureGenerator(model, symbolProvider, this, shape, emptyList()).render()
+                    }
                 }
             }
         }

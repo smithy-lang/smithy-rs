@@ -140,20 +140,6 @@ class StructureGeneratorTest {
     }
 
     @Test
-    fun `generate error structures`() {
-        val provider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("error")
-        val generator = StructureGenerator(model, provider, writer, error, emptyList())
-        generator.render()
-        writer.compileAndTest(
-            """
-            let err = MyError { message: None };
-            assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
-            """,
-        )
-    }
-
-    @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("lib")
