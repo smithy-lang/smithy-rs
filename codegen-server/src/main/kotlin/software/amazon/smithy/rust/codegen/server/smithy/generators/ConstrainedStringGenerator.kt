@@ -77,7 +77,7 @@ class ConstrainedStringGenerator(
         metadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
         if (metadata.visibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rust(
             """
