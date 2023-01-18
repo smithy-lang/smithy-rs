@@ -10,7 +10,6 @@ import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.eval.Type
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
-import software.amazon.smithy.rulesengine.language.syntax.fn.Function
 import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
@@ -289,9 +288,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 val target = generator.generate(fn)
                 val next = generateRuleInternal(rule, rest)
                 when {
-                    fn.type() is Type.Option ||
-                        // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
-                        (fn as Function).name == "substring" -> {
+                    fn.type() is Type.Option -> {
                         Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",
