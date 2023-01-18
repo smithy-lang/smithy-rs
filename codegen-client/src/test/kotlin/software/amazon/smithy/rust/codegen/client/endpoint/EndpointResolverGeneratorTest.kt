@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.eval.Scope
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.End
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
+import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -62,7 +64,8 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                TestRuntimeConfig,
+                codegenContext = testCodegenContext(model = Model.builder().build()),
+                endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
         }
@@ -87,7 +90,8 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                TestRuntimeConfig,
+                codegenContext = testCodegenContext(Model.builder().build()),
+                endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
         }
