@@ -22,6 +22,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmit
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
+val TestUtilFeature = Feature("test-util", false, listOf())
+
 /**
  * A set of customizations that are included in all protocols.
  *
@@ -57,6 +59,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+
+        rustCrate.mergeFeature(TestUtilFeature)
 
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
