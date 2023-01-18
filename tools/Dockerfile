@@ -103,7 +103,6 @@ RUN set -eux; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/changelogger; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/crate-hasher; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-lints; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-sync; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 

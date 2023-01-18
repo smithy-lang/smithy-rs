@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -59,14 +58,14 @@ class ConstrainedMapGenerator(
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "#{HashMap}<#{KeySymbol}, #{ValueSymbol}>"
+        val inner = "#{HashMap}<#{KeySymbol}, #{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constrainedSymbol = symbolProvider.toSymbol(shape)
 
         val codegenScope = arrayOf(
             "HashMap" to RuntimeType.HashMap,
             "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueSymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
+            "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
