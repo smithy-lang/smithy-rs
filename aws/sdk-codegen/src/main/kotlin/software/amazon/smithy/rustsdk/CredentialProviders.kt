@@ -93,7 +93,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             }
 
             is ServiceConfig.DefaultForTests -> rustTemplate(
-                "${section.configBuilderRef}.set_credentials_provider(Some(Arc::new(#{TestCredentials}::for_tests())));",
+                "${section.configBuilderRef}.set_credentials_provider(Some(std::sync::Arc::new(#{TestCredentials}::for_tests())));",
                 *codegenScope,
             )
 
