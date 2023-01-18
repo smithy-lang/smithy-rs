@@ -123,9 +123,9 @@ mod builder {
     /// Builder for constructing a `LazyCredentialsCache`.
     ///
     /// `LazyCredentialsCache` implements [`ProvideCachedCredentials`](crate::cache::ProvideCachedCredentials) by caching
-    /// credentials that it loads by calling a user-provided [`ProvideCredentials`] implementation.
+    /// credentials that it loads by calling a user-provided [`ProvideCredentials`](crate::provider::ProvideCredentials) implementation.
     ///
-    /// For example, you can provide a [`ProvideCredentials`] implementation that calls
+    /// For example, you can provide a [`ProvideCredentials`](crate::provider::ProvideCredentials) implementation that calls
     /// AWS STS's AssumeRole operation to get temporary credentials, and `LazyCredentialsCache`
     /// will cache those credentials until they expire.
     ///
@@ -179,7 +179,7 @@ mod builder {
             self
         }
 
-        /// Timeout for the given [`ProvideCredentials`] implementation.
+        /// Timeout for the given [`ProvideCredentials`](crate::provider::ProvideCredentials) implementation.
         ///
         /// Defaults to 5 seconds.
         pub fn load_timeout(mut self, timeout: Duration) -> Self {
@@ -187,7 +187,7 @@ mod builder {
             self
         }
 
-        /// Timeout for the given [`ProvideCredentials`] implementation.
+        /// Timeout for the given [`ProvideCredentials`](crate::provider::ProvideCredentials) implementation.
         ///
         /// Defaults to 5 seconds.
         pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
@@ -221,7 +221,7 @@ mod builder {
 
         /// Default expiration time to set on credentials if they don't have an expiration time.
         ///
-        /// This is only used if the given [`ProvideCredentials`] returns
+        /// This is only used if the given [`ProvideCredentials`](crate::provider::ProvideCredentials) returns
         /// [`Credentials`](crate::Credentials) that don't have their `expiry` set.
         /// This must be at least 15 minutes.
         ///
@@ -233,7 +233,7 @@ mod builder {
 
         /// Default expiration time to set on credentials if they don't have an expiration time.
         ///
-        /// This is only used if the given [`ProvideCredentials`] returns
+        /// This is only used if the given [`ProvideCredentials`](crate::provider::ProvideCredentials) returns
         /// [`Credentials`](crate::Credentials) that don't have their `expiry` set.
         /// This must be at least 15 minutes.
         ///
