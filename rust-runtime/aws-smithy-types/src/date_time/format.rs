@@ -405,12 +405,6 @@ pub(crate) mod rfc3339 {
     // Timezones not supported:
     // Not OK: 1985-04-12T23:20:50-02:00
     pub(crate) fn parse(s: &str) -> Result<DateTime, DateTimeParseError> {
-        if !matches!(s.chars().last(), Some('Z')) {
-            return Err(DateTimeParseErrorKind::Invalid(
-                "Smithy does not support timezone offsets in RFC-3339 date times".into(),
-            )
-            .into());
-        }
         let date_time = OffsetDateTime::parse(s, &Rfc3339).map_err(|err| {
             DateTimeParseErrorKind::Invalid(format!("invalid RFC-3339 date-time: {}", err).into())
         })?;

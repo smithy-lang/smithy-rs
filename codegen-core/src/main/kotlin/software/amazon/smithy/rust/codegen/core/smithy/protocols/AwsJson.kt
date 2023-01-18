@@ -79,6 +79,15 @@ class AwsJsonHttpBindingResolver(
     override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
         bindings(errorShape)
 
+    override fun timestampFormat(
+        memberShape: MemberShape,
+        location: HttpLocation,
+        defaultTimestampFormat: TimestampFormatTrait.Format,
+    ): TimestampFormatTrait.Format {
+        return memberShape.getMemberTrait(model, TimestampFormatTrait::class.java).map { it.format }
+            .orElse(defaultTimestampFormat)
+    }
+
     override fun requestContentType(operationShape: OperationShape): String =
         "application/x-amz-json-${awsJsonVersion.value}"
 
