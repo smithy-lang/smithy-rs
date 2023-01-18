@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -15,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -46,6 +48,10 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
                 }
             },
         )
+
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
+    }
 }
 
 /**
@@ -54,13 +60,19 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "provider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider"),
+        "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
+        "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
         "DefaultProvider" to defaultProvider(),
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.BuilderStruct ->
-                rustTemplate("credentials_provider: Option<std::sync::Arc<dyn #{provider}::ProvideCredentials>>,", *codegenScope)
+                rustTemplate(
+                    "credentials_provider: Option<std::sync::Arc<dyn #{provider}::ProvideCredentials>>,",
+                    *codegenScope,
+                )
+
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
@@ -79,6 +91,11 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                     *codegenScope,
                 )
             }
+
+            is ServiceConfig.DefaultForTests -> rustTemplate(
+                "${section.configBuilderRef}.set_credentials_provider(Some(std::sync::Arc::new(#{TestCredentials}::for_tests())));",
+                *codegenScope,
+            )
 
             else -> emptySection
         }

@@ -210,6 +210,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Phantom = std.resolve("marker::PhantomData")
         val StdError = std.resolve("error::Error")
         val String = std.resolve("string::String")
+        val Bool = std.resolve("primitive::bool")
         val TryFrom = stdConvert.resolve("TryFrom")
         val Vec = std.resolve("vec::Vec")
 

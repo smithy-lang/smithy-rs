@@ -465,6 +465,9 @@ class Attribute(val inner: Writable) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
+        fun shouldPanic(expectedMessage: String) =
+            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
 
@@ -505,6 +508,8 @@ class Attribute(val inner: Writable) {
         fun doc(vararg attrMacros: Writable): Writable = macroWithArgs("doc", *attrMacros)
         fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
         fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
+
+        fun feature(feature: String) = writable("feature = ${feature.dq()}")
 
         fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()
