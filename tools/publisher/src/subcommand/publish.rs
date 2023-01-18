@@ -60,7 +60,7 @@ pub async fn subcommand_publish(
                 publish(&package.handle, &package.crate_path).await?;
 
                 // Keep things slow to avoid getting throttled by crates.io
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
 
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then

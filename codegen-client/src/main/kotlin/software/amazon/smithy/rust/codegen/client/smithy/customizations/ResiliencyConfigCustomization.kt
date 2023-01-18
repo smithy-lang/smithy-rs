@@ -213,9 +213,16 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                     )
 
                 ServiceConfig.BuilderBuild -> rustTemplate(
+                    // We call clone on sleep_impl because the field is used by
+                    // initializing the credentials_cache field later in the build
+                    // method of a Config builder.
+                    // We could rearrange the order of decorators so that AwsCodegenDecorator
+                    // runs before RequiredCustomizations, which in turns renders
+                    // CredentialsCacheDecorator before this class, but that is a bigger
+                    // change than adding a call to the clone method on sleep_impl.
                     """
                     retry_config: self.retry_config,
-                    sleep_impl: self.sleep_impl,
+                    sleep_impl: self.sleep_impl.clone(),
                     timeout_config: self.timeout_config,
                     """,
                     *codegenScope,
