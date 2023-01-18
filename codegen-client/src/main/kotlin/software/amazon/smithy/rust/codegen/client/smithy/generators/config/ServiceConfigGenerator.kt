@@ -99,11 +99,10 @@ sealed class ServiceConfig(name: String) : Section(name) {
 data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writable?, val getterDocs: Writable? = null)
 
 /**
- * Config customization for a standard config param:
+ * Config customization for a config param with no special behavior:
  * 1. `pub(crate)` field
- * 2. pub(crate) accessor
- * 3. convenience setter (non-optional)
- * 4. standard setter (&mut self)
+ * 2. convenience setter (non-optional)
+ * 3. standard setter (&mut self)
  */
 fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
     override fun section(section: ServiceConfig): Writable {

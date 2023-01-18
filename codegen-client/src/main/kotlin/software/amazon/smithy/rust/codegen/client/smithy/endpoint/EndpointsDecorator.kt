@@ -58,7 +58,23 @@ interface EndpointCustomization {
 
     /**
      * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
+     *
+     * Example:
+     * ```kotlin
+     * override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+     *     if (name != Builtins.REGION.builtIn.get()) {
+     *         return null
+     *     }
+     *     return writable {
+     *         rustTemplate(
+     *             "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+     *             "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+     *         )
+     *     }
+     * }
+     * ```
      */
+
     fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 
     /**

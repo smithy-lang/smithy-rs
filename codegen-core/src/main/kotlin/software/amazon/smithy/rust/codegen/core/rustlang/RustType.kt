@@ -466,7 +466,9 @@ class Attribute(val inner: Writable) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
-        val ShouldPanic = Attribute("should_panic")
+        fun shouldPanic(expectedMessage: String) =
+            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
 

@@ -88,7 +88,7 @@ class S3Decorator : ClientCodegenDecorator {
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(object : EndpointCustomization {
             override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                if (name.startsWith("S3")) {
+                if (!name.startsWith("AWS::S3")) {
                     return null
                 }
                 val builtIn = codegenContext.getBuiltIn(name) ?: return null
