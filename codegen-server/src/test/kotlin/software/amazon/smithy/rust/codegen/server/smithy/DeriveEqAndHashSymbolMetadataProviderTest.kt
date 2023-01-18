@@ -182,6 +182,7 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
                 "test#StreamingOperationInputOutput",
                 "test#EventStreamOperationInputOutput",
                 "test#StreamingUnion",
+                "test#BlobStream",
                 "test#TestInputOutput",
                 "test#HasFloat",
                 "test#HasDouble",
@@ -223,21 +224,10 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["smithy.api#Blob", "test#BlobStream"])
-    fun `unconstrained blobs have no metadata`(shapeId: String) {
-        // Unconstrained blobs have no metadata. `Eq` and `Hash` are derived on `aws_smithy_types::Blob` instead.
-
-        val shape = model.lookup<Shape>(shapeId)
-        shouldThrowAny {
-            deriveEqAndHashSymbolMetadataProvider.toSymbol(shape).expectRustMetadata()
-        }
-    }
-
-    @ParameterizedTest
     // These don't implement `PartialEq` because they are not constrained, so they don't generate newtypes. If the
     // symbol provider wrapped `ConstrainedShapeSymbolProvider` and they were constrained, they would generate
     // newtypes, and they would hence implement `PartialEq`.
-    @ValueSource(strings = ["test#List", "test#Map", "test#ListWithMap"])
+    @ValueSource(strings = ["test#List", "test#Map", "test#ListWithMap", "smithy.api#Blob"])
     fun `it should not derive Eq if shape does not implement PartialEq`(shapeId: String) {
         val shape = model.lookup<Shape>(shapeId)
         val derives = deriveEqAndHashSymbolMetadataProvider.toSymbol(shape).expectRustMetadata().derives
