@@ -2,6 +2,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldNotContain
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -226,5 +227,17 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
         shouldThrowAny {
             deriveEqAndHashSymbolMetadataProvider.toSymbol(shape).expectRustMetadata()
         }
+    }
+
+    @ParameterizedTest
+    // These don't implement `PartialEq` because they are not constrained, so they don't generate newtypes. If the
+    // symbol provider wrapped `ConstrainedShapeSymbolProvider` and they were constrained, they would generate
+    // newtypes, and they would hence implement `PartialEq`.
+    @ValueSource(strings = ["test#List", "test#Map", "test#ListWithMap"])
+    fun `it should not derive Eq if shape does not implement PartialEq`(shapeId: String) {
+        val shape = model.lookup<Shape>(shapeId)
+        val derives = deriveEqAndHashSymbolMetadataProvider.toSymbol(shape).expectRustMetadata().derives
+        derives shouldNotContain RuntimeType.PartialEq
+        derives shouldNotContain RuntimeType.Eq
     }
 }

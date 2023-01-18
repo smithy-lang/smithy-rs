@@ -18,8 +18,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -55,7 +57,6 @@ class ConstrainedBlobGenerator(
         val inner = RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        // TODO Delegate RustMetadata entirely to the symbol provider
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
         } else {
@@ -70,23 +71,26 @@ class ConstrainedBlobGenerator(
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
-        }
-        writer.rust(
-            """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
-                    &self.0
-                }
-
+        writer.rustBlock("impl $name") {
+            if (constrainedTypeVisibility == Visibility.PUBLIC) {
+                writer.rust(
+                    """
+                    /// ${rustDocsInnerMethod(inner)}
+                    pub fn inner(&self) -> &$inner {
+                        &self.0
+                    }
+                    """,
+                )
+            }
+            writer.rust(
+                """
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }""",
-        )
+                """,
+            )
+        }
 
         writer.renderTryFrom(inner, name, constraintViolation, constraintsInfo)
 

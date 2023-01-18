@@ -16,7 +16,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.containerDefaultMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 
-// TODO Docs
+/**
+ * This symbol metadata provider adds the usual derives on shapes that are constrained and hence generate newtypes.
+ *
+ * It also makes the newtypes `pub(crate)` when `publicConstrainedTypes` is disabled.
+ */
 class ConstrainedShapeSymbolMetadataProvider(
     private val base: RustSymbolProvider,
     private val model: Model,

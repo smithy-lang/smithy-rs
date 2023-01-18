@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
@@ -71,25 +72,12 @@ class ConstrainedStringGenerator(
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        // TODO Delegate RustMetadata entirely to the symbol provider
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        val constrainedTypeMetadata = RustMetadata(
-            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash),
-            visibility = constrainedTypeVisibility,
-        )
-
-        // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
-        // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
-        // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = symbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
+        if (metadata.visibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
         writer.rust(
@@ -223,6 +211,9 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
      */
     @Suppress("UNUSED_PARAMETER")
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
+        // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
+        // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
+        // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
         rust(
             """
             fn check_length(string: &str) -> Result<(), $constraintViolation> {
