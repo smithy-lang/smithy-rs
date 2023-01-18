@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -38,7 +39,7 @@ class ConstrainedShapeSymbolMetadataProvider(
     override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
 
     private fun addDerivesAndAdjustVisibilityIfConstrained(shape: Shape): RustMetadata {
-        check(shape is ListShape || shape is MapShape || shape is StringShape || shape is NumberShape)
+        check(shape is ListShape || shape is MapShape || shape is StringShape || shape is NumberShape || shape is BlobShape)
 
         val baseMetadata = base.toSymbol(shape).expectRustMetadata()
         val derives = baseMetadata.derives.toMutableSet()
@@ -56,4 +57,5 @@ class ConstrainedShapeSymbolMetadataProvider(
     override fun mapMeta(mapShape: MapShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(mapShape)
     override fun stringMeta(stringShape: StringShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(stringShape)
     override fun numberMeta(numberShape: NumberShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(numberShape)
+    override fun blobMeta(blobShape: BlobShape) = addDerivesAndAdjustVisibilityIfConstrained(blobShape)
 }

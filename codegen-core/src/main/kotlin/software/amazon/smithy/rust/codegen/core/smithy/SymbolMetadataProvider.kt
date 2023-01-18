@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -62,6 +63,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is ListShape -> listMeta(shape)
             is MapShape -> mapMeta(shape)
             is NumberShape -> numberMeta(shape)
+            is BlobShape -> blobMeta(shape)
             is StringShape -> if (shape.hasTrait<EnumTrait>()) {
                 enumMeta(shape)
             } else {
@@ -82,6 +84,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
     abstract fun mapMeta(mapShape: MapShape): RustMetadata
     abstract fun stringMeta(stringShape: StringShape): RustMetadata
     abstract fun numberMeta(numberShape: NumberShape): RustMetadata
+    abstract fun blobMeta(blobShape: BlobShape): RustMetadata
 }
 
 fun containerDefaultMetadata(
@@ -163,6 +166,7 @@ class BaseSymbolMetadataProvider(
     override fun mapMeta(mapShape: MapShape) = defaultRustMetadata
     override fun stringMeta(stringShape: StringShape) = defaultRustMetadata
     override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata
+    override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata
 }
 
 private const val META_KEY = "meta"

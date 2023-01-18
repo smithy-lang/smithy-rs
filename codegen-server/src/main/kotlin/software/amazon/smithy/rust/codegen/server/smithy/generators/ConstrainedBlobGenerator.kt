@@ -57,22 +57,13 @@ class ConstrainedBlobGenerator(
         val inner = RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        val constrainedTypeMetadata = RustMetadata(
-            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash),
-            visibility = constrainedTypeVisibility,
-        )
-
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = symbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
         writer.rustBlock("impl $name") {
-            if (constrainedTypeVisibility == Visibility.PUBLIC) {
+            if (metadata.visibility == Visibility.PUBLIC) {
                 writer.rust(
                     """
                     /// ${rustDocsInnerMethod(inner)}

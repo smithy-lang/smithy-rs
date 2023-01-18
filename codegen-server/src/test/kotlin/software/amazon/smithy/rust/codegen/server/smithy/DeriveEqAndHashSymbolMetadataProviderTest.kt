@@ -225,8 +225,8 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
 
     @ParameterizedTest
     @ValueSource(strings = ["smithy.api#Blob", "test#BlobStream"])
-    fun `blobs have no metadata`(shapeId: String) {
-        // Blobs have no metadata. `Eq` and `Hash` are derived on `aws_smithy_types::Blob` instead.
+    fun `unconstrained blobs have no metadata`(shapeId: String) {
+        // Unconstrained blobs have no metadata. `Eq` and `Hash` are derived on `aws_smithy_types::Blob` instead.
 
         val shape = model.lookup<Shape>(shapeId)
         shouldThrowAny {

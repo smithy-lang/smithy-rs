@@ -112,4 +112,5 @@ class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider,
     override fun mapMeta(mapShape: MapShape) = base.toSymbol(mapShape).expectRustMetadata()
     override fun stringMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
+    override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
 }
