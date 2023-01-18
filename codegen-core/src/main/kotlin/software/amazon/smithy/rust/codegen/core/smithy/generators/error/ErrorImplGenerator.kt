@@ -13,26 +13,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
-import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.StdError
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.genericError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -79,7 +70,7 @@ fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
     }
 }
 
-class ErrorGenerator(
+class ErrorImplGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
@@ -91,62 +82,6 @@ class ErrorGenerator(
 
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         val symbol = symbolProvider.toSymbol(shape)
-
-        StructureGenerator(
-            model, symbolProvider, writer, shape,
-            listOf(object : StructureCustomization() {
-                override fun section(section: StructureSection): Writable = writable {
-                    when (section) {
-                        is StructureSection.AdditionalFields -> {
-                            rust("pub(crate) _meta: #T,", genericError(runtimeConfig))
-                        }
-                        is StructureSection.AdditionalDebugFields -> {
-                            rust("""${section.formatterName}.field("_meta", &self._meta);""")
-                        }
-                    }
-                }
-            },
-            ),
-        ).render()
-
-        BuilderGenerator(
-            model, symbolProvider, shape,
-            listOf(object : BuilderCustomization() {
-                override fun section(section: BuilderSection): Writable = writable {
-                    when (section) {
-                        is BuilderSection.AdditionalFields -> {
-                            rust("_meta: Option<#T>,", genericError(runtimeConfig))
-                        }
-                        is BuilderSection.AdditionalMethods -> {
-                            rustTemplate(
-                                """
-                                pub(crate) fn _meta(mut self, _meta: #{generic_error}) -> Self {
-                                    self._meta = Some(_meta);
-                                    self
-                                }
-
-                                pub(crate) fn _set_meta(&mut self, _meta: Option<#{generic_error}>) -> &mut Self {
-                                    self._meta = _meta;
-                                    self
-                                }
-                                """,
-                                "generic_error" to genericError(runtimeConfig),
-                            )
-                        }
-                        is BuilderSection.AdditionalFieldsInBuild -> {
-                            rust("_meta: self._meta.unwrap_or_default(),")
-                        }
-                    }
-                }
-            },
-            ),
-        ).let { builderGen ->
-            writer.implBlock(symbol) {
-                builderGen.renderConvenienceMethod(this)
-            }
-            builderGen.render(writer)
-        }
-
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.retryErrorKind(runtimeConfig)
         writer.rustBlock("impl ${symbol.name}") {
@@ -224,10 +159,6 @@ class ErrorGenerator(
         }
 
         writer.write("impl #T for ${symbol.name} {}", StdError)
-
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.errorMetadataTrait(runtimeConfig)) {
-            rust("fn meta(&self) -> &#T { &self._meta }", genericError(runtimeConfig))
-        }
 
         writer.writeCustomizations(customizations, ErrorSection.ErrorAdditionalTraitImpls(symbol))
     }

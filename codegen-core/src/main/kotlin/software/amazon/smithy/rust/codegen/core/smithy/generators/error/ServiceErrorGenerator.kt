@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -111,16 +112,16 @@ class ServiceErrorGenerator(
                 ) {
                     rustBlock("match err") {
                         rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
-                        rustTemplate(
-                            """
-                            _ => {
-                                use #{ErrorMetadata};
-                                Error::Unhandled(#{Unhandled}::builder().meta(err.meta().clone()).source(err).build())
-                            }
-                            """,
-                            "ErrorMetadata" to RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig),
-                            "Unhandled" to unhandledError(codegenContext.runtimeConfig),
-                        )
+                        withBlock(
+                            "_ => Error::Unhandled(#T::builder()",
+                            ".source(err).build()),",
+                            unhandledError(codegenContext.runtimeConfig),
+                        ) {
+                            writeCustomizations(
+                                customizations,
+                                ErrorSection.ServiceErrorAdditionalUnhandledErrorBuildFields("err"),
+                            )
+                        }
                     }
                 }
             }

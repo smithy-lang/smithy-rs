@@ -304,7 +304,7 @@ class ProtocolTestGenerator(
             val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
-            rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
+            rustBlock("if let #T::$errorVariant(actual_error) = parsed", errorSymbol) {
                 rustTemplate("#{AssertEq}(expected_output, actual_error);", *codegenScope)
             }
             rustBlock("else") {

@@ -16,14 +16,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
@@ -76,7 +76,7 @@ internal class ServiceErrorGeneratorTest {
             CodegenTarget.CLIENT,
         )
 
-        val rustCrate = RustCrate(
+        val rustCrate = TestWriterDelegator(
             pluginContext.fileManifest,
             symbolProvider,
             codegenContext.settings.codegenConfig,
@@ -99,9 +99,11 @@ internal class ServiceErrorGeneratorTest {
             }
             for (shape in model.structureShapes) {
                 if (shape.id.namespace == "com.example") {
+                    StructureGenerator(model, symbolProvider, this, shape, emptyList()).render()
+
                     val errorTrait = shape.getTrait<ErrorTrait>()
                     if (errorTrait != null) {
-                        ErrorGenerator(
+                        ErrorImplGenerator(
                             model,
                             symbolProvider,
                             this,
@@ -109,8 +111,6 @@ internal class ServiceErrorGeneratorTest {
                             errorTrait,
                             listOf(),
                         ).render(CodegenTarget.CLIENT)
-                    } else {
-                        StructureGenerator(model, symbolProvider, this, shape, emptyList()).render()
                     }
                 }
             }
@@ -127,8 +127,6 @@ internal class ServiceErrorGeneratorTest {
             }
             """,
         )
-        rustCrate.finalize(settings, model, emptyMap(), emptyList(), false)
-
-        "cargo test".runCommand(testDir)
+        rustCrate.compileAndTest()
     }
 }

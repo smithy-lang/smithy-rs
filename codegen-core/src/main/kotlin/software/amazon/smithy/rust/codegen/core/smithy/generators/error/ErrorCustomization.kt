@@ -14,11 +14,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 /** Error customization sections */
 sealed class ErrorSection(name: String) : Section(name) {
     /** Use this section to add additional trait implementations to the generated operation errors */
-    data class OperationErrorAdditionalTraitImpls(val errorType: RuntimeType) : ErrorSection("OperationErrorAdditionalTraitImpls")
+    data class OperationErrorAdditionalTraitImpls(val errorType: RuntimeType, val allErrors: List<StructureShape>) :
+        ErrorSection("OperationErrorAdditionalTraitImpls")
 
     /** Use this section to add additional trait implementations to the generated service error */
     class ServiceErrorAdditionalTraitImpls(val allErrors: List<StructureShape>) :
         ErrorSection("ServiceErrorAdditionalTraitImpls")
+
+    /** Use this section to add additional fields to unhandled error construction */
+    class ServiceErrorAdditionalUnhandledErrorBuildFields(errorVariableName: String) :
+        ErrorSection("ServiceErrorAdditionalUnhandledErrorBuildFields")
 
     /** Use this section to add additional trait implementations to the generated error structures */
     class ErrorAdditionalTraitImpls(val errorType: Symbol) : ErrorSection("ErrorAdditionalTraitImpls")
