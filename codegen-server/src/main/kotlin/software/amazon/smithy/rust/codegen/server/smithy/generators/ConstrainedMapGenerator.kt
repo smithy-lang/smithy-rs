@@ -58,7 +58,7 @@ class ConstrainedMapGenerator(
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
+        val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
         val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
@@ -69,7 +69,7 @@ class ConstrainedMapGenerator(
 
         val codegenScope = arrayOf(
             "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueSymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
+            "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
@@ -80,7 +80,7 @@ class ConstrainedMapGenerator(
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rustTemplate(
             """

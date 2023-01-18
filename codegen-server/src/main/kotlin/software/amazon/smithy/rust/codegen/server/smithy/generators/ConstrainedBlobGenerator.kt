@@ -70,7 +70,7 @@ class ConstrainedBlobGenerator(
         constrainedTypeMetadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rust(
             """
