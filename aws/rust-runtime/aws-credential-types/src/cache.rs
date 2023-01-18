@@ -11,7 +11,7 @@ mod lazy_caching;
 pub use expiring_cache::ExpiringCache;
 pub use lazy_caching::Builder as LazyBuilder;
 
-use crate::provider::{future, ProvideCredentials};
+use crate::provider::{future, SharedCredentialsProvider};
 use std::sync::Arc;
 
 /// Asynchronous Cached Credentials Provider
@@ -73,11 +73,11 @@ pub(crate) enum Inner {
 /// use aws_credential_types::Credentials;
 /// use aws_credential_types::cache::CredentialsCache;
 /// use aws_credential_types::credential_fn::provide_credentials_fn;
-/// use std::sync::Arc;
+/// use aws_credential_types::provider::SharedCredentialsProvider;
 ///
 /// let credentials_cache = CredentialsCache::lazy_builder()
 ///     .into_credentials_cache()
-///     .create_cache(Arc::new(provide_credentials_fn(|| async {
+///     .create_cache(SharedCredentialsProvider::new(provide_credentials_fn(|| async {
 ///         // An async process to retrieve credentials would go here:
 ///         Ok(Credentials::new(
 ///             "example",
@@ -105,7 +105,7 @@ impl CredentialsCache {
     }
 
     /// Creates a [`SharedCredentialsCache`] wrapping a concrete caching implementation.
-    pub fn create_cache(self, provider: Arc<dyn ProvideCredentials>) -> SharedCredentialsCache {
+    pub fn create_cache(self, provider: SharedCredentialsProvider) -> SharedCredentialsCache {
         match self.inner {
             Inner::Lazy(builder) => SharedCredentialsCache::new(builder.build(provider)),
         }

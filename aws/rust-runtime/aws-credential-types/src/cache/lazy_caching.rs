@@ -13,6 +13,7 @@ use aws_smithy_async::rt::sleep::AsyncSleep;
 use tracing::{debug, info, info_span, Instrument};
 
 use crate::cache::{ExpiringCache, ProvideCachedCredentials};
+use crate::provider::SharedCredentialsProvider;
 use crate::provider::{error::CredentialsError, future, ProvideCredentials};
 use crate::time_source::TimeSource;
 
@@ -25,7 +26,7 @@ pub(crate) struct LazyCredentialsCache {
     time: TimeSource,
     sleeper: Arc<dyn AsyncSleep>,
     cache: ExpiringCache<Credentials, CredentialsError>,
-    provider: Arc<dyn ProvideCredentials>,
+    provider: SharedCredentialsProvider,
     load_timeout: Duration,
     default_credential_expiration: Duration,
 }
@@ -34,7 +35,7 @@ impl LazyCredentialsCache {
     fn new(
         time: TimeSource,
         sleeper: Arc<dyn AsyncSleep>,
-        provider: Arc<dyn ProvideCredentials>,
+        provider: SharedCredentialsProvider,
         load_timeout: Duration,
         default_credential_expiration: Duration,
         buffer_time: Duration,
@@ -110,7 +111,7 @@ mod builder {
     use std::time::Duration;
 
     use crate::cache::{CredentialsCache, Inner};
-    use crate::provider::ProvideCredentials;
+    use crate::provider::SharedCredentialsProvider;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 
     use super::TimeSource;
@@ -258,7 +259,7 @@ mod builder {
         /// This will panic if no `sleep` implementation is given and if no default crate features
         /// are used. By default, the [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep)
         /// implementation will be set automatically.
-        pub(crate) fn build(self, provider: Arc<dyn ProvideCredentials>) -> LazyCredentialsCache {
+        pub(crate) fn build(self, provider: SharedCredentialsProvider) -> LazyCredentialsCache {
             let default_credential_expiration = self
                 .default_credential_expiration
                 .unwrap_or(DEFAULT_CREDENTIAL_EXPIRATION);
@@ -289,6 +290,7 @@ mod tests {
     use tracing::info;
     use tracing_test::traced_test;
 
+    use crate::provider::SharedCredentialsProvider;
     use crate::{
         cache::ProvideCachedCredentials, credential_fn::provide_credentials_fn,
         provider::error::CredentialsError, time_source::TestingTimeSource, Credentials,
@@ -307,7 +309,7 @@ mod tests {
         LazyCredentialsCache::new(
             time,
             Arc::new(TokioSleep::new()),
-            Arc::new(provide_credentials_fn(move || {
+            SharedCredentialsProvider::new(provide_credentials_fn(move || {
                 let list = load_list.clone();
                 async move {
                     let next = list.lock().unwrap().remove(0);
@@ -341,7 +343,7 @@ mod tests {
     #[tokio::test]
     async fn initial_populate_credentials() {
         let time = TestingTimeSource::new(UNIX_EPOCH);
-        let provider = Arc::new(provide_credentials_fn(|| async {
+        let provider = SharedCredentialsProvider::new(provide_credentials_fn(|| async {
             info!("refreshing the credentials");
             Ok(credentials(1000))
         }));
@@ -464,7 +466,7 @@ mod tests {
         let credentials_cache = LazyCredentialsCache::new(
             TimeSource::testing(&time),
             Arc::new(TokioSleep::new()),
-            Arc::new(provide_credentials_fn(|| async {
+            SharedCredentialsProvider::new(provide_credentials_fn(|| async {
                 aws_smithy_async::future::never::Never::new().await;
                 Ok(credentials(1000))
             })),
