@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "Upgrade Rust MSRV to 1.63.0"
+references = ["smithy-rs#2222"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "Nugine"
+
+[[smithy-rs]]
 message = "`@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported"
 references = ["smithy-rs#2213"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}

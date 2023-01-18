@@ -16,7 +16,7 @@ on:
         type: boolean
 
 env:
-  rust_version: 1.62.1
+  rust_version: 1.63.0
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
