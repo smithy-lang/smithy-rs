@@ -538,15 +538,14 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
+        // Fallback to the default code of `@http`, 200.
+        val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: HttpTrait.builder().build().code
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
-                serverRenderResponseCodeBinding(it)(this)
+                serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
             }
             // no binding, use http's
-            ?: operationShape.getTrait<HttpTrait>()?.code?.let {
-                serverRenderHttpResponseCode(it)(this)
-            }
-        // Fallback to the default code of `http::response::Builder`, 200.
+            ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
@@ -669,6 +668,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun serverRenderResponseCodeBinding(
         binding: HttpBindingDescriptor,
+        fallbackStatusCode: Int,
     ): Writable {
         check(binding.location == HttpLocation.RESPONSE_CODE)
 
@@ -678,7 +678,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             if (symbolProvider.toSymbol(binding.member).isOptional()) {
                 rustTemplate(
                     """
-                    .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?
+                    .unwrap_or($fallbackStatusCode)
                     """.trimIndent(),
                     *codegenScope,
                 )
