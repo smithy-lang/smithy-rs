@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -26,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -76,30 +76,13 @@ class ConstrainedNumberGenerator(
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
 
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        val constrainedTypeMetadata = RustMetadata(
-
-            setOf(
-                RuntimeType.Debug,
-                RuntimeType.Clone,
-                RuntimeType.PartialEq,
-                RuntimeType.Eq,
-                RuntimeType.Hash,
-            ),
-
-            visibility = constrainedTypeVisibility,
-        )
-
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = symbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rust("struct $name(pub(crate) $unconstrainedTypeName);")
 
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
+        if (metadata.visibility == Visibility.PUBCRATE) {
             Attribute.AllowDeadCode.render(writer)
         }
         writer.rustTemplate(
