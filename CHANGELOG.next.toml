@@ -322,3 +322,15 @@ set_credentials_cache(
 references = ["smithy-rs#2122"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `Eq` and `Hash` traits"
+references = ["smithy-rs#2223"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+author = "david-perez"
+
+[[smithy-rs]]
+message = "Code-generated types for server SDKs now implement the `Eq` and `Hash` traits when possible"
+references = ["smithy-rs#2223"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "david-perez"

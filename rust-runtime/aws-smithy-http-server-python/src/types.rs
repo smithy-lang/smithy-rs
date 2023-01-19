@@ -26,7 +26,7 @@ use crate::PyError;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
 #[pyclass]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Blob(aws_smithy_types::Blob);
 
 impl Blob {
@@ -88,7 +88,7 @@ impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
 
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);
 
 #[pyclass]
