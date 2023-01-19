@@ -14,7 +14,6 @@
 )]
 
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
-use std::collections::HashMap;
 
 mod blob;
 pub use blob::Blob;
