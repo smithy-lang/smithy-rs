@@ -100,7 +100,7 @@ class ConstrainedNumberGenerator(
         writer.rust("struct $name(pub(crate) $unconstrainedTypeName);")
 
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rustTemplate(
             """

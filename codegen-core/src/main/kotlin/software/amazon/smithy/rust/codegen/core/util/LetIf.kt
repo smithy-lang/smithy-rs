@@ -24,3 +24,8 @@ fun <T> Boolean.thenSingletonListOf(f: () -> T): List<T> = if (this) {
 } else {
     listOf()
 }
+
+/**
+ * Returns this list if it is non-empty otherwise, it returns null
+ */
+fun<T> List<T>.orNullIfEmpty(): List<T>? = this.ifEmpty { null }
