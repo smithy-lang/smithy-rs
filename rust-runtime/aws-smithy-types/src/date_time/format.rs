@@ -660,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_rfc3339_timezone_forbidden() {
+    fn parse_rfc3339_with_timezone() {
         let dt = rfc3339::parse("1985-04-12T21:20:51-02:00");
         assert_eq!(dt.unwrap(), DateTime::from_secs_and_nanos(482196051, 0));
     }
