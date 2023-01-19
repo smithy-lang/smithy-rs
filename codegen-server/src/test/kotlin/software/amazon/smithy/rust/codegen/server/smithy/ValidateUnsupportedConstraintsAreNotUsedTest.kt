@@ -59,13 +59,13 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         // Asserts the exact message, to ensure the formatting is appropriate.
         validationResult.messages[0].message shouldBe """Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
-```smithy
-use smithy.framework#ValidationException
+            ```smithy
+            use smithy.framework#ValidationException
 
-operation TestOperation {
-    ...
-    errors: [..., ValidationException] // <-- Add this.
-}
+            operation TestOperation {
+                ...
+                errors: [..., ValidationException] // <-- Add this.
+            }
 ```"""
     }
 
