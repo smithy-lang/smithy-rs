@@ -270,6 +270,17 @@ open class ServerServiceGenerator(
         }
 
         renderExtras(operations)
+
+        rustCrate.withModule(
+            RustModule.public(
+                "server",
+                """
+                Contains the types that are re-exported from the `aws-smithy-http-server` create.
+                """,
+            ),
+        ) {
+            renderServerReExports(this)
+        }
     }
 
     // Render any extra section needed by subclasses of `ServerServiceGenerator`.
@@ -278,5 +289,10 @@ open class ServerServiceGenerator(
     // Render combined errors.
     open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
         /* Subclasses can override */
+    }
+
+    // Render `server` crate, re-exporting types.
+    private fun renderServerReExports(writer: RustWriter) {
+        ServerRuntimeTypesReExportsGenerator(codegenContext).render(writer)
     }
 }
