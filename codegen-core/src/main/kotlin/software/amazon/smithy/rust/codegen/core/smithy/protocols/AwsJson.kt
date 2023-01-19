@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
@@ -49,16 +50,21 @@ class AwsJsonHttpBindingResolver(
         .uri(UriPattern.parse("/"))
         .build()
 
-    private fun bindings(shape: ToShapeId) =
-        shape.let { model.expectShape(it.toShapeId()) }.members()
-            .map {
-                if (it.isStreaming(model)) {
-                    HttpBindingDescriptor(it, HttpLocation.PAYLOAD, "document")
-                } else {
-                    HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document")
-                }
+    private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
+        val members = shape.let { model.expectShape(it.toShapeId()) }.members()
+        if (members.size > 1 && members.any { it.isStreaming(model) }) {
+            throw CodegenException("A streaming members must be the only member in the payload of the request")
+        }
+
+        return members.map {
+            if (it.isStreaming(model)) {
+                HttpBindingDescriptor(it, HttpLocation.PAYLOAD, "document")
+            } else {
+                HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document")
             }
+        }
             .toList()
+    }
 
     override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
 
