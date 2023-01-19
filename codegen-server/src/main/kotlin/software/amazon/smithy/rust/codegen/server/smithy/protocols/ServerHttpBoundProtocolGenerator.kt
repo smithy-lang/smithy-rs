@@ -597,7 +597,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "let mut input = #T::default();",
             inputShape.serverBuilderSymbol(codegenContext),
         )
-        Attribute.AllowUnused.render(this)
+        Attribute.AllowUnusedVariables.render(this)
         rust("let (parts, body) = request.into_parts();")
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
