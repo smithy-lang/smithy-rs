@@ -155,7 +155,6 @@ After:
 ```rust
 use aws_credential_types::cache::CredentialsCache;
 use aws_types::provider::ProvideCredentials;
-use std::sync::Arc;
 
 fn make_provider() -> impl ProvideCredentials {
     // --snip--
@@ -164,7 +163,7 @@ fn make_provider() -> impl ProvideCredentials {
 // Wrapping a result of `make_provider` in `LazyCredentialsCache` is done automatically.
 let sdk_config = aws_config::from_env()
     .credentials_cache(CredentialsCache::lazy()) // This line can be omitted because it is on by default.
-    .credentials_provider(Arc::new(make_provider()))
+    .credentials_provider(make_provider())
     .load()
     .await;
 
@@ -201,7 +200,6 @@ After:
 ```rust
 use aws_credential_types::cache::CredentialsCache;
 use aws_types::provider::ProvideCredentials;
-use std::sync::Arc;
 use std::time::Duration;
 
 fn make_provider() -> impl ProvideCredentials {
@@ -214,7 +212,7 @@ let sdk_config = aws_config::from_env()
             .load_timeout(Duration::from_secs(60)) // Configures timeout.
             .into_credentials_cache(),
     )
-    .credentials_provider(Arc::new(make_provider()))
+    .credentials_provider(make_provider())
     .load()
     .await;
 
@@ -253,7 +251,6 @@ After:
 ```rust
 use aws_config::default_provider::credentials::default_provider;
 use aws_credential_types::cache::CredentialsCache;
-use std::sync::Arc;
 use std::time::Duration;
 
 // Previously used methods no longer exist on the builder for `DefaultCredentialsChain`.
@@ -266,7 +263,7 @@ let sdk_config = aws_config::from_env()
             .default_credential_expiration(Duration::from_secs(20 * 60))
             .into_credentials_cache(),
     )
-    .credentials_provider(Arc::new(credentials_provider))
+    .credentials_provider(credentials_provider)
     .load()
     .await;
 
@@ -275,13 +272,13 @@ let client = aws_sdk_s3::Client::new(&sdk_config);
 
 </details>
 """
-references = ["smithy-rs#2122"]
+references = ["smithy-rs#2122", "smithy-rs#2227"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = """
-The introduction of `CredentialsCache` comes with an accompanying type `SharedCredentialsCache`. This replaces `SharedCredentialsProvider` and as a result, `aws_http::auth:set_provider` has been updated to `aws_http::auth::set_credentials_cache`.
+The introduction of `CredentialsCache` comes with an accompanying type `SharedCredentialsCache`, which we will store in the property bag instead of a `SharedCredentialsProvider`. As a result, `aws_http::auth:set_provider` has been updated to `aws_http::auth::set_credentials_cache`.
 
 Before:
 ```rust
@@ -303,23 +300,23 @@ After:
 ```rust
 use aws_credential_types::Credentials;
 use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::auth::set_credentials_cache;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation;
-use std::sync::Arc;
 
 let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
 let credentials = Credentials::new("example", "example", None, None, "my_provider_name");
 let credentials_cache = CredentialsCache::lazy_builder()
     .into_credentials_cache()
-    .create_cache(Arc::new(credentials));
+    .create_cache(SharedCredentialsProvider::new(credentials));
 set_credentials_cache(
     &mut req.properties_mut(),
     SharedCredentialsCache::new(credentials_cache),
 );
 ```
 """
-references = ["smithy-rs#2122"]
+references = ["smithy-rs#2122", "smithy-rs#2227"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
