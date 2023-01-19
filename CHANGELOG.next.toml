@@ -287,3 +287,15 @@ message = "The modules in generated client crates have been reorganized. See the
 references = ["smithy-rs#2448"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix bug in timestamp format resolution. Prior to this fix, the timestamp format may have been incorrect if set on the target instead of on the member."
+references = ["smithy-rs#2226"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Add support for offsets when parsing datetimes. RFC3339 date times now support offsets like `-0200`"
+references = ["smithy-rs#2226"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
