@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldNotContain
 import org.junit.jupiter.params.ParameterizedTest
