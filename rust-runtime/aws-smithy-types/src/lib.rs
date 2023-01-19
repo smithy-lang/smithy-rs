@@ -21,12 +21,14 @@ pub use blob::Blob;
 
 pub mod base64;
 pub mod date_time;
+mod document;
 pub mod endpoint;
 pub mod error;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
-pub use crate::date_time::DateTime;
+pub use date_time::DateTime;
+pub use document::Document;
 pub use error::Error;
 
 /* ANCHOR: document */
@@ -106,8 +108,6 @@ pub enum Number {
     /// 64-bit floating-point value.
     Float(f64),
 }
-
-/* ANCHOR_END: document */
 
 impl Number {
     /// Converts to an `f64` lossily.
