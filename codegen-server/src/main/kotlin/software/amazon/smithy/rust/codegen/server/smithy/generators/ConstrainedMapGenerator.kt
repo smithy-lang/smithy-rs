@@ -10,14 +10,14 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -58,16 +58,12 @@ class ConstrainedMapGenerator(
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueMemberSymbol}>"
+        val inner = "#{HashMap}<#{KeySymbol}, #{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-
-        val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
-        val constrainedTypeMetadata = RustMetadata(
-            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq),
-            visibility = constrainedTypeVisibility,
-        )
+        val constrainedSymbol = symbolProvider.toSymbol(shape)
 
         val codegenScope = arrayOf(
+            "HashMap" to RuntimeType.HashMap,
             "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
             "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
             "From" to RuntimeType.From,
@@ -77,25 +73,34 @@ class ConstrainedMapGenerator(
 
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = constrainedSymbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowDeadCode.render(writer)
-        }
-        writer.rustTemplate(
-            """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
-                    &self.0
-                }
-
+        writer.rustBlockTemplate("impl $name", *codegenScope) {
+            if (metadata.visibility == Visibility.PUBLIC) {
+                writer.rustTemplate(
+                    """
+                    /// ${rustDocsInnerMethod(inner)}
+                    pub fn inner(&self) -> &$inner {
+                        &self.0
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+            writer.rustTemplate(
+                """
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }
+                """,
+                *codegenScope,
+            )
+        }
 
+        writer.rustTemplate(
+            """
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
 
@@ -149,6 +154,7 @@ class ConstrainedMapGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
+                *codegenScope,
                 "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
                 "UnconstrainedSymbol" to unconstrainedSymbol,
             )
