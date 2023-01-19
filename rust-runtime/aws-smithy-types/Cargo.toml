@@ -17,6 +17,7 @@ base64-simd = "0.7"
 [target.'cfg(aws_sdk_unstable)'.dependencies.serde]
 version = "1"
 features = ["derive"]
+optional = true
 
 [dev-dependencies]
 base64 = "0.13.0"
@@ -37,3 +38,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
+
+[features]
+"serialize" = []
+"deserialize" = []
