@@ -73,12 +73,17 @@ interface HttpBindingResolver {
 
     /**
      * Determine the timestamp format based on the input parameters.
+     *
+     * By default, this uses the timestamp trait, either on the member or on the target.
      */
     fun timestampFormat(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
-    ): TimestampFormatTrait.Format
+        model: Model,
+    ): TimestampFormatTrait.Format =
+        memberShape.getMemberTrait(model, TimestampFormatTrait::class.java).map { it.format }
+            .orElse(defaultTimestampFormat)
 
     /**
      * Determines the request content type for given [operationShape].
@@ -132,6 +137,7 @@ open class HttpTraitHttpBindingResolver(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
+        model: Model,
     ): TimestampFormatTrait.Format =
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
@@ -184,13 +190,4 @@ open class StaticHttpBindingResolver(
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
 
     override fun responseContentType(operationShape: OperationShape): String = responseContentType
-
-    override fun timestampFormat(
-        memberShape: MemberShape,
-        location: HttpLocation,
-        defaultTimestampFormat: TimestampFormatTrait.Format,
-    ): TimestampFormatTrait.Format {
-        return memberShape.getMemberTrait(model, TimestampFormatTrait::class.java).map { it.format }
-            .orElse(defaultTimestampFormat)
-    }
 }

@@ -120,7 +120,9 @@ class XmlBindingTraitSerializerGenerator(
                         """
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
-                        let mut root = writer.start_el(${operationXmlName.dq()})${inputShape.xmlNamespace(root = true).apply()};
+                        let mut root = writer.start_el(${operationXmlName.dq()})${
+                        inputShape.xmlNamespace(root = true).apply()
+                        };
                         """,
                         *codegenScope,
                     )
@@ -164,6 +166,7 @@ class XmlBindingTraitSerializerGenerator(
                             XmlMemberIndex.fromMembers(target.members().toList()),
                             Ctx.Element("root", "input"),
                         )
+
                         is UnionShape -> serializeUnion(target, Ctx.Element("root", "input"))
                         else -> throw IllegalStateException("xml payloadSerializer only supports structs and unions")
                     }
@@ -208,7 +211,9 @@ class XmlBindingTraitSerializerGenerator(
                         """
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
-                        let mut root = writer.start_el(${operationXmlName.dq()})${outputShape.xmlNamespace(root = true).apply()};
+                        let mut root = writer.start_el(${operationXmlName.dq()})${
+                        outputShape.xmlNamespace(root = true).apply()
+                        };
                         """,
                         *codegenScope,
                     )
@@ -291,23 +296,26 @@ class XmlBindingTraitSerializerGenerator(
                 }
                 rust("$dereferenced.as_str()")
             }
+
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
                     RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                 )
             }
+
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(
                         member,
                         HttpLocation.DOCUMENT,
-                        TimestampFormatTrait.Format.DATE_TIME,
+                        TimestampFormatTrait.Format.DATE_TIME, model,
                     )
                 val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
+
             else -> TODO(member.toString())
         }
     }
@@ -325,18 +333,21 @@ class XmlBindingTraitSerializerGenerator(
                         serializeRawMember(memberShape, ctx.input)
                     }
                 }
+
                 is CollectionShape -> if (memberShape.hasTrait<XmlFlattenedTrait>()) {
                     serializeFlatList(memberShape, target, ctx)
                 } else {
                     rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
                     serializeList(target, Ctx.Scope("inner_writer", ctx.input))
                 }
+
                 is MapShape -> if (memberShape.hasTrait<XmlFlattenedTrait>()) {
                     serializeMap(target, xmlIndex.memberName(memberShape), ctx)
                 } else {
                     rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
                     serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input))
                 }
+
                 is StructureShape -> {
                     // We call serializeStructure only when target.members() is nonempty.
                     // If it were empty, serializeStructure would generate the following code:
@@ -363,10 +374,12 @@ class XmlBindingTraitSerializerGenerator(
                         )
                     }
                 }
+
                 is UnionShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
                     serializeUnion(target, Ctx.Element("inner_writer", ctx.input))
                 }
+
                 else -> TODO(target.toString())
             }
         }

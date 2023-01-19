@@ -345,7 +345,7 @@ class JsonParserGenerator(
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
-                TimestampFormatTrait.Format.EPOCH_SECONDS,
+                TimestampFormatTrait.Format.EPOCH_SECONDS, model,
             )
         val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
         rustTemplate(
