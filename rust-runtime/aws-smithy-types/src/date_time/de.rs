@@ -56,7 +56,7 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
             VisitorState::Second => {
                 self.seconds = v;
                 self.state = VisitorState::SubsecondNanos;
-                return Ok(self)
+                Ok(self)
             }
             _ => "`seconds` value must be i64",
         };
@@ -71,7 +71,7 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
             VisitorState::SubsecondNanos => {
                 self.subsecond_nanos = v;
                 self.state = VisitorState::Unexpected;
-                return Ok(self)
+                Ok(self)
             }
             _ => "`subsecond_nanos` value must be u32",
         };
