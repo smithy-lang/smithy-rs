@@ -227,3 +227,15 @@ message = "Code-generated types for server SDKs now implement the `Eq` and `Hash
 references = ["smithy-rs#2223"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Fix endpoint for s3.write_get_object_response(). This bug was introduced in 0.53."
+references = ["smithy-rs#2204"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `with_test_defaults()` and `set_test_defaults()` to `<service>::Config`. These methods fill in defaults for configuration that is mandatory to successfully send a request."
+references = ["smithy-rs#2204"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
