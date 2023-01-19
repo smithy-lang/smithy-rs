@@ -10,8 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -55,20 +55,18 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         return ModelTransformer.create().mapTraits(model) { _, trait ->
             when (trait) {
                 is EndpointRuleSetTrait -> {
-                    val epRules = EndpointRuleSet.fromNode(trait.ruleSet)
+                    val rules = trait.ruleSet.expectObjectNode()
+                    val params = rules.expectObjectMember("parameters")
                     val newParameters = Parameters.builder()
-                    epRules.parameters.toList()
-                        .map { param ->
-                            param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
-                                parameter.toBuilder().required(true).build()
-                            }
+                    params.members.map { (key, value) ->
+                        val param = Parameter.fromNode(key, value.expectObjectNode())
+                        param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
+                            parameter.toBuilder().required(true).build()
                         }
-                        .forEach(newParameters::addParameter)
-
-                    val newTrait = epRules.toBuilder().parameters(
-                        newParameters.build(),
-                    ).build()
-                    EndpointRuleSetTrait.builder().ruleSet(newTrait.toNode()).build()
+                    }.forEach(newParameters::addParameter)
+                    EndpointRuleSetTrait.builder()
+                        .ruleSet(rules.toBuilder().withMember("parameters", newParameters.build().toNode()).build())
+                        .build()
                 }
 
                 else -> trait
@@ -244,7 +242,9 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                 }
 
                 ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
-                else -> {}
+                ServiceConfig.ConfigStructAdditionalDocs -> emptySection
+                ServiceConfig.Extras -> emptySection
+                else -> emptySection
             }
         }
     }
