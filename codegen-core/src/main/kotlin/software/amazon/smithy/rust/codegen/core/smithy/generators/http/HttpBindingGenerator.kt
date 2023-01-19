@@ -650,12 +650,13 @@ class HttpBindingGenerator(
                 let $safeName = $formatted;
                 if !$safeName.is_empty() {
                     let header_value = $safeName;
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_field_error:W}
                     })?;
                     builder = builder.header("$headerName", header_value);
                 }
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_field_error" to renderErrorMessage("header_value"),
             )
         }
@@ -698,13 +699,14 @@ class HttpBindingGenerator(
                     isMultiValuedHeader = false,
                 )
                 };
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_header_value:W}
                     })?;
                     builder = builder.header(header_name, header_value);
                 }
 
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_header_name" to OperationBuildError(runtimeConfig).invalidField(memberName) {
                     rust("""format!("`{k}` cannot be used as a header name: {err}")""")
                 },

@@ -325,6 +325,16 @@ fun RustType.isCopy(): Boolean = when (this) {
     else -> false
 }
 
+/** Returns true if the type implements Eq */
+fun RustType.isEq(): Boolean = when (this) {
+    is RustType.Integer -> true
+    is RustType.Bool -> true
+    is RustType.String -> true
+    is RustType.Unit -> true
+    is RustType.Container -> this.member.isEq()
+    else -> false
+}
+
 enum class Visibility {
     PRIVATE, PUBCRATE, PUBLIC;
 
@@ -454,6 +464,7 @@ class Attribute(val inner: Writable) {
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
         val AllowClippyUnnecessaryLazyEvaluations = Attribute(allow("clippy::unnecessary_lazy_evaluations"))
+        val AllowClippyDerivePartialEqWithoutEq = Attribute(allow("clippy::derive_partial_eq_without_eq"))
         val AllowDeadCode = Attribute(allow("dead_code"))
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
@@ -544,5 +555,12 @@ class Attribute(val inner: Writable) {
             val (key, value) = pair
             rustInline("$key = $value")
         }
+    }
+}
+
+/** Render all attributes in this list, one after another */
+fun Collection<Attribute>.render(writer: RustWriter) {
+    for (attr in this) {
+        attr.render(writer)
     }
 }

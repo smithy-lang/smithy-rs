@@ -171,6 +171,8 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
     private fun generateEndpointsStruct(writer: RustWriter) {
         // Ensure that fields can be added in the future
         Attribute.NonExhaustive.render(writer)
+        // Required in case we ever need to add a field that's not Eq
+        Attribute.AllowClippyDerivePartialEqWithoutEq.render(writer)
         // Automatically implement standard Rust functionality
         Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)).render(writer)
         // Generate the struct block:
@@ -235,6 +237,8 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
 
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
+        // Required in case we ever need to add a param that's not Eq
+        Attribute.AllowClippyDerivePartialEqWithoutEq.render(rustWriter)
         Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(rustWriter)
         rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->

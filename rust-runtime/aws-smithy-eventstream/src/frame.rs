@@ -95,6 +95,7 @@ mod value {
     const TYPE_UUID: u8 = 9;
 
     /// Event Stream frame header value.
+    #[allow(clippy::derive_partial_eq_without_eq)]
     #[non_exhaustive]
     #[derive(Clone, Debug, PartialEq)]
     pub enum HeaderValue {

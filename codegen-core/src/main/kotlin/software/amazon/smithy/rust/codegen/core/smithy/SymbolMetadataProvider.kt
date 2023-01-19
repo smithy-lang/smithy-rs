@@ -92,7 +92,15 @@ fun containerDefaultMetadata(
     model: Model,
     additionalAttributes: List<Attribute> = emptyList(),
 ): RustMetadata {
-    val defaultDerives = setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
+    // A list of `allow` attributes to ignore linter warnings. Each entry in the list must be
+    // accompanied by a reason.
+    val allowLints = setOf(
+        // Required because service team could add non-Eq types at a later date. This
+        // means we can only ever derive PartialEq.
+        Attribute.AllowClippyDerivePartialEqWithoutEq,
+    )
+
+    val derives = mutableSetOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
 
     val isSensitive = shape.hasTrait<SensitiveTrait>() ||
         // Checking the shape's direct members for the sensitive trait should suffice.
@@ -101,14 +109,13 @@ fun containerDefaultMetadata(
         // shape; any sensitive descendant should still be printed as redacted.
         shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
 
-    val setOfDerives = if (isSensitive) {
-        defaultDerives - RuntimeType.Debug
-    } else {
-        defaultDerives
+    if (isSensitive) {
+        derives.remove(RuntimeType.Debug)
     }
+
     return RustMetadata(
-        setOfDerives,
-        additionalAttributes,
+        derives,
+        additionalAttributes + allowLints,
         Visibility.PUBLIC,
     )
 }
@@ -116,7 +123,7 @@ fun containerDefaultMetadata(
 /**
  * The base metadata supports a set of attributes that are used by generators to decorate code.
  *
- * By default we apply `#[non_exhaustive]` in [additionalAttributes] only to client structures since breaking model
+ * By default, we apply `#[non_exhaustive]` in [additionalAttributes] only to client structures since breaking model
  * changes are fine when generating server code.
  */
 class BaseSymbolMetadataProvider(
