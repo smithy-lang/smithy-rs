@@ -493,7 +493,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
-                val checkValueSet = !shape.members().all { it.isTargetUnit() }
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 if (checkValueSet) {
                     rust("let mut variant_set = false;")
                 }
@@ -535,7 +535,9 @@ class JsonParserGenerator(
                                                 unwrapOrDefaultOrError(member)
                                             }
                                             rust("variant = Some(#T::$variantName(value));", returnSymbolToParse.symbol)
-                                            rust("variant_set = variant_set || is_not_null;")
+                                            if (checkValueSet) {
+                                                rust("variant_set = variant_set || is_not_null;")
+                                            }
                                         }
                                     }
                                 }
