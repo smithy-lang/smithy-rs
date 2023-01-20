@@ -10,10 +10,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
  */
 
 fun rustDocsConstrainedTypeEpilogue(typeName: String) = """
-This is a constrained type because its corresponding modeled Smithy shape has one or more 
-[constraint traits]. Use [`$typeName::try_from`] to construct values of this type.
+    This is a constrained type because its corresponding modeled Smithy shape has one or more
+    [constraint traits]. Use [`$typeName::try_from`] to construct values of this type.
 
-[constraint traits]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html
+    [constraint traits]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html
 """
 
 fun rustDocsTryFromMethod(typeName: String, inner: String) =
