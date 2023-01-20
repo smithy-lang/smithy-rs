@@ -4,6 +4,10 @@
  */
 
 use crate::Number;
+#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+use serde::Deserialize;
+#[cfg(all(aws_sdk_unstable, feature = "serialize"))]
+use serde::Serialize;
 use std::collections::HashMap;
 
 /* ANCHOR: document */
@@ -85,6 +89,10 @@ impl From<i32> for Document {
 
 #[cfg(test)]
 mod test {
+    use crate::Document;
+    use crate::Number;
+    use std::collections::HashMap;
+
     /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
     #[test]
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]

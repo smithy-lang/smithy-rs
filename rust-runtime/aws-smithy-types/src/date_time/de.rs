@@ -24,6 +24,14 @@ struct NonHumanReadableDateTimeVisitor {
     subsecond_nanos: u32,
 }
 
+fn fail<T, M, E>(err_message: M) -> Result<T, E>
+where
+    M: std::fmt::Display,
+    E: serde::de::Error,
+{
+    Err(serde::de::Error::custom(err_message))
+}
+
 impl<'de> Visitor<'de> for DateTimeVisitor {
     type Value = DateTime;
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -36,7 +44,7 @@ impl<'de> Visitor<'de> for DateTimeVisitor {
     {
         match DateTime::from_str(v, Format::DateTime) {
             Ok(e) => Ok(e),
-            Err(e) => Err(serde::de::Error::custom(e)),
+            Err(e) => fail(e),
         }
     }
 }
@@ -51,31 +59,30 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
     where
         E: serde::de::Error,
     {
-        let msg = match self.state {
-            VisitorState::Unexpected => VisitorState::UNEXPECTED_VISITOR_STATE,
+        match self.state {
+            VisitorState::Unexpected => fail(VisitorState::UNEXPECTED_VISITOR_STATE),
             VisitorState::Second => {
                 self.seconds = v;
                 self.state = VisitorState::SubsecondNanos;
                 Ok(self)
             }
-            _ => "`seconds` value must be i64",
-        };
-        Err(serde::de::Error::custom(msg))
+            _ => fail("`seconds` value must be i64"),
+        }
     }
+
     fn visit_u32<E>(mut self, v: u32) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
-        let msg = match self.state {
-            VisitorState::Unexpected => VisitorState::UNEXPECTED_VISITOR_STATE,
+        match self.state {
+            VisitorState::Unexpected => fail(VisitorState::UNEXPECTED_VISITOR_STATE),
             VisitorState::SubsecondNanos => {
                 self.subsecond_nanos = v;
                 self.state = VisitorState::Unexpected;
                 Ok(self)
             }
-            _ => "`subsecond_nanos` value must be u32",
-        };
-        Err(serde::de::Error::custom(msg))
+            _ => fail("`subsecond_nanos` value must be u32"),
+        }
     }
 }
 

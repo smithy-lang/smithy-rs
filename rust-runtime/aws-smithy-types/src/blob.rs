@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(all(test, aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
-mod test;
-
 #[cfg(all(aws_sdk_unstable, feature = "serialize"))]
 use serde::Serialize;
 #[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
@@ -103,5 +100,57 @@ impl<'de> Deserialize<'de> for Blob {
         } else {
             deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Blob;
+    use std::collections::HashMap;
+
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    use serde::{Deserialize, Serialize};
+
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[derive(Deserialize, Serialize, Debug, PartialEq)]
+    struct ForTest {
+        blob: Blob,
+    }
+
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[test]
+    fn human_readable_blob() {
+        let aws_in_base64 = r#"{"blob":"QVdT"}"#;
+        let for_test = ForTest {
+            blob: Blob {
+                inner: vec![b'A', b'W', b'S'],
+            },
+        };
+        assert_eq!(for_test, serde_json::from_str(aws_in_base64).unwrap());
+        assert_eq!(serde_json::to_string(&for_test).unwrap(), aws_in_base64);
+    }
+
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[test]
+    fn not_human_readable_blob() {
+        use std::ffi::CString;
+
+        let for_test = ForTest {
+            blob: Blob {
+                inner: vec![b'A', b'W', b'S'],
+            },
+        };
+        let mut buf = vec![];
+        let res = ciborium::ser::into_writer(&for_test, &mut buf);
+        assert!(res.is_ok());
+
+        // checks whether the bytes are deserialiezd properly
+        let n: HashMap<String, CString> =
+            ciborium::de::from_reader(std::io::Cursor::new(buf.clone())).unwrap();
+        assert!(n.get("blob").is_some());
+        assert!(n.get("blob") == CString::new([65, 87, 83]).ok().as_ref());
+
+        let de: ForTest = ciborium::de::from_reader(std::io::Cursor::new(buf)).unwrap();
+        assert_eq!(for_test, de);
     }
 }

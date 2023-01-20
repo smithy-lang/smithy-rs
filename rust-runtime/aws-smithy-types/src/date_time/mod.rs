@@ -552,6 +552,8 @@ mod test {
     #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
     #[test]
     fn human_readable_datetime() {
+        use serde::{Deserialize, Serialize};
+
         let datetime = DateTime::from_secs(1576540098);
         #[derive(Serialize, Deserialize, PartialEq)]
         struct Test {
