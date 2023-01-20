@@ -52,12 +52,12 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // In RestJson, a streaming member is the unique member in the payload and must be marked with `@httpPayload`.
-        // Until we have an answer on https://github.com/awslabs/smithy/issues/1584, we should restrict protocols
-        // that don't support http traits and have data in payloads to unique streaming member in the payload.
-        // The change is backwards compatible as no release supports @streaming in AwsJson1.0 and relaxing this change in the future will not be breaking.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
         if (members.size > 1 && members.any { it.isStreaming(model) }) {
-            throw CodegenException("A streaming member must be the only member in the payload of a request")
+            throw CodegenException(
+                "We only support one payload member if that payload contains a streaming member." +
+                    "Tracking issue to relax this constraint: https://github.com/awslabs/smithy-rs/issues/2237",
+            )
         }
 
         return members.map {
