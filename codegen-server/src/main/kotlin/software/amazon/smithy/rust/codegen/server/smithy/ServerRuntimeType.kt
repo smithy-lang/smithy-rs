@@ -19,9 +19,6 @@ object ServerRuntimeType {
 
     fun router(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
 
-    fun operationHandler(runtimeConfig: RuntimeConfig) =
-        forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
-
     fun runtimeError(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("runtime_error::RuntimeError")
 
     fun requestRejection(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("rejection::RequestRejection")

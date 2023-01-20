@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -28,6 +27,7 @@ import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -108,7 +108,7 @@ fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider)
         //  so we can't simply delegate to the `else` branch when we implement them.
         this.targetCanReachConstrainedShape(model, symbolProvider)
     } else {
-        Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
+        DirectedWalker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }
 
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =

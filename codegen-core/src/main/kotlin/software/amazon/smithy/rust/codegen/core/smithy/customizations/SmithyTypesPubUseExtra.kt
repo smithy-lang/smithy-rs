@@ -52,10 +52,12 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
             PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
         ) + RuntimeType.smithyTypes(runtimeConfig).let { types ->
-            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
+            listOf(
+                PubUseType(types.resolve("error::display::DisplayErrorContext")) { true },
+                PubUseType(types.resolve("error::ErrorMetadata")) { true },
+            )
         } + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
-                PubUseType(http.resolve("result::ErrorMetadata")) { true },
                 PubUseType(http.resolve("result::SdkError")) { true },
                 PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
                 PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),

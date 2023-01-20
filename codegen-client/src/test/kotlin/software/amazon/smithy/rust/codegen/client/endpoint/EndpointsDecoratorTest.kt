@@ -80,6 +80,9 @@ class EndpointsDecoratorTest {
               "params": {
                 "Region": "test-region"
               },
+              "operationInputs": [
+                { "operationName": "TestOperation" }
+              ],
               "expect": {
                 "endpoint": {
                     "url": "https://failingtest.com"
