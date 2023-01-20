@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.error
+package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -20,13 +20,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 
@@ -112,16 +112,18 @@ class ServiceErrorGenerator(
                 ) {
                     rustBlock("match err") {
                         rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
-                        withBlock(
-                            "_ => Error::Unhandled(#T::builder()",
-                            ".source(err).build()),",
-                            unhandledError(codegenContext.runtimeConfig),
-                        ) {
-                            writeCustomizations(
-                                customizations,
-                                ErrorSection.ServiceErrorAdditionalUnhandledErrorBuildFields("err"),
-                            )
-                        }
+                        rustTemplate(
+                            """
+                            _ => Error::Unhandled(
+                                #{Unhandled}::builder()
+                                    .meta(#{ErrorMetadata}::meta(&err).clone())
+                                    .source(err)
+                                    .build()
+                            ),
+                            """,
+                            "Unhandled" to unhandledError(codegenContext.runtimeConfig),
+                            "ErrorMetadata" to RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig),
+                        )
                     }
                 }
             }

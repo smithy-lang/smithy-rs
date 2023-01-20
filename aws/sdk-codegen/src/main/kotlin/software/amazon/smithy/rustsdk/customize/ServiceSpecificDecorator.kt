@@ -15,13 +15,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 
 /** Only apply this decorator to the given service ID */
 fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): List<ClientCodegenDecorator> =
@@ -83,6 +84,13 @@ class ServiceSpecificDecorator(
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
         delegateTo.errorCustomizations(codegenContext, baseCustomizations)
+    }
+
+    override fun errorImplCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorImplCustomization>,
+    ): List<ErrorImplCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
+        delegateTo.errorImplCustomizations(codegenContext, baseCustomizations)
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {

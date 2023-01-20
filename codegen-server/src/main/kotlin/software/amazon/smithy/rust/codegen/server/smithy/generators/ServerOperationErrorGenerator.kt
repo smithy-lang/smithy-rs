@@ -7,8 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -19,6 +21,21 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+
+/**
+ * For a given Operation ([this]), return the symbol referring to the operation error. This can be used
+ * if you, e.g. want to return an operation error from a function:
+ *
+ * ```kotlin
+ * rustWriter.rustBlock("fn get_error() -> #T", operation.errorSymbol(symbolProvider)) {
+ *     write("todo!() // function body")
+ * }
+ * ```
+ */
+fun OperationShape.errorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
+    val operationSymbol = symbolProvider.toSymbol(this)
+    return RustModule.Error.toType().resolve("${operationSymbol.name}Error")
+}
 
 /**
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,

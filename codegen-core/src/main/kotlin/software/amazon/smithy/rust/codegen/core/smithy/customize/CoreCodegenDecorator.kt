@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -67,14 +67,6 @@ interface CoreCodegenDecorator<CodegenContext> {
     ): List<LibRsCustomization> = baseCustomizations
 
     /**
-     * Hook to customize generated errors.
-     */
-    fun errorCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ErrorCustomization>,
-    ): List<ErrorCustomization> = baseCustomizations
-
-    /**
      * Hook to customize generated structures.
      */
     fun structureCustomizations(
@@ -90,6 +82,14 @@ interface CoreCodegenDecorator<CodegenContext> {
         codegenContext: CodegenContext,
         baseCustomizations: List<BuilderCustomization>,
     ): List<BuilderCustomization> = baseCustomizations
+
+    /**
+     * Hook to customize error struct `impl` blocks.
+     */
+    fun errorImplCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ErrorImplCustomization>,
+    ): List<ErrorImplCustomization> = baseCustomizations
 
     /**
      * Extra sections allow one decorator to influence another. This is intended to be used by querying the `rootDecorator`
@@ -127,13 +127,6 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
             decorator.libRsCustomizations(codegenContext, customizations)
         }
 
-    override fun errorCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ErrorCustomization>,
-    ): List<ErrorCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
-        decorator.errorCustomizations(codegenContext, customizations)
-    }
-
     override fun structureCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<StructureCustomization>,
@@ -146,6 +139,13 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
         baseCustomizations: List<BuilderCustomization>,
     ): List<BuilderCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
         decorator.builderCustomizations(codegenContext, customizations)
+    }
+
+    override fun errorImplCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ErrorImplCustomization>,
+    ): List<ErrorImplCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.errorImplCustomizations(codegenContext, customizations)
     }
 
     final override fun extraSections(codegenContext: CodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =

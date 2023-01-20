@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 

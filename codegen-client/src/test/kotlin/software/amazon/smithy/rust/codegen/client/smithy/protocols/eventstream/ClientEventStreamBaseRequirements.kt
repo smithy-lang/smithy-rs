@@ -16,7 +16,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ClientErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -24,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -79,7 +79,7 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         shape: StructureShape,
     ) {
         val errorTrait = shape.expectTrait<ErrorTrait>()
-        ClientErrorGenerator(
+        ErrorGenerator(
             codegenContext.model,
             codegenContext.symbolProvider,
             writer,

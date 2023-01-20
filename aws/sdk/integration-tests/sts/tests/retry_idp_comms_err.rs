@@ -6,22 +6,19 @@
 use aws_sdk_sts as sts;
 use aws_smithy_types::error::Error as ErrorMeta;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
-use sts::error::{
-    AssumeRoleWithWebIdentityError, AssumeRoleWithWebIdentityErrorKind,
-    IdpCommunicationErrorException,
-};
+use sts::error::{AssumeRoleWithWebIdentityError, IdpCommunicationErrorException};
 
 #[tokio::test]
 async fn idp_comms_err_retryable() {
-    let error = AssumeRoleWithWebIdentityError::new(
-        AssumeRoleWithWebIdentityErrorKind::IdpCommunicationErrorException(
-            IdpCommunicationErrorException::builder()
-                .message("test")
-                .build(),
-        ),
-        ErrorMeta::builder()
-            .code("IDPCommunicationError")
+    let error = AssumeRoleWithWebIdentityError::IdpCommunicationErrorException(
+        IdpCommunicationErrorException::builder()
             .message("test")
+            ._meta(
+                ErrorMeta::builder()
+                    .code("IDPCommunicationError")
+                    .message("test")
+                    .build(),
+            )
             .build(),
     );
     assert_eq!(

@@ -43,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -71,6 +70,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.errorSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol

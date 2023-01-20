@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
@@ -44,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape

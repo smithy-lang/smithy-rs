@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -24,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait

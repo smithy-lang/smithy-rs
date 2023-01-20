@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -21,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -62,7 +62,8 @@ private class TestProtocolTraitImplGenerator(
                 fn parse(&self, _response: &#{Response}<#{Bytes}>) -> Self::Output {
                     ${operationWriter.escape(correctResponse)}
                 }
-                    }""",
+            }
+            """,
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "Error" to operationShape.errorSymbol(symbolProvider),

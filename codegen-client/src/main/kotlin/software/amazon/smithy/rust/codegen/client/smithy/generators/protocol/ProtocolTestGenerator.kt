@@ -21,6 +21,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -35,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -304,46 +304,50 @@ class ProtocolTestGenerator(
             val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
-            rustBlock("if let #T::$errorVariant(actual_error) = parsed", errorSymbol) {
-                rustTemplate("#{AssertEq}(expected_output, actual_error);", *codegenScope)
+            rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
+                compareMembers(expectedShape)
             }
             rustBlock("else") {
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
             rust("let parsed = parsed.unwrap();")
-            outputShape.members().forEach { member ->
-                val memberName = codegenContext.symbolProvider.toMemberName(member)
-                if (member.isStreaming(codegenContext.model)) {
-                    rustTemplate(
-                        """
-                        #{AssertEq}(
-                            parsed.$memberName.collect().await.unwrap().into_bytes(),
-                            expected_output.$memberName.collect().await.unwrap().into_bytes()
-                        );
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    when (codegenContext.model.expectShape(member.target)) {
-                        is DoubleShape, is FloatShape -> {
-                            addUseImports(
-                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals").toSymbol(),
-                            )
-                            rust(
-                                """
-                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
-                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
-                                """,
-                            )
-                        }
+            compareMembers(outputShape)
+        }
+    }
 
-                        else ->
-                            rustTemplate(
-                                """#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""",
-                                *codegenScope,
-                            )
+    private fun RustWriter.compareMembers(shape: StructureShape) {
+        shape.members().forEach { member ->
+            val memberName = codegenContext.symbolProvider.toMemberName(member)
+            if (member.isStreaming(codegenContext.model)) {
+                rustTemplate(
+                    """
+                    #{AssertEq}(
+                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                    );
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                when (codegenContext.model.expectShape(member.target)) {
+                    is DoubleShape, is FloatShape -> {
+                        addUseImports(
+                            RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals").toSymbol(),
+                        )
+                        rust(
+                            """
+                            assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
+                                "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
+                            """,
+                        )
                     }
+
+                    else ->
+                        rustTemplate(
+                            """#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""",
+                            *codegenScope,
+                        )
                 }
             }
         }

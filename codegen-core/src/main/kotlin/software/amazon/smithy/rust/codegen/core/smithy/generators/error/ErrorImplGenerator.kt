@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -23,6 +24,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -34,6 +37,15 @@ import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
+
+/** Error customization sections */
+sealed class ErrorImplSection(name: String) : Section(name) {
+    /** Use this section to add additional trait implementations to the generated error structures */
+    class ErrorAdditionalTraitImpls(val errorType: Symbol) : ErrorImplSection("ErrorAdditionalTraitImpls")
+}
+
+/** Customizations for generated errors */
+abstract class ErrorImplCustomization : NamedSectionGenerator<ErrorImplSection>()
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -76,7 +88,7 @@ class ErrorImplGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape,
     private val error: ErrorTrait,
-    private val customizations: List<ErrorCustomization>,
+    private val customizations: List<ErrorImplCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
 
@@ -160,6 +172,6 @@ class ErrorImplGenerator(
 
         writer.write("impl #T for ${symbol.name} {}", StdError)
 
-        writer.writeCustomizations(customizations, ErrorSection.ErrorAdditionalTraitImpls(symbol))
+        writer.writeCustomizations(customizations, ErrorImplSection.ErrorAdditionalTraitImpls(symbol))
     }
 }

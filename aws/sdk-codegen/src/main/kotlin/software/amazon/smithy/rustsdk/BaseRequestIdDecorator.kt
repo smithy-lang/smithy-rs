@@ -8,6 +8,8 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorSection
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -22,8 +24,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplSection
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
@@ -47,6 +49,11 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> =
         baseCustomizations + listOf(RequestIdErrorCustomization(codegenContext))
+
+    override fun errorImplCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorImplCustomization>,
+    ): List<ErrorImplCustomization> = baseCustomizations + listOf(RequestIdErrorImplCustomization(codegenContext))
 
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
@@ -117,8 +124,15 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         }
                     }
                 }
+            }
+        }
+    }
 
-                is ErrorSection.ErrorAdditionalTraitImpls -> {
+    private inner class RequestIdErrorImplCustomization(private val codegenContext: ClientCodegenContext) :
+        ErrorImplCustomization() {
+        override fun section(section: ErrorImplSection): Writable = writable {
+            when (section) {
+                is ErrorImplSection.ErrorAdditionalTraitImpls -> {
                     rustBlock("impl #1T for #2T", accessorTrait(codegenContext), section.errorType) {
                         rustBlock("fn $accessorFunctionName(&self) -> Option<&str>") {
                             rust("use #T;", RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig))

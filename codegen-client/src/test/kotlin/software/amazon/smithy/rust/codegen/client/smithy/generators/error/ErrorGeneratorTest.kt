@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
-class ClientErrorGeneratorTest {
+class ErrorGeneratorTest {
     val model =
         """
         namespace com.test

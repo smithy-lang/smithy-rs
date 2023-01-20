@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.error
+package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -47,11 +46,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 fun OperationShape.errorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
     val operationSymbol = symbolProvider.toSymbol(this)
     return RustModule.Error.toType().resolve("${operationSymbol.name}Error")
-}
-
-fun UnionShape.eventStreamErrorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val unionSymbol = symbolProvider.toSymbol(this)
-    return RustModule.Error.toType().resolve("${unionSymbol.name}Error")
 }
 
 /**
@@ -127,8 +121,17 @@ class OperationErrorGenerator(
         }
         writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                delegateToVariants(symbolProvider, errors) {
+                delegateToVariants(errors) {
                     writable { rust("_inner.fmt(f)") }
+                }
+            }
+        }
+
+        val errorMetadataTrait = RuntimeType.errorMetadataTrait(runtimeConfig)
+        writer.rustBlock("impl #T for ${errorType.name}", errorMetadataTrait) {
+            rustBlock("fn meta(&self) -> &#T", genericError(runtimeConfig)) {
+                delegateToVariants(errors) {
+                    writable { rust("#T::meta(_inner)", errorMetadataTrait) }
                 }
             }
         }
@@ -205,7 +208,7 @@ class OperationErrorGenerator(
 
         writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
-                delegateToVariants(symbolProvider, errors) {
+                delegateToVariants(errors) {
                     writable {
                         rust("Some(_inner)")
                     }
@@ -213,45 +216,44 @@ class OperationErrorGenerator(
             }
         }
     }
-}
 
-sealed class VariantMatch(name: String) : Section(name) {
-    object Unhandled : VariantMatch("Unhandled")
-    data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
-}
+    sealed class VariantMatch(name: String) : Section(name) {
+        object Unhandled : VariantMatch("Unhandled")
+        data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
+    }
 
-/**
- * Generates code to delegate behavior to the variants, for example:
- *
- * ```rust
- *  match self {
- *      Self::InvalidGreeting(_inner) => inner.fmt(f),
- *      Self::ComplexError(_inner) => inner.fmt(f),
- *      Self::FooError(_inner) => inner.fmt(f),
- *      Self::Unhandled(_inner) => _inner.fmt(f),
- *  }
- *  ```
- *
- * [handler] is passed an instance of [VariantMatch]—a [writable] should be returned containing the content to be
- * written for this variant.
- *
- *  The field will always be bound as `_inner`.
- */
-fun RustWriter.delegateToVariants(
-    symbolProvider: RustSymbolProvider,
-    errors: List<StructureShape>,
-    handler: (VariantMatch) -> Writable,
-) {
-    rustBlock("match self") {
-        errors.forEach {
-            val errorSymbol = symbolProvider.toSymbol(it)
-            rust("""Self::${errorSymbol.name}(_inner) => """)
-            handler(VariantMatch.Modeled(errorSymbol, it))(this)
-            write(",")
-        }
-        val unhandledHandler = handler(VariantMatch.Unhandled)
-        rustBlock("Self::Unhandled(_inner) =>") {
-            unhandledHandler(this)
+    /**
+     * Generates code to delegate behavior to the variants, for example:
+     *
+     * ```rust
+     *  match self {
+     *      Self::InvalidGreeting(_inner) => inner.fmt(f),
+     *      Self::ComplexError(_inner) => inner.fmt(f),
+     *      Self::FooError(_inner) => inner.fmt(f),
+     *      Self::Unhandled(_inner) => _inner.fmt(f),
+     *  }
+     *  ```
+     *
+     * [handler] is passed an instance of [VariantMatch]—a [writable] should be returned containing the content to be
+     * written for this variant.
+     *
+     *  The field will always be bound as `_inner`.
+     */
+    fun RustWriter.delegateToVariants(
+        errors: List<StructureShape>,
+        handler: (VariantMatch) -> Writable,
+    ) {
+        rustBlock("match self") {
+            errors.forEach {
+                val errorSymbol = symbolProvider.toSymbol(it)
+                rust("""Self::${errorSymbol.name}(_inner) => """)
+                handler(VariantMatch.Modeled(errorSymbol, it))(this)
+                write(",")
+            }
+            val unhandledHandler = handler(VariantMatch.Unhandled)
+            rustBlock("Self::Unhandled(_inner) =>") {
+                unhandledHandler(this)
+            }
         }
     }
 }

@@ -21,7 +21,8 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ClientErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
@@ -31,12 +32,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -215,13 +215,13 @@ class ClientCodegenVisitor(
                     }
                 }
                 else -> {
-                    ClientErrorGenerator(
+                    ErrorGenerator(
                         model,
                         symbolProvider,
                         this,
                         shape,
                         errorTrait,
-                        codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                        codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                     ).render()
                 }
             }

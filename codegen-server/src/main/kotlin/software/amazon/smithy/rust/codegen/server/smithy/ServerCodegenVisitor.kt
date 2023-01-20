@@ -40,10 +40,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
+import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -270,7 +270,7 @@ open class ServerCodegenVisitor(
                     this,
                     shape,
                     errorTrait,
-                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                    codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                 ).render(CodegenTarget.SERVER)
             }
         }

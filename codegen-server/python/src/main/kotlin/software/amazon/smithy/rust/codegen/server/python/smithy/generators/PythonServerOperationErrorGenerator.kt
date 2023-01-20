@@ -15,9 +15,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.errorSymbol
 
 /**
  * Generates a unified error enum for [operation]. It depends on [ServerOperationErrorGenerator]

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_lambda::error::ListFunctionsErrorKind;
+use aws_sdk_lambda::error::ListFunctionsError;
 use aws_sdk_lambda::operation::ListFunctions;
 use aws_sdk_lambda::types::RequestId;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -20,7 +20,7 @@ fn get_request_id_from_unmodeled_error() {
     let err = ListFunctions::new()
         .parse_loaded(&resp.map(Bytes::from))
         .expect_err("status was 500, this is an error");
-    assert!(matches!(err.kind, ListFunctionsErrorKind::Unhandled(_)));
+    assert!(matches!(err, ListFunctionsError::Unhandled(_)));
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
 }

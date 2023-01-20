@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -30,7 +31,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
