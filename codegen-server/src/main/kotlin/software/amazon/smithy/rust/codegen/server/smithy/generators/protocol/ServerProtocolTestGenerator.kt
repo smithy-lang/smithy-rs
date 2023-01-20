@@ -926,7 +926,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
 
             // Deprioritized, sets don't exist in Smithy 2.0.
