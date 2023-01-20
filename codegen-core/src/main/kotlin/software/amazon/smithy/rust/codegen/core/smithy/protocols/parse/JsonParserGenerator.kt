@@ -493,6 +493,10 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() }
+                if (checkValueSet) {
+                    rust("let mut variant_set = false;")
+                }
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -510,7 +514,7 @@ class JsonParserGenerator(
                                 """,
                                 *codegenScope,
                             )
-                            withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
+                            withBlock("match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
@@ -518,15 +522,20 @@ class JsonParserGenerator(
                                             rustTemplate(
                                                 """
                                                 #{skip_value}(tokens)?;
-                                                Some(#{Union}::$variantName)
+                                                variant = Some(#{Union}::$variantName)
                                                 """,
                                                 "Union" to returnSymbolToParse.symbol, *codegenScope,
                                             )
                                         } else {
-                                            withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
-                                                deserializeMember(member)
+                                            rust("let (value, is_not_null) =")
+                                            deserializeMember(member)
+                                            rust(".map_or((None, false), |v| (Some(v), true));")
+
+                                            withBlock("let value = value", ";") {
                                                 unwrapOrDefaultOrError(member)
                                             }
+                                            rust("variant = Some(#T::$variantName(value));", returnSymbolToParse.symbol)
+                                            rust("variant_set = variant_set || is_not_null;")
                                         }
                                     }
                                 }
@@ -536,7 +545,7 @@ class JsonParserGenerator(
                                         """
                                         _ => {
                                           #{skip_value}(tokens)?;
-                                          Some(#{Union}::${UnionGenerator.UnknownVariantName})
+                                          variant = Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                         }
                                         """,
                                         "Union" to returnSymbolToParse.symbol,
@@ -557,6 +566,12 @@ class JsonParserGenerator(
                         *codegenScope,
                     )
                 }
+                if (checkValueSet) {
+                    rustTemplate(
+                        """if !variant_set { return Err(#{Error}::custom("no variant was set in union"))}""",
+                        *codegenScope,
+                    )
+                }
                 rust("Ok(variant)")
             }
         }
@@ -565,10 +580,10 @@ class JsonParserGenerator(
 
     private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
         if (symbolProvider.toSymbol(member).canUseDefault()) {
-            rust(".unwrap_or_default()")
+            rust(".unwrap_or_default();")
         } else {
             rustTemplate(
-                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
+                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?;",
                 *codegenScope,
             )
         }
