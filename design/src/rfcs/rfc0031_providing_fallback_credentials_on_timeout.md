@@ -1,24 +1,24 @@
 RFC: Providing fallback credentials on external timeout
 =======================================================
-
 > Status: RFC
 >
 > Applies to: client
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-This RFC proposes a fallback mechanism for credentials providers on external timeout (see the [Terminology](#terminology) section), allowing them to continue serving (possibly stale) credentials for the sake of overall reliability of the intended service; The IMDS credentials provider is an example that must fulfill such a requirement to support static stability.
+This RFC proposes a fallback mechanism for credentials providers on external timeout (see the [Terminology](#terminology) section), allowing them to continue serving (possibly expired) credentials for the sake of overall reliability of the intended service; The IMDS credentials provider is an example that must fulfill such a requirement to support static stability.
 
 Terminology
 -----------
 
 - External timeout: The name of the timeout that occurs when a duration elapses before an async call to `provide_credentials` returns. In this case, `provide_credentials` returns no credentials.
 - Internal timeout: The name of the timeout that occurs when a duration elapses before an async call to some function, inside the implementation of `provide_credentials`, returns. Examples include connection timeouts, TLS negotiation timeouts, and HTTP request timeouts. Implementations of `provide_credentials` may handle these failures at their own discretion e.g. by returning _(possibly expired)_ credentials or a `CredentialsError`.
+- Static stability: Continued availability of a service in the face of impaired dependencies.
 
 Assumption
 ----------
 
-This RFC is concerned only with external timeouts, as the cost of poor API design is much higher than in this case than for internal timeouts. The former will affect a public trait implemented by all credentials providers whereas the latter can be handled locally by individual credentials providers without affecting one another.
+This RFC is concerned only with external timeouts, as the cost of poor API design is much higher in this case than for internal timeouts. The former will affect a public trait implemented by all credentials providers whereas the latter can be handled locally by individual credentials providers without affecting one another.
 
 Problem
 -------
@@ -49,7 +49,7 @@ let result = cache
 ```
 This creates an external timeout for `provide_credentials`. If `timeout_future` wins the race, a future for `provide_credentials` gets dropped, `timeout_future` returns an error, and the error is mapped to `CredentialsError::ProviderTimedOut` and returned. This makes it impossible for the variable `provider` above to serve credentials as stated in REQ 1.
 
-A slightly more complex use case involves `CredentialsProviderChain`. It is a manifestation of the chain of responsibility pattern and keeps calling the `provide_credentials` method on each credentials provider down the chain until credentials are returned by one of them. In addition to REQ 1, we have the following functional requirement with respect to `CredentialsProviderChain`:
+A more complex use case involves `CredentialsProviderChain`. It is a manifestation of the chain of responsibility pattern and keeps calling the `provide_credentials` method on each credentials provider down the chain until credentials are returned by one of them. In addition to REQ 1, we have the following functional requirement with respect to `CredentialsProviderChain`:
 - REQ 2: Once a credentials provider in the chain has returned credentials, it should continue serving them even in the event of a timeout (whether internal or external) without falling back to another credentials provider.
 
 Referring back to the code snippet above, we analyze two relevant cases (and suppose provider 2 below must meet REQ 1 and REQ 2 in each case):
@@ -73,25 +73,40 @@ The figure above illustrates an example with the same setting as the previous fi
 
 Proposal
 --------
-To address the problem in the previous section, we propose to add a new method to the `ProvideCredentials` trait called `on_timeout` that looks something like this:
+To address the problem in the previous section, we propose to add a new method to the `ProvideCredentials` trait called `fallback_on_interrupt` that looks something like this:
 ```rust
-mod future {
-    // --snip--
-
-    pub struct OnTimeout<'a>(NowOrLater<Option<Credentials>, BoxFuture<'a, Option<Credentials>>>);
-
-    // impls for OnTimeout similar to those for the ProvideCredentials future newtype
-}
-
 pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     // --snip--
 
-    fn on_timeout<'a>(&'a self) -> future::OnTimeout<'a> {
-        future::OnTimeout::ready(None)
+    fn fallback_on_interrupt(&self) -> future::FallbackOnInterrupt {
+        future::FallbackOnInterrupt::ready(None)
+    }
+}
+
+mod future {
+    // --snip--
+
+    // Mimics `FutureExt::now_or_never` using `NowOrLater` with `OnlyReady`.
+    pub struct FallbackOnInterrupt(NowOrLater<Option<Credentials>, OnlyReady>);
+
+    impl FallbackOnInterrupt {
+        pub fn ready(credentials: Option<Credentials>) -> Self {
+            FallbackOnInterrupt(NowOrLater::ready(credentials))
+        }
+    }
+
+    impl Future for FallbackOnInterrupt {
+        type Output = Option<Credentials>;
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            Pin::new(&mut self.0).poll(cx)
+        }
     }
 }
 ```
-This method allows credentials providers to have a fallback mechanism on an external timeout and to serve credentials to users if needed. It comes with a default implementation to return a future that immediately yields `None`. Credentials providers that need a different behavior can choose to override the method.
+This method allows credentials providers to have a fallback mechanism on an external timeout and to serve credentials to users if needed. Since it is a fallback plan, the execution should not take too long. The concept of "now or never" fits well and we can use `NowOrLater` by supplying the `OnlyReady` type to realize that. We considerd this as a synchronous primitive but we did not need an async critical section for this operation so an asynchronous primitive should be a reasonable design decision here.
+
+The default implementation returns a future that immediately yields `None`. Credentials providers that need a different behavior can choose to override the method.
 
 The user experience for the code snippet in question will look like this once this proposal is implemented:
 ```rust
@@ -103,7 +118,7 @@ let result = cache
         async move {
            let credentials = match future.await {
                 Ok(creds) => creds?,
-                Err(_err) => match provider.on_timeout().await { // can provide fallback credentials
+                Err(_err) => match provider.fallback_on_interrupt().await { // can provide fallback credentials
                     Some(creds) => creds,
                     None => return Err(CredentialsError::provider_timed_out(load_timeout)),
                 }
@@ -118,19 +133,19 @@ let result = cache
 How to actually implement this RFC
 ----------------------------------
 
-Almost all credentials providers do not have to implement their own `on_timeout` except for `CredentialsProviderChain` (`ImdsCredentialsProvider` also needs to implement `on_timeout` when we are adding static stability support to it but that is outside the scope of this RFC).
+Almost all credentials providers do not have to implement their own `fallback_on_interrupt` except for `CredentialsProviderChain` (`ImdsCredentialsProvider` also needs to implement `fallback_on_interrupt` when we are adding static stability support to it but that is outside the scope of this RFC).
 
-Considering the two cases we analyzed above, implementing `CredentialsProviderChain::on_timeout` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
+Considering the two cases we analyzed above, implementing `CredentialsProviderChain::fallback_on_interrupt` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
 
 With that in mind, consider instead the following approach:
 ```rust
 impl ProvideCredentials for CredentialsProviderChain {
     // --snip--
 
-    fn on_timeout<'a>(&'a self) -> future::OnTimeout<'a> {
-        future::OnTimeout::new(async move {
+    fn fallback_on_interrupt(&self) -> future::FallbackOnInterrupt {
+        future::FallbackOnInterrupt::ready(async move {
             for (_, provider) in &self.providers {
-                match provider.on_timeout().await {
+                match provider.fallback_on_interrupt().await {
                     creds @ Some(_) => return creds,
                     None => {}
                 }
@@ -140,18 +155,18 @@ impl ProvideCredentials for CredentialsProviderChain {
     }
 }
 ```
-`CredentialsProviderChain::on_timeout` will invoke each provider's `on_timeout` method until credentials are returned by one of them. It ensures that the updated code snippet for `LazyCredentialsCache` can return credentials from provider 2 in both `Case 1` and `Case 2`. Even if `timeout_future` wins the race, the execution subsequently calls `provider.on_timeout().await` to obtain fallback credentials from provider 2, assuming provider 2's `on_timeout` is implemented to return credentials retrieved on the first call to `CredentialsProviderChain::provide_credentials`.
+`CredentialsProviderChain::fallback_on_interrupt` will invoke each provider's `fallback_on_interrupt` method until credentials are returned by one of them. It ensures that the updated code snippet for `LazyCredentialsCache` can return credentials from provider 2 in both `Case 1` and `Case 2`. Even if `timeout_future` wins the race, the execution subsequently calls `provider.fallback_on_interrupt().await` to obtain fallback credentials from provider 2, assuming provider 2's `fallback_on_interrupt` is implemented to return fallback credentials accordingly.
 
-The downside of this simple approach is that the behavior is not clear if more than one credentials provider in the chain can return credentials from their `on_timeout`. Note, however, that it is the exception rather than the norm for a provider's `on_timeout` to return fallback credentials, at least at the time of writing (01/13/2023). The fact that it returns fallback credentials means that the provider successfully loaded credentials at least once, and it usually continues serving credentials on subsequent calls to `provide_credentials`.
+The downside of this simple approach is that the behavior is not clear if more than one credentials provider in the chain can return credentials from their `fallback_on_interrupt`. Note, however, that it is the exception rather than the norm for a provider's `fallback_on_interrupt` to return fallback credentials, at least at the time of writing (01/13/2023). The fact that it returns fallback credentials means that the provider successfully loaded credentials at least once, and it usually continues serving credentials on subsequent calls to `provide_credentials`.
 
-Should we have more than one provider in the chain that can potentially return fallback credentials from `on_timeout`, we could configure the behavior of `CredentialsProviderChain` managing in what order and how each `on_timeout` should be executed; it can be possible to introduce a new API without breaking changes. That being said, we first need to investigate and understand the use case behind it to design the right API.
+Should we have more than one provider in the chain that can potentially return fallback credentials from `fallback_on_interrupt`, we could configure the behavior of `CredentialsProviderChain` managing in what order and how each `fallback_on_interrupt` should be executed. See the [Appendix](#appendix) section for more details. The use case described there is an extreme edge case, but it's worth exploring what options are available to us with the proposed design.
 
 Alternative
 -----------
 
 In this section, we will describe an alternative approach that we ended up dismissing as unworkable.
 
-Instead of `on_timeout`, we considered the following method to be added to the `ProvideCredentials` trait:
+Instead of `fallback_on_interrupt`, we considered the following method to be added to the `ProvideCredentials` trait:
 ```rust
 pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     // --snip--
@@ -243,7 +258,62 @@ There are mainly two problems with this approach. The first problem is that as s
 Changes checklist
 -----------------
 
-- [ ] Add `on_timeout` method to the `ProvideCredentials` trait with the default implementation
-- [ ] Implement the `OnTimeout` future newtype
-- [ ] Implement `CredentialsProviderChain::on_timeout`
+- [ ] Add `fallback_on_interrupt` method to the `ProvideCredentials` trait with the default implementation
+- [ ] Implement the `FallbackOnInterrupt` future newtype
+- [ ] Implement `CredentialsProviderChain::fallback_on_interrupt`
+- [ ] Implement `DefaultCredentialsChain::fallback_on_interrupt`
 - [ ] Add unit tests for `Case 1` and `Case 2`
+
+Appendix
+--------
+We will describe how to customize the behavior for `CredentialsProviderChain::fallback_on_interrupt`. We are only demonstrating how much the proposed design can be extended and currently do not have concrete use cases to implement using what we present in this section.
+
+As described in the [Proposal](#proposal) section, `CredentialsProviderChain::fallback_on_interrupt` traverses the chain from the head to the tail and returns the first fallback credentials found. This precedence policy works most of the time, but when we have more than one provider in the chain that can potentially return fallback credentials, it could break in the following edge case (we are still basing our discussion on the code snippet from `LazyCredentialsCache` but forget REQ 1 and REQ 2 for the sake of simplicity).
+
+<p align="center">
+<img width="800" alt="fallback_on_interrupt_appendix excalidraw" src="https://user-images.githubusercontent.com/15333866/213618808-d19892d8-5c83-4039-9940-280dcd2a8cf1.png">
+</p>
+
+During the first call to `CredentialsProviderChain::provide_credentials`, provider 1 fails to load credentials, maybe due to an internal timeout, and then provider 2 succeeds in loading its credentials (call them credentials 2) and internally stores them for `Provider2::fallback_on_interrupt` to return them subsequently. During the second call, provider 1 succeeds in loading credentials (call them credentials 1) and internally stores them for `Provider1::fallback_on_interrupt` to return them subsequently. Suppose, however, that credentials 1's expiry is earlier than credentials 2's expiry. Finally, during the third call, `CredentialsProviderChain::provide_credentials` did not complete due to an external timeout. `CredentialsProviderChain::fallback_on_interrupt` then returns credentials 1, when it should return credentials 2 whose expiry is later, because of the precedence policy.
+
+This a case where `CredentialsProviderChain::fallback_on_interrupt` requires the recency policy for fallback credentials found in provider 1 and provider 2, not the precedence policy. The following figure shows how we can set up such a chain:
+
+<p align="center">
+<img width="832" alt="heterogeneous_policies_for_fallback_on_interrupt" src="https://user-images.githubusercontent.com/15333866/213755875-ac6fddbc-0f1b-4437-af16-6e0dbe08ae04.png">
+</p>
+
+The outermost chain is a `CredentialsProviderChain` and follows the precedence policy for `fallback_on_interrupt`. It contains a sub-chain that, in turn, contains provider 1 and provider 2. This sub-chain implements its own `fallback_on_interrupt` to realize the recency policy for fallback credentials found in provider 1 and provider 2. Conceptually, we have
+```
+pub struct FallbackRecencyChain {
+    provider_chain: CredentialsProviderChain,
+}
+
+impl ProvideCredentials for FallbackRecencyChain {
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        // Can follow the precedence policy for loading credentials
+        // if it chooses to do so.
+    }
+
+    fn fallback_on_interrupt(&self) -> future::FallbackOnInterrupt {
+        // Iterate over `self.provider_chain` and return
+        // fallback credentials whose expiry is the most recent.
+    }
+}
+```
+We can then compose the entire chain like so:
+```
+let provider_1 = /* ... */
+let provider_2 = /* ... */
+let provider_3 = /* ... */
+let sub_chain = CredentialsProviderChain::first_try("Provider1", provider_1)
+    .or_else("Provider2", provider_2);
+let recency_chain = /* Create a FallbackRecencyChain with sub_chain */
+let final_chain = CredentialsProviderChain::first_try("fallback_recency", recency_chain)
+    .or_else("Provider3", provider_3);
+```
+The `fallback_on_interrupt` method on `final_chain` still traverses from the head to the tail, but once it hits `recency_chain`, `fallback_on_interrupt` on `recency_chain` respects the expiry of fallback credentials found in its inner providers.
+
+What we have presented in this section can be generalized thanks to chain composability. We could have different sub-chains, each implementing its own policy for `fallback_on_interrupt`.
