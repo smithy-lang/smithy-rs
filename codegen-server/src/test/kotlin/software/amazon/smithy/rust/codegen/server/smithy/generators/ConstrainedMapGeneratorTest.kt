@@ -50,7 +50,7 @@ class ConstrainedMapGeneratorTest {
             TestCase(
                 """
                 namespace test
-                
+
                 $trait
                 map ConstrainedMap {
                     key: String,
@@ -129,13 +129,13 @@ class ConstrainedMapGeneratorTest {
     fun `type should not be constructible without using a constructor`() {
         val model = """
             namespace test
-            
+
             @length(min: 1, max: 69)
             map ConstrainedMap {
                 key: String,
                 value: String
             }
-            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+        """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
 
         val writer = RustWriter.forModule(ModelsModule.name)
