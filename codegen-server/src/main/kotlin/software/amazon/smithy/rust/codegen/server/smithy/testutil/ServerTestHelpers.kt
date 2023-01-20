@@ -39,12 +39,20 @@ private fun testServiceShapeFor(model: Model) =
 fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
     serverTestSymbolProviders(model, serviceShape).symbolProvider
 
-fun serverTestSymbolProviders(model: Model, serviceShape: ServiceShape? = null) =
+fun serverTestSymbolProviders(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+    settings: ServerRustSettings? = null,
+) =
     ServerSymbolProviders.from(
         model,
         serviceShape ?: testServiceShapeFor(model),
         ServerTestSymbolVisitorConfig,
-        serverTestRustSettings((serviceShape ?: testServiceShapeFor(model)).id).codegenConfig.publicConstrainedTypes,
+        (
+            settings ?: serverTestRustSettings(
+                (serviceShape ?: testServiceShapeFor(model)).id,
+            )
+            ).codegenConfig.publicConstrainedTypes,
         RustCodegenServerPlugin::baseSymbolProvider,
     )
 

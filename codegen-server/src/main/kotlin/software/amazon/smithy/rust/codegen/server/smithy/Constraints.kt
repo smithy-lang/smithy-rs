@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -27,6 +27,7 @@ import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -90,11 +91,12 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
     is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
+    is BlobShape -> this.hasTrait<LengthTrait>()
     else -> false
 }
 
 fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider): Boolean =
-    this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))
+    this.isDirectlyConstrained(symbolProvider) || model.expectShape(this.target).isDirectlyConstrained(symbolProvider)
 
 fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: SymbolProvider): Boolean =
     !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
@@ -106,7 +108,7 @@ fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider)
         //  so we can't simply delegate to the `else` branch when we implement them.
         this.targetCanReachConstrainedShape(model, symbolProvider)
     } else {
-        Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
+        DirectedWalker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }
 
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
@@ -118,6 +120,7 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTy
     is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
+    is BlobShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
     else -> false
 }
 

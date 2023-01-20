@@ -14,17 +14,13 @@ pub(crate) mod macros;
 pub mod body;
 pub(crate) mod error;
 pub mod extension;
-#[doc(hidden)]
 pub mod instrumentation;
-#[doc(hidden)]
 pub mod operation;
-#[doc(hidden)]
 pub mod plugin;
 #[doc(hidden)]
 pub mod protocols;
 #[doc(hidden)]
 pub mod rejection;
-#[doc(hidden)]
 pub mod request;
 #[doc(hidden)]
 pub mod response;
@@ -39,6 +35,7 @@ pub mod routers;
 pub(crate) use self::error::Error;
 pub use self::request::extension::Extension;
 #[doc(inline)]
+#[allow(deprecated)]
 pub use self::routing::Router;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};

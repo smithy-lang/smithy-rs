@@ -25,16 +25,17 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -50,10 +51,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
@@ -100,20 +103,20 @@ class JsonParserGenerator(
     private val jsonDeserModule = RustModule.private("json_deser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
-        "Error" to smithyJson.member("deserialize::error::DeserializeError"),
-        "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
-        "expect_bool_or_null" to smithyJson.member("deserialize::token::expect_bool_or_null"),
-        "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-        "expect_number_or_null" to smithyJson.member("deserialize::token::expect_number_or_null"),
-        "expect_start_array" to smithyJson.member("deserialize::token::expect_start_array"),
-        "expect_start_object" to smithyJson.member("deserialize::token::expect_start_object"),
-        "expect_string_or_null" to smithyJson.member("deserialize::token::expect_string_or_null"),
-        "expect_timestamp_or_null" to smithyJson.member("deserialize::token::expect_timestamp_or_null"),
-        "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
-        "Peekable" to RuntimeType.std.member("iter::Peekable"),
-        "skip_value" to smithyJson.member("deserialize::token::skip_value"),
-        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
-        "Token" to smithyJson.member("deserialize::Token"),
+        "Error" to smithyJson.resolve("deserialize::error::DeserializeError"),
+        "expect_blob_or_null" to smithyJson.resolve("deserialize::token::expect_blob_or_null"),
+        "expect_bool_or_null" to smithyJson.resolve("deserialize::token::expect_bool_or_null"),
+        "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+        "expect_number_or_null" to smithyJson.resolve("deserialize::token::expect_number_or_null"),
+        "expect_start_array" to smithyJson.resolve("deserialize::token::expect_start_array"),
+        "expect_start_object" to smithyJson.resolve("deserialize::token::expect_start_object"),
+        "expect_string_or_null" to smithyJson.resolve("deserialize::token::expect_string_or_null"),
+        "expect_timestamp_or_null" to smithyJson.resolve("deserialize::token::expect_timestamp_or_null"),
+        "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+        "Peekable" to RuntimeType.std.resolve("iter::Peekable"),
+        "skip_value" to smithyJson.resolve("deserialize::token::skip_value"),
+        "skip_to_end" to smithyJson.resolve("deserialize::token::skip_to_end"),
+        "Token" to smithyJson.resolve("deserialize::Token"),
         "or_empty" to orEmptyJson(),
     )
 
@@ -296,7 +299,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeBlob(target: BlobShape) {
         rustTemplate(
             "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
+            "ConvertFrom" to writable { RuntimeType.blob(runtimeConfig).toSymbol().rustType().render() },
             *codegenScope,
         )
     }
@@ -311,6 +314,7 @@ class JsonParserGenerator(
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
                 }
+
                 else -> rust("u.into_owned()")
             }
         }
@@ -346,7 +350,7 @@ class JsonParserGenerator(
                 member, HttpLocation.DOCUMENT,
                 TimestampFormatTrait.Format.EPOCH_SECONDS,
             )
-        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+        val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
         rustTemplate(
             "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
             "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
@@ -421,7 +425,7 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
+                    rust("let mut map = #T::new();", RuntimeType.HashMap)
                     objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
@@ -510,9 +514,19 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
-                                            deserializeMember(member)
-                                            unwrapOrDefaultOrError(member)
+                                        if (member.isTargetUnit()) {
+                                            rustTemplate(
+                                                """
+                                                #{skip_value}(tokens)?;
+                                                Some(#{Union}::$variantName)
+                                                """,
+                                                "Union" to returnSymbolToParse.symbol, *codegenScope,
+                                            )
+                                        } else {
+                                            withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
+                                                deserializeMember(member)
+                                                unwrapOrDefaultOrError(member)
+                                            }
                                         }
                                     }
                                 }

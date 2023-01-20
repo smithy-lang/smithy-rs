@@ -34,13 +34,16 @@ impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
     }
 }
 
-/// Extractor for getting connection information produced by a `Connected`.
+/// Extractor for getting connection information produced by a [`Connected`](crate::routing::Connected).
 ///
 /// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`http::Extensions`]. This is
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 /// middleware, which can be applied using the `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]
-pub struct ConnectInfo<T>(pub T);
+pub struct ConnectInfo<T>(
+    /// The type produced via [`Connected`](crate::routing::Connected).
+    pub T,
+);
 
 impl<P, T> FromParts<P> for ConnectInfo<T>
 where

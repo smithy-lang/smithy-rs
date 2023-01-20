@@ -3,36 +3,39 @@
 #  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #  SPDX-License-Identifier: Apache-2.0
 
+import argparse
 import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
 from typing import List, Optional, Callable, Awaitable
 
-from libpokemon_service_server_sdk import App
-from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
-from libpokemon_service_server_sdk.input import (  # type: ignore
+from pokemon_service_server_sdk import App
+from pokemon_service_server_sdk.tls import TlsConfig  # type: ignore
+from pokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
+from pokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
+from pokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
 )
-from libpokemon_service_server_sdk.logging import TracingHandler  # type: ignore
-from libpokemon_service_server_sdk.middleware import (  # type: ignore
+from pokemon_service_server_sdk.logging import TracingHandler  # type: ignore
+from pokemon_service_server_sdk.middleware import (  # type: ignore
     MiddlewareException,
     Response,
     Request,
 )
-from libpokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
-from libpokemon_service_server_sdk.output import (  # type: ignore
+from pokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
+from pokemon_service_server_sdk.output import (  # type: ignore
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
 )
-from libpokemon_service_server_sdk.types import ByteStream  # type: ignore
+from pokemon_service_server_sdk.types import ByteStream  # type: ignore
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
@@ -78,6 +81,10 @@ class SafeCounter:
 #   https://docs.python.org/3/library/multiprocessing.html#sharing-state-between-processes
 @dataclass
 class Context:
+    # Inject Lambda context if service is running on Lambda
+    # NOTE: All the values that will be injected by the framework should be wrapped with `Optional`
+    lambda_ctx: Optional[LambdaContext] = None
+
     # In our case it simulates an in-memory database containing the description of Pikachu in multiple
     # languages.
     _pokemon_database = {
@@ -154,7 +161,7 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
         logging.debug("Found valid `application/json` content type")
     else:
         logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers}"
+            f"Invalid content type {content_type}, dumping headers: {request.headers.items()}"
         )
     return await next(request)
 
@@ -195,6 +202,18 @@ def do_nothing(_: DoNothingInput) -> DoNothingOutput:
 def get_pokemon_species(
     input: GetPokemonSpeciesInput, context: Context
 ) -> GetPokemonSpeciesOutput:
+    if context.lambda_ctx is not None:
+        logging.debug(
+            "Lambda Context: %s",
+            dict(
+                request_id=context.lambda_ctx.request_id,
+                deadline=context.lambda_ctx.deadline,
+                invoked_function_arn=context.lambda_ctx.invoked_function_arn,
+                function_name=context.lambda_ctx.env_config.function_name,
+                memory=context.lambda_ctx.env_config.memory,
+                version=context.lambda_ctx.env_config.version,
+            ),
+        )
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
@@ -245,7 +264,20 @@ async def stream_pokemon_radio(
 # Run the server.
 ###########################################################
 def main() -> None:
-    app.run(workers=1)
+    parser = argparse.ArgumentParser(description="PokémonService")
+    parser.add_argument("--enable-tls", action="store_true")
+    parser.add_argument("--tls-key-path")
+    parser.add_argument("--tls-cert-path")
+    args = parser.parse_args()
+
+    config = dict(workers=1)
+    if args.enable_tls:
+        config["tls"] = TlsConfig(
+            key_path=args.tls_key_path,
+            cert_path=args.tls_cert_path,
+        )
+
+    app.run(**config)
 
 
 if __name__ == "__main__":

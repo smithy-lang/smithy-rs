@@ -4,13 +4,13 @@
  */
 
 use crate::middleware::Signature;
+use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SignableRequest, SignatureLocation,
-    SigningParams, SigningSettings,
+    SigningParams, SigningSettings, UriPathNormalizationMode,
 };
 use aws_smithy_http::body::SdkBody;
 use aws_types::region::SigningRegion;
-use aws_types::Credentials;
 use aws_types::SigningService;
 use std::fmt;
 use std::time::{Duration, SystemTime};
@@ -62,6 +62,7 @@ impl OperationSigningConfig {
             signing_options: SigningOptions {
                 double_uri_encode: true,
                 content_sha256_header: false,
+                normalize_uri_path: true,
             },
             signing_requirements: SigningRequirements::Required,
             expires_in: None,
@@ -88,9 +89,9 @@ pub enum SigningRequirements {
 pub struct SigningOptions {
     pub double_uri_encode: bool,
     pub content_sha256_header: bool,
+    pub normalize_uri_path: bool,
     /*
     Currently unsupported:
-    pub normalize_uri_path: bool,
     pub omit_session_token: bool,
      */
 }
@@ -138,6 +139,12 @@ impl SigV4Signer {
         } else {
             PayloadChecksumKind::NoHeader
         };
+        settings.uri_path_normalization_mode =
+            if operation_config.signing_options.normalize_uri_path {
+                UriPathNormalizationMode::Enabled
+            } else {
+                UriPathNormalizationMode::Disabled
+            };
         settings.signature_location = match operation_config.signature_type {
             HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
             HttpSignatureType::HttpRequestQueryParams => SignatureLocation::QueryParams,
@@ -220,9 +227,10 @@ impl SigV4Signer {
 #[cfg(test)]
 mod tests {
     use super::{RequestConfig, SigV4Signer, EXPIRATION_WARNING};
+    use aws_credential_types::Credentials;
     use aws_sigv4::http_request::SigningSettings;
     use aws_types::region::SigningRegion;
-    use aws_types::{Credentials, SigningService};
+    use aws_types::SigningService;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 

@@ -41,6 +41,10 @@
 //! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
 //! error chain.
 
+// For some reason `deprecated(deprecated)` warns of its own deprecation. Putting `allow(deprecated)` at the module
+// level remedies it.
+#![allow(deprecated)]
+
 use strum_macros::Display;
 
 use crate::response::IntoResponse;
@@ -49,6 +53,10 @@ use crate::response::IntoResponse;
 /// extensions]. Contains one variant for each way the extractor can fail.
 ///
 /// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[deprecated(
+    since = "0.52.0",
+    note = "This was used for extraction under the older service builder. The `MissingExtension` struct returned by `FromParts::from_parts` is now used."
+)]
 #[derive(Debug, Display)]
 pub enum RequestExtensionNotFoundRejection {
     /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
@@ -66,10 +74,6 @@ impl std::error::Error for RequestExtensionNotFoundRejection {}
 /// into an HTTP response.
 #[derive(Debug, Display)]
 pub enum ResponseRejection {
-    /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
-    /// it to `None`.
-    MissingHttpStatusCode,
-
     /// Used when the service implementer provides an integer outside the 100-999 range for a
     /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,

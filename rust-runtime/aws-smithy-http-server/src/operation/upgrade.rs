@@ -218,6 +218,8 @@ where
 }
 
 /// An interface to convert a representation of a Smithy operation into a [`Route`].
+///
+/// See the [module](crate::operation) documentation for more information.
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     /// Upgrade the representation of a Smithy operation to a [`Route`].
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
@@ -270,11 +272,6 @@ where
         Route::new(layer.layer(mapped.inner))
     }
 }
-
-/// A marker struct indicating an [`Operation`] has not been set in a builder.
-///
-/// This does _not_ implement [`Upgradable`] purposely.
-pub struct MissingOperation;
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 ///

@@ -11,14 +11,14 @@ use crate::connector::expect_connector;
 use crate::imds::client::error::{BuildError, ImdsError, InnerImdsError, InvalidEndpointMode};
 use crate::imds::client::token::TokenMiddleware;
 use crate::provider_config::ProviderConfig;
-use crate::{profile, PKG_VERSION};
+use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
 use aws_sdk_sso::config::timeout::TimeoutConfig;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::Endpoint;
+use aws_smithy_http::endpoint::apply_endpoint;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::{Metadata, Operation};
 use aws_smithy_http::response::ParseStrictResponse;
@@ -28,7 +28,7 @@ use aws_smithy_http_tower::map_request::{
 };
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::Env;
 use bytes::Bytes;
 use http::{Response, Uri};
 use std::borrow::Cow;
@@ -128,7 +128,7 @@ pub struct Client {
 
 #[derive(Debug)]
 struct ClientInner {
-    endpoint: Endpoint,
+    endpoint: Uri,
     smithy_client: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
 }
 
@@ -235,10 +235,7 @@ impl Client {
         let mut base_uri: Uri = path.parse().map_err(|_| {
             ImdsError::unexpected("IMDS path was not a valid URI. Hint: does it begin with `/`?")
         })?;
-        self.inner
-            .endpoint
-            .set_endpoint(&mut base_uri, None)
-            .map_err(ImdsError::unexpected)?;
+        apply_endpoint(&mut base_uri, &self.inner.endpoint, None).map_err(ImdsError::unexpected)?;
         let request = http::Request::builder()
             .uri(base_uri)
             .body(SdkBody::empty())
@@ -432,9 +429,8 @@ impl Builder {
         let connector = expect_connector(config.connector(&connector_settings));
         let endpoint_source = self
             .endpoint
-            .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
+            .unwrap_or_else(|| EndpointSource::Env(config.clone()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
-        let endpoint = Endpoint::immutable_uri(endpoint)?;
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let token_loader = token::TokenMiddleware::new(
@@ -479,7 +475,7 @@ mod profile_keys {
 #[derive(Debug, Clone)]
 enum EndpointSource {
     Explicit(Uri),
-    Env(Env, Fs),
+    Env(ProviderConfig),
 }
 
 impl EndpointSource {
@@ -493,15 +489,16 @@ impl EndpointSource {
                 }
                 Ok(uri.clone())
             }
-            EndpointSource::Env(env, fs) => {
+            EndpointSource::Env(conf) => {
+                let env = conf.env();
                 // load an endpoint override from the environment
-                let profile = profile::load(fs, env, &Default::default())
-                    .await
-                    .map_err(BuildError::invalid_profile)?;
+                let profile = conf.profile().await;
                 let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {
                     Some(Cow::Owned(uri))
                 } else {
-                    profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
+                    profile
+                        .and_then(|profile| profile.get(profile_keys::ENDPOINT))
+                        .map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
                     return Uri::try_from(uri.as_ref()).map_err(BuildError::invalid_endpoint_uri);
@@ -513,7 +510,8 @@ impl EndpointSource {
                 } else if let Ok(mode) = env.get(env::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
                         .map_err(BuildError::invalid_endpoint_mode)?
-                } else if let Some(mode) = profile.get(profile_keys::ENDPOINT_MODE) {
+                } else if let Some(mode) = profile.and_then(|p| p.get(profile_keys::ENDPOINT_MODE))
+                {
                     mode.parse::<EndpointMode>()
                         .map_err(BuildError::invalid_endpoint_mode)?
                 } else {
@@ -566,6 +564,7 @@ impl<T, E> ClassifyRetry<SdkSuccess<T>, SdkError<E>> for ImdsResponseRetryClassi
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
+    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
@@ -573,7 +572,7 @@ pub(crate) mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_types::retry::RetryKind;
-    use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
+    use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
     use http::Uri;
     use serde::Deserialize;
@@ -694,13 +693,13 @@ pub(crate) mod test {
                 imds_response(r#"test-imds-output2"#),
             ),
         ]);
-        let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        let mut time_source = TestingTimeSource::new(UNIX_EPOCH);
         tokio::time::pause();
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_http_connector(DynConnector::new(connection.clone()))
-                    .with_time_source(TimeSource::manual(&time_source))
+                    .with_time_source(TimeSource::testing(&time_source))
                     .with_sleep(TokioSleep::new()),
             )
             .endpoint_mode(EndpointMode::IpV6)
@@ -747,13 +746,13 @@ pub(crate) mod test {
             ),
         ]);
         tokio::time::pause();
-        let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        let mut time_source = TestingTimeSource::new(UNIX_EPOCH);
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_sleep(TokioSleep::new())
                     .with_http_connector(DynConnector::new(connection.clone()))
-                    .with_time_source(TimeSource::manual(&time_source)),
+                    .with_time_source(TimeSource::testing(&time_source)),
             )
             .endpoint_mode(EndpointMode::IpV6)
             .token_ttl(Duration::from_secs(600))

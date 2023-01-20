@@ -36,7 +36,7 @@ async fn plugin_layers_are_executed_in_registration_order() {
     let pipeline = PluginPipeline::new()
         .push(SentinelPlugin::new("first", output.clone()))
         .push(SentinelPlugin::new("second", output.clone()));
-    let mut app = pokemon_service_server_sdk::service::PokemonService::builder_with_plugins(pipeline)
+    let mut app = pokemon_service_server_sdk::PokemonService::builder_with_plugins(pipeline)
         .do_nothing(do_nothing)
         .build_unchecked();
     let request = DoNothingInput::builder()

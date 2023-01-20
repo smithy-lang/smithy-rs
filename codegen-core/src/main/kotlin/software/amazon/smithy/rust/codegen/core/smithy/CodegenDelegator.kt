@@ -171,11 +171,11 @@ open class RustCrate(
     }
 }
 
-val ErrorsModule = RustModule.public("error", documentation = "All error types that operations can return.")
+val ErrorsModule = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
 val OperationsModule = RustModule.public("operation", documentation = "All operations that this crate can perform.")
-val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs.")
-val InputsModule = RustModule.public("input", documentation = "Input structures for operations.")
-val OutputsModule = RustModule.public("output", documentation = "Output structures for operations.")
+val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
+val InputsModule = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
+val OutputsModule = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
 
 val UnconstrainedModule =
     RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")

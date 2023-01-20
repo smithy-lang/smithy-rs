@@ -30,7 +30,7 @@ pub use error::Error;
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
 }
@@ -100,6 +100,24 @@ impl From<Vec<Document>> for Document {
 impl From<HashMap<String, Document>> for Document {
     fn from(values: HashMap<String, Document>) -> Self {
         Document::Object(values)
+    }
+}
+
+impl From<u64> for Document {
+    fn from(value: u64) -> Self {
+        Document::Number(Number::PosInt(value))
+    }
+}
+
+impl From<i64> for Document {
+    fn from(value: i64) -> Self {
+        Document::Number(Number::NegInt(value))
+    }
+}
+
+impl From<i32> for Document {
+    fn from(value: i32) -> Self {
+        Document::Number(Number::NegInt(value as i64))
     }
 }
 

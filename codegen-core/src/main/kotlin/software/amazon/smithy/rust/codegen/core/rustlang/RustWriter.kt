@@ -22,10 +22,12 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -93,6 +95,11 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     trim: Boolean = true,
     f: T.(String) -> U,
 ): U {
+    scope.forEach { (k, v) ->
+        when (v) {
+            is Unit -> PANIC("provided `kotlin.Unit` for $k. This is a bug.")
+        }
+    }
     val contents = transformTemplate(template, scope, trim)
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
@@ -139,6 +146,16 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     vararg args: Any,
 ) {
     this.write(contents.trim(), *args)
+}
+
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust
+ */
+fun RustWriter.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents, *args)
 }
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
@@ -241,23 +258,40 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 ): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    when (docTrait?.value?.isNotBlank()) {
-        // If docs are modeled, then place them on the code generated shape
-        true -> {
-            this.docs(normalizeHtml(escape(docTrait.value)))
-            note?.also {
-                // Add a blank line between the docs and the note to visually differentiate
-                write("///")
-                docs("_Note: ${it}_")
-            }
-        }
-        // Otherwise, suppress the missing docs lint for this shape since
-        // the lack of documentation is a modeling issue rather than a codegen issue.
-        else -> if (autoSuppressMissingDocs) {
-            rust("##[allow(missing_docs)] // documentation missing in model")
-        }
-    }
+    return docsOrFallback(docTrait?.value, autoSuppressMissingDocs, note)
+}
 
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docString: String? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
+        true -> { { docs(normalizeHtml(escape(docString))) } }
+        else -> null
+    }
+    return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
+}
+
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docsWritable: (T.() -> Unit)? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    if (docsWritable != null) {
+        // If docs are modeled, then place them on the code generated shape
+
+        docsWritable(this)
+        note?.also {
+            // Add a blank line between the docs and the note to visually differentiate
+            write("///")
+            docs("_Note: ${it}_")
+        }
+    } else if (autoSuppressMissingDocs) {
+        rust("##[allow(missing_docs)] // documentation missing in model")
+    }
+    // Otherwise, suppress the missing docs lint for this shape since
+    // the lack of documentation is a modeling issue rather than a codegen issue.
     return this
 }
 
@@ -293,6 +327,15 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
 }
 
 /**
+ * Writes a comment into the code
+ *
+ * Equivalent to [docs] but lines are preceded with `// ` instead of `///`
+ */
+fun <T : AbstractCodeWriter<T>> T.comment(text: String, vararg args: Any): T {
+    return docs(text, *args, newlinePrefix = "// ")
+}
+
+/**
  * Generates a `#[deprecated]` attribute for [shape].
  */
 fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
@@ -301,7 +344,7 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val note = deprecatedTrait.message.orNull()
     val since = deprecatedTrait.since.orNull()
 
-    Attribute.Custom.deprecated(note, since).render(this)
+    Attribute(deprecated(since, note)).render(this)
 
     return this
 }
@@ -627,6 +670,16 @@ class RustWriter private constructor(
 
                 is RustType -> {
                     t.render(fullyQualified = true)
+                }
+
+                is Function<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val func =
+                        t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    func(innerWriter)
+                    innerWriter.dependencies.forEach { addDependency(it) }
+                    return innerWriter.toString().trimEnd()
                 }
 
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")

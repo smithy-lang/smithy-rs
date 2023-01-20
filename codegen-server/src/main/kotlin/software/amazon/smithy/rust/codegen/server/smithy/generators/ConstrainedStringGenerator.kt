@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -23,8 +23,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -56,36 +59,25 @@ class ConstrainedStringGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
     private val constraintsInfo: List<TraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
-            .map(StringTraitInfo::fromTrait)
+            .map { StringTraitInfo.fromTrait(symbol, it) }
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
-        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash)),
-            visibility = constrainedTypeVisibility,
-        )
-
-        // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
-        // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
-        // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
-        writer.documentShape(shape, model, note = rustDocsNote(name))
-        constrainedTypeMetadata.render(writer)
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
+        val metadata = symbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
+        if (metadata.visibility == Visibility.PUBCRATE) {
+            Attribute.AllowDeadCode.render(writer)
         }
         writer.rust(
             """
@@ -134,7 +126,7 @@ class ConstrainedStringGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
@@ -144,6 +136,8 @@ class ConstrainedStringGenerator(
         writer.withInlineModule(constraintViolation.module()) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
+
+        renderTests(shape)
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
@@ -151,7 +145,7 @@ class ConstrainedStringGenerator(
             """
             ##[derive(Debug, PartialEq)]
             pub enum ${constraintViolation.name} {
-              #{Variants:W}
+                #{Variants:W}
             }
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
@@ -173,15 +167,31 @@ class ConstrainedStringGenerator(
             )
         }
     }
+
+    private fun renderTests(shape: Shape) {
+        val testCases = TraitInfo.testCases(constraintsInfo)
+
+        if (testCases.isNotEmpty()) {
+            val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
+            writer.withInlineModule(testModule) {
+                rustTemplate(
+                    """
+                    #{TestCases:W}
+                    """,
+                    "TestCases" to testCases.join("\n"),
+                )
+            }
+        }
+    }
 }
 private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo = TraitInfo(
-        { rust("Self::check_length(&value)?;") },
-        {
+        tryFromCheck = { rust("Self::check_length(&value)?;") },
+        constraintViolationVariant = {
             docs("Error when a string doesn't satisfy its `@length` requirements.")
             rust("Length(usize)")
         },
-        {
+        asValidationExceptionField = {
             rust(
                 """
                 Self::Length(length) => crate::model::ValidationExceptionField {
@@ -191,7 +201,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 """,
             )
         },
-        this::renderValidationFunction,
+        validationFunctionDefinition = this::renderValidationFunction,
     )
 
     /**
@@ -200,6 +210,9 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
      */
     @Suppress("UNUSED_PARAMETER")
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
+        // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
+        // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
+        // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
         rust(
             """
             fn check_length(string: &str) -> Result<(), $constraintViolation> {
@@ -216,18 +229,18 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     }
 }
 
-private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
+private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         val pattern = patternTrait.pattern
 
         return TraitInfo(
-            { rust("let value = Self::check_pattern(value)?;") },
-            {
+            tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
+            constraintViolationVariant = {
                 docs("Error when a string doesn't satisfy its `@pattern`.")
                 docs("Contains the String that failed the pattern.")
                 rust("Pattern(String)")
             },
-            {
+            asValidationExceptionField = {
                 rust(
                     """
                     Self::Pattern(string) => crate::model::ValidationExceptionField {
@@ -238,6 +251,16 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                 )
             },
             this::renderValidationFunction,
+            testCases = listOf {
+                unitTest("regex_compiles") {
+                    rustTemplate(
+                        """
+                        #{T}::compile_regex();
+                        """,
+                        "T" to symbol,
+                    )
+                }
+            },
         )
     }
 
@@ -263,6 +286,8 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                     }
                 }
 
+                /// Attempts to compile the regex for this constrained type's `@pattern`.
+                /// This can fail if the specified regex is not supported by the `#{Regex}` crate.
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
                     static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
 
@@ -278,10 +303,10 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
 
 private sealed class StringTraitInfo {
     companion object {
-        fun fromTrait(trait: Trait): StringTraitInfo =
+        fun fromTrait(symbol: Symbol, trait: Trait) =
             when (trait) {
                 is PatternTrait -> {
-                    Pattern(trait)
+                    Pattern(symbol, trait)
                 }
                 is LengthTrait -> {
                     Length(trait)

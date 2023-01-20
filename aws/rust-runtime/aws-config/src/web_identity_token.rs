@@ -63,15 +63,14 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::Region;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use tracing::Instrument;
 
 const ENV_VAR_TOKEN_FILE: &str = "AWS_WEB_IDENTITY_TOKEN_FILE";
 const ENV_VAR_ROLE_ARN: &str = "AWS_ROLE_ARN";
@@ -147,7 +146,7 @@ impl WebIdentityTokenCredentialsProvider {
             Source::Static(conf) => Ok(Cow::Borrowed(conf)),
         }
     }
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> provider::Result {
         let conf = self.source()?;
         load_credentials(
             &self.fs,
@@ -161,10 +160,6 @@ impl WebIdentityTokenCredentialsProvider {
             &conf.role_arn,
             &conf.session_name,
         )
-        .instrument(tracing::debug_span!(
-            "load_credentials",
-            provider = "WebIdentityToken"
-        ))
         .await
     }
 }
@@ -229,7 +224,7 @@ async fn load_credentials(
     token_file: impl AsRef<Path>,
     role_arn: &str,
     session_name: &str,
-) -> credentials::Result {
+) -> provider::Result {
     let token = fs
         .read_to_end(token_file)
         .await
@@ -264,10 +259,10 @@ mod test {
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
+    use aws_credential_types::provider::error::CredentialsError;
     use aws_sdk_sts::Region;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_types::credentials::CredentialsError;
     use aws_types::os_shim_internal::{Env, Fs};
     use std::collections::HashMap;
 

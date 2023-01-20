@@ -1,7 +1,7 @@
 RFC: RequestID in business logic handlers
 =============
 
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: server
 
@@ -38,7 +38,7 @@ RequestIDs are not to be used by multiple services, but only within a single ser
 The user experience if this RFC is implemented
 ----------------------------------------------
 
-The proposal is to implement a `RequestId` type and make it available to middleware and business logic handlers, through [FromParts](../server/from-parts.md) and as a `Service`.
+The proposal is to implement a `RequestId` type and make it available to middleware and business logic handlers, through [FromParts](../server/from_parts.md) and as a `Service`.
 To aid customers already relying on clients' request IDs, there will be two types: `ClientRequestId` and `ServerRequestId`.
 
 1. Implementing `FromParts` for `Extension<RequestId>` gives customers the ability to write their handlers:
@@ -85,7 +85,7 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        request.extensions_mut().insert(ServerRequestId::new());
+        req.extensions_mut().insert(ServerRequestId::new());
         self.inner.call(req)
     }
 }
@@ -131,7 +131,12 @@ Although the generated ID is opaque, this will give guarantees to customers as t
 Changes checklist
 -----------------
 
-- [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
+- [x] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
 - [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
-- [x] Implement `FromParts` for `Extension<ClientRequestId>`
+- [ ] Implement `FromParts` for `Extension<ClientRequestId>`
+
+Changes since the RFC has been approved
+---------------------------------------
+
+This RFC has been changed to only implement `ServerRequestId`.

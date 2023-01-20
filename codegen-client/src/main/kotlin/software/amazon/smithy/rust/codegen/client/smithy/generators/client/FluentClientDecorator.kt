@@ -8,9 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-class FluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class FluentClientDecorator : ClientCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
@@ -61,9 +59,6 @@ class FluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
             }
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 sealed class FluentClientSection(name: String) : Section(name) {
@@ -81,8 +76,7 @@ abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSec
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.smithyClient(codegenContext.runtimeConfig)
-    private val codegenScope = arrayOf("client" to clientDep.toType())
+    private val codegenScope = arrayOf("client" to RuntimeType.smithyClient(codegenContext.runtimeConfig))
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
             is FluentClientSection.FluentClientDocs -> writable {
@@ -142,7 +136,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// ##     */
                     /// ##     .middleware_fn(|r| r)
                     ///       .build();
-                    /// let config = Config::builder().build();
+                    /// let config = Config::builder().endpoint_resolver("https://www.myurl.com").build();
                     /// let client = Client::with_config(smithy_client, config);
                     /// ```
                     ///

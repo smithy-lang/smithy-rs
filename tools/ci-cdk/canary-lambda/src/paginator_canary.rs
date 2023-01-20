@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::canary::Clients;
-
 use crate::mk_canary;
 use anyhow::bail;
 
@@ -14,9 +12,12 @@ use aws_sdk_ec2::model::InstanceType;
 use crate::CanaryEnv;
 use tokio_stream::StreamExt;
 
-mk_canary!("ec2_paginator", |clients: &Clients, env: &CanaryEnv| {
-    paginator_canary(clients.ec2.clone(), env.page_size)
-});
+mk_canary!(
+    "ec2_paginator",
+    |sdk_config: &aws_config::SdkConfig, env: &CanaryEnv| {
+        paginator_canary(ec2::Client::new(sdk_config), env.page_size)
+    }
+);
 
 pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::Result<()> {
     let mut history = client

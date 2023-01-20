@@ -10,18 +10,18 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.smithy.EventStreamSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
+import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -44,10 +44,10 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator: CombinedCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(
+        val codegenDecorator: CombinedServerCodegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(
                 context,
-                CombinedCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
+                CombinedServerCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
             )
 
         // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
@@ -56,7 +56,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        /** SymbolProvider
+        /**
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
          * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
@@ -79,8 +79,12 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
+                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
+                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { PythonStreamingShapeMetadataProvider(it, model) }
+                // Derive `Eq` and `Hash` if possible.
+                .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }

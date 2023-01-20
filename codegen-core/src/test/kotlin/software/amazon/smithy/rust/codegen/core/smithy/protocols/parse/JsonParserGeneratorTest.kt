@@ -50,6 +50,7 @@ class JsonParserGeneratorTest {
             number: Double,
             s: String,
             top: Top,
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])

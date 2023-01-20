@@ -25,7 +25,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -43,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -91,7 +90,7 @@ class ServerProtocolTestGenerator(
         val outputT = if (it.errors.isEmpty()) {
             t
         } else {
-            val errorType = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+            val errorType = RuntimeType("crate::error::${operationSymbol.name}Error")
             val e = errorType.fullyQualifiedName()
             "Result<$t, $e>"
         }
@@ -103,14 +102,14 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
-        "Http" to CargoDependency.Http.toType(),
-        "Hyper" to CargoDependency.Hyper.toType(),
+        "SmithyHttp" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+        "Http" to RuntimeType.Http,
+        "Hyper" to RuntimeType.Hyper,
         "Tokio" to ServerCargoDependency.TokioDev.toType(),
-        "Tower" to CargoDependency.Tower.toType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
-        "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
+        "Tower" to RuntimeType.Tower,
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
+        "Router" to ServerRuntimeType.router(codegenContext.runtimeConfig),
     )
 
     sealed class TestCase {
@@ -180,7 +179,7 @@ class ServerProtocolTestGenerator(
             PROTOCOL_TEST_HELPER_MODULE_NAME,
             RustMetadata(
                 additionalAttributes = listOf(
-                    Attribute.Cfg("test"),
+                    Attribute.CfgTest,
                     Attribute.AllowDeadCode,
                 ),
                 visibility = Visibility.PUBCRATE,
@@ -258,8 +257,8 @@ class ServerProtocolTestGenerator(
                 "server_${operationName.toSnakeCase()}_test",
                 RustMetadata(
                     additionalAttributes = listOf(
-                        Attribute.Cfg("test"),
-                        Attribute.Custom("allow(unreachable_code, unused_variables)"),
+                        Attribute.CfgTest,
+                        Attribute(allow("unreachable_code", "unused_variables")),
                     ),
                     visibility = Visibility.PRIVATE,
                 ),
@@ -366,7 +365,7 @@ class ServerProtocolTestGenerator(
         testModuleWriter.rust("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
 
-        TokioTest.render(testModuleWriter)
+        Attribute.TokioTest.render(testModuleWriter)
 
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
@@ -487,13 +486,15 @@ class ServerProtocolTestGenerator(
     ) {
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
 
+        val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
+
         rust("// Use the `OperationRegistryBuilder`")
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
-            makeRequest(operationShape, this, writable("todo!() as $outputT"))
+            makeRequest(operationShape, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
             checkResponse(this, testCase.response)
         }
 
@@ -503,7 +504,7 @@ class ServerProtocolTestGenerator(
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
-            makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
+            makeRequest2(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
             checkResponse(this, testCase.response)
         }
     }
@@ -699,7 +700,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals")
+                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -797,8 +798,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
                 )
             }
         }
@@ -851,7 +852,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rust(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -872,7 +873,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -882,7 +883,7 @@ class ServerProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.protocolTest(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }
@@ -920,9 +921,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
 
-            // See https://github.com/awslabs/smithy/issues/1098 for context.
-            FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
-
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
@@ -945,12 +943,6 @@ class ServerProtocolTestGenerator(
 
             // Tests involving constraint traits, which are not yet fully implemented.
             // See https://github.com/awslabs/smithy-rs/issues/1401.
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
@@ -1064,67 +1056,6 @@ class ServerProtocolTestGenerator(
         // or because they are flaky
         private val DisableTests = setOf<String>()
 
-        private fun fixRestJsonSupportsNaNFloatQueryValues(
-            testCase: HttpRequestTestCase,
-            @Suppress("UNUSED_PARAMETER")
-            operationShape: OperationShape,
-        ): HttpRequestTestCase {
-            val params = Node.parse(
-                """
-                {
-                    "queryFloat": "NaN",
-                    "queryDouble": "NaN",
-                    "queryParamsMapOfStringList": {
-                        "Float": ["NaN"],
-                        "Double": ["NaN"]
-                    }
-                }
-                """.trimIndent(),
-            ).asObjectNode().get()
-
-            return testCase.toBuilder().params(params).build()
-        }
-
-        private fun fixRestJsonSupportsInfinityFloatQueryValues(
-            testCase: HttpRequestTestCase,
-            @Suppress("UNUSED_PARAMETER")
-            operationShape: OperationShape,
-        ): HttpRequestTestCase =
-            testCase.toBuilder().params(
-                Node.parse(
-                    """
-                    {
-                        "queryFloat": "Infinity",
-                        "queryDouble": "Infinity",
-                        "queryParamsMapOfStringList": {
-                            "Float": ["Infinity"],
-                            "Double": ["Infinity"]
-                        }
-                    }
-                    """.trimMargin(),
-                ).asObjectNode().get(),
-            ).build()
-
-        private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(
-            testCase: HttpRequestTestCase,
-            @Suppress("UNUSED_PARAMETER")
-            operationShape: OperationShape,
-        ): HttpRequestTestCase =
-            testCase.toBuilder().params(
-                Node.parse(
-                    """
-                    {
-                        "queryFloat": "-Infinity",
-                        "queryDouble": "-Infinity",
-                        "queryParamsMapOfStringList": {
-                            "Float": ["-Infinity"],
-                            "Double": ["-Infinity"]
-                        }
-                    }
-                    """.trimMargin(),
-                ).asObjectNode().get(),
-            ).build()
-
         private fun fixRestJsonAllQueryStringTypes(
             testCase: HttpRequestTestCase,
             @Suppress("UNUSED_PARAMETER")
@@ -1195,12 +1126,6 @@ class ServerProtocolTestGenerator(
                 ).asObjectNode().get(),
             ).build()
 
-        private fun fixAwsJson11MissingHeaderXAmzTarget(
-            testCase: HttpRequestTestCase,
-            operationShape: OperationShape,
-        ): HttpRequestTestCase =
-            testCase.toBuilder().putHeader("x-amz-target", "JsonProtocol.${operationShape.id.name}").build()
-
         private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
         private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
@@ -1233,75 +1158,10 @@ class ServerProtocolTestGenerator(
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
         // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
         private val BrokenRequestTests = mapOf(
-            // https://github.com/awslabs/smithy/pull/1040
-            Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,
-            Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
-            Pair(
-                RestJson,
-                "RestJsonSupportsNegativeInfinityFloatQueryValues",
-            ) to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
+            // TODO(https://github.com/awslabs/smithy/pull/1564)
             Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
+            // TODO(https://github.com/awslabs/smithy/pull/1562)
             Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
-
-            // https://github.com/awslabs/smithy/pull/1392
-            // Missing `X-Amz-Target` in response header
-            Pair(AwsJson11, "AwsJson11Enums") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "AwsJson11ListsSerializeNull") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "AwsJson11MapsSerializeNullValues") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "AwsJson11ServersDontDeserializeNullStructureValues",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "PutAndGetInlineDocumentsInput") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "json_1_1_client_sends_empty_payload_for_no_input_shape",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "json_1_1_service_supports_empty_payload_for_no_input_shape",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "sends_requests_to_slash") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_blob_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_boolean_shapes_false") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_boolean_shapes_true") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_double_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_empty_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_empty_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_empty_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_float_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_integer_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_list_of_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_list_of_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_list_of_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_long_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_map_of_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_map_of_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_map_of_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_string_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_string_shapes_with_jsonvalue_trait") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "serializes_structure_members_with_locationname_traits",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_structure_which_have_no_members") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(AwsJson11, "serializes_timestamp_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "serializes_timestamp_shapes_with_httpdate_timestampformat",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "serializes_timestamp_shapes_with_iso8601_timestampformat",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
-            Pair(
-                AwsJson11,
-                "serializes_timestamp_shapes_with_unixtimestamp_timestampformat",
-            ) to ::fixAwsJson11MissingHeaderXAmzTarget,
         )
 
         private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> =

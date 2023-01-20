@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+pub mod claim_crate_names;
 pub mod fix_manifests;
 pub mod generate_version_manifest;
 pub mod hydrate_readme;

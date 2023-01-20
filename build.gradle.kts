@@ -16,7 +16,6 @@ buildscript {
 
 plugins {
     kotlin("jvm") version "1.3.72" apply false
-    id("org.jetbrains.dokka") version "1.7.10"
 }
 
 allprojects {
@@ -32,7 +31,7 @@ allprojects.forEach {
 
     it.the<JacocoPluginExtension>().apply {
         toolVersion = "0.8.8"
-        reportsDirectory.set(file("${buildDir}/jacoco-reports"))
+        reportsDirectory.set(file("$buildDir/jacoco-reports"))
     }
 }
 

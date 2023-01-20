@@ -14,7 +14,7 @@ import software.amazon.smithy.model.shapes.ShapeId
  *
  * Code-generation context is pervasive read-only global data that gets passed around to the generators.
  *
- * If your data is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your data is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your data is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  */
 open class CodegenContext(

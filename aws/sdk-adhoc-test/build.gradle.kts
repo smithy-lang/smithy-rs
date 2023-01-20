@@ -16,7 +16,7 @@ val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val pluginName = "rust-codegen"
+val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
@@ -41,6 +41,23 @@ val allCodegenTests = listOf(
     CodegenTest(
         "com.amazonaws.apigateway#BackplaneControlService",
         "apigateway",
+        imports = listOf("models/apigateway-rules.smithy"),
+        extraConfig = """
+            ,
+            "codegen": {
+                "includeFluentClient": false
+            },
+            "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false
+                }
+            }
+        """,
+    ),
+    CodegenTest(
+        "com.amazonaws.testservice#TestService",
+        "endpoint-test-service",
+        imports = listOf("models/single-static-endpoint.smithy"),
         extraConfig = """
             ,
             "codegen": {

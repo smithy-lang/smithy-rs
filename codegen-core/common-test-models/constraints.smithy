@@ -10,7 +10,6 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-        // TODO Rename as {Verb}[{Qualifier}]{Noun}: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r980936650
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,
@@ -446,6 +445,11 @@ structure ConA {
     maxLengthString: MaxLengthString,
     fixedLengthString: FixedLengthString,
 
+    lengthBlob: LengthBlob,
+    minLengthBlob: MinLengthBlob,
+    maxLengthBlob: MaxLengthBlob,
+    fixedLengthBlob: FixedLengthBlob,
+
     rangeInteger: RangeInteger,
     minRangeInteger: MinRangeInteger,
     maxRangeInteger: MaxRangeInteger,
@@ -467,15 +471,20 @@ structure ConA {
     fixedValueByte: FixedValueByte,
 
     conBList: ConBList,
-    conBList2: ConBList2,
+    lengthList: LengthList,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // conBSet: ConBSet,
 
     conBMap: ConBMap,
+    lengthMap: LengthMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
+    sparseMap: SparseMap,
+    sparseList: SparseList,
+    sparseLengthMap: SparseLengthMap,
+    sparseLengthList: SparseLengthList,
 
     constrainedUnion: ConstrainedUnion,
     enumString: EnumString,
@@ -485,6 +494,12 @@ structure ConA {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
+
+    listOfLengthBlob: ListOfLengthBlob,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfLengthBlob: SetOfLengthBlob,
+    mapOfLengthBlob: MapOfLengthBlob,
 
     listOfRangeInteger: ListOfRangeInteger,
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
@@ -530,6 +545,35 @@ structure ConA {
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // lengthSetOfPatternString: LengthSetOfPatternString,
+}
+
+@sparse
+map SparseMap {
+    key: String,
+    value: LengthString
+}
+
+@sparse
+list SparseList {
+    member: LengthString
+}
+
+@sparse
+@length(min: 69)
+map SparseLengthMap {
+    key: String,
+    value: String
+}
+
+@sparse
+@length(min: 69)
+list SparseLengthList {
+    member: String
+}
+
+map MapOfLengthBlob {
+    key: String,
+    value: LengthBlob,
 }
 
 map MapOfLengthString {
@@ -640,6 +684,23 @@ string MaxLengthString
 @length(min: 69, max: 69)
 string FixedLengthString
 
+@length(min: 2, max: 8)
+list LengthListOfLengthBlob {
+    member: LengthBlob
+}
+
+@length(min: 2, max: 70)
+blob LengthBlob
+
+@length(min: 2)
+blob MinLengthBlob
+
+@length(max: 70)
+blob MaxLengthBlob
+
+@length(min: 70, max: 70)
+blob FixedLengthBlob
+
 @pattern("[a-d]{5}")
 string PatternString
 
@@ -732,6 +793,10 @@ set SetOfLengthString {
     member: LengthString
 }
 
+set SetOfLengthBlob {
+    member: LengthBlob
+}
+
 set SetOfPatternString {
     member: PatternString
 }
@@ -747,6 +812,10 @@ set LengthSetOfPatternString {
 
 list ListOfLengthString {
     member: LengthString
+}
+
+list ListOfLengthBlob {
+    member: LengthBlob
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
@@ -837,24 +906,25 @@ list RecursiveList {
 }
 
 list ConBList {
-    member: NestedList
+    member: ConBListInner
 }
 
-list ConBList2 {
+list ConBListInner {
     member: ConB
 }
 
-list NestedList {
-    member: ConB
+@length(max: 69)
+list LengthList {
+    member: String
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
 //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
 // set ConBSet {
-//     member: NestedSet
+//     member: ConBSetInner
 // }
 //
-// set NestedSet {
+// set ConBSetInner {
 //     member: String
 // }
 
@@ -874,12 +944,16 @@ map ConBMap {
     value: LengthString
 }
 
+@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: String
+}
+
 @error("client")
 structure ErrorWithLengthStringMessage {
-    // TODO Doesn't work yet because constrained string types don't implement
-    // `AsRef<str>`.
-    // @required
-    // message: LengthString
+    @required
+    message: LengthString
 }
 
 map MapOfMapOfListOfListOfConB {

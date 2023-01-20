@@ -14,13 +14,14 @@ async fn shared_config_testbed() {
         .build();
     let (conn, request) = aws_smithy_client::test_connection::capture_request(None);
     let conf = aws_sdk_dynamodb::config::Builder::from(&shared_config)
-        .credentials_provider(Credentials::new("asdf", "asdf", None, None, "test"))
+        .credentials_provider(Credentials::for_tests())
         .http_connector(conn)
+        .endpoint_url("http://localhost:8000")
         .build();
     let svc = aws_sdk_dynamodb::Client::from_conf(conf);
     let _ = svc.list_tables().send().await;
     assert_eq!(
         request.expect_request().uri(),
-        &Uri::from_static("https://dynamodb.us-east-4.amazonaws.com")
+        &Uri::from_static("http://localhost:8000")
     );
 }

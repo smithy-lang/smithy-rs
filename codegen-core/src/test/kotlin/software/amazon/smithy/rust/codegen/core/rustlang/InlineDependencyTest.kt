@@ -42,7 +42,7 @@ internal class InlineDependencyTest {
                 assert_eq!(res, "00000000-0000-4000-8000-000000000000");
 
                 """,
-                "idempotency" to dep.asType(),
+                "idempotency" to dep.toType(),
             )
         }
         testProject.compileAndTest()
