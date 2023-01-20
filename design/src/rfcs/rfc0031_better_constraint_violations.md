@@ -15,7 +15,7 @@ violations](#tightness-of-constraint-violations). The RFC explains each of them
 in turn, solving them in an iterative and pedagogical manner, i.e. the solution
 of a problem depends on the previous ones having been solved with their
 proposed solutions. The three problems are meant to be addressed atomically in
-one changeset (see the [Checklist][#checklist]) section.
+one changeset (see the [Checklist](#checklist)) section.
 
 Note: code snippets from generated SDKs in this document are abridged so as to
 be didactic and relevant to the point being made. They are accurate with
@@ -811,15 +811,15 @@ work: solving the tightness problem requires a more or less complete overhaul
 of the constraint violations code generator. It's best that all three problems
 be solved in the same changeset.
 
-[ ] Generate `ConstraintViolations` and `ConstraintViolationExceptions` types
-    so as to not reify [impossible constraint
-    violations](#impossible-constraint-violations), add the ability to [collect
-    constraint
-    violations](#collecting-constraint-violations), and solve the ["tightness" problem of constraint violations](#tightness-of-constraint-violations).
-[ ] Special-case generated request deserialization code for operations
-    using `@length` and `@uniqueItems` constrained shapes whose closures reach
-    other constrained shapes so that the validators for these two traits
-    short-circuit upon encountering a number of inner constraint violations
-    above a certain threshold.
-[ ] Write and expose a layer, applied by default to all generated server SDKs,
-    that bounds a request body's size to a reasonable (yet high) default, to prevent [trivial DoS attacks].
+- [ ] Generate `ConstraintViolations` and `ConstraintViolationExceptions` types
+      so as to not reify [impossible constraint
+      violations](#impossible-constraint-violations), add the ability to [collect
+      constraint
+      violations](#collecting-constraint-violations), and solve the ["tightness" problem of constraint violations](#tightness-of-constraint-violations).
+- [ ] Special-case generated request deserialization code for operations
+      using `@length` and `@uniqueItems` constrained shapes whose closures reach
+      other constrained shapes so that the validators for these two traits
+      short-circuit upon encountering a number of inner constraint violations
+      above a certain threshold.
+- [ ] Write and expose a layer, applied by default to all generated server SDKs,
+      that bounds a request body's size to a reasonable (yet high) default, to prevent [trivial DoS attacks].
