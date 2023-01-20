@@ -4,6 +4,7 @@
  */
 
 use aws_config::retry::RetryConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
@@ -124,23 +125,18 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
 
 async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::error::Error>> {
     let conn = NeverConnector::new();
-    let conf =
-        aws_types::SdkConfig::builder()
-            .region(Region::new("us-east-2"))
-            .http_connector(conn.clone())
-            .credentials_provider(
-                aws_credential_types::provider::SharedCredentialsProvider::new(
-                    Credentials::for_tests(),
-                ),
-            )
-            .retry_config(RetryConfig::standard())
-            .timeout_config(
-                TimeoutConfig::builder()
-                    .operation_attempt_timeout(Duration::from_secs_f64(0.1))
-                    .build(),
-            )
-            .sleep_impl(sleep_impl)
-            .build();
+    let conf = aws_types::SdkConfig::builder()
+        .region(Region::new("us-east-2"))
+        .http_connector(conn.clone())
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .retry_config(RetryConfig::standard())
+        .timeout_config(
+            TimeoutConfig::builder()
+                .operation_attempt_timeout(Duration::from_secs_f64(0.1))
+                .build(),
+        )
+        .sleep_impl(sleep_impl)
+        .build();
     let client = Client::new(&conf);
     let resp = client
         .list_buckets()

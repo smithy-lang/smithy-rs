@@ -14,7 +14,7 @@ enum VisitorState {
     Unexpected,
 }
 
-impl VisitorState { 
+impl VisitorState {
     const UNEXPECTED_VISITOR_STATE: &'static str = "Unexpected state. This happens when visitor tries to parse something after finished parsing the `subsec_nanos`.";
 }
 

@@ -12,6 +12,7 @@ import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -538,15 +539,18 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
+        // Fallback to the default code of `@http`, 200.
+        val httpTraitDefaultStatusCode = HttpTrait
+            .builder().method("GET").uri(UriPattern.parse("/")) /* Required to build */
+            .build()
+            .code
+        val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
-                serverRenderResponseCodeBinding(it)(this)
+                serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
             }
             // no binding, use http's
-            ?: operationShape.getTrait<HttpTrait>()?.code?.let {
-                serverRenderHttpResponseCode(it)(this)
-            }
-        // Fallback to the default code of `http::response::Builder`, 200.
+            ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
@@ -669,6 +673,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun serverRenderResponseCodeBinding(
         binding: HttpBindingDescriptor,
+        fallbackStatusCode: Int,
     ): Writable {
         check(binding.location == HttpLocation.RESPONSE_CODE)
 
@@ -678,7 +683,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             if (symbolProvider.toSymbol(binding.member).isOptional()) {
                 rustTemplate(
                     """
-                    .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?
+                    .unwrap_or($fallbackStatusCode)
                     """.trimIndent(),
                     *codegenScope,
                 )

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
@@ -20,6 +21,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
             is ServiceConfig.ConfigStruct -> writable {
                 rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
             }
+
             ServiceConfig.ConfigImpl -> writable {
                 rust(
                     """
@@ -33,24 +35,36 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                     RuntimeType.IdempotencyToken,
                 )
             }
+
             ServiceConfig.BuilderStruct -> writable {
                 rust("make_token: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
             }
+
             ServiceConfig.BuilderImpl -> writable {
-                rust(
+                rustTemplate(
                     """
                     /// Sets the idempotency token provider to use for service calls that require tokens.
-                    pub fn make_token(mut self, make_token: impl Into<#T::IdempotencyTokenProvider>) -> Self {
-                        self.make_token = Some(make_token.into());
+                    pub fn make_token(mut self, make_token: impl Into<#{TokenProvider}>) -> Self {
+                        self.set_make_token(Some(make_token.into()));
+                        self
+                    }
+
+                    /// Sets the idempotency token provider to use for service calls that require tokens.
+                    pub fn set_make_token(&mut self, make_token: Option<#{TokenProvider}>) -> &mut Self {
+                        self.make_token = make_token;
                         self
                     }
                     """,
-                    RuntimeType.IdempotencyToken,
+                    "TokenProvider" to RuntimeType.IdempotencyToken.resolve("IdempotencyTokenProvider"),
                 )
             }
+
             ServiceConfig.BuilderBuild -> writable {
                 rust("make_token: self.make_token.unwrap_or_else(#T::default_provider),", RuntimeType.IdempotencyToken)
             }
+
+            is ServiceConfig.DefaultForTests -> writable { rust("""${section.configBuilderRef}.set_make_token(Some("00000000-0000-4000-8000-000000000000".into()));""") }
+
             else -> writable { }
         }
     }
