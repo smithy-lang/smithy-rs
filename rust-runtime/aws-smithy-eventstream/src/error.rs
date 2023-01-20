@@ -101,7 +101,7 @@ impl fmt::Display for Error {
             Unmarshalling(error) => write!(f, "failed to unmarshall message: {}", error),
             DeserializedStream => write!(
                 f,
-                "this is a deserialized stream. No meesage can be sent or be received."
+                "this is a deserialized stream. No message can be sent or be received."
             ),
         }
     }
