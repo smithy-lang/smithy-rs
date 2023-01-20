@@ -7,10 +7,10 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use aws_credential_types::cache::CredentialsCache;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
@@ -88,7 +88,8 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         ));
         aws_http::auth::set_credentials_cache(
             conf,
-            CredentialsCache::lazy().create_cache(Arc::new(Credentials::for_tests())),
+            CredentialsCache::lazy()
+                .create_cache(SharedCredentialsProvider::new(Credentials::for_tests())),
         );
         conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());

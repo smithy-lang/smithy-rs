@@ -47,10 +47,6 @@ use crate::response::IntoResponse;
 /// into an HTTP response.
 #[derive(Debug, Display)]
 pub enum ResponseRejection {
-    /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
-    /// it to `None`.
-    MissingHttpStatusCode,
-
     /// Used when the service implementer provides an integer outside the 100-999 range for a
     /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,

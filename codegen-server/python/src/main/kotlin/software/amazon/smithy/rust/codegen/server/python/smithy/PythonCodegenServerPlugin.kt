@@ -17,7 +17,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
+import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import java.util.logging.Level
@@ -54,7 +56,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        /** SymbolProvider
+        /**
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
          * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
@@ -77,8 +79,12 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
+                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
+                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { PythonStreamingShapeMetadataProvider(it, model) }
+                // Derive `Eq` and `Hash` if possible.
+                .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }
