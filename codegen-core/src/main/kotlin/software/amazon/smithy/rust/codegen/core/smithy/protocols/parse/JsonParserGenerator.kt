@@ -440,7 +440,7 @@ class JsonParserGenerator(
                                 rustTemplate(
                                     """
                                     match value {
-                                        Some(value) => map.insert(key, value),
+                                        Some(value) => { map.insert(key, value); }
                                         None => return Err(#{Error}::custom("dense map cannot contain null values"))
                                             }""",
                                     *codegenScope,
