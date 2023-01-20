@@ -279,7 +279,7 @@ During the first call to `CredentialsProviderChain::provide_credentials`, provid
 This a case where `CredentialsProviderChain::fallback_on_interrupt` requires the recency policy for fallback credentials found in provider 1 and provider 2, not the precedence policy. The following figure shows how we can set up such a chain:
 
 <p align="center">
-<img width="832" alt="heterogeneous_policies_for_fallback_on_interrupt" src="https://user-images.githubusercontent.com/15333866/213755875-ac6fddbc-0f1b-4437-af16-6e0dbe08ae04.png">
+<img width="700" alt="heterogeneous_policies_for_fallback_on_interrupt" src="https://user-images.githubusercontent.com/15333866/213755875-ac6fddbc-0f1b-4437-af16-6e0dbe08ae04.png">
 </p>
 
 The outermost chain is a `CredentialsProviderChain` and follows the precedence policy for `fallback_on_interrupt`. It contains a sub-chain that, in turn, contains provider 1 and provider 2. This sub-chain implements its own `fallback_on_interrupt` to realize the recency policy for fallback credentials found in provider 1 and provider 2. Conceptually, we have
