@@ -527,7 +527,7 @@ exploitable].
 Users can always manually apply the layer again to their resulting service if
 they want to further restrict a request's body size.
 
-[possible DoS attacks]: https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/
+[trivially exploitable]: https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/
 
 "Tightness" of constraint violations
 ------------------------------------
@@ -822,4 +822,4 @@ be solved in the same changeset.
       short-circuit upon encountering a number of inner constraint violations
       above a certain threshold.
 - [ ] Write and expose a layer, applied by default to all generated server SDKs,
-      that bounds a request body's size to a reasonable (yet high) default, to prevent [trivial DoS attacks].
+      that bounds a request body's size to a reasonable (yet high) default, to prevent [trivial DoS attacks][trivially exploitable].
