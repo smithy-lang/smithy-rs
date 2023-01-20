@@ -253,6 +253,8 @@ We considered skipping relevant fields on serialization and creating a custom de
 However, we believe that our decision is justified for following reason.
 - All for operations that feature event streams since the stream is ephemeral (tied to the HTTP connection), and is effectively unusable after serialization and deserialization
 - Most event stream operations don't have fields that go along with them, making the stream the sole component in them, which makes ser/de not so useful
+- SDK that uses event stream, such as `aws-sdk-transcribestreaming` only has just over 5000 all-time downloads with recent downloads of just under 1000 as of writing (2023/01/21); It makes it difficult to justify since the implementation impacts smaller number of people.
+
 
 ## `Serde` traits implemented on Builder of Output Types
 Output data, such as `aws_sdk_dynamodb::output::UpdateTableOutput` has builder types.
