@@ -11,16 +11,16 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -72,11 +72,7 @@ class ConstrainedCollectionGenerator(
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
         val inner = "std::vec::Vec<#{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-        val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
-        val constrainedTypeMetadata = RustMetadata(
-            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq),
-            visibility = constrainedTypeVisibility,
-        )
+        val constrainedSymbol = symbolProvider.toSymbol(shape)
 
         val codegenScope = arrayOf(
             "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.member),
@@ -87,33 +83,43 @@ class ConstrainedCollectionGenerator(
 
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = constrainedSymbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rustTemplate(
             """
             struct $name(pub(crate) $inner);
             """,
             *codegenScope,
         )
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowDeadCode.render(writer)
-        }
 
-        writer.rustTemplate(
-            """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
-                    &self.0
-                }
-
+        writer.rustBlock("impl $name") {
+            if (metadata.visibility == Visibility.PUBLIC) {
+                writer.rustTemplate(
+                    """
+                    /// ${rustDocsInnerMethod(inner)}
+                    pub fn inner(&self) -> &$inner {
+                        &self.0
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+            writer.rustTemplate(
+                """
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
 
                 #{ValidationFunctions:W}
-            }
+                """,
+                *codegenScope,
+                "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
+            )
+        }
 
+        writer.rustTemplate(
+            """
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
 
