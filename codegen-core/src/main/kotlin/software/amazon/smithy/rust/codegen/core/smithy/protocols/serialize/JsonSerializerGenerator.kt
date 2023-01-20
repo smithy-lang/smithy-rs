@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -166,6 +167,7 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
@@ -398,8 +400,12 @@ class JsonSerializerGenerator(
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS, model)
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
-                rust("$writer.date_time(${value.asRef()}, #T)?;", timestampFormatType)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                rustTemplate(
+                    "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
+                    "FormatType" to timestampFormatType,
+                    "ConvertInto" to typeConversionGenerator.convertViaInto(target),
+                )
             }
 
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->

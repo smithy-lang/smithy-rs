@@ -71,7 +71,7 @@ typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
@@ -347,7 +347,7 @@ class JsonParserGenerator(
                 member, HttpLocation.DOCUMENT,
                 TimestampFormatTrait.Format.EPOCH_SECONDS, model,
             )
-        val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+        val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
         rustTemplate(
             "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
             "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
