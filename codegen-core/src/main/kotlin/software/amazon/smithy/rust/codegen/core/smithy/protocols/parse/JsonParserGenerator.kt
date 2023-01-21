@@ -494,9 +494,6 @@ class JsonParserGenerator(
             ) {
                 rust("let mut variant = None;")
                 val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
-                if (checkValueSet) {
-                    rust("let mut variant_set = false;")
-                }
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -527,16 +524,25 @@ class JsonParserGenerator(
                                                 "Union" to returnSymbolToParse.symbol, *codegenScope,
                                             )
                                         } else {
-                                            rust("let (value, is_not_null) =")
-                                            deserializeMember(member)
-                                            rust(".map_or((None, false), |v| (Some(v), true));")
+                                            if (checkValueSet) {
+                                                rust("let (value, variant_set) =")
+                                                deserializeMember(member)
+                                                rust(".map_or((None, false), |v| (Some(v), true))")
+                                            } else {
+                                                rust("let value =")
+                                                deserializeMember(member)
+                                            }
+                                            rust(";")
 
                                             withBlock("let value = value", ";") {
                                                 unwrapOrDefaultOrError(member)
                                             }
                                             rust("variant = Some(#T::$variantName(value));", returnSymbolToParse.symbol)
                                             if (checkValueSet) {
-                                                rust("variant_set = variant_set || is_not_null;")
+                                                rustTemplate(
+                                                    """if !variant_set { return Err(#{Error}::custom("no variant was set in union"))}""",
+                                                    *codegenScope,
+                                                )
                                             }
                                         }
                                     }
@@ -565,12 +571,6 @@ class JsonParserGenerator(
                     }
                     rustTemplate(
                         """_ => return Err(#{Error}::custom("expected start object or null"))""",
-                        *codegenScope,
-                    )
-                }
-                if (checkValueSet) {
-                    rustTemplate(
-                        """if !variant_set { return Err(#{Error}::custom("no variant was set in union"))}""",
                         *codegenScope,
                     )
                 }
