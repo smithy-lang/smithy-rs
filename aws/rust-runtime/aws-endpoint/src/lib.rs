@@ -270,7 +270,7 @@ mod test {
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
-            props.insert(region.clone());
+            props.insert(region);
             props.insert(SigningService::from_static("qldb"));
             props.insert(endpoint);
         };

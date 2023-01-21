@@ -574,7 +574,7 @@ mod test {
     #[test]
     fn resolve_partitions() {
         let mut resolver = PartitionResolver::empty();
-        let mut new_suffix = PartitionOutputOverride {
+        let new_suffix = PartitionOutputOverride {
             dns_suffix: Some("mars.aws".into()),
             ..Default::default()
         };
