@@ -526,11 +526,7 @@ class JsonParserGenerator(
                                         } else {
                                             withBlock("variant = Some(#T::$variantName(", "));", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                if (checkValueSet) {
-                                                    rust(""".ok_or_else(|| aws_smithy_json::deserialize::error::DeserializeError::custom("no variant was set in union"))?""")
-                                                } else {
-                                                    unwrapOrDefaultOrError(member)
-                                                }
+                                                unwrapOrDefaultOrError(member, checkValueSet)
                                             }
                                         }
                                     }
@@ -568,8 +564,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(
