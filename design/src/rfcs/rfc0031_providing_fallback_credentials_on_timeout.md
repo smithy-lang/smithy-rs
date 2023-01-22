@@ -87,6 +87,7 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
 ```
 - :+1: Users can be guided to use only synchronous primitives when implementing `fallback_on_interrupt`.
 - :-1: It cannot support cases where fallback credentials are asynchronously retrieved.
+- :-1: It may turn into a blocking operation if it takes longer than it should.
 
 #### Option B: Asynchronous primitive
 ```rust
@@ -113,11 +114,9 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
 - :+1: It is async from the beginning, so less likely to introduce a breaking change.
 - :-1: We may have to consider yet another timeout for `fallback_on_interrupt` itself.
 
-However it is implemented, the execution should not take too long because it is a fallback plan (we will document it to ensure the users are made aware). It comes with the default implementation, but credentials providers that need a different behavior can choose to override the method.
+Option A cannot be reversible in the future if we are to support the use case for asynchronously retrieving the fallback credentials, whereas option B allows us to continue supporting both ready and pending futures when retrieving the fallback credentials. Should we require a timeout for `fallback_on_interrupt`, it will be set as a separate configuration for `LazyCredentialsCache` just like `load_timeout` (a timeout future with the configured value can then be raced against a future for `fallback_on_interrupt`). It is possible to introduce that configulation later without breaking existing customers, _assuming_ they do not execute a long-running operation in `fallback_on_interrupt`.
 
-_For the remainder of the RFC, we will choose Option A for the sake of discussion._
-
-The user experience for the code snippet in question will look like this once this proposal is implemented:
+For thease reasons, we will choose option B over option A. The user experience for the code snippet in question will look like this once this proposal is implemented:
 ```rust
 let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
 // --snip--
@@ -127,7 +126,7 @@ let result = cache
         async move {
            let credentials = match future.await {
                 Ok(creds) => creds?,
-                Err(_err) => match provider.fallback_on_interrupt() { // can provide fallback credentials
+                Err(_err) => match provider.fallback_on_interrupt().await { // can provide fallback credentials
                     Some(creds) => creds,
                     None => return Err(CredentialsError::provider_timed_out(load_timeout)),
                 }
@@ -148,12 +147,11 @@ Considering the two cases we analyzed above, implementing `CredentialsProviderCh
 
 With that in mind, consider instead the following approach:
 ```rust
-impl ProvideCredentials for CredentialsProviderChain {
+impl CredentialsProviderChain {
     // --snip--
-
-    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+    async fn fallback_credentials(&self) -> Option<Credentials> {
         for (_, provider) in &self.providers {
-            match provider.fallback_on_interrupt() {
+            match provider.fallback_on_interrupt().await {
                 creds @ Some(_) => return creds,
                 None => {}
             }
@@ -161,8 +159,16 @@ impl ProvideCredentials for CredentialsProviderChain {
         None
     }
 }
+
+impl ProvideCredentials for CredentialsProviderChain {
+    // --snip--
+
+    fn fallback_on_interrupt(&self) -> future::FallbackOnInterrupt<'_> {
+        future::FallbackOnInterrupt::new(self.fallback_credentials())
+    }
+}
 ```
-`CredentialsProviderChain::fallback_on_interrupt` will invoke each provider's `fallback_on_interrupt` method until credentials are returned by one of them. It ensures that the updated code snippet for `LazyCredentialsCache` can return credentials from provider 2 in both `Case 1` and `Case 2`. Even if `timeout_future` wins the race, the execution subsequently calls `provider.fallback_on_interrupt()` to obtain fallback credentials from provider 2, assuming provider 2's `fallback_on_interrupt` is implemented to return fallback credentials accordingly.
+`CredentialsProviderChain::fallback_on_interrupt` will invoke each provider's `fallback_on_interrupt` method until credentials are returned by one of them. It ensures that the updated code snippet for `LazyCredentialsCache` can return credentials from provider 2 in both `Case 1` and `Case 2`. Even if `timeout_future` wins the race, the execution subsequently calls `provider.fallback_on_interrupt().await` to obtain fallback credentials from provider 2, assuming provider 2's `fallback_on_interrupt` is implemented to return fallback credentials accordingly.
 
 The downside of this simple approach is that the behavior is not clear if more than one credentials provider in the chain can return credentials from their `fallback_on_interrupt`. Note, however, that it is the exception rather than the norm for a provider's `fallback_on_interrupt` to return fallback credentials, at least at the time of writing (01/13/2023). The fact that it returns fallback credentials means that the provider successfully loaded credentials at least once, and it usually continues serving credentials on subsequent calls to `provide_credentials`.
 
@@ -265,7 +271,6 @@ There are mainly two problems with this approach. The first problem is that as s
 Changes checklist
 -----------------
 
-- [ ] Decide whether `fallback_on_interrupt` is implemented as a synchronous primitive or an asynchronous primitive
 - [ ] Add `fallback_on_interrupt` method to the `ProvideCredentials` trait with the default implementation
 - [ ] Implement `CredentialsProviderChain::fallback_on_interrupt`
 - [ ] Implement `DefaultCredentialsChain::fallback_on_interrupt`
@@ -304,7 +309,7 @@ impl ProvideCredentials for FallbackRecencyChain {
         // if it chooses to do so.
     }
 
-    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+    fn fallback_on_interrupt(&self) -> future::FallbackOnInterrupt<'_> {
         // Iterate over `self.provider_chain` and return
         // fallback credentials whose expiry is the most recent.
     }
@@ -315,9 +320,12 @@ We can then compose the entire chain like so:
 let provider_1 = /* ... */
 let provider_2 = /* ... */
 let provider_3 = /* ... */
+
 let sub_chain = CredentialsProviderChain::first_try("Provider1", provider_1)
     .or_else("Provider2", provider_2);
+
 let recency_chain = /* Create a FallbackRecencyChain with sub_chain */
+
 let final_chain = CredentialsProviderChain::first_try("fallback_recency", recency_chain)
     .or_else("Provider3", provider_3);
 ```
