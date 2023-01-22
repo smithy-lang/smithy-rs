@@ -524,25 +524,13 @@ class JsonParserGenerator(
                                                 "Union" to returnSymbolToParse.symbol, *codegenScope,
                                             )
                                         } else {
-                                            if (checkValueSet) {
-                                                rust("let (value, variant_set) =")
+                                            withBlock("variant = Some(#T::$variantName(", "));", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                rust(".map_or((None, false), |v| (Some(v), true))")
-                                            } else {
-                                                rust("let value =")
-                                                deserializeMember(member)
-                                            }
-                                            rust(";")
-
-                                            withBlock("let value = value", ";") {
-                                                unwrapOrDefaultOrError(member)
-                                            }
-                                            rust("variant = Some(#T::$variantName(value));", returnSymbolToParse.symbol)
-                                            if (checkValueSet) {
-                                                rustTemplate(
-                                                    """if !variant_set { return Err(#{Error}::custom("no variant was set in union"))}""",
-                                                    *codegenScope,
-                                                )
+                                                if (checkValueSet) {
+                                                    rust(""".ok_or_else(|| aws_smithy_json::deserialize::error::DeserializeError::custom("no variant was set in union"))?""")
+                                                } else {
+                                                    unwrapOrDefaultOrError(member)
+                                                }
                                             }
                                         }
                                     }
@@ -582,10 +570,10 @@ class JsonParserGenerator(
 
     private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
         if (symbolProvider.toSymbol(member).canUseDefault()) {
-            rust(".unwrap_or_default();")
+            rust(".unwrap_or_default()")
         } else {
             rustTemplate(
-                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?;",
+                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
                 *codegenScope,
             )
         }
