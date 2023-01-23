@@ -389,8 +389,22 @@ class JsonParserGenerator(
                                     withBlock("let value =", ";") {
                                         deserializeMember(shape.member)
                                     }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                    rust(
+                                        """
+                                        if let Some(value) = value {
+                                            items.push(value);
+                                        }
+                                        """,
+                                    )
+                                    codegenTarget.ifServer {
+                                        rustTemplate(
+                                            """
+                                            else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
+                                            }
+                                            """,
+                                            *codegenScope,
+                                        )
                                     }
                                 }
                             }

@@ -773,7 +773,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
 
             // Deprioritized, sets don't exist in Smithy 2.0.
             // They have the exact same semantics as list shapes with `@uniqueItems`,
