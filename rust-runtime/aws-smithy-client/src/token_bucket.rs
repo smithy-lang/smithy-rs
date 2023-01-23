@@ -8,7 +8,7 @@
 //! form of concurrency control if a token is required to send a new request (as opposed to retry
 //! requests only).
 
-use aws_smithy_types::retry::ErrorKind;
+use aws_smithy_types::retry::RetryKind;
 use std::fmt;
 
 pub mod standard;
@@ -30,15 +30,14 @@ pub trait Token {
 /// related: [`Token`], [`TokenBucketError`]
 pub trait TokenBucket {
     /// The type of tokens this bucket dispenses.
-    type Token;
+    type Token: Token;
 
     /// Attempt to acquire a token from the bucket. This will fail if the bucket has no more tokens.
     fn try_acquire(
         &self,
-        previous_request_failed_because: Option<ErrorKind>,
+        previous_response_kind: Option<RetryKind>,
     ) -> Result<Self::Token, TokenBucketError>;
 
-    // TODO should this be exposed for non-`test` usage?
     /// Get the number of available tokens in the bucket.
     fn available(&self) -> usize;
 
@@ -65,3 +64,15 @@ impl fmt::Display for TokenBucketError {
 }
 
 impl std::error::Error for TokenBucketError {}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenBucket;
+    use crate::token_bucket::standard;
+
+    #[test]
+    fn token_bucket_trait_is_dyn_safe() {
+        let tb: Box<dyn TokenBucket<Token = standard::Token>> =
+            Box::new(standard::TokenBucket::builder().build());
+    }
+}

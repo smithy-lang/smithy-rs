@@ -165,7 +165,6 @@ impl Default for Standard {
 #[derive(Clone, Debug)]
 struct RequestLocalRetryState {
     attempts: u32,
-    last_quota_usage: Option<usize>,
 }
 
 impl Default for RequestLocalRetryState {
@@ -173,7 +172,6 @@ impl Default for RequestLocalRetryState {
         Self {
             // Starts at one to account for the initial request that failed and warranted a retry
             attempts: 1,
-            last_quota_usage: None,
         }
     }
 }
@@ -222,13 +220,10 @@ impl RetryHandler {
     ///
     /// If a retry is specified, this function returns `(next, backoff_duration)`
     /// If no retry is specified, this function returns None
-    fn should_retry_error(&self, error_kind: &ErrorKind) -> Option<(Self, Duration)> {
-        let quota_used = {
-            if self.local.attempts == self.config.max_attempts {
-                return None;
-            }
-            // self.quota.acquire(error_kind).await?
-        };
+    fn should_retry_error(&self) -> Option<(Self, Duration)> {
+        if self.local.attempts == self.config.max_attempts {
+            return None;
+        }
         let backoff = calculate_exponential_backoff(
             // Generate a random base multiplier to create jitter
             (self.config.base)(),
@@ -242,10 +237,7 @@ impl RetryHandler {
         let next = RetryHandler {
             local: RequestLocalRetryState {
                 attempts: self.local.attempts + 1,
-                // last_quota_usage: Some(quota_used),
-                last_quota_usage: None,
             },
-            // quota: self.quota.clone(),
             config: self.config.clone(),
             sleep_impl: self.sleep_impl.clone(),
         };
@@ -257,11 +249,8 @@ impl RetryHandler {
         match retry_kind {
             RetryKind::Explicit(dur) => Some((self.clone(), *dur)),
             RetryKind::UnretryableFailure => None,
-            RetryKind::Unnecessary => {
-                // self.quota.release(self.local.last_quota_usage);
-                None
-            }
-            RetryKind::Error(err) => self.should_retry_error(err),
+            RetryKind::Unnecessary => None,
+            RetryKind::Error(_) => self.should_retry_error(),
             _ => None,
         }
     }
@@ -310,6 +299,7 @@ where
     ) -> Option<Self::Future> {
         let classifier = req.retry_classifier();
         let retry_kind = classifier.classify_retry(result);
+
         self.retry_for(retry_kind)
     }
 

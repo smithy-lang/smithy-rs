@@ -61,6 +61,7 @@ where
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 }
@@ -101,6 +102,7 @@ where
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 

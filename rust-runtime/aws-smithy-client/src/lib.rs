@@ -133,12 +133,14 @@ pub struct Client<
     Connector = erase::DynConnector,
     Middleware = erase::DynMiddleware<Connector>,
     RetryPolicy = retry::Standard,
+    TokenBucket = token_bucket::standard::TokenBucket,
 > {
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
     operation_timeout_config: OperationTimeoutConfig,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    token_bucket: TokenBucket,
 }
 
 impl Client<(), (), ()> {
@@ -160,6 +162,7 @@ where
         Builder::new()
             .connector(connector)
             .middleware(M::default())
+            .token_bucket(token_bucket::standard::TokenBucket::builder().build())
             .build()
     }
 }
@@ -218,16 +221,15 @@ where
 
         let timeout_params =
             ClientTimeoutParams::new(&self.operation_timeout_config, self.sleep_impl.clone());
+        let token_bucket = &self.token_bucket;
 
         let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_params.operation_timeout))
-            .layer(QuotaLayer::new(|| {
-                token_bucket::standard::TokenBucket::builder().build()
-            }))
             .retry(
                 self.retry_policy
                     .new_request_policy(self.sleep_impl.clone()),
             )
+            .layer(QuotaLayer::new(|| token_bucket.clone()))
             .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
             .layer(ParseResponseLayer::<H, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{bounds, erase, retry, Client};
+use crate::{bounds, erase, retry, token_bucket, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
@@ -31,12 +31,13 @@ impl<I> MaybeRequiresSleep<I> {
 /// When configured to your liking, call [`Builder::build`]. The individual methods have additional
 /// documentation.
 #[derive(Clone, Debug)]
-pub struct Builder<C = (), M = (), R = retry::Standard> {
+pub struct Builder<C = (), M = (), R = retry::Standard, Tb = token_bucket::standard::TokenBucket> {
     connector: MaybeRequiresSleep<C>,
     middleware: M,
     retry_policy: MaybeRequiresSleep<R>,
     operation_timeout_config: Option<OperationTimeoutConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    token_bucket: Tb,
 }
 
 impl<C, M> Default for Builder<C, M>
@@ -55,6 +56,7 @@ where
             ),
             operation_timeout_config: None,
             sleep_impl: default_async_sleep(),
+            token_bucket: token_bucket::standard::TokenBucket::builder().build(),
         }
     }
 }
@@ -173,6 +175,7 @@ impl<M, R> Builder<(), M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 
@@ -229,6 +232,7 @@ impl<C, R> Builder<C, (), R> {
             operation_timeout_config: self.operation_timeout_config,
             middleware,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 
@@ -280,6 +284,23 @@ impl<C, M> Builder<C, M, retry::Standard> {
             operation_timeout_config: self.operation_timeout_config,
             middleware: self.middleware,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
+        }
+    }
+}
+
+impl<C, M, R, Tb> Builder<C, M, R, Tb>
+where
+    Tb: token_bucket::TokenBucket,
+{
+    pub fn token_bucket(self, token_bucket: Tb) -> Builder<C, M, R, Tb> {
+        Builder {
+            connector: self.connector,
+            retry_policy: self.retry_policy,
+            operation_timeout_config: self.operation_timeout_config,
+            middleware: self.middleware,
+            sleep_impl: self.sleep_impl,
+            token_bucket,
         }
     }
 }
@@ -347,6 +368,7 @@ impl<C, M, R> Builder<C, M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 
@@ -361,6 +383,7 @@ impl<C, M, R> Builder<C, M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 
@@ -392,6 +415,7 @@ impl<C, M, R> Builder<C, M, R> {
             middleware: self.middleware,
             operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            token_bucket: self.token_bucket,
         }
     }
 }
