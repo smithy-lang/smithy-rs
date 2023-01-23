@@ -77,11 +77,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::body::SdkBody;
     use crate::operation;
     use crate::result::{SdkError, SdkSuccess};
-    use crate::retry::ClassifyRetry;
+    use crate::retry::{ClassifyRetry, DefaultResponseRetryClassifier};
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::fmt;
 

@@ -258,9 +258,8 @@ where
 
         let result = async move {
             check_send_sync(svc)
-                // TODO
-                .ready()
-                .await?
+                // .ready()
+                // .await?
                 .call(op)
                 .await
         }

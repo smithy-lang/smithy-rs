@@ -33,13 +33,13 @@ impl<S, Tb: TokenBucket> QuotaService<S, Tb> {
     }
 }
 
-impl<S, H, R, Tb, To, E, T> Service<Operation<H, R>> for QuotaService<S, Tb>
+impl<S, H, R, Tb, To, T, E> Service<Operation<H, R>> for QuotaService<S, Tb>
 where
     S: Service<Operation<H, R>, Error = SdkError<E>, Response = SdkSuccess<T>>,
     S::Response: 'static,
     S::Future: 'static,
-    E: ProvideErrorKind + 'static,
     T: 'static,
+    E: ProvideErrorKind + 'static,
     To: Token + 'static,
     Tb: TokenBucket<Token = To>,
 {
@@ -70,19 +70,23 @@ where
         };
 
         Box::pin(async move {
-            let res = fut.await;
+            let mut res = fut.await;
             let classifier = DefaultResponseRetryClassifier::new();
             // If this request failed with a reason that's relevant to our token bucket,
             // insert that info into the property bag so we can retrieve the correct number
             // of tokens if the request is retried.
             let response_kind = classifier.classify_retry(res.as_ref());
-            // res.properties_mut().insert(response_kind);
 
-            if res.is_ok() {
-                token.release()
-            } else {
-                token.forget()
-            }
+            match &mut res {
+                Ok(success) => {
+                    token.release();
+                    success.raw.properties_mut().insert(response_kind)
+                }
+                Err(SdkError::ServiceError(failure)) => {
+                    token.forget();
+                    failure.raw().properties_mut().insert(response_kind)
+                }
+            };
 
             res
         })

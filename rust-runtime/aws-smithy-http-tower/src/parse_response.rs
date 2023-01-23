@@ -65,28 +65,22 @@ type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>
 /// `T`: The happy path return of the response parser
 /// `E`: The error path return of the response parser
 /// `R`: The type of the retry policy
-impl<InnerService, ResponseHandler, SuccessResponse, FailureResponse, RetryPolicy>
-    Service<Operation<ResponseHandler, RetryPolicy>>
-    for ParseResponseService<InnerService, ResponseHandler, RetryPolicy>
+impl<S, H, T, E, R> Service<Operation<H, R>> for ParseResponseService<S, H, R>
 where
-    InnerService:
-        Service<operation::Request, Response = operation::Response, Error = SendOperationError>,
-    InnerService::Future: Send + 'static,
-    ResponseHandler: ParseHttpResponse<Output = Result<SuccessResponse, FailureResponse>>
-        + Send
-        + Sync
-        + 'static,
-    FailureResponse: std::error::Error + 'static,
+    S: Service<operation::Request, Response = operation::Response, Error = SendOperationError>,
+    S::Future: Send + 'static,
+    H: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + 'static,
+    E: std::error::Error + 'static,
 {
-    type Response = SdkSuccess<SuccessResponse>;
-    type Error = SdkError<FailureResponse>;
+    type Response = SdkSuccess<T>;
+    type Error = SdkError<E>;
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(|err| err.into())
     }
 
-    fn call(&mut self, req: Operation<ResponseHandler, RetryPolicy>) -> Self::Future {
+    fn call(&mut self, req: Operation<H, R>) -> Self::Future {
         let (req, parts) = req.into_request_response();
         let handler = parts.response_handler;
         let resp = self.inner.call(req);

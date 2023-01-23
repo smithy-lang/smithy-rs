@@ -8,9 +8,7 @@
 use super::Token as TokenTrait;
 use super::TokenBucket as TokenBucketTrait;
 use super::TokenBucketError;
-use aws_smithy_http::result::ServiceError;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use futures_util::future::err;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -226,8 +224,8 @@ impl TokenBucketTrait for TokenBucket {
 #[cfg(test)]
 mod test {
     use super::{
-        ResponseKind, TokenBucket, DEFAULT_INITIAL_RETRY_TOKENS,
-        DEFAULT_RETRYABLE_ERROR_RETRY_COST, DEFAULT_TIMEOUT_ERROR_RETRY_COST,
+        TokenBucket, DEFAULT_INITIAL_RETRY_TOKENS, DEFAULT_RETRYABLE_ERROR_RETRY_COST,
+        DEFAULT_TIMEOUT_ERROR_RETRY_COST,
     };
     use crate::token_bucket::{Token, TokenBucket as TokenBucketTrait};
 

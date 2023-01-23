@@ -16,7 +16,7 @@ use crate::{SdkError, SdkSuccess};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::retry::ClassifyRetry;
-use aws_smithy_types::retry::{ErrorKind, RetryKind};
+use aws_smithy_types::retry::RetryKind;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
