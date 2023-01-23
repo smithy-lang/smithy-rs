@@ -81,6 +81,7 @@ fn main() {
         );
         current_page.files.push(file);
     }
+    pages.push(current_page);
 
     if let Err(err) = html::write_html(&args.output_dir, args.title, args.subtitle, &pages) {
         eprintln!("failed to write HTML: {err}");
