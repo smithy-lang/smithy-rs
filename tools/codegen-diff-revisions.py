@@ -128,20 +128,18 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
         eprint(f"No diff output for {base_commit_sha}..{head_commit_sha}")
         return None
     else:
-        run(f"mkdir -p {OUTPUT_PATH}/{base_commit_sha}/{head_commit_sha}")
-        dest_path = f"{base_commit_sha}/{head_commit_sha}/diff-{suffix}.html"
-        whitespace_context = "" if whitespace else "(ignoring whitespace)"
-
-        subtitle = f"rev. {head_commit_sha} {whitespace_context}"
-
+        full_output_path = f"{OUTPUT_PATH}/{base_commit_sha}/{head_commit_sha}/{suffix}"
+        run(f"mkdir -p {full_output_path}")
         run(f"git diff --output=codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
 
         # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
         # All arguments after the first `--` go to the `git diff` command.
-        diff_cmd = f"difftags --output-dir {OUTPUT_PATH}/{dest_path} --title \"{title}\" --subtitle \"{subtitle}\" codegen-diff.txt"
+        whitespace_context = "" if whitespace else "(ignoring whitespace)"
+        subtitle = f"rev. {head_commit_sha} {whitespace_context}"
+        diff_cmd = f"difftags --output-dir {full_output_path} --title \"{title}\" --subtitle \"{subtitle}\" codegen-diff.txt"
         eprint(f"Running diff cmd: {diff_cmd}")
         run(diff_cmd)
-        return dest_path
+        return f"{full_output_path}/index.html"
 
 
 def diff_link(diff_text, empty_diff_text, diff_location, alternate_text, alternate_location):
