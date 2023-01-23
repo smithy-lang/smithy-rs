@@ -128,7 +128,8 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
         eprint(f"No diff output for {base_commit_sha}..{head_commit_sha} ({suffix})")
         return None
     else:
-        full_output_path = f"{OUTPUT_PATH}/{base_commit_sha}/{head_commit_sha}/{suffix}"
+        partial_output_path = f"{base_commit_sha}/{head_commit_sha}/{suffix}"
+        full_output_path = f"{OUTPUT_PATH}/{partial_output_path}"
         run(f"mkdir -p {full_output_path}")
         run(f"git diff --output=codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
 
@@ -139,7 +140,7 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
         diff_cmd = f"difftags --output-dir {full_output_path} --title \"{title}\" --subtitle \"{subtitle}\" codegen-diff.txt"
         eprint(f"Running diff cmd: {diff_cmd}")
         run(diff_cmd)
-        return f"{full_output_path}/index.html"
+        return f"{partial_output_path}/index.html"
 
 
 def diff_link(diff_text, empty_diff_text, diff_location, alternate_text, alternate_location):
