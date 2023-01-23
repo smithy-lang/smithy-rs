@@ -220,6 +220,8 @@ def is_fn_like(obj: Any) -> bool:
         or inspect.ismethod(obj)
         or inspect.isfunction(obj)
         or inspect.ismethoddescriptor(obj)
+        or inspect.iscoroutine(obj)
+        or inspect.iscoroutinefunction(obj)
     )
 
 
