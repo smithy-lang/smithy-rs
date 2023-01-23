@@ -134,7 +134,7 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
 
         subtitle = f"rev. {head_commit_sha} {whitespace_context}"
 
-        run(f"git diff -o codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
+        run(f"git diff --output=codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
 
         # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
         # All arguments after the first `--` go to the `git diff` command.
