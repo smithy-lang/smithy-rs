@@ -436,8 +436,24 @@ class JsonParserGenerator(
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
-                            rustBlock("if let Some(value) = value") {
-                                rust("map.insert(key, value);")
+                            codegenTarget.ifServer {
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                            }""",
+                                    *codegenScope,
+                                )
+                            }
+                            codegenTarget.ifClient {
+                                rustTemplate(
+                                    """
+                                    if let Some(value) = value {
+                                        map.insert(key, value);
+                                    }
+                                    """,
+                                )
                             }
                         }
                     }
