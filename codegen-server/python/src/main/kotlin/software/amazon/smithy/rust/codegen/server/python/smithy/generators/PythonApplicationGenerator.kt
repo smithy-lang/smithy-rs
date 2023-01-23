@@ -199,7 +199,7 @@ class PythonApplicationGenerator(
                         let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
                         let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
                         let builder = builder.$name(move |input, state| {
-                            #{pyo3_asyncio}::tokio::scope(${name}_locals.clone(), crate::operation_handler::$name(input, state, handler.clone()))
+                            #{pyo3_asyncio}::tokio::scope(${name}_locals.clone(), crate::python_operation_adaptor::$name(input, state, handler.clone()))
                         });
                         """,
                         *codegenScope,

@@ -174,13 +174,6 @@ impl IntoResponse<AwsJson1_1> for RuntimeError {
     }
 }
 
-#[allow(deprecated)]
-impl From<crate::rejection::RequestExtensionNotFoundRejection> for RuntimeError {
-    fn from(err: crate::rejection::RequestExtensionNotFoundRejection) -> Self {
-        Self::InternalFailure(crate::Error::new(err))
-    }
-}
-
 impl From<crate::rejection::ResponseRejection> for RuntimeError {
     fn from(err: crate::rejection::ResponseRejection) -> Self {
         Self::Serialization(crate::Error::new(err))
