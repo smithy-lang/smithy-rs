@@ -35,7 +35,7 @@ import shlex
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
 BASE_BRANCH_NAME = "__tmp-localonly-base"
-OUTPUT_PATH = "tmp-codegen-diff/"
+OUTPUT_PATH = "tmp-codegen-diff"
 
 COMMIT_AUTHOR_NAME = "GitHub Action (generated code preview)"
 COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
@@ -99,9 +99,9 @@ def generate_and_commit_generated_code(revision_sha):
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
-    run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}")
-    run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}")
-    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}")
+    run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+    run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
+    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}/")
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
@@ -125,7 +125,7 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
     diff_exists = get_cmd_status(f"git diff --quiet {whitespace_flag} "
                                  f"{BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
     if diff_exists == 0:
-        eprint(f"No diff output for {base_commit_sha}..{head_commit_sha}")
+        eprint(f"No diff output for {base_commit_sha}..{head_commit_sha} ({suffix})")
         return None
     else:
         full_output_path = f"{OUTPUT_PATH}/{base_commit_sha}/{head_commit_sha}/{suffix}"
