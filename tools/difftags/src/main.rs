@@ -14,7 +14,7 @@ mod html;
 mod page;
 
 #[derive(Debug, Parser)]
-#[clap(name = "difftags")]
+#[clap(name = "difftags", version)]
 #[clap(about = "Diff to HTML conversion tool")]
 struct Cli {
     /// Directory to output to
