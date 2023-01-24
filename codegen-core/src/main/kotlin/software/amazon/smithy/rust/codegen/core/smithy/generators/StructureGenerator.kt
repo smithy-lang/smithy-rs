@@ -138,7 +138,7 @@ open class StructureGenerator(
         
         // todo! check if it is sensitive
         // if {
-            //writer.writeInline("This data may contain sensitive information; You must be careful when you serialize this.")
+            // writer.writeInline("This data contains sensitive information; It will be not be obscured when serialized.")
         // }
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
