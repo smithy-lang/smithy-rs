@@ -290,7 +290,7 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     /// The fallback credentials should be set aside and ready to be returned
     /// immediately. Therefore, the user should NOT go fetch new credentials
     /// within this method, which might cause a long-running operation.
-    fn fallback_on_interrupt<'a>(&'a self) -> Option<Credentials> {
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
         None
     }
 }
