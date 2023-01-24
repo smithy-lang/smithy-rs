@@ -54,7 +54,7 @@ class CargoTomlGenerator(
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
         }
-        
+
         val cargoToml = mapOf(
             "package" to listOfNotNull(
                 "name" to settings.moduleName,

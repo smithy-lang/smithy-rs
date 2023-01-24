@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
-import UnstableDerive
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
 class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
@@ -180,7 +179,7 @@ open class EnumGenerator(
             renamedWarning.ifBlank { null },
         )
         writer.deprecatedShape(shape)
-        
+
         writer.writeInline(UnstableDerive.UnstableDerive)
         meta.render(writer)
         writer.rustBlock("enum $enumName") {

@@ -447,6 +447,16 @@ class Attribute(val inner: Writable) {
     }
 
     companion object {
+        fun cfg_attr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
+        val UnstableSerdeAny = Attribute(cfg(all(writable("aws_sdk_unstable"), any(pair("feature" to "serde-serialize"), pair("feature" to "serde-deserialize")))))
+        val UnstableSerdeAll = all(writable("aws_sdk_unstable"), all(pair("feature" to "serde-serialize"), pair("feature" to "serde-deserialize")))
+        val UnstableSerialize = all(writable("aws_sdk_unstable"), pair("feature" to "serde-serialize"))
+        val UnstableDeserialize = all(writable("aws_sdk_unstable"), pair("feature" to "serde-deserialize"))
+        val UnstableSerdeDerive = writable {
+            Attribute(cfg_attr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-serialize"), derive(CargoDependency.Serde.resolve("Serialize"))))).render(this)
+            Attribute(cfg_attr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-deserialize"), derive(CargoDependency.Serde.resolve("Deserialize"))))).render(this)
+        }
+
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))

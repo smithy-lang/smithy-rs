@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
-import UnstableDerive
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -135,10 +134,10 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
-        
+
         // todo! check if it is sensitive
         // if {
-            // writer.writeInline("This data contains sensitive information; It will be not be obscured when serialized.")
+        // writer.writeInline("This data contains sensitive information; It will be not be obscured when serialized.")
         // }
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
