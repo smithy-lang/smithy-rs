@@ -458,7 +458,6 @@ class Attribute(val inner: Writable) {
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
-        val AllowUnused = Attribute(allow("unused"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
@@ -466,6 +465,9 @@ class Attribute(val inner: Writable) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
+        fun shouldPanic(expectedMessage: String) =
+            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
         val SerdeSerialize = Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "\"serde-serialize\"")), derive(RuntimeType.SerdeSerialize)))
@@ -509,6 +511,8 @@ class Attribute(val inner: Writable) {
         fun doc(vararg attrMacros: Writable): Writable = macroWithArgs("doc", *attrMacros)
         fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
         fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
+
+        fun feature(feature: String) = writable("feature = ${feature.dq()}")
 
         fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()

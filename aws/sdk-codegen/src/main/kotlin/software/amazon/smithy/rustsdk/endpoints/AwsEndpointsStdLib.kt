@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.endpoints
 
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
+import software.amazon.smithy.rustsdk.SdkSettings
 import kotlin.io.path.readText
 
 /**

@@ -486,13 +486,15 @@ class ServerProtocolTestGenerator(
     ) {
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
 
+        val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
+
         rust("// Use the `OperationRegistryBuilder`")
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
-            makeRequest(operationShape, this, writable("todo!() as $outputT"))
+            makeRequest(operationShape, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
             checkResponse(this, testCase.response)
         }
 
@@ -502,7 +504,7 @@ class ServerProtocolTestGenerator(
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
-            makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
+            makeRequest2(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
             checkResponse(this, testCase.response)
         }
     }
@@ -918,9 +920,6 @@ class ServerProtocolTestGenerator(
 
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
-
-            // See https://github.com/awslabs/smithy/issues/1098 for context.
-            FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),

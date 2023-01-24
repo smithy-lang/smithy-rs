@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 12th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#2201](https://github.com/awslabs/smithy-rs/issues/2201)) Fix severe bug where a router fails to deserialize percent-encoded query strings, reporting no operation match when there could be one. If your Smithy model uses an operation with a request URI spec containing [query string literals](https://smithy.io/2.0/spec/http-bindings.html#query-string-literals), you are affected. This fix was released in `aws-smithy-http-server` v0.53.1.
+
+
 January 11th, 2023
 ==================
 **Breaking Changes:**

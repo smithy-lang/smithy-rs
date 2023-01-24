@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.endpoint
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.ClientContextDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.ClientContextConfigCustomization
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -52,6 +52,6 @@ class ClientContextParamsDecoratorTest {
                 """,
             )
         }
-        validateConfigCustomizations(ClientContextDecorator(testCodegenContext(model)), project)
+        validateConfigCustomizations(ClientContextConfigCustomization(testCodegenContext(model)), project)
     }
 }
