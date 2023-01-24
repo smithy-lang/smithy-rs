@@ -511,7 +511,7 @@ class JsonParserGenerator(
                                 """,
                                 *codegenScope,
                             )
-                            withBlock("match key.to_unescaped()?.as_ref() {", "};") {
+                            withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
@@ -519,12 +519,12 @@ class JsonParserGenerator(
                                             rustTemplate(
                                                 """
                                                 #{skip_value}(tokens)?;
-                                                variant = Some(#{Union}::$variantName)
+                                                Some(#{Union}::$variantName)
                                                 """,
                                                 "Union" to returnSymbolToParse.symbol, *codegenScope,
                                             )
                                         } else {
-                                            withBlock("variant = Some(#T::$variantName(", "));", returnSymbolToParse.symbol) {
+                                            withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
                                                 unwrapOrDefaultOrError(member, checkValueSet)
                                             }
@@ -537,7 +537,7 @@ class JsonParserGenerator(
                                         """
                                         _ => {
                                           #{skip_value}(tokens)?;
-                                          variant = Some(#{Union}::${UnionGenerator.UnknownVariantName})
+                                          Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                         }
                                         """,
                                         "Union" to returnSymbolToParse.symbol,
