@@ -239,3 +239,20 @@ message = "Add `with_test_defaults()` and `set_test_defaults()` to `<service>::C
 references = ["smithy-rs#2204"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Remove deprecated service builder, this includes:
+
+- Remove `aws_smithy_http_server::routing::Router` and `aws_smithy_http_server::request::RequestParts`.
+- Move the `aws_smithy_http_server::routers::Router` trait and `aws_smithy_http_server::routing::RoutingService` into `aws_smithy_http_server::routing`.
+- Remove the following from the generated SDK:
+    - `operation_registry.rs`
+    - `operation_handler.rs`
+    - `server_operation_handler_trait.rs`
+
+If migration to the new service builder API has not already been completed a brief summary of required changes can be seen in [previous release notes](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) and in API documentation of the root crate.
+"""
+references = ["smithy-rs#2161"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+author = "hlbarber"
