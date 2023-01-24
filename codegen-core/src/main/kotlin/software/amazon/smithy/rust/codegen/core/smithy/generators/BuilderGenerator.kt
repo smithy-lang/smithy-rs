@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -27,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustInline
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
@@ -206,11 +206,12 @@ class BuilderGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
+        writer.docs("This is the datatype that Builder of this module build itself into.")
+        writer.rustInline("pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
-        writer.docs("This is the datatype that Builder of this module build itself into.")
-        writer.rustInline("pub type OutputShape = #D", structureSymbol)
-        writer.writeInline(UnstableDerive.UnstableDerive)
+        Attribute.SerdeSerialize.render(writer)
+        Attribute.SerdeDeserialize.render(writer)
         writer.rustBlock("pub struct $builderName") {
             // add serde
             for (member in members) {

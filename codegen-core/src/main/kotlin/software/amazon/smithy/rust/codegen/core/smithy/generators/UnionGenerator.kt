@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -62,8 +61,9 @@ class UnionGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
 
+        Attribute.SerdeSerialize.render(writer)
+        Attribute.SerdeDeserialize.render(writer)
         val containerMeta = unionSymbol.expectRustMetadata()
-        writer.writeInline(UnstableDerive.UnstableDerive)
         containerMeta.render(writer)
 
         renderUnion(unionSymbol)

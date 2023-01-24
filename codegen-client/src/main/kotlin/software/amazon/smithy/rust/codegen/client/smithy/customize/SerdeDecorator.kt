@@ -22,7 +22,7 @@ class SerdeDecorator : ClientCodegenDecorator {
         fun _feature(feature_name: String, crate_name: String): Feature {
             return Feature(feature_name, false, listOf(crate_name + "/" + feature_name))
         }
-        rustCrate.mergeFeature(_feature("serde-serialize", "aws-sdk-types"))
-        rustCrate.mergeFeature(_feature("serde-deserialize", "aws-sdk-types"))
+        rustCrate.mergeFeature(_feature("serde-serialize", "aws-smithy-types"))
+        rustCrate.mergeFeature(_feature("serde-deserialize", "aws-smithy-types"))
     }
 }

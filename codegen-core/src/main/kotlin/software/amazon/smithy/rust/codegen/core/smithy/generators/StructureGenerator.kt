@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -13,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -137,7 +137,7 @@ open class StructureGenerator(
 
         // todo! check if it is sensitive
         // if {
-        // writer.writeInline("This data contains sensitive information; It will be not be obscured when serialized.")
+        //     writer.writeInline("This data contains sensitive information; It will not be obscured when serialized.")
         // }
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
@@ -149,7 +149,8 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-        writer.writeInline(UnstableDerive.UnstableDerive)
+        Attribute.SerdeSerialize.render(writer)
+        Attribute.SerdeDeserialize.render(writer)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {

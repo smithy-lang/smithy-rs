@@ -32,3 +32,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
+
+[features]
+serde-serialize = []
+serde-deserialize = []

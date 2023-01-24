@@ -447,16 +447,6 @@ class Attribute(val inner: Writable) {
     }
 
     companion object {
-        fun cfg_attr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
-        val UnstableSerdeAny = Attribute(cfg(all(writable("aws_sdk_unstable"), any(pair("feature" to "serde-serialize"), pair("feature" to "serde-deserialize")))))
-        val UnstableSerdeAll = all(writable("aws_sdk_unstable"), all(pair("feature" to "serde-serialize"), pair("feature" to "serde-deserialize")))
-        val UnstableSerialize = all(writable("aws_sdk_unstable"), pair("feature" to "serde-serialize"))
-        val UnstableDeserialize = all(writable("aws_sdk_unstable"), pair("feature" to "serde-deserialize"))
-        val UnstableSerdeDerive = writable {
-            Attribute(cfg_attr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-serialize"), derive(CargoDependency.Serde.resolve("Serialize"))))).render(this)
-            Attribute(cfg_attr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-deserialize"), derive(CargoDependency.Serde.resolve("Deserialize"))))).render(this)
-        }
-
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
@@ -478,6 +468,8 @@ class Attribute(val inner: Writable) {
         val DocInline = Attribute(doc("inline"))
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val SerdeSerialize = Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "\"serde-serialize\"")), derive(RuntimeType.SerdeSerialize)))
+        val SerdeDeserialize = Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "\"serde-deserialize\"")), derive(RuntimeType.SerdeDeserialize)))
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
@@ -506,6 +498,7 @@ class Attribute(val inner: Writable) {
         }
 
         fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
+        fun cfgAttr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
 
         fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
         fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)

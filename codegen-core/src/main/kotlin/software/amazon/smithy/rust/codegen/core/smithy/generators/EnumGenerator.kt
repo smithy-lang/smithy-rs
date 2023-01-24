@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
@@ -139,7 +138,8 @@ open class EnumGenerator(
     private fun renderUnnamedEnum() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-        writer.writeInline(UnstableDerive.UnstableDerive)
+        Attribute.SerdeSerialize.render(writer)
+        Attribute.SerdeDeserialize.render(writer)
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
@@ -179,8 +179,8 @@ open class EnumGenerator(
             renamedWarning.ifBlank { null },
         )
         writer.deprecatedShape(shape)
-
-        writer.writeInline(UnstableDerive.UnstableDerive)
+        Attribute.SerdeSerialize.render(writer)
+        Attribute.SerdeDeserialize.render(writer)
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
@@ -227,7 +227,7 @@ open class EnumGenerator(
                 part of the enums that are public interface.
                 """.trimIndent(),
             )
-            writer.writeInline(UnstableDerive.UnstableDerive)
+            // adding serde features here adds attribute to the end of the file for some reason
             meta.render(this)
             rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {
