@@ -65,6 +65,14 @@ sealed class OperationSection(name: String) : Section(name) {
         /** Name of the response (for referring to it in Rust code) */
         val responseName: String,
     ) : OperationSection("PopulateGenericErrorExtras")
+
+    /**
+     * Hook to add custom code right before the response is parsed.
+     */
+    data class BeforeParseResponse(
+        override val customizations: List<OperationCustomization>,
+        val responseName: String,
+    ) : OperationSection("BeforeParseResponse")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {

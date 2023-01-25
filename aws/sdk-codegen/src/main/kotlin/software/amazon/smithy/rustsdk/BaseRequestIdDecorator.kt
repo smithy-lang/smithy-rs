@@ -88,6 +88,13 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         accessorTrait(codegenContext),
                     )
                 }
+                is OperationSection.BeforeParseResponse -> {
+                    rustTemplate(
+                        "#{tracing}::debug!($fieldName = #{trait}::$accessorFunctionName(${section.responseName}));",
+                        "tracing" to RuntimeType.Tracing,
+                        "trait" to accessorTrait(codegenContext),
+                    )
+                }
                 else -> {}
             }
         }

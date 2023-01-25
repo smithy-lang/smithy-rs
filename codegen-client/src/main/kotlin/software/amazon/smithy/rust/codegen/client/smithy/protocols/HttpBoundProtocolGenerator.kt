@@ -116,6 +116,7 @@ class HttpBoundProtocolTraitImplGenerator(
             impl #{ParseStrict} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
                 fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
+                     #{BeforeParseResponse}
                      if !response.status().is_success() && response.status().as_u16() != $successCode {
                         #{parse_error}(response)
                      } else {
@@ -128,6 +129,9 @@ class HttpBoundProtocolTraitImplGenerator(
             "E" to operationShape.errorSymbol(symbolProvider),
             "parse_error" to parseError(operationShape, customizations),
             "parse_response" to parseResponse(operationShape, customizations),
+            "BeforeParseResponse" to writable {
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+            },
         )
     }
 
