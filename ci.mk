@@ -36,6 +36,10 @@ check-aws-sdk-examples: generate-aws-sdk
 check-aws-sdk-services: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-only-aws-sdk-services
+check-only-aws-sdk-services: generate-aws-sdk
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-smoketest-docs-clippy-udeps
 check-aws-sdk-smoketest-docs-clippy-udeps: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
