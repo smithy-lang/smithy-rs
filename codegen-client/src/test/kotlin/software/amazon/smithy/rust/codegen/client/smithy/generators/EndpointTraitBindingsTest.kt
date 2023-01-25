@@ -50,10 +50,10 @@ internal class EndpointTraitBindingsTest {
             }
         """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
-        val sym = testSymbolProvider(model)
+        val symbolProvider = testSymbolProvider(model)
         val endpointBindingGenerator = EndpointTraitBindings(
             model,
-            sym,
+            symbolProvider,
             TestRuntimeConfig,
             operationShape,
             operationShape.expectTrait(EndpointTrait::class.java),
@@ -67,7 +67,7 @@ internal class EndpointTraitBindingsTest {
                 }
                 """,
             )
-            implBlock(sym.toSymbol(model.lookup("test#GetStatusInput"))) {
+            implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
                 rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     RuntimeType.smithyHttp(TestRuntimeConfig),

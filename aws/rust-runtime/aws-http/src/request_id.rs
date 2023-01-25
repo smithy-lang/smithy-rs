@@ -16,7 +16,7 @@ const AWS_REQUEST_ID: &str = "aws_request_id";
 
 /// Implementers add a function to return an AWS request ID
 pub trait RequestId {
-    /// Returns the request ID if it's available.
+    /// Returns the request ID, or `None` if the service could not be reached.
     fn request_id(&self) -> Option<&str>;
 }
 
