@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 25th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#920](https://github.com/awslabs/smithy-rs/issues/920)) Fix bug in `OperationExtensionFuture`s `Future::poll` implementation
+
+
 January 24th, 2023
 ==================
 **Breaking Changes:**

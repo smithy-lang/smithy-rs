@@ -10,9 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[smithy-rs]]
-message = "Fix bug in `OperationExtensionFuture`s `Future::poll` implementation"
-references = ["smithy-rs#920"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
-author = "hlbarber"
