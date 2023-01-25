@@ -13,7 +13,7 @@ use crate::imds::client::token::TokenMiddleware;
 use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
-use aws_sdk_sso::config::timeout::TimeoutConfig;
+use aws_sdk_sts::config::timeout::TimeoutConfig;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};

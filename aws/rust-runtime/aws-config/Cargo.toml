@@ -13,13 +13,13 @@ client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
+sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
 
-default = ["client-hyper", "rustls", "rt-tokio"]
+default = ["client-hyper", "rustls", "rt-tokio", "sso"]
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types" }
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
-aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
@@ -33,14 +33,15 @@ time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.8.4", features = ["sync"] }
 tracing = { version = "0.1" }
 
-# implementation detail of SSO credential caching
-ring = "0.16"
-hex = "0.4.3"
-zeroize = "1"
-
 bytes = "1.1.0"
 http = "0.2.4"
 tower = { version = "0.4.8" }
+
+# implementation detail of SSO credential caching
+aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }
+ring = { version = "0.16", optional = true }
+hex = { version = "0.4.3", optional = true }
+zeroize = { version = "1", optional = true }
 
 [dev-dependencies]
 futures-util = "0.3.16"

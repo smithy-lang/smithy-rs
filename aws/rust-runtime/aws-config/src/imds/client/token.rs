@@ -19,7 +19,7 @@ use crate::imds::client::ImdsResponseRetryClassifier;
 use aws_credential_types::cache::ExpiringCache;
 use aws_credential_types::time_source::TimeSource;
 use aws_http::user_agent::UserAgentStage;
-use aws_sdk_sso::config::timeout::TimeoutConfig;
+use aws_sdk_sts::config::timeout::TimeoutConfig;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::retry;

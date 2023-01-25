@@ -14,6 +14,7 @@ use super::repr::{self, BaseProvider};
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
+#[cfg(feature = "sso")]
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
@@ -127,13 +128,22 @@ impl ProviderChain {
                 sso_role_name,
                 sso_start_url,
             } => {
-                let sso_config = SsoConfig {
-                    account_id: sso_account_id.to_string(),
-                    role_name: sso_role_name.to_string(),
-                    start_url: sso_start_url.to_string(),
-                    region: Region::new(sso_region.to_string()),
-                };
-                Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                #[cfg(foo)]
+                {
+                    let sso_config = SsoConfig {
+                        account_id: sso_account_id.to_string(),
+                        role_name: sso_role_name.to_string(),
+                        start_url: sso_start_url.to_string(),
+                        region: Region::new(sso_region.to_string()),
+                    };
+                    Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                }
+                #[cfg(not(feature = "sso"))]
+                {
+                    Err(ProfileFileError::UnknownProvider {
+                        name: "sso".to_string(),
+                    })?
+                }
             }
         };
         tracing::info!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());
