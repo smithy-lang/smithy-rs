@@ -17,11 +17,11 @@ aws-endpoint = { path = "../aws-endpoint" }
 aws-http = { path = "../aws-http" }
 aws-sig-auth = { path = "../aws-sig-auth" }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", default-features = false }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-types = { path = "../aws-types" }
+aws-types = { path = "../aws-types", default-features = false }
 bytes = "1"
 bytes-utils = "0.1.1"
 hex = "0.4.3"
