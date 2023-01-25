@@ -15,6 +15,7 @@ January 24th, 2023
 
 **New this release:**
 - 🐛 (server, [smithy-rs#2213](https://github.com/awslabs/smithy-rs/issues/2213)) `@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported
+- 🐛 (server, [smithy-rs#2200](https://github.com/awslabs/smithy-rs/pull/2200)) Event streams no longer generate empty error enums when their operations don’t have modeled errors
 - (all, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) `aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `Eq` and `Hash` traits
 - (server, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) Code-generated types for server SDKs now implement the `Eq` and `Hash` traits when possible
 
