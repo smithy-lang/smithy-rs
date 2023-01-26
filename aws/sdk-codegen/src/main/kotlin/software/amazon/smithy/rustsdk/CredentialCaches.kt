@@ -54,6 +54,7 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
 class CredentialCacheConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "cache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache"),
+        "provider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider"),
         "DefaultProvider" to defaultProvider(),
     )
 
@@ -113,7 +114,7 @@ class CredentialCacheConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization(
                     })
                     .create_cache(
                         self.credentials_provider.unwrap_or_else(|| {
-                            std::sync::Arc::new(#{DefaultProvider})
+                            #{provider}::SharedCredentialsProvider::new(#{DefaultProvider})
                         })
                     ),
                 """,

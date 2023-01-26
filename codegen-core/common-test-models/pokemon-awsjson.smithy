@@ -27,7 +27,6 @@ service PokemonService {
 }
 
 /// Capture Pokémons via event streams.
-@http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemon {
     input: CapturePokemonEventsInput,
     output: CapturePokemonEventsOutput,
@@ -36,17 +35,11 @@ operation CapturePokemon {
 
 @input
 structure CapturePokemonEventsInput {
-    @httpPayload
     events: AttemptCapturingPokemonEvent,
-
-    @httpLabel
-    @required
-    region: String,
 }
 
 @output
 structure CapturePokemonEventsOutput {
-    @httpPayload
     events: CapturePokemonEvents,
 }
 

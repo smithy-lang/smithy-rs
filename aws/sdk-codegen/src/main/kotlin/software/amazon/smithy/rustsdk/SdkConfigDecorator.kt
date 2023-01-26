@@ -35,6 +35,26 @@ object SdkConfigSection : AdHocSection<SdkConfigSection.CopySdkConfigToClientCon
      */
     data class CopySdkConfigToClientConfig(val sdkConfig: String, val serviceConfigBuilder: String) :
         Section("CopyConfig")
+
+    /**
+     * Copy a field from SDK config to service config with an optional map block.
+     *
+     * This handles the common case where the field name is identical in both cases and an accessor is used.
+     *
+     * # Examples
+     * ```kotlin
+     * SdkConfigSection.copyField("some_string_field") { rust("|s|s.to_to_string()") }
+     * ```
+     */
+    fun copyField(fieldName: String, map: Writable?) = SdkConfigSection.create { section ->
+        {
+            val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
+            rustTemplate(
+                "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
+                "map" to mapBlock,
+            )
+        }
+    }
 }
 
 /**

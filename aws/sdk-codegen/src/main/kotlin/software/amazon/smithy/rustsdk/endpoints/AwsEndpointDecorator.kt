@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.endpoints
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
@@ -12,12 +12,10 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -38,6 +36,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
+import software.amazon.smithy.rustsdk.AwsRuntimeType
+import software.amazon.smithy.rustsdk.SdkConfigSection
+import software.amazon.smithy.rustsdk.getBuiltIn
 
 class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
@@ -87,9 +88,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
     ): List<ConfigCustomization> {
         return baseCustomizations.extendIf(codegenContext.isRegionalized()) {
             AwsEndpointShimCustomization(codegenContext)
-        } + SdkEndpointCustomization(
-            codegenContext,
-        )
+        }
     }
 
     override fun libRsCustomizations(
@@ -141,25 +140,11 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                     rust(
                         """
                         ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
-                        ${section.serviceConfigBuilder}.set_endpoint_url(${section.sdkConfig}.endpoint_url().map(|url|url.to_string()));
                         """,
                     )
                 }
             }
         }
-    }
-
-    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
-        return listOf(
-            object : EndpointCustomization {
-                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
-                    return when (parameter.builtIn) {
-                        Builtins.SDK_ENDPOINT.builtIn -> writable { rust("$configRef.endpoint_url().map(|url|url.to_string())") }
-                        else -> null
-                    }
-                }
-            },
-        )
     }
 
     class AwsEndpointShimCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {

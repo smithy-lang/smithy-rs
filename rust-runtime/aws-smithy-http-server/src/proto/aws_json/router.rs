@@ -9,9 +9,9 @@ use tower::Layer;
 use tower::Service;
 
 use crate::body::BoxBody;
-use crate::routers::Router;
 use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
+use crate::routing::Router;
 
 use http::header::ToStrError;
 use thiserror::Error;
@@ -115,5 +115,44 @@ impl<S> FromIterator<(String, S)> for AwsJsonRouter<S> {
                 .map(|(svc, request_spec)| (svc, request_spec))
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{proto::test_helpers::req, routing::Router};
+
+    use http::{HeaderMap, HeaderValue, Method};
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn simple_routing() {
+        let routes = vec![("Service.Operation")];
+        let router: AwsJsonRouter<_> = routes
+            .clone()
+            .into_iter()
+            .map(|operation| (operation.to_string(), ()))
+            .collect();
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));
+
+        // Valid request, should match.
+        router
+            .match_route(&req(&Method::POST, "/", Some(headers.clone())))
+            .unwrap();
+
+        // No headers, should return `MissingHeader`.
+        let res = router.match_route(&req(&Method::POST, "/", None));
+        assert_eq!(res.unwrap_err().to_string(), Error::MissingHeader.to_string());
+
+        // Wrong HTTP method, should return `MethodNotAllowed`.
+        let res = router.match_route(&req(&Method::GET, "/", Some(headers.clone())));
+        assert_eq!(res.unwrap_err().to_string(), Error::MethodNotAllowed.to_string());
+
+        // Wrong URI, should return `NotRootUrl`.
+        let res = router.match_route(&req(&Method::POST, "/something", Some(headers)));
+        assert_eq!(res.unwrap_err().to_string(), Error::NotRootUrl.to_string());
     }
 }

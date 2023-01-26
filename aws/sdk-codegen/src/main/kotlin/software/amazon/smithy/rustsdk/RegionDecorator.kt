@@ -12,7 +12,6 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -130,14 +129,14 @@ class RegionDecorator : ClientCodegenDecorator {
         }
         return listOf(
             object : EndpointCustomization {
-                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
+                override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
                     }
                 }
 
-                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != Builtins.REGION.builtIn.get()) {
                         return null
                     }
@@ -148,9 +147,6 @@ class RegionDecorator : ClientCodegenDecorator {
                         )
                     }
                 }
-
-                override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> =
-                    listOf()
             },
         )
     }

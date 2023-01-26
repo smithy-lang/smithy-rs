@@ -10,4 +10,4 @@ cd aws-sdk
 # Remove examples from workspace
 sed -i '/"examples\//d' Cargo.toml
 
-cargo check
+cargo test --all-features
