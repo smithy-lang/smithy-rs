@@ -13,7 +13,7 @@ client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
+credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
 
 default = ["client-hyper", "rustls", "rt-tokio", "sso"]
 
