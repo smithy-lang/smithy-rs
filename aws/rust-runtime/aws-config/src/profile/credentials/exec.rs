@@ -128,7 +128,7 @@ impl ProviderChain {
                 sso_role_name,
                 sso_start_url,
             } => {
-                #[cfg(foo)]
+                #[cfg(feature = "sso")]
                 {
                     let sso_config = SsoConfig {
                         account_id: sso_account_id.to_string(),
