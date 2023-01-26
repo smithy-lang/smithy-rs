@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       dry_run:
-        description: Dry runs will only produce release artifacts, but will not cut a release tag in GitHub nor publish to crates.io
+        description: Dry runs will only produce release artifacts, but they will not cut a release tag in GitHub nor publish to crates.io
         required: true
         type: boolean
         default: true
