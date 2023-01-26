@@ -1,6 +1,6 @@
 RFC: Providing fallback credentials on external timeout
 =======================================================
-> Status: RFC
+> Status: Implemented in [smithy-rs#2246](https://github.com/awslabs/smithy-rs/pull/2246)
 >
 > Applies to: client
 
@@ -165,7 +165,8 @@ impl ProvideCredentials for CredentialsProviderChain {
 
 The downside of this simple approach is that the behavior is not clear if more than one credentials provider in the chain can return credentials from their `fallback_on_interrupt`. Note, however, that it is the exception rather than the norm for a provider's `fallback_on_interrupt` to return fallback credentials, at least at the time of writing (01/13/2023). The fact that it returns fallback credentials means that the provider successfully loaded credentials at least once, and it usually continues serving credentials on subsequent calls to `provide_credentials`.
 
-Should we have more than one provider in the chain that can potentially return fallback credentials from `fallback_on_interrupt`, we could configure the behavior of `CredentialsProviderChain` managing in what order and how each `fallback_on_interrupt` should be executed. See the [Appendix](#appendix) section for more details. The use case described there is an extreme edge case, but it's worth exploring what options are available to us with the proposed design.
+Should we have more than one provider in the chain that can potentially return fallback credentials from `fallback_on_interrupt`, we could configure the behavior of `CredentialsProviderChain` managing in what order and how each `fallback_on_interrupt` should be executed. See the [Possible enhancement
+](#possible-enhancement) section for more details. The use case described there is an extreme edge case, but it's worth exploring what options are available to us with the proposed design.
 
 Alternative
 -----------
@@ -269,8 +270,8 @@ Changes checklist
 - [ ] Implement `DefaultCredentialsChain::fallback_on_interrupt`
 - [ ] Add unit tests for `Case 1` and `Case 2`
 
-Appendix
---------
+Possible enhancement
+--------------------
 We will describe how to customize the behavior for `CredentialsProviderChain::fallback_on_interrupt`. We are only demonstrating how much the proposed design can be extended and currently do not have concrete use cases to implement using what we present in this section.
 
 As described in the [Proposal](#proposal) section, `CredentialsProviderChain::fallback_on_interrupt` traverses the chain from the head to the tail and returns the first fallback credentials found. This precedence policy works most of the time, but when we have more than one provider in the chain that can potentially return fallback credentials, it could break in the following edge case (we are still basing our discussion on the code snippet from `LazyCredentialsCache` but forget REQ 1 and REQ 2 for the sake of simplicity).
