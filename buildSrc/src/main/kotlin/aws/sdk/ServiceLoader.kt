@@ -37,8 +37,9 @@ class AwsServices(
             services.map(AwsService::module).map { "sdk/$it" } +
                 CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
                 CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
-                examples +
-                rootTests.map(RootTest::manifestName)
+                examples
+            // Root tests should not be included since they can't be part of the root Cargo workspace
+            // in order to test differences in Cargo features.
             ).toSortedSet()
     }
 
