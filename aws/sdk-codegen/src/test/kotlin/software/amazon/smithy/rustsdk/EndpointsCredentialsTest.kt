@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -97,9 +98,9 @@ class EndpointsCredentialsTest {
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
                         "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("Credentials"),
+                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -121,9 +122,9 @@ class EndpointsCredentialsTest {
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
                         "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("Credentials"),
+                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
