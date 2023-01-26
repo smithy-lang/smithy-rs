@@ -122,6 +122,7 @@ impl ProviderChain {
                     .build();
                 Arc::new(provider)
             }
+            #[allow(unused_variables)]
             BaseProvider::Sso {
                 sso_account_id,
                 sso_region,
