@@ -21,7 +21,7 @@ fn get_default_config() -> impl std::future::Future<Output = aws_config::SdkConf
             "provider_name",
         ))
         .timeout_config(TimeoutConfig::disabled())
-        .retry_config(RetryConfig::standard().with_max_attempts(1))
+        .retry_config(RetryConfig::disabled())
         .http_connector(DynConnector::new(Adapter::default()))
         .load()
 }
