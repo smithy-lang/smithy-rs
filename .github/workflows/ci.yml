@@ -14,6 +14,13 @@ on:
         required: false
         default: false
         type: boolean
+      git_ref:
+        description: | 
+          The git reference that all checks should be run against. It can be a branch, a tag or a commit SHA.
+          If unspecified, it will default to the git reference that triggered the execution of this workflow.
+        required: false
+        type: string
+        default: ""
 
 env:
   rust_version: 1.62.1
@@ -39,6 +46,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.git_ref }}
     # The models from aws-sdk-rust are needed to generate the full SDK for CI
     - uses: actions/checkout@v3
       with:
@@ -84,6 +92,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.git_ref }}
     - name: Run ${{ matrix.test.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -113,6 +122,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.git_ref }}
     - name: Run ${{ matrix.test.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -128,6 +138,8 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.1.0
     - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
       with:
@@ -190,6 +202,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.1.0
     - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
       with:
@@ -258,6 +272,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.git_ref }}
     - name: Run ${{ matrix.actions.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:

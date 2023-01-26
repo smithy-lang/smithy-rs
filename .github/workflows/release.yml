@@ -13,10 +13,18 @@ env:
   rust_version: 1.62.1
 
 name: Release smithy-rs
-run-name: ${{ github.workflow }} - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
+run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
 on:
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: The SHA of the git commit that you want to release (e.g. b2318b0)
+        required: true
+        type: string
+      semantic_version:
+        description: The semver tag that you want to release (e.g. 0.52.1)
+        required: true
+        type: string
       dry_run:
         description: Dry runs will only produce release artifacts, but will not cut a release tag in GitHub nor publish to crates.io
         required: true
@@ -24,30 +32,18 @@ on:
         default: true
 
 jobs:
-  main-branch-check:
-    name: Check that workflow is running in main
-    runs-on: ubuntu-latest
-    steps:
-    - name: Main branch check
-      if: ${{ github.ref_name != 'main' }}
-      uses: actions/github-script@v6
-      with:
-        script: |
-          core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
-
-  # If a release is kicked off before an image is built after push to main,
-  # or if a dry-run release is kicked off against a non-main branch to test
-  # automation changes, we'll need to build a base image to work against.
-  # This job will be a no-op if an image was already built on main.
+  # We'll need to build a base image to work against if:
+  # - a release was kicked off before the image build step triggered by a push to the release branch/main completed
+  # - a dry-run release was kicked off against a feature branch to test automation changes
+  # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
-    needs:
-    - main-branch-check
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
@@ -61,6 +57,7 @@ jobs:
 
   release-ci:
     name: Prerelease checks
+    if: inputs.dry_run == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
@@ -81,6 +78,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
+        ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
