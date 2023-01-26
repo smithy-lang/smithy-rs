@@ -21,7 +21,7 @@ aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", default-
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-types = { path = "../aws-types", default-features = false }
+aws-types = { path = "../aws-types" }
 bytes = "1"
 bytes-utils = "0.1.1"
 hex = "0.4.3"

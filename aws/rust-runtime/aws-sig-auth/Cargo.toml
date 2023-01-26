@@ -15,7 +15,7 @@ aws-credential-types = { path = "../aws-credential-types" }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-types = { path = "../aws-types", default-features = false }
+aws-types = { path = "../aws-types" }
 http = "0.2.2"
 tracing = "0.1"
 
