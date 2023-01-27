@@ -5,6 +5,7 @@
 
 import aws.sdk.AwsServices
 import aws.sdk.Membership
+import aws.sdk.RootTest
 import aws.sdk.discoverServices
 import aws.sdk.docsLandingPage
 import aws.sdk.parseMembership
@@ -294,6 +295,8 @@ tasks.register<Copy>("relocateChangelog") {
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
+    |exclude = [${"\n"}${services.rootTests.map(RootTest::manifestName).joinToString(",\n") { "|    \"$it\"" }}
+    |]
     |members = [${"\n"}${services.allModules.joinToString(",\n") { "|    \"$it\"" }}
     |]
     """.trimMargin()
