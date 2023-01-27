@@ -319,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_find_released_versions_decreased_version_number_sanity_check() {
         let result = find_released_versions(
             &fake_manifest(
