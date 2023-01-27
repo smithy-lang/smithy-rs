@@ -94,6 +94,13 @@ impl Builder {
         self
     }
 
+    #[allow(dead_code)]
+    #[cfg(test)]
+    fn last_retrieved_credentials(mut self, credentials: Credentials) -> Self {
+        self.last_retrieved_credentials = Some(credentials);
+        self
+    }
+
     /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
@@ -285,12 +292,19 @@ impl ImdsCredentialsProvider {
 
 #[cfg(test)]
 mod test {
+    use std::time::{Duration, UNIX_EPOCH};
+
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
     };
     use crate::imds::credentials::ImdsCredentialsProvider;
+    use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
+    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::TestConnection;
+    use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
 
@@ -325,6 +339,163 @@ mod test {
         let creds2 = client.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
         assert_eq!(creds2.access_key_id(), "ASIARTEST2");
+        connection.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn expired_credentials_should_be_extended() {
+        let connection = TestConnection::new(vec![
+                (
+                    token_request("http://169.254.169.254", 21600),
+                    token_response(21600, TOKEN_A),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_response(r#"profile-name"#),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                ),
+            ]);
+
+        // set to 2021-09-21T17:41:25Z that renders fetched credentials already expired (2021-09-21T04:16:53Z)
+        let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
+        let time_source = TimeSource::testing(&TestingTimeSource::new(
+            time_of_request_to_fetch_credentials,
+        ));
+
+        tokio::time::pause();
+
+        let provider_config = ProviderConfig::no_configuration()
+            .with_http_connector(DynConnector::new(connection.clone()))
+            .with_time_source(time_source)
+            .with_sleep(TokioSleep::new());
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        let creds = provider.provide_credentials().await.expect("valid creds");
+        assert!(creds.expiry().unwrap() > time_of_request_to_fetch_credentials);
+        connection.assert_requests_match(&[]);
+
+        // We should inform customers that expired credentials are being used for stability.
+        assert!(logs_contain("Attempting credential expiration extension"));
+    }
+
+    #[tokio::test]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint(http::Uri::from_static("http://240.0.0.0"))
+            .build()
+            .await
+            .expect("valid client");
+        let expected = aws_credential_types::Credentials::for_tests();
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            // seed fallback credentials for testing
+            .last_retrieved_credentials(expected.clone())
+            .build();
+        let actual = provider.provide_credentials().await;
+        assert_eq!(actual.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
+    ) {
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint(http::Uri::from_static("http://240.0.0.0"))
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            // no fallback credentials provided
+            .build();
+        let actual = provider.provide_credentials().await;
+        assert!(matches!(
+            actual,
+            Err(aws_credential_types::provider::error::CredentialsError::CredentialsNotLoaded(_))
+        ));
+    }
+
+    #[tokio::test]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
+        use aws_sdk_sso::config::AsyncSleep;
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint(http::Uri::from_static("http://240.0.0.0"))
+            .build()
+            .await
+            .expect("valid client");
+        let expected = aws_credential_types::Credentials::for_tests();
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            // seed fallback credentials for testing
+            .last_retrieved_credentials(expected.clone())
+            .build();
+        let sleeper = aws_smithy_async::rt::sleep::TokioSleep::new();
+        let timeout = aws_smithy_async::future::timeout::Timeout::new(
+            provider.provide_credentials(),
+            // make sure `sleeper.sleep` will be timed out first by setting a shorter duration than connect timeout
+            sleeper.sleep(std::time::Duration::from_millis(100)),
+        );
+        match timeout.await {
+            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
+            Err(_err) => match provider.fallback_on_interrupt() {
+                Some(actual) => assert_eq!(actual, expected),
+                None => assert!(
+                    false,
+                    "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
+                ),
+            },
+        };
+    }
+
+    #[tokio::test]
+    async fn fallback_credentials_should_be_used_when_imds_returns_500_during_credentials_refresh()
+    {
+        let connection = TestConnection::new(vec![
+                // The next three request/response pairs will correspond to the first call to `provide_credentials`.
+                // During the call, it populates last_retrieved_credentials.
+                (
+                    token_request("http://169.254.169.254", 21600),
+                    token_response(21600, TOKEN_A),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_response(r#"profile-name"#),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                ),
+                // The following request/response pair corresponds to the second call to `provide_credentials`.
+                // During the call, IMDS returns response code 500.
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    http::Response::builder().status(500).body("").unwrap(),
+                ),
+            ]);
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(make_client(&connection).await)
+            .build();
+        let creds1 = provider.provide_credentials().await.expect("valid creds");
+        assert_eq!(creds1.access_key_id(), "ASIARTEST");
+        // `creds1` should be returned as fallback credentials and assigned to `creds2`
+        let creds2 = provider.provide_credentials().await.expect("valid creds");
+        assert_eq!(creds1, creds2);
         connection.assert_requests_match(&[]);
     }
 }
