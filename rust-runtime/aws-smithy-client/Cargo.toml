@@ -9,11 +9,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
-test-util = ["dep:aws-smithy-protocol-test", "dep:serde", "serde/derive", "rustls"]
+test-util = ["dep:aws-smithy-protocol-test", "dep:serde", "serde?/derive", "rustls"]
 native-tls = ["dep:hyper-tls", "client-hyper", "rt-tokio"]
 rustls = ["dep:hyper-rustls", "dep:lazy_static", "client-hyper", "rt-tokio"]
 client-hyper = ["dep:hyper"]
-hyper-webpki-doctest-only = ["dep:hyper-rustls", "hyper-rustls/webpki-roots"]
+hyper-webpki-doctest-only = ["dep:hyper-rustls", "hyper-rustls?/webpki-roots"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
