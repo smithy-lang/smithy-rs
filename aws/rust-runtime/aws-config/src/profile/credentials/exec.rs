@@ -139,7 +139,7 @@ impl ProviderChain {
                     };
                     Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
                 }
-                #[cfg(not(feature = "credentials-sso "))]
+                #[cfg(not(feature = "credentials-sso"))]
                 {
                     Err(ProfileFileError::UnknownProvider {
                         name: "sso".to_string(),
