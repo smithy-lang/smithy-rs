@@ -14,7 +14,7 @@ use super::repr::{self, BaseProvider};
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
-#[cfg(feature = "credentials-sso ")]
+#[cfg(feature = "credentials-sso")]
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
