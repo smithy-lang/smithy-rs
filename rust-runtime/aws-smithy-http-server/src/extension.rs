@@ -101,11 +101,11 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
+        let resp = ready!(this.inner.try_poll(cx));
         let ext = this
             .operation_extension
             .take()
             .expect("futures cannot be polled after completion");
-        let resp = ready!(this.inner.try_poll(cx));
         Poll::Ready(resp.map(|mut resp| {
             resp.extensions_mut().insert(ext);
             resp
