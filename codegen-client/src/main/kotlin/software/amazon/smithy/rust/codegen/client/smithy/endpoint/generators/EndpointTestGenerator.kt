@@ -49,8 +49,8 @@ internal class EndpointTestGenerator(
         "Error" to types.resolveEndpointError,
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
-        "capture_request" to CargoDependency.smithyClient(runtimeConfig)
-            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
+        "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
+            .resolve("test_connection::capture_request"),
     )
 
     private val instantiator = clientInstantiator(codegenContext)

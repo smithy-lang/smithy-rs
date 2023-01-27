@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -97,10 +98,10 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
-                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("Credentials"),
+                        "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
+                            .resolve("test_connection::capture_request"),
+                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil
+                            .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -121,10 +122,10 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
-                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("Credentials"),
+                        "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
+                            .resolve("test_connection::capture_request"),
+                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil
+                            .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }

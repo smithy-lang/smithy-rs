@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -147,8 +148,8 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                 let _result = dbg!(#{invoke_operation});
                 #{assertion}
                 """,
-                "capture_request" to CargoDependency.smithyClient(runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType().resolve("test_connection::capture_request"),
+                "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
+                    .resolve("test_connection::capture_request"),
                 "conf" to config(testOperationInput),
                 "invoke_operation" to operationInvocation(testOperationInput),
                 "assertion" to writable {
