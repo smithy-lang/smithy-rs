@@ -5,6 +5,11 @@
 
 use unidiff::{Hunk, Line, PatchedFile};
 
+/// Number of lines before and after the first modified and last modified lines in a diff that will
+/// be displayed by default. Lines outside of this range will be hidden by default (but can be shown
+/// by clicking a link to expand the context).
+const DISPLAYED_CONTEXT_LINES: usize = 10;
+
 #[derive(Debug, Default)]
 pub struct PageTracker {
     max_files_per_page: usize,
@@ -134,12 +139,12 @@ impl From<&Hunk> for Section {
             }
         }
 
-        let diff_start = diff_start.unwrap().saturating_sub(10);
+        let diff_start = diff_start.unwrap().saturating_sub(DISPLAYED_CONTEXT_LINES);
         let suffix_start = usize::min(
             hunk.lines().len(),
             suffix_start
                 .unwrap_or_else(|| hunk.lines().len())
-                .saturating_add(10),
+                .saturating_add(DISPLAYED_CONTEXT_LINES),
         );
 
         let context_prefix: Vec<Line> = (&hunk.lines()[0..diff_start]).into();
@@ -227,8 +232,14 @@ index 422b64415..9561909ed 100644
         assert_eq!((31, 31), section.end_line);
         assert_eq!(5, section.context_prefix.as_ref().unwrap().len());
         assert_eq!(22, section.diff.len());
-        assert_eq!("05", section.diff[0].value);
-        assert_eq!("25", section.diff[21].value);
+        assert_eq!(
+            "05", section.diff[0].value,
+            "the first line of the diff should be {DISPLAYED_CONTEXT_LINES} lines before the first modified line"
+        );
+        assert_eq!(
+            "25", section.diff[21].value,
+            "the last line of the diff should be {DISPLAYED_CONTEXT_LINES} lines after the last modified line"
+        );
         assert_eq!(5, section.context_suffix.as_ref().unwrap().len());
         assert_eq!("26", section.context_suffix.as_ref().unwrap()[0].value);
         assert_eq!("30", section.context_suffix.as_ref().unwrap()[4].value);
@@ -290,8 +301,14 @@ index 422b64415..9561909ed 100644
         assert_eq!((38, 36), section.end_line);
         assert_eq!(5, section.context_prefix.as_ref().unwrap().len());
         assert_eq!(30, section.diff.len());
-        assert_eq!("05", section.diff[0].value);
-        assert_eq!("31", section.diff[29].value);
+        assert_eq!(
+            "05", section.diff[0].value,
+            "the first line of the diff should be {DISPLAYED_CONTEXT_LINES} lines before the first modified line"
+        );
+        assert_eq!(
+            "31", section.diff[29].value,
+            "the last line of the diff should be {DISPLAYED_CONTEXT_LINES} lines after the last modified line"
+        );
         assert_eq!(5, section.context_suffix.as_ref().unwrap().len());
         assert_eq!("32", section.context_suffix.as_ref().unwrap()[0].value);
         assert_eq!("36", section.context_suffix.as_ref().unwrap()[4].value);

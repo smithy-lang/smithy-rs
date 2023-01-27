@@ -133,7 +133,7 @@ def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whi
         run(f"mkdir -p {full_output_path}")
         run(f"git diff --output=codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
 
-        # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
+        # Generate HTML diff. This uses the `difftags` tool from the `tools/` directory.
         # All arguments after the first `--` go to the `git diff` command.
         whitespace_context = "" if whitespace else "(ignoring whitespace)"
         subtitle = f"rev. {head_commit_sha} {whitespace_context}"
