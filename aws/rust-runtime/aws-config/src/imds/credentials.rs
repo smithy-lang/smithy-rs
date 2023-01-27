@@ -14,11 +14,16 @@ use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
+
+const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -45,6 +50,8 @@ pub struct ImdsCredentialsProvider {
     client: LazyClient,
     env: Env,
     profile: Option<String>,
+    time_source: TimeSource,
+    last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -53,6 +60,7 @@ pub struct Builder {
     provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
     imds_override: Option<imds::Client>,
+    last_retrieved_credentials: Option<Credentials>,
 }
 
 impl Builder {
@@ -102,6 +110,8 @@ impl Builder {
             client,
             env,
             profile: self.profile_override,
+            time_source: provider_config.time_source(),
+            last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
         }
     }
 }
@@ -116,6 +126,10 @@ impl ProvideCredentials for ImdsCredentialsProvider {
         Self: 'a,
     {
         future::ProvideCredentials::new(self.credentials())
+    }
+
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        self.last_retrieved_credentials.read().unwrap().clone()
     }
 }
 
@@ -167,7 +181,36 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    async fn credentials(&self) -> provider::Result {
+    // Extend the cached expiration time if necessary
+    //
+    // This allows continued use of the credentials even when IMDS returns expired ones.
+    fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
+        let rng = fastrand::Rng::with_seed(
+            self.time_source
+                .now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("now should be after UNIX EPOCH")
+                .as_secs(),
+        );
+        // calculate credentials' refresh offset with jitter
+        let refresh_offset =
+            CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(120..=600));
+        let new_expiry = self.time_source.now() + refresh_offset;
+
+        if new_expiry < expiration {
+            return expiration;
+        }
+
+        tracing::warn!(
+            "Attempting credential expiration extension due to a credential service availability issue. \
+            A refresh of these credentials will be attempted again within the next {:.2} minutes.",
+            refresh_offset.as_secs_f64() / 60.0,
+        );
+
+        new_expiry
+    }
+
+    async fn retrieve_credentials(&self) -> provider::Result {
         if self.imds_disabled() {
             tracing::debug!("IMDS disabled because $AWS_EC2_METADATA_DISABLED was set to `true`");
             return Err(CredentialsError::not_loaded(
@@ -196,13 +239,18 @@ impl ImdsCredentialsProvider {
                 session_token,
                 expiration,
                 ..
-            })) => Ok(Credentials::new(
-                access_key_id,
-                secret_access_key,
-                Some(session_token.to_string()),
-                expiration.into(),
-                "IMDSv2",
-            )),
+            })) => {
+                let expiration = self.maybe_extend_expiration(expiration);
+                let creds = Credentials::new(
+                    access_key_id,
+                    secret_access_key,
+                    Some(session_token.to_string()),
+                    expiration.into(),
+                    "IMDSv2",
+                );
+                *self.last_retrieved_credentials.write().unwrap() = Some(creds.clone());
+                Ok(creds)
+            }
             Ok(JsonCredentials::Error { code, message })
                 if code == codes::ASSUME_ROLE_UNAUTHORIZED_ACCESS =>
             {
@@ -220,6 +268,17 @@ impl ImdsCredentialsProvider {
             }
             // got bad data from IMDS, should not occur during normal operation:
             Err(invalid) => Err(CredentialsError::unhandled(invalid)),
+        }
+    }
+
+    async fn credentials(&self) -> provider::Result {
+        match self.retrieve_credentials().await {
+            creds @ Ok(_) => creds,
+            // Any failure while retrieving credentials MUST NOT impede use of existing credentials.
+            err => match &*self.last_retrieved_credentials.read().unwrap() {
+                Some(creds) => Ok(creds.clone()),
+                _ => err,
+            },
         }
     }
 }
