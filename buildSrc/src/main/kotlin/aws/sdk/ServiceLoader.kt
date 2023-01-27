@@ -14,6 +14,11 @@ import software.amazon.smithy.model.traits.TitleTrait
 import java.io.File
 import kotlin.streams.toList
 
+data class RootTest(
+    val path: File,
+    val manifestName: String,
+)
+
 class AwsServices(
     private val project: Project,
     services: List<AwsService>,
@@ -23,37 +28,56 @@ class AwsServices(
     val services: List<AwsService>
     val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
 
+    init {
+        this.services = services.sortedBy { it.module }
+    }
+
     val allModules: Set<String> by lazy {
         (
             services.map(AwsService::module).map { "sdk/$it" } +
                 CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
                 CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
                 examples
+            // Root tests should not be included since they can't be part of the root Cargo workspace
+            // in order to test differences in Cargo features.
             ).toSortedSet()
     }
 
     val examples: List<String> by lazy {
         project.projectDir.resolve("examples")
             .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-            .filter { file ->
-                val cargoToml = File(file, "Cargo.toml")
-                if (cargoToml.exists()) {
-                    val usedModules = cargoToml.readLines()
-                        .map { line -> line.substringBefore('=').trim() }
-                        .filter { line -> line.startsWith("aws-sdk-") }
-                        .map { line -> line.substringAfter("aws-sdk-") }
-                        .toSet()
-                    moduleNames.containsAll(usedModules)
-                } else {
-                    false
-                }
-            }
+            .filter { file -> manifestCompatibleWithGeneratedServices(file) }
             .map { "examples/${it.name}" }
     }
 
-    init {
-        this.services = services.sortedBy { it.module }
+    /**
+     * Tests in `aws/sdk/integration-tests` that are not named after a service module, and therefore,
+     * are not included in a service's `tests/` directory. These are to be included at the SDK root
+     * `tests/` directory for inclusion in CI.
+     */
+    val rootTests: List<RootTest> by lazy {
+        project.projectDir.resolve("integration-tests")
+            .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
+            .filter { file -> !moduleNames.contains(file.name) && manifestCompatibleWithGeneratedServices(file) }
+            .map { file -> RootTest(file, "tests/${file.name}") }
     }
+
+    /**
+     * Returns true if the Cargo manifest in the given path is compatible with the set of generated services.
+     */
+    private fun manifestCompatibleWithGeneratedServices(path: File) =
+        File(path, "Cargo.toml").let { cargoToml ->
+            if (cargoToml.exists()) {
+                val usedModules = cargoToml.readLines()
+                    .map { line -> line.substringBefore('=').trim() }
+                    .filter { line -> line.startsWith("aws-sdk-") }
+                    .map { line -> line.substringAfter("aws-sdk-") }
+                    .toSet()
+                moduleNames.containsAll(usedModules)
+            } else {
+                false
+            }
+        }
 }
 
 /**
