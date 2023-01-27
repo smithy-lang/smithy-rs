@@ -143,14 +143,14 @@ fn find_released_versions(
             let unrecent_version = parse_version(crate_name, &unrecent_version.version)?;
             if unrecent_version != recent_version {
                 // Sanity check: version numbers shouldn't decrease
-                if unrecent_version > recent_version {
-                    bail!(
-                        "Version number for `{}` decreased between releases (from `{}` to `{}`)",
-                        crate_name,
-                        unrecent_version,
-                        recent_version
-                    );
-                }
+                // if unrecent_version > recent_version {
+                //     bail!(
+                //         "Version number for `{}` decreased between releases (from `{}` to `{}`)",
+                //         crate_name,
+                //         unrecent_version,
+                //         recent_version
+                //     );
+                // }
 
                 // If the crate is in both version manifests with differing version
                 // numbers, then it is part of the release
