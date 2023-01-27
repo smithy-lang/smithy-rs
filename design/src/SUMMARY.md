@@ -53,6 +53,7 @@
   - [RFC-0028: SDK Credential Cache Type Safety](./rfcs/rfc0028_sdk_credential_cache_type_safety.md)
   - [RFC-0029: Finding New Home for Credential Types](./rfcs/rfc0029_new_home_for_cred_types.md)
   - [RFC-0030: Serialization And Deserialization](./rfcs/rfc0030_serialization_and_deserialization.md)
+  - [RFC-0031: Providing Fallback Credentials on Timeout](./rfcs/rfc0031_providing_fallback_credentials_on_timeout.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
