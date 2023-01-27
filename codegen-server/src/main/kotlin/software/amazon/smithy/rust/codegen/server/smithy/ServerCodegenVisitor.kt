@@ -260,10 +260,7 @@ open class ServerCodegenVisitor(
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
             ).render()
 
-            renderStructureShapeBuilder(shape, this)
-
-            val errorTrait = shape.getTrait<ErrorTrait>()
-            if (errorTrait != null) {
+            shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
                     model,
                     codegenContext.symbolProvider,
@@ -273,6 +270,8 @@ open class ServerCodegenVisitor(
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                 ).render(CodegenTarget.SERVER)
             }
+
+            renderStructureShapeBuilder(shape, this)
         }
     }
 
