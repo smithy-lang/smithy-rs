@@ -127,6 +127,8 @@ impl From<&Hunk> for Section {
                 if line.line_type != " " {
                     diff_start = Some(index);
                 }
+            } else if suffix_start.is_some() && line.line_type != " " {
+                suffix_start = None;
             } else if suffix_start.is_none() && line.line_type == " " {
                 suffix_start = Some(index);
             }
@@ -230,5 +232,68 @@ index 422b64415..9561909ed 100644
         assert_eq!(5, section.context_suffix.as_ref().unwrap().len());
         assert_eq!("26", section.context_suffix.as_ref().unwrap()[0].value);
         assert_eq!("30", section.context_suffix.as_ref().unwrap()[4].value);
+
+        let diff_str = r#"
+diff --git a/some/path/to/file.rs b/some/path/to/file.rs
+index 422b64415..9561909ed 100644
+--- a/some/path/to/file.rs
++++ b/some/path/to/file.rs
+@@ -1,38 +1,36 @@
+ 00
+ 01
+ 02
+ 03
+ 04
+ 05
+ 06
+ 07
+ 08
+ 09
+ 10
+ 11
+ 12
+ 13
+ 14
+-oops
++15
+ 16
+ 17
+ 18
+ 19
+-oops1
+-oops2
+-oops3
++20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+        "#;
+        let mut patch = PatchSet::new();
+        patch.parse(&diff_str).unwrap();
+
+        let hunk = &patch.files()[0].hunks()[0];
+        let section: Section = hunk.into();
+
+        assert_eq!((1, 1), section.start_line);
+        assert_eq!((38, 36), section.end_line);
+        assert_eq!(5, section.context_prefix.as_ref().unwrap().len());
+        assert_eq!(30, section.diff.len());
+        assert_eq!("05", section.diff[0].value);
+        assert_eq!("31", section.diff[29].value);
+        assert_eq!(5, section.context_suffix.as_ref().unwrap().len());
+        assert_eq!("32", section.context_suffix.as_ref().unwrap()[0].value);
+        assert_eq!("36", section.context_suffix.as_ref().unwrap()[4].value);
     }
 }
