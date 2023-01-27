@@ -44,7 +44,7 @@ pub async fn subcommand_upgrade_runtime_crates_version(
     }
     let updated_gradle_properties = version_regex.replace(
         &gradle_properties,
-        format!("${{field}}{}", upgraded_version.to_string()),
+        format!("${{field}}{}", upgraded_version),
     );
     update_gradle_properties(
         fs,
