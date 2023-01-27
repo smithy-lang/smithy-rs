@@ -13,3 +13,10 @@ cd aws-sdk
 sed -i '/"examples\//d' Cargo.toml
 
 cargo check --all-targets --all-features
+
+for test_dir in tests/*; do
+    if [ -f "${test_dir}/Cargo.toml" ]; then
+        echo "#### Checking ${test_dir}..."
+        cargo check --all-targets --all-features --manifest-path "${test_dir}/Cargo.toml"
+    fi
+done
