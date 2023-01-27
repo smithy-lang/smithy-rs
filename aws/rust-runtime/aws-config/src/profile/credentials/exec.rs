@@ -129,7 +129,7 @@ impl ProviderChain {
                 sso_role_name,
                 sso_start_url,
             } => {
-                #[cfg(feature = "credentials-sso ")]
+                #[cfg(feature = "credentials-sso")]
                 {
                     let sso_config = SsoConfig {
                         account_id: sso_account_id.to_string(),
