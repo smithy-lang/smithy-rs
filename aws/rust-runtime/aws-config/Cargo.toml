@@ -15,7 +15,7 @@ native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
 
-default = ["client-hyper", "rustls", "rt-tokio", "sso"]
+default = ["client-hyper", "rustls", "rt-tokio", "credentials-sso"]
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types" }
