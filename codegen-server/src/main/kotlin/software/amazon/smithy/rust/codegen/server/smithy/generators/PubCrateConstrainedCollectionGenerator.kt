@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
@@ -41,7 +42,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPubl
  */
 class PubCrateConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     val shape: CollectionShape,
 ) {
     private val model = codegenContext.model
@@ -74,7 +75,7 @@ class PubCrateConstrainedCollectionGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withInlineModule(constrainedSymbol.module()) {
+        inlineModuleCreator(constrainedSymbol) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

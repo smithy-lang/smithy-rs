@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -105,10 +106,10 @@ class ServerBuilderDefaultValuesTest {
         project.withModule(RustModule.public("model")) {
             when (builderGeneratorKind) {
                 BuilderGeneratorKind.SERVER_BUILDER_GENERATOR -> {
-                    writeServerBuilderGenerator(this, model, symbolProvider)
+                    writeServerBuilderGenerator(project, this, model, symbolProvider)
                 }
                 BuilderGeneratorKind.SERVER_BUILDER_GENERATOR_WITHOUT_PUBLIC_CONSTRAINED_TYPES -> {
-                    writeServerBuilderGeneratorWithoutPublicConstrainedTypes(this, model, symbolProvider)
+                    writeServerBuilderGeneratorWithoutPublicConstrainedTypes(project, this, model, symbolProvider)
                 }
             }
 
@@ -168,7 +169,7 @@ class ServerBuilderDefaultValuesTest {
             .map { it.key to "${it.value}.into()" }
     }
 
-    private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
+    private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val codegenContext = serverTestCodegenContext(
             model,
@@ -181,7 +182,7 @@ class ServerBuilderDefaultValuesTest {
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
         }
-        builderGenerator.render(writer)
+        builderGenerator.render(rustCrate, writer)
 
         ServerEnumGenerator(
             codegenContext,
@@ -191,7 +192,7 @@ class ServerBuilderDefaultValuesTest {
         StructureGenerator(model, symbolProvider, writer, struct, emptyList()).render()
     }
 
-    private fun writeServerBuilderGenerator(writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
+    private fun writeServerBuilderGenerator(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val codegenContext = serverTestCodegenContext(model)
         val builderGenerator = ServerBuilderGenerator(codegenContext, struct, SmithyValidationExceptionConversionGenerator(codegenContext))
@@ -199,7 +200,7 @@ class ServerBuilderDefaultValuesTest {
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
         }
-        builderGenerator.render(writer)
+        builderGenerator.render(rustCrate, writer)
 
         ServerEnumGenerator(
             codegenContext,

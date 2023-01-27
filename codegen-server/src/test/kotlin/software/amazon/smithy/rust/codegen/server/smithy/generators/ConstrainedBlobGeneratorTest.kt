@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -69,9 +70,10 @@ class ConstrainedBlobGeneratorTest {
 
         project.withModule(ServerRustModule.Model) {
             addDependency(RuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
+            // FZ Rebase
             ConstrainedBlobGenerator(
                 codegenContext,
-                this,
+                this.createTestInlineModuleCreator(),
                 constrainedBlobShape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
             ).render()
@@ -127,12 +129,19 @@ class ConstrainedBlobGeneratorTest {
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
+        // FZ rebase
         ConstrainedBlobGenerator(
             codegenContext,
-            writer,
+            writer.createTestInlineModuleCreator(),
             constrainedBlobShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render()
+
+        // FZ rebase main
+        // ConstrainedBlobGenerator(codegenContext,
+        //     writer.createTestInlineModuleCreator(),
+        //     writer,
+        //     constrainedBlobShape).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedBlob(pub(crate) aws_smithy_types::Blob);"

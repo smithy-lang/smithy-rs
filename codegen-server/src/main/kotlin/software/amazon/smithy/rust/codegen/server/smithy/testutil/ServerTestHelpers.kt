@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.getInlineModuleWriter
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
@@ -125,8 +127,13 @@ fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: Ru
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
     val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this, SmithyValidationExceptionConversionGenerator(serverCodegenContext))
-    modelBuilder.render(writer)
+    modelBuilder.render(rustCrate, writer)
     writer.implBlock(symbolProvider.toSymbol(this)) {
+        // FZ Rebase mine
+        // val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
+        // modelBuilder.render(rustCrate, writer)
+        // writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)
     }
+    rustCrate.getInlineModuleWriter().render()
 }

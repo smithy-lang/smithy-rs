@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
@@ -51,6 +52,7 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
     )
 
     override fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ClientCodegenContext,
         shape: StructureShape,

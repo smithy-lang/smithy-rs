@@ -53,7 +53,7 @@ class ServerOperationErrorGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ServerRustModule.Error) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
-                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
+                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(project, model, symbolProvider, this)
             }
             ServerOperationErrorGenerator(
                 model,

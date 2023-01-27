@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.Default
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -100,10 +101,14 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
+        val parent = shape.getParentAndInlineModuleForConstrainedMember(this, !publicConstrainedTypes)?.second ?: ServerRustModule.UnconstrainedModule
+
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            parent = ServerRustModule.UnconstrainedModule,
+            // FZ rebase
+            // parent = ServerRustModule.UnconstrainedModule,
+            parent = parent,
             inline = true,
         )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())

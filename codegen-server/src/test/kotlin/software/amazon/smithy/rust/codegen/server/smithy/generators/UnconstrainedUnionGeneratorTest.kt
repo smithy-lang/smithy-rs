@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -42,15 +44,17 @@ class UnconstrainedUnionGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
-            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, this)
+            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(project, model, symbolProvider, this)
         }
 
         project.withModule(ServerRustModule.Model) {
             UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
+        
+        // FZ rebase
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
             project.withModule(ServerRustModule.Model) modelsModuleWriter@{
-                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter, this@modelsModuleWriter, unionShape).render()
+                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
                 this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.SimpleShape
@@ -26,11 +27,21 @@ import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderModule
+import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
 /**
  * This file contains utilities to work with constrained shapes.
@@ -159,4 +170,53 @@ fun Shape.typeNameContainsNonPublicType(
     is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
     is StructureShape, is UnionShape -> false
     else -> UNREACHABLE("the above arms should be exhaustive, but we received shape: $this")
+}
+
+
+/**
+ * For synthetic shapes that are added to the model because of member constrained shapes, it returns
+ * the "container" and "the member shape" that originally had the constraint trait. For all other
+ * shapes, it returns null.
+ */
+fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
+    val trait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
+    return Pair(trait.container, trait.member)
+}
+
+
+/**
+ * Returns the parent and the inline module that this particular shape should go in.
+ */
+fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolProvider, pubCrateServerBuilder: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
+    //val container = overriddenConstrainedMemberInfo()?.first ?: return null
+    val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
+    return if (overriddenTrait.container is StructureShape) {
+        val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()
+        val builderModule = overriddenTrait.container.serverBuilderModule(symbolProvider, pubCrateServerBuilder)
+        Pair(structureModule, builderModule)
+    }
+    else {
+        // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
+        // that is a descendant of the module that contains the extracted shape itself.
+        return if (!pubCrateServerBuilder) {
+            // List, union and map types need to go into their own module
+            val shapeSymbol = symbolProvider.toSymbol(this)
+            val shapeModule = shapeSymbol.module()
+            check(!shapeModule.parent.isInline()) {
+                "parent module of $id should not be an inline module"
+            }
+            Pair(shapeModule.parent as RustModule.LeafModule, shapeModule)
+        }
+        else {
+            val name = RustReservedWords.escapeIfNeeded(overriddenTrait.container.id.name).toSnakeCase() + "_internal"
+            val innerModule = RustModule.new(
+                    name = name,
+                    visibility = Visibility.PUBCRATE,
+                    parent = ModelsModule,
+                    inline = true,
+                )
+
+            Pair(ModelsModule, innerModule)
+        }
+    }
 }

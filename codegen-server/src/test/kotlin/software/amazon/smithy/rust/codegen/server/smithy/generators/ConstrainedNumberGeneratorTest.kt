@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -71,10 +72,11 @@ class ConstrainedNumberGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
+        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             ConstrainedNumberGenerator(
                 codegenContext,
-                this,
+                this.createTestInlineModuleCreator(),
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
             ).render()
@@ -138,9 +140,10 @@ class ConstrainedNumberGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        // FZ rebase
         ConstrainedNumberGenerator(
             codegenContext,
-            writer,
+            writer.createTestInlineModuleCreator(),
             constrainedShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render()

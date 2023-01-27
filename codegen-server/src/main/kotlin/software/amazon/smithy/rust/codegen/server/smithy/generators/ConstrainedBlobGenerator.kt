@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 class ConstrainedBlobGenerator(
     val codegenContext: ServerCodegenContext,
+    private val inlineModuleCreator : InlineModuleCreator,
     val writer: RustWriter,
     val shape: BlobShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
@@ -110,7 +112,7 @@ class ConstrainedBlobGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withInlineModule(constraintViolation.module()) {
+        inlineModuleCreator(constraintViolation) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
     }

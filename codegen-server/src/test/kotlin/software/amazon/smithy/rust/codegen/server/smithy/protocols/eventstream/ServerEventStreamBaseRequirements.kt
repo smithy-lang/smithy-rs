@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
@@ -68,21 +69,23 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
     )
 
     override fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
     ) {
         val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+            // FZ rebase
             ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
-                render(writer)
+                render(rustCrate, writer)
                 writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
             ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator).apply {
-                render(writer)
+                render(rustCrate, writer)
                 writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }

@@ -138,10 +138,11 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
+        // FZ rebase
         project.withModule(ServerRustModule.Model) {
-            structure.serverRenderWithModelBuilder(model, symbolProvider, this)
-            inner.serverRenderWithModelBuilder(model, symbolProvider, this)
-            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
+            structure.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            inner.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
             withInlineModule(RustModule.inlineTests()) {

@@ -19,7 +19,10 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
@@ -32,6 +35,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderModule
 
 /**
  * The [ConstrainedShapeSymbolProvider] returns, for a given _directly_
@@ -56,14 +61,19 @@ class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,
+    private val publicConstrainedTypes : Boolean = true
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
     private fun publicConstrainedSymbolForMapOrCollectionShape(shape: Shape): Symbol {
         check(shape is MapShape || shape is CollectionShape)
+        // FZ rebase
+        // val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+        // return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
 
-        val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
+        val (name, module) = getMemberNameAndModule(shape, serviceShape, ServerRustModule.Model, !publicConstrainedTypes)
+        val rustType = RustType.Opaque(name)
+        return symbolBuilder(shape, rustType).locatedIn(module).build()
     }
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -74,8 +84,14 @@ class ConstrainedShapeSymbolProvider(
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
                 // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
+                handleOptionality(
+                    handleRustBoxing(targetSymbol, shape),
+                    shape,
+                    nullableIndex,
+                    base.config().nullabilityCheckMode,
+                )
             }
+
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     check(shape.hasTrait<LengthTrait>()) {
@@ -91,6 +107,7 @@ class ConstrainedShapeSymbolProvider(
                         .build()
                 }
             }
+
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     check(constrainedCollectionCheck(shape)) {
@@ -105,8 +122,15 @@ class ConstrainedShapeSymbolProvider(
 
             is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
+                    // FZ rebase
+                    //val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+                    //symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
+
+                    // A standalone constrained shape goes into `ModelsModule`, but one
+                    // arising from a constrained member shape goes into a module for the container.
+                    val (name, module) = getMemberNameAndModule(shape, serviceShape, ServerRustModule.Model, !publicConstrainedTypes)
+                    val rustType = RustType.Opaque(name)
+                    symbolBuilder(shape, rustType).locatedIn(module).build()
                 } else {
                     base.toSymbol(shape)
                 }
@@ -122,9 +146,51 @@ class ConstrainedShapeSymbolProvider(
      *  - That it has no unsupported constraints applied.
      */
     private fun constrainedCollectionCheck(shape: CollectionShape): Boolean {
-        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
+        val supportedConstraintTraits =
+            supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
         val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
 
-        return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits).isEmpty()
+        return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits)
+            .isEmpty()
+    }
+
+
+    /**
+     * Returns the pair (Rust Symbol Name, Inline Module) for the shape. At the time of model transformation all
+     * constrained member shapes are extracted and are given a model-wide unique name. However, the generated code
+     * for the new shapes is in a module that is named after the containing shape (structure, list, map or union).
+     * The new shape's Rust Symbol is renamed from `{structureName}{memberName}` to  `{structure_name}::{member_name}`
+     */
+    private fun getMemberNameAndModule(
+        shape: Shape,
+        serviceShape: ServiceShape,
+        defaultModule: RustModule.LeafModule,
+        pubCrateServerBuilder: Boolean,
+    ): Pair<String, RustModule.LeafModule> {
+        val (container, member) =
+            shape.overriddenConstrainedMemberInfo() ?: return Pair(shape.contextName(serviceShape), defaultModule)
+
+        return if (container is StructureShape) {
+            val builderModule = container.serverBuilderModule(base, pubCrateServerBuilder)
+            val renameTo = member.memberName ?: member.id.name
+            Pair(renameTo.toPascalCase(), builderModule)
+        } else {
+            // For List, Union and Map, the new shape defined for a constrained member shape
+            // need to be placed into an inline module named `pub {container_name_in_snake_case}`
+            val innerModuleName = RustReservedWords.escapeIfNeeded(container.id.name.toSnakeCase()) + if (pubCrateServerBuilder) {
+                    "_internal"
+            } else {
+                    ""
+            }
+
+            val innerModule = RustModule.new(
+                innerModuleName,
+                visibility = Visibility.publicIf(!pubCrateServerBuilder, Visibility.PUBCRATE),
+                parent = defaultModule,
+                inline = true,
+            )
+            val renameTo = member.memberName ?: member.id.name
+            Pair(renameTo.toPascalCase(), innerModule)
+        }
     }
 }

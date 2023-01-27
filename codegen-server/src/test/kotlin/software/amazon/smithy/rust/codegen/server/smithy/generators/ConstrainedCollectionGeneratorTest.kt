@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
@@ -285,9 +286,10 @@ class ConstrainedCollectionGeneratorTest {
     ) {
         val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape, codegenContext.symbolProvider)
         ConstrainedCollectionGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
+        // FZ rebase
         CollectionConstraintViolationGenerator(
             codegenContext,
-            writer,
+            writer.createTestInlineModuleCreator(),
             constrainedCollectionShape,
             constraintsInfo,
             SmithyValidationExceptionConversionGenerator(codegenContext),

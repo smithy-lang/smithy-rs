@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
@@ -22,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 
 class MapConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
-    private val modelsModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     val shape: MapShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
@@ -67,7 +68,8 @@ class MapConstraintViolationGenerator(
         } else {
             Visibility.PUBCRATE
         }
-        modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
+
+        inlineModuleCreator(constraintViolationSymbol) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
             //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.
             //  The other one will have variants if the shape's key or value is directly or transitively constrained,

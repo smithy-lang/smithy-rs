@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -62,6 +63,7 @@ interface EventStreamTestRequirements<C : CodegenContext> {
 
     /** Render a builder for the given shape */
     fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: C,
         shape: StructureShape,
