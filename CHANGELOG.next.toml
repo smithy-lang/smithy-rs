@@ -56,3 +56,11 @@ let result = cache
 references = ["smithy-rs#2246"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.
+"""
+references = ["smithy-rs#2258"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
