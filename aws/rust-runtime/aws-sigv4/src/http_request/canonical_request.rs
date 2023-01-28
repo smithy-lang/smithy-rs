@@ -225,7 +225,7 @@ impl<'a> CanonicalRequest<'a> {
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
-        for (name, _) in &canonical_headers {
+        for name in canonical_headers.keys() {
             if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
                 if excluded_headers.contains(name) {
                     continue;
@@ -338,14 +338,17 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         // write out _all_ the headers
         for header in &self.values.signed_headers().headers {
             // a missing header is a bug, so we should panic.
-            let value = &self.headers[&header.0];
+            let values: Vec<&str> = self
+                .headers
+                .get_all(&header.0)
+                .into_iter()
+                .map(|value| {
+                    std::str::from_utf8(value.as_bytes())
+                        .expect("SDK request header values are valid UTF-8")
+                })
+                .collect();
             write!(f, "{}:", header.0.as_str())?;
-            writeln!(
-                f,
-                "{}",
-                std::str::from_utf8(value.as_bytes())
-                    .expect("SDK request header values are valid UTF-8")
-            )?;
+            writeln!(f, "{}", values.join(","))?;
         }
         writeln!(f)?;
         // write out the signed headers
@@ -539,6 +542,43 @@ mod tests {
     }
 
     #[test]
+    fn test_repeated_header() {
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.headers_mut().append(
+            "x-amz-object-attributes",
+            HeaderValue::from_static("Checksum"),
+        );
+        req.headers_mut().append(
+            "x-amz-object-attributes",
+            HeaderValue::from_static("ObjectSize"),
+        );
+        let req = SignableRequest::from(&req);
+        let settings = SigningSettings {
+            payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            ..Default::default()
+        };
+        let signing_params = signing_params(settings);
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
+        assert_eq!(
+            creq.values.signed_headers().to_string(),
+            "host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes"
+        );
+
+        let expected = "GET
+/
+Param1=value1&Param2=value2
+host:example.amazonaws.com
+x-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+x-amz-date:20210511T154045Z
+x-amz-object-attributes:Checksum,ObjectSize
+
+host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        assert_eq!(creq.to_string(), expected);
+    }
+
+    #[test]
     fn test_set_xamz_sha_256() {
         let req = test_request("get-vanilla-query-order-key-case");
         let req = SignableRequest::from(&req);
@@ -548,6 +588,7 @@ mod tests {
         };
         let mut signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
         assert_eq!(
             creq.values.content_sha256(),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -555,12 +596,15 @@ mod tests {
         // assert that the sha256 header was added
         assert_eq!(
             creq.values.signed_headers().as_str(),
-            "host;x-amz-content-sha256;x-amz-date"
+            "host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes;x-amz-object-attributes"
         );
 
         signing_params.settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
-        assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
+        assert_eq!(
+            creq.values.signed_headers().as_str(),
+            "host;x-amz-date;x-amz-object-attributes;x-amz-object-attributes"
+        );
     }
 
     #[test]
