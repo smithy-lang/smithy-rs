@@ -588,7 +588,6 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
         };
         let mut signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
-
         assert_eq!(
             creq.values.content_sha256(),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -596,15 +595,12 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
         // assert that the sha256 header was added
         assert_eq!(
             creq.values.signed_headers().as_str(),
-            "host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes;x-amz-object-attributes"
+            "host;x-amz-content-sha256;x-amz-date"
         );
 
         signing_params.settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
-        assert_eq!(
-            creq.values.signed_headers().as_str(),
-            "host;x-amz-date;x-amz-object-attributes;x-amz-object-attributes"
-        );
+        assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
     #[test]
