@@ -71,6 +71,7 @@ jobs:
       - release-ci
     outputs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
+      new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -86,24 +87,32 @@ jobs:
           # Split on the dots
           version_array=( ${SEMANTIC_VERSION//./ } ) 
           major=version_array[0]
+          minor=version_array[1]
+          patch=version_array[2]
           if [[ major == 0 ]]; then
-            minor=version_array[1]
             branch_name="smithy-rs-release-${major}.${minor}.x"
+            if [[ patch == 0 ]]; then
+              echo "new_release_series=true" > $GITHUB_OUTPUT
+            fi
           else 
             branch_name="smithy-rs-release-${major}.x.y"
+            if [[ minor == 0 && patch == 0 ]]; then
+              echo "new_release_series=true" > $GITHUB_OUTPUT
+            fi
           fi
+          
           if [[ "${DRY_RUN}" == "true" ]]; then
             branch_name="${branch_name}-preview"
           fi
-          echo "branch_name=${branch_name}" > $GITHUB_OUTPUT
+          echo "release_branch=${branch_name}" > $GITHUB_OUTPUT
           
           if [[ "${DRY_RUN}" == "true" ]]; then
             git push -f origin HEAD:${branch_name}
           else 
+            commit_sha=$(git rev-parse --verify --short HEAD)
             if [[ git ls-remote --exit-code --heads origin ${branch_name} ]]; then
               # The release branch already exists, we need to make sure that our commit is its current tip
               branch_head_sha=$(git rev-parse --verify --short refs/heads/patches)
-              commit_sha=$(git rev-parse --verify --short HEAD)
               if [[ branch_head_sha != commit_sha ]]; then
                 echo "The release branch - ${branch_name} - already exists. ${commit_sha}, the commit you chose when "
                 echo "launching this release, is not its current HEAD (${branch_head_sha}). This is not allowed: you "
@@ -111,9 +120,17 @@ jobs:
                 exit 1
               fi
             else
-              # The release branch does not exist, we create it and set the current commit as its tip
-              git checkout -b ${branch_name} 
-              git push origin ${branch_name}
+              # The release branch does not exist.
+              # We need to make sure that the commit SHA that we are releasing is on `main`.
+              git fetch origin main
+              if [[ git branch --contains ${commit_sha} | grep main ]]; then
+                # We can then create create the release branch and set the current commit as its tip
+                git checkout -b ${branch_name} 
+                git push origin ${branch_name}
+              else
+                echo "You must choose a commit from main to create a new release series!"
+                exit 1
+              fi
             fi
           fi
 
@@ -242,3 +259,31 @@ jobs:
         else
           publisher publish -y --location .
         fi
+
+  trim-changelog-next-on-main:
+    name: Remove released entries from CHANGELOG.next.toml on the main branch
+    if: inputs.dry_run == false && needs.get-or-create-release-branch.outputs.new_release_series == true
+    needs:
+      - get-or-create-release-branch
+      - release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout smithy-rs
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.commit_sha }}
+          token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+      - name: Empty CHANGELOG.next.toml
+        uses: ./smithy-rs/.github/actions/docker-build
+        with:
+          action: generate-new-changelog-next-toml
+      - name: Push smithy-rs changes
+        shell: bash
+        run: |
+          # This will fail if other commits have been pushed to `main` after `commit_sha`
+          # In particular, this will ALWAYS fail if you are creating a new release series from
+          # a commit that is not the current tip of `main`.
+          # We can build more refined automation to handle this case in the future - until then, it'll require 
+          # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
+          git commit CHANGELOG.next.toml -m "Remove released entries from CHANGELOG.next.toml"
+          git push origin main
