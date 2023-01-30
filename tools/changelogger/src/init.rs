@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use crate::render::EXAMPLE_ENTRY;
 use clap::Parser;
 use std::io::Write;
