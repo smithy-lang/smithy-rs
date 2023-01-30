@@ -53,7 +53,7 @@ jobs:
 
   acquire-base-image:
     name: Acquire Base Image
-    needs: acquire-base-image
+    needs: acquire-base-image-with-login
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
