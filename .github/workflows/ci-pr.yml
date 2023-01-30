@@ -52,8 +52,8 @@ jobs:
         retention-days: 1
 
   acquire-base-image:
-    continue-on-error: true
     name: Acquire Base Image
+    needs: acquire-base-image
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -74,7 +74,7 @@ jobs:
 
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
-    needs: acquire-base-image-with-login
+    needs: acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
@@ -82,7 +82,7 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
-    needs: acquire-base-image-with-login
+    needs: acquire-base-image
     # Only run this job on pull requests (not directly on main)
     if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
