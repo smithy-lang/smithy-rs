@@ -94,7 +94,7 @@ class Shell:
         print("-------------------")
 
         not_found_message = "not found: manifest unknown"
-        throttle_message = "toomanyrequests: Rate exceeded"
+        throttle_message = "toomanyrequests:"
         retryable_messages = ["net/http: TLS handshake timeout"]
         if status == 0:
             return DockerPullResult.SUCCESS
@@ -185,16 +185,17 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
             announce("Building a new image locally.")
             shell.docker_build_base_image(context.image_tag, context.tools_path)
 
-            if context.github_actions:
-                announce("Saving base image for use in later jobs...")
-                shell.docker_save(
-                    LOCAL_BASE_IMAGE_NAME,
-                    context.image_tag,
-                    context.start_path + "/smithy-rs-base-image"
-                )
         else:
             announce("Successfully pulled remote image!")
             shell.docker_tag(REMOTE_BASE_IMAGE_NAME, context.image_tag, LOCAL_BASE_IMAGE_NAME, context.image_tag)
+
+        if context.github_actions:
+            announce("Saving base image for use in later jobs...")
+            shell.docker_save(
+                LOCAL_BASE_IMAGE_NAME,
+                context.image_tag,
+                context.start_path + "/smithy-rs-base-image"
+            )
     else:
         announce("Base image found locally! No retrieval or rebuild necessary.")
 
