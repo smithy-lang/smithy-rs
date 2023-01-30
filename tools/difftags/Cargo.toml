@@ -1,0 +1,16 @@
+[package]
+name = "difftags"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+clap = { version = "3.2.23", features = ["derive"] }
+html-escape = { version = "0.2.13", default-features = false }
+unidiff = { version = "0.3.3", default-features = false }
