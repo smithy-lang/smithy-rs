@@ -190,8 +190,8 @@ data class CargoDependency(
         val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
-        val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
-        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
+        val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"), DependencyScope.Dev)
+        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"), DependencyScope.Dev)
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
@@ -220,7 +220,12 @@ data class CargoDependency(
         val Smol: CargoDependency = CargoDependency("smol", CratesIo("1.2.0"), DependencyScope.Dev)
         val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), DependencyScope.Dev)
         val Tokio: CargoDependency =
-            CargoDependency("tokio", CratesIo("1.8.4"), DependencyScope.Dev, features = setOf("macros", "test-util", "rt-multi-thread"))
+            CargoDependency(
+                "tokio",
+                CratesIo("1.8.4"),
+                DependencyScope.Dev,
+                features = setOf("macros", "test-util", "rt-multi-thread"),
+            )
         val TracingAppender: CargoDependency = CargoDependency(
             "tracing-appender",
             CratesIo("0.2.2"),
@@ -236,12 +241,16 @@ data class CargoDependency(
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
         fun smithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-client")
+        fun smithyClientTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyClient(runtimeConfig).copy(scope = DependencyScope.Dev).withFeature("test-util")
+
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
         fun smithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-tower")
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
+
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")

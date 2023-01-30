@@ -94,11 +94,10 @@ class ProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 visibility = Visibility.PRIVATE,
                 additionalAttributes = listOf(
-                    Attribute.CfgTest,
                     Attribute(allow("unreachable_code", "unused_variables")),
                 ),
             )
-            writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true)) {
+            writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true).cfgTest()) {
                 renderAllTestCases(allTests)
             }
         }

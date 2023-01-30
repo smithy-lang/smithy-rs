@@ -10,6 +10,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolWriter
 import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
@@ -267,7 +268,10 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
     note: String? = null,
 ): T {
     val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
-        true -> { { docs(normalizeHtml(escape(docString))) } }
+        true -> {
+            { docs(normalizeHtml(escape(docString))) }
+        }
+
         else -> null
     }
     return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
@@ -394,6 +398,8 @@ class RustWriter private constructor(
     private val printWarning: Boolean = true,
     /** Insert comments indicating where code was generated */
     private val debugMode: Boolean = false,
+    /** When true, automatically change all dependencies to be in the test scope */
+    private val testWriter: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
     companion object {
@@ -409,6 +415,7 @@ class RustWriter private constructor(
                 fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
                 fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
+                fileName.startsWith("tests/") -> RustWriter(fileName, namespace, debugMode = debugMode, testWriter = true)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
@@ -474,6 +481,19 @@ class RustWriter private constructor(
         preamble.add(preWriter)
     }
 
+    private fun addDependency(dependency: SymbolDependency) {
+        if (!testWriter) {
+            super.addDependency(dependency)
+        } else {
+            super.addDependency(
+                when (val dep = RustDependency.fromSymbolDependency(dependency)) {
+                    is CargoDependency -> dep.copy(scope = DependencyScope.Dev)
+                    else -> dependency
+                },
+            )
+        }
+    }
+
     /**
      * Create an inline module. Instead of being in a new file, inline modules are written as a `mod { ... }` block
      * directly into the parent.
@@ -499,7 +519,7 @@ class RustWriter private constructor(
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
-        val innerWriter = RustWriter(this.filename, "${this.namespace}::${module.name}", printWarning = false)
+        val innerWriter = RustWriter(this.filename, "${this.namespace}::${module.name}", printWarning = false, testWriter = testWriter || module.tests)
         moduleWriter(innerWriter)
         module.documentation?.let { docs -> docs(docs) }
         module.rustMetadata.render(this)
@@ -605,7 +625,7 @@ class RustWriter private constructor(
     override fun toString(): String {
         val contents = super.toString()
         val preheader = if (preamble.isNotEmpty()) {
-            val prewriter = RustWriter(filename, namespace, printWarning = false)
+            val prewriter = RustWriter(filename, namespace, printWarning = false, testWriter = testWriter)
             preamble.forEach { it(prewriter) }
             prewriter.toString()
         } else null
@@ -647,7 +667,7 @@ class RustWriter private constructor(
             @Suppress("UNCHECKED_CAST")
             val func =
                 t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
-            val innerWriter = RustWriter(filename, namespace, printWarning = false)
+            val innerWriter = RustWriter(filename, namespace, printWarning = false, testWriter = testWriter)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependency(it) }
             return innerWriter.toString().trimEnd()
@@ -676,7 +696,7 @@ class RustWriter private constructor(
                     @Suppress("UNCHECKED_CAST")
                     val func =
                         t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
-                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false, testWriter = testWriter)
                     func(innerWriter)
                     innerWriter.dependencies.forEach { addDependency(it) }
                     return innerWriter.toString().trimEnd()

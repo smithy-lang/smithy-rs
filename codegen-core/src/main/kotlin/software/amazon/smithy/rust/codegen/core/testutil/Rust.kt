@@ -9,6 +9,7 @@ import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -18,6 +19,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -34,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 import java.nio.file.Files.createTempDirectory
@@ -221,7 +224,45 @@ fun RustWriter.unitTest(
     if (async) {
         rust("async")
     }
-    return rustBlock("fn $name()", *args, block = block)
+    return testDependenciesOnly { rustBlock("fn $name()", *args, block = block) }
+}
+
+fun RustWriter.cargoDependencies() = dependencies.map { RustDependency.fromSymbolDependency(it) }
+    .filterIsInstance<CargoDependency>().distinct()
+
+fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (CargoDependency) -> String?): RustWriter {
+    val startingDependencies = cargoDependencies().toSet()
+    block(this)
+    val endingDependencies = cargoDependencies().toSet()
+    val newDeps = (endingDependencies - startingDependencies)
+    val invalidDeps =
+        newDeps.mapNotNull { dep -> dependencyFilter(dep)?.let { message -> message to dep } }.orNullIfEmpty()
+    if (invalidDeps != null) {
+        val badDeps = invalidDeps.map { it.second.rustName }
+        val writtenOut = this.toString()
+        val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
+        throw CodegenException(
+            "found invalid dependencies. ${invalidDeps.map { it.first }}\nHint: the following lines may be the problem.\n${
+            badLines.joinToString(
+                separator = "\n",
+                prefix = "   ",
+            )
+            }",
+        )
+    }
+    return this
+}
+
+fun RustWriter.testDependenciesOnly(block: Writable) = assertNoNewDependencies(block) { dep ->
+    if (dep.scope != DependencyScope.Dev) {
+        "Cannot add $dep — this writer should only add test dependencies."
+    } else {
+        null
+    }
+}
+
+fun testDependenciesOnly(block: Writable): Writable = {
+    testDependenciesOnly(block)
 }
 
 fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
