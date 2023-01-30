@@ -87,6 +87,18 @@ sealed class RustModule {
         fun pubCrate(name: String, documentation: String? = null, parent: RustModule): LeafModule =
             new(name, visibility = Visibility.PUBCRATE, documentation = documentation, inline = false, parent = parent)
 
+        fun inlineTests(
+            name: String = "test",
+            parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
+        ) = new(
+            name,
+            Visibility.PRIVATE,
+            inline = true,
+            additionalAttributes = additionalAttributes,
+            parent = parent,
+        ).cfgTest()
+
         /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")
         val Error = public(

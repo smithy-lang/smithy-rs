@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
@@ -465,8 +466,11 @@ fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile(
 
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {
-        unitTest(safeName("test")) {
-            test(this)
+        val name = safeName("test")
+        withInlineModule(RustModule.inlineTests(name)) {
+            unitTest(name) {
+                test(this)
+            }
         }
     }
     return this

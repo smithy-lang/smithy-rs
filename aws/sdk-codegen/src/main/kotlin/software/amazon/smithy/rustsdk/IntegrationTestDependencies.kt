@@ -117,7 +117,7 @@ class S3TestDependencies : LibRsCustomization() {
         writable {
             addDependency(AsyncStd)
             addDependency(BytesUtils)
-            addDependency(FastRand)
+            addDependency(FastRand.copy(scope = DependencyScope.Dev))
             addDependency(HdrHistogram)
             addDependency(Smol)
             addDependency(TempFile)
