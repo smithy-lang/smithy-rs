@@ -3,4 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod auth;
+//! Smithy HTTP Auth Types
+
+pub mod api_key;
+pub mod definition;
+pub mod error;
+pub mod location;
