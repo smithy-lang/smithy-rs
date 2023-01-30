@@ -245,6 +245,9 @@ internal fun List<CargoDependency>.mergeDependencyFeatures(): List<CargoDependen
         .toList()
         .sortedBy { it.name }
 
+/**
+ * If the same dependency exists both in prod and test scope, remove it from the test scope.
+ */
 internal fun List<CargoDependency>.mergeIdenticalTestDependencies(): List<CargoDependency> {
     val compileDeps =
         this.filter { it.scope == DependencyScope.Compile }.toSet()
