@@ -11,37 +11,6 @@ ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
-#
-# Node Installation Stage
-#
-FROM bare_base_image AS install_node
-ARG node_version=v16.14.0
-ENV DEST_PATH=/opt/nodejs \
-    PATH=/opt/nodejs/bin:${PATH}
-RUN yum -y install \
-        ca-certificates \
-        curl \
-        tar \
-        xz && \
-    yum clean all
-WORKDIR /root
-RUN set -eux; \
-    ARCHITECTURE=""; \
-    if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
-        curl "https://nodejs.org/dist/${node_version}/node-${node_version}-linux-arm64.tar.xz" --output node.tar.xz; \
-        echo "5a6e818c302527a4b1cdf61d3188408c8a3e4a1bbca1e3f836c93ea8469826ce  node.tar.xz" | sha256sum --check; \
-        ARCHITECTURE="arm64"; \
-    else \
-        curl "https://nodejs.org/dist/${node_version}/node-${node_version}-linux-x64.tar.xz" --output node.tar.xz; \
-        echo "0570b9354959f651b814e56a4ce98d4a067bf2385b9a0e6be075739bc65b0fae  node.tar.xz" | sha256sum --check; \
-        ARCHITECTURE="x64"; \
-    fi; \
-    mkdir -p "${DEST_PATH}"; \
-    tar -xJvf node.tar.xz -C "${DEST_PATH}"; \
-    mv "${DEST_PATH}/node-${node_version}-linux-${ARCHITECTURE}/"* "${DEST_PATH}"; \
-    rmdir "${DEST_PATH}"/node-${node_version}-linux-${ARCHITECTURE}; \
-    rm node.tar.xz; \
-    node --version
 
 #
 # Rust & Tools Installation Stage
@@ -102,6 +71,7 @@ RUN set -eux; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/publisher; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/changelogger; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/crate-hasher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/difftags; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-lints; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
@@ -160,7 +130,6 @@ RUN set -eux; \
     groupadd build; \
     useradd -m -g build build; \
     chmod 775 /home/build;
-COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
 COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
 COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
@@ -169,7 +138,7 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
+ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
@@ -185,7 +154,6 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
-RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0 aiohttp==3.8.1
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test
