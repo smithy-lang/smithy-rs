@@ -31,9 +31,9 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::Args;
-    use crate::entry::ChangeSet;
-    use crate::render::RenderArgs;
-    use crate::split::SplitArgs;
+    use changelogger::entry::ChangeSet;
+    use changelogger::render::RenderArgs;
+    use changelogger::split::SplitArgs;
     use clap::Parser;
     use std::path::PathBuf;
 
