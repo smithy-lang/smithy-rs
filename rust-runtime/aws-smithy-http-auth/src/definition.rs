@@ -40,11 +40,14 @@ impl HttpAuthDefinition {
         N: Into<String>,
         S: Into<Option<String>>,
     {
-        Self::builder()
+        let mut builder = Self::builder()
             .location(HttpAuthLocation::Header)
-            .name(header_name)
-            .scheme(scheme)
-            .build()
+            .name(header_name);
+        let scheme: Option<String> = scheme.into();
+        if scheme.is_some() {
+            builder.set_scheme(scheme);
+        }
+        builder.build()
     }
 
     /// Constructs a new HTTP auth definition following the RFC 2617 for Basic Auth.
@@ -128,8 +131,13 @@ pub mod http_auth_definition {
         }
 
         /// Sets the HTTP auth scheme.
-        pub fn scheme(mut self, scheme: impl Into<Option<String>>) -> Self {
-            let scheme: Option<String> = scheme.into();
+        pub fn scheme(mut self, scheme: impl Into<String>) -> Self {
+            self.scheme = Some(scheme.into());
+            self
+        }
+
+        /// Sets the HTTP auth scheme.
+        pub fn set_scheme(&mut self, scheme: Option<String>) -> &mut Self {
             self.scheme = scheme;
             self
         }
