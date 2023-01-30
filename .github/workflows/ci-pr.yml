@@ -16,7 +16,43 @@ jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
+  acquire-base-image-with-login:
+    permissions:
+      id-token: write
+      contents: read
+    continue-on-error: true
+    name: Acquire Base Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        fetch-depth: 0
+    - name: Acquire credentials (optional)
+      continue-on-error: true
+      uses: aws-actions/configure-aws-credentials@v1-node16
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Login to ECR
+      continue-on-error: true
+      run: |
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+    - name: Acquire base image
+      id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
+      run: ./smithy-rs/tools/ci-build/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
   acquire-base-image:
+    continue-on-error: true
     name: Acquire Base Image
     runs-on: ubuntu-latest
     steps:
@@ -38,7 +74,7 @@ jobs:
 
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
-    needs: acquire-base-image
+    needs: acquire-base-image-with-login
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
@@ -46,7 +82,7 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
-    needs: acquire-base-image
+    needs: acquire-base-image-with-login
     # Only run this job on pull requests (not directly on main)
     if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
