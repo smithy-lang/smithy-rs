@@ -16,7 +16,6 @@
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 use std::collections::HashMap;
 
-pub mod auth;
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;
