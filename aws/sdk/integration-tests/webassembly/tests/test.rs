@@ -5,7 +5,7 @@
 
 use aws_config::retry::RetryConfig;
 use aws_credential_types::Credentials;
-use aws_sdk_lambda::{Client, Region};
+use aws_sdk_s3::{Client, Region};
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -32,11 +32,11 @@ async fn test_clients_from_service_config() {
 }
 
 #[tokio::test]
-async fn test_clients_list_functions() {
+async fn test_clients_list_buckets() {
     let shared_config = get_default_config().await;
     let client = Client::new(&shared_config);
-    let result = client.list_functions().send().await.unwrap();
-    assert_eq!(result.functions().unwrap().len(), 1)
+    let result = client.list_buckets().send().await.unwrap();
+    assert_eq!(result.buckets().unwrap().len(), 2)
 }
 
 #[derive(Default, Debug, Clone)]
@@ -59,13 +59,23 @@ impl tower::Service<http::Request<SdkBody>> for Adapter {
     fn call(&mut self, _req: http::Request<SdkBody>) -> Self::Future {
         // Consumers here would pass the HTTP request to
         // the Wasm host in order to get the response back
-        let body = "{
-    \"Functions\": [
-        {
-            \"FunctionName\": \"name\"
-        }
-    ]
-}";
+        let body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        <ListAllMyBucketsResult>
+        <Buckets>
+            <Bucket>
+                <CreationDate>2023-01-23T11:59:03.575496Z</CreationDate>
+                <Name>doc-example-bucket</Name>
+            </Bucket>
+            <Bucket>
+                <CreationDate>2023-01-23T23:32:13.125238Z</CreationDate>
+                <Name>doc-example-bucket2</Name>
+            </Bucket>
+        </Buckets>
+        <Owner>
+            <DisplayName>account-name</DisplayName>
+            <ID>a3a42310-42d0-46d1-9745-0cee9f4fb851</ID>
+        </Owner>
+        </ListAllMyBucketsResult>";
         let res = http::Response::new(SdkBody::from(body));
 
         Box::pin(async move { Ok(res) })
