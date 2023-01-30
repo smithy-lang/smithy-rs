@@ -6,6 +6,8 @@
 
 use std::cmp::PartialEq;
 use std::fmt::Debug;
+use std::sync::Arc;
+use zeroize::Zeroizing;
 
 #[derive(Debug, PartialEq)]
 enum AuthErrorKind {
@@ -39,42 +41,49 @@ impl From<AuthErrorKind> for AuthError {
 }
 
 /// Authentication configuration to connect to a Smithy Service
-#[derive(Clone, Debug, PartialEq)]
-pub struct AuthApiKey {
-    api_key: String,
+#[derive(Clone, Eq, PartialEq)]
+pub struct AuthApiKey(Arc<Inner>);
+
+#[derive(Clone, Eq, PartialEq)]
+struct Inner {
+    api_key: Zeroizing<String>,
+}
+
+impl Debug for AuthApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut auth_api_key = f.debug_struct("AuthApiKey");
+        auth_api_key.field("api_key", &"** redacted **");
+        auth_api_key.finish()
+    }
 }
 
 impl AuthApiKey {
     /// Constructs a new API key.
     pub fn new(api_key: impl Into<String>) -> Self {
-        Self {
-            api_key: api_key.into(),
-        }
+        Self(Arc::new(Inner {
+            api_key: Zeroizing::new(api_key.into()),
+        }))
     }
 
     /// Returns the underlying api key.
     pub fn api_key(&self) -> &str {
-        &self.api_key
-    }
-
-    /// Sets the value for the api key
-    pub fn set_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.api_key = api_key.into();
-        self
+        &self.0.api_key
     }
 }
 
 impl From<&str> for AuthApiKey {
     fn from(api_key: &str) -> Self {
-        Self {
-            api_key: api_key.to_owned(),
-        }
+        Self(Arc::new(Inner {
+            api_key: Zeroizing::new(api_key.to_owned()),
+        }))
     }
 }
 
 impl From<String> for AuthApiKey {
     fn from(api_key: String) -> Self {
-        Self { api_key }
+        Self(Arc::new(Inner {
+            api_key: Zeroizing::new(api_key),
+        }))
     }
 }
 
