@@ -46,7 +46,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -211,10 +210,7 @@ class BuilderGenerator(
         writer.rustInline("pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
-        if (shape.members().none { it.isEventStream(model) }) {
-            Attribute.SerdeSerialize.render(writer)
-            Attribute.SerdeDeserialize.render(writer)
-        }
+        RenderSerdeAttribute.forStructureShape(writer, shape, model)
         writer.rustBlock("pub struct $builderName") {
             // add serde
             for (member in members) {

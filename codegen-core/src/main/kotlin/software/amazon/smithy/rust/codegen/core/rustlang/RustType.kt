@@ -470,8 +470,10 @@ class Attribute(val inner: Writable) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
-        val SerdeSerialize = Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "\"serde-serialize\"")), derive(RuntimeType.SerdeSerialize)))
-        val SerdeDeserialize = Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "\"serde-deserialize\"")), derive(RuntimeType.SerdeDeserialize)))
+        val UnstableSerdeDerive = fun(writer: RustWriter) = {
+            Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-serialize"), derive(RuntimeType.SerdeSerialize)))).render(writer)
+            Attribute(cfgAttr(all(writable("aws_sdk_unstable"), pair("feature" to "serde-deserialize"), derive(RuntimeType.SerdeDeserialize)))).render(writer)
+        }
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)

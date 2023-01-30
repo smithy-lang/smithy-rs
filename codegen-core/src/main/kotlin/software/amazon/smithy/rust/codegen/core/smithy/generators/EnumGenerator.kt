@@ -138,8 +138,7 @@ open class EnumGenerator(
     private fun renderUnnamedEnum() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-        Attribute.SerdeSerialize.render(writer)
-        Attribute.SerdeDeserialize.render(writer)
+        RenderSerdeAttribute.writeAttributes(writer)
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
@@ -179,8 +178,7 @@ open class EnumGenerator(
             renamedWarning.ifBlank { null },
         )
         writer.deprecatedShape(shape)
-        Attribute.SerdeSerialize.render(writer)
-        Attribute.SerdeDeserialize.render(writer)
+        RenderSerdeAttribute.writeAttributes(writer)
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
