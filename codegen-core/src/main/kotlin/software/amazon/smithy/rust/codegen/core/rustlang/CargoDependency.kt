@@ -129,6 +129,8 @@ data class CargoDependency(
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
+    val nameAndLocation: Pair<String, DependencyLocation> = name to location
+
     fun withFeature(feature: String): CargoDependency {
         return copy(features = features.toMutableSet().apply { add(feature) })
     }

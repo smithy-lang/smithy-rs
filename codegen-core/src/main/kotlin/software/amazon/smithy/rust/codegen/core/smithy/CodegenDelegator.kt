@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
@@ -171,11 +172,23 @@ open class RustCrate(
     }
 }
 
-val ErrorsModule = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
+val ErrorsModule = RustModule.public(
+    "error",
+    documentation = "All error types that operations can return. Documentation on these types is copied from the model.",
+)
 val OperationsModule = RustModule.public("operation", documentation = "All operations that this crate can perform.")
-val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
-val InputsModule = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
-val OutputsModule = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
+val ModelsModule = RustModule.public(
+    "model",
+    documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.",
+)
+val InputsModule = RustModule.public(
+    "input",
+    documentation = "Input structures for operations. Documentation on these types is copied from the model.",
+)
+val OutputsModule = RustModule.public(
+    "output",
+    documentation = "Output structures for operations. Documentation on these types is copied from the model.",
+)
 
 val UnconstrainedModule =
     RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
@@ -198,10 +211,12 @@ fun WriterDelegator<RustWriter>.finalize(
     this.useFileWriter("src/lib.rs", "crate::lib") {
         LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
     }
-    val cargoDependencies = mergeDependencyFeatures(
+    val cargoDependencies =
+
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
-            .filterIsInstance<CargoDependency>().distinct(),
-    )
+            .filterIsInstance<CargoDependency>().distinct()
+            .let { mergeIdenticalTestDependencies(it) }
+            .let { mergeIdenticalTestDependencies(it) }
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
             settings,
@@ -229,3 +244,10 @@ fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<Carg
         .values
         .toList()
         .sortedBy { it.name }
+
+fun mergeIdenticalTestDependencies(cargoDependencies: List<CargoDependency>): List<CargoDependency> {
+    val compileDeps =
+        cargoDependencies.filter { it.scope == DependencyScope.Compile }.toSet()
+
+    return cargoDependencies.filterNot { it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile)) }
+}
