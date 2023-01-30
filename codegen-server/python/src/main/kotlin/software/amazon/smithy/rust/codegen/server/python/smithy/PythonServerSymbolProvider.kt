@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -79,6 +80,10 @@ class PythonServerSymbolVisitor(
 
     override fun blobShape(shape: BlobShape?): Symbol {
         return PythonServerRuntimeType.blob(runtimeConfig).toSymbol()
+    }
+
+    override fun documentShape(shape: DocumentShape?): Symbol {
+        return PythonServerRuntimeType.document(runtimeConfig).toSymbol()
     }
 }
 
