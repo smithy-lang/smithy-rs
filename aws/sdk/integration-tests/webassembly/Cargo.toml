@@ -13,7 +13,7 @@ edition = "2021"
 
 [dev-dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = ["rt-tokio"]}
-aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types" }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
 aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda", default-features = false }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", default-features = false }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }

@@ -13,12 +13,10 @@ use aws_smithy_types::timeout::TimeoutConfig;
 fn get_default_config() -> impl std::future::Future<Output = aws_config::SdkConfig> {
     aws_config::from_env()
         .region(Region::from_static("us-west-2"))
-        .credentials_provider(Credentials::new(
+        .credentials_provider(Credentials::from_keys(
             "access_key",
             "secret_key",
             Some("session_token".to_string()),
-            None,
-            "provider_name",
         ))
         .timeout_config(TimeoutConfig::disabled())
         .retry_config(RetryConfig::disabled())
