@@ -279,15 +279,17 @@ class InstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            unitTest("blob_inputs_are_binary_data") {
-                withBlock("let blob = ", ";") {
-                    sut.render(
-                        this,
-                        BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
-                        StringNode.parse("foo".dq()),
-                    )
+            withInlineModule(RustModule.inlineTests("blob_tests", parent = RustModule.Model)) {
+                unitTest("blob_inputs_are_binary_data") {
+                    withBlock("let blob = ", ";") {
+                        sut.render(
+                            this,
+                            BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
+                            StringNode.parse("foo".dq()),
+                        )
+                    }
+                    rust("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
                 }
-                rust("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
             }
         }
         project.compileAndTest()
