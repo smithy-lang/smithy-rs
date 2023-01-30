@@ -52,7 +52,10 @@ impl tower::Service<http::Request<SdkBody>> for Adapter {
         Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>,
     >;
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         std::task::Poll::Ready(Ok(()))
     }
 
