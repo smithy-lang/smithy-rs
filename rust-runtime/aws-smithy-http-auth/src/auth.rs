@@ -28,7 +28,7 @@ impl std::fmt::Display for AuthError {
             InvalidLocation => write!(f, "invalid location: expected `header` or `query`"),
             SchemeNotAllowed => write!(
                 f,
-                "scheme only allowed when it is set into the `Authorization header`"
+                "scheme only allowed when it is set into the `Authorization` header"
             ),
         }
     }
@@ -87,93 +87,129 @@ impl From<String> for AuthApiKey {
     }
 }
 
-/// An HTTP-specific authentication scheme that sends an arbitrary
+/// Enum for describing where the HTTP Auth can be placed.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum HttpAuthLocation {
+    /// In the HTTP header.
+    #[default] Header,
+    /// In the query string of the URL.
+    Query,
+}
+
+impl HttpAuthLocation {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Header => "header",
+            Self::Query => "query"
+        }
+    }
+}
+
+impl TryFrom<&str> for HttpAuthLocation {
+    type Error = AuthError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "header" => Ok(Self::Header),
+            "query" => Ok(Self::Query),
+            _ => Err(AuthError::from(AuthErrorKind::InvalidLocation))
+        }
+    }
+}
+
+impl TryFrom<String> for HttpAuthLocation {
+    type Error = AuthError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
+impl AsRef<str> for HttpAuthLocation {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for HttpAuthLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.as_str(), f)
+    }
+}
+
+/// A HTTP-specific authentication scheme that sends an arbitrary
 /// auth value in a header or query string parameter.
 // As described in the Smithy documentation:
 // https://github.com/awslabs/smithy/blob/main/smithy-model/src/main/resources/software/amazon/smithy/model/loader/prelude.smithy
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct HttpAuthDefinition {
-    /// Defines the location of where the Auth is serialized. This value
-    /// can be set to `"header"` or `"query"`.
-    location: String,
+    /// Defines the location of where the Auth is serialized.
+    location: HttpAuthLocation,
 
     /// Defines the name of the HTTP header or query string parameter
     /// that contains the Auth.
     name: String,
 
     /// Defines the security scheme to use on the `Authorization` header value.
-    /// This can only be set if the "in" property is set to `"header"`.
+    /// This can only be set if the "location" property is set to [`HttpAuthLocation::Header`].
     scheme: Option<String>,
 }
 
 impl HttpAuthDefinition {
-    /// Constructs a new HTTP auth definition.
-    fn new<S>(location: String, name: String, scheme: S) -> Result<Self, AuthError>
-    where
-        S: Into<Option<String>>,
-    {
-        if location != "header" && location != "query" {
-            return Err(AuthError::from(AuthErrorKind::InvalidLocation));
-        }
-        Ok(Self {
-            location,
-            name,
-            scheme: scheme.into(),
-        })
+    /// Returns a builder for `HttpAuthDefinition`.
+    pub fn builder() -> http_auth_definition::Builder {
+        http_auth_definition::Builder::default()
     }
 
     /// Constructs a new HTTP auth definition in header.
-    pub fn new_with_header<N, S>(header_name: N, scheme: S) -> Result<Self, AuthError>
+    pub fn header<N, S>(header_name: N, scheme: S) -> Result<Self, AuthError>
     where
         N: Into<String>,
         S: Into<Option<String>>,
     {
-        let name: String = header_name.into();
-        let scheme: Option<String> = scheme.into();
-        if scheme.is_some() && !name.eq_ignore_ascii_case("authorization") {
-            return Err(AuthError::from(AuthErrorKind::SchemeNotAllowed));
-        }
-        HttpAuthDefinition::new("header".to_owned(), name, scheme)
+        Self::builder()
+            .location(HttpAuthLocation::Header)
+            .name(header_name)
+            .scheme(scheme)
+            .build()
     }
 
     /// Constructs a new HTTP auth definition following the RFC 2617 for Basic Auth.
-    pub fn new_with_basic_auth() -> Self {
-        HttpAuthDefinition::new(
-            "header".to_owned(),
-            "Authorization".to_owned(),
-            "Basic".to_owned(),
-        )
-        .unwrap()
+    pub fn basic_auth() -> Result<Self, AuthError> {
+        Self::builder()
+            .location(HttpAuthLocation::Header)
+            .name("Authorization".to_owned())
+            .scheme("Basic".to_owned())
+            .build()
     }
 
     /// Constructs a new HTTP auth definition following the RFC 2617 for Digest Auth.
-    pub fn new_with_digest_auth() -> Self {
-        HttpAuthDefinition::new(
-            "header".to_owned(),
-            "Authorization".to_owned(),
-            "Digest".to_owned(),
-        )
-        .unwrap()
+    pub fn digest_auth() -> Result<Self, AuthError> {
+        Self::builder()
+            .location(HttpAuthLocation::Header)
+            .name("Authorization".to_owned())
+            .scheme("Digest".to_owned())
+            .build()
     }
 
     /// Constructs a new HTTP auth definition following the RFC 6750 for Bearer Auth.
-    pub fn new_with_bearer_auth() -> Self {
-        HttpAuthDefinition::new(
-            "header".to_owned(),
-            "Authorization".to_owned(),
-            "Bearer".to_owned(),
-        )
-        .unwrap()
+    pub fn bearer_auth() -> Result<Self, AuthError> {
+        Self::builder()
+            .location(HttpAuthLocation::Header)
+            .name("Authorization".to_owned())
+            .scheme("Bearer".to_owned())
+            .build()
     }
 
     /// Constructs a new HTTP auth definition in query string.
-    pub fn new_with_query(name: impl Into<String>) -> Self {
-        HttpAuthDefinition::new("query".to_owned(), name.into(), None).unwrap()
+    pub fn query(name: impl Into<String>) -> Result<Self, AuthError> {
+        Self::builder()
+            .location(HttpAuthLocation::Query)
+            .name(name.into())
+            .build()
     }
 
     /// Returns the HTTP auth location.
-    pub fn location(&self) -> &str {
-        &self.location
+    pub fn location(&self) -> HttpAuthLocation {
+        self.location
     }
 
     /// Returns the HTTP auth name.
@@ -187,11 +223,61 @@ impl HttpAuthDefinition {
     }
 }
 
+/// Types associated with [`HttpAuthDefinition`].
+pub mod http_auth_definition {
+    use super::AuthError;
+    use super::AuthErrorKind;
+    use super::HttpAuthDefinition;
+    use super::HttpAuthLocation;
+
+    /// A builder for [`HttpAuthDefinition`].
+    #[derive(Debug, Default)]
+    pub struct Builder {
+        location: HttpAuthLocation,
+        name: String,
+        scheme: Option<String>,
+    }
+
+    impl Builder {
+        /// Sets the HTTP auth location.
+        pub fn location(mut self, location: HttpAuthLocation) -> Self {
+            self.location = location;
+            self
+        }
+
+        /// Sets the the HTTP auth name.
+        pub fn name(mut self, name: impl Into<String>) -> Self {
+            self.name = name.into();
+            self
+        }
+
+        /// Sets the HTTP auth scheme.
+        pub fn scheme(mut self, scheme: impl Into<Option<String>>) -> Self {
+            let scheme: Option<String> = scheme.into();
+            self.scheme = scheme;
+            self
+        }
+
+        /// Constructs a [`HttpAuthDefinition`] from the builder.
+        pub fn build(self) -> Result<HttpAuthDefinition, AuthError> {
+            if self.scheme.is_some() && !self.name.eq_ignore_ascii_case("authorization") {
+                return Err(AuthError::from(AuthErrorKind::SchemeNotAllowed));
+            }
+            Ok(HttpAuthDefinition {
+                location: self.location,
+                name: self.name,
+                scheme: self.scheme,
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::auth::AuthApiKey;
     use crate::auth::AuthErrorKind;
     use crate::auth::HttpAuthDefinition;
+    use crate::auth::HttpAuthLocation;
 
     #[test]
     fn api_key_is_equal() {
@@ -208,17 +294,16 @@ mod tests {
     }
 
     #[test]
-    fn auth_definition_fails_with_invalid_location() {
-        let result =
-            HttpAuthDefinition::new("invalid".to_owned(), "".to_owned(), None).map_err(|e| e.kind);
+    fn auth_location_fails_when_invalid() {
+        let result = HttpAuthLocation::try_from("invalid").map_err(|e| e.kind);
         let expected = Err(AuthErrorKind::InvalidLocation);
         assert_eq!(expected, result);
     }
 
     #[test]
     fn auth_definition_for_header_without_scheme() {
-        let definition = HttpAuthDefinition::new_with_header("Header", None).unwrap();
-        assert_eq!(definition.location, "header");
+        let definition = HttpAuthDefinition::header("Header", None).unwrap();
+        assert_eq!(definition.location, HttpAuthLocation::Header);
         assert_eq!(definition.name, "Header");
         assert_eq!(definition.scheme, None);
     }
@@ -226,15 +311,15 @@ mod tests {
     #[test]
     fn auth_definition_for_authorization_header_with_scheme() {
         let definition =
-            HttpAuthDefinition::new_with_header("authorization", "Scheme".to_owned()).unwrap();
-        assert_eq!(definition.location(), "header");
+            HttpAuthDefinition::header("authorization", "Scheme".to_owned()).unwrap();
+        assert_eq!(definition.location(), HttpAuthLocation::Header);
         assert_eq!(definition.name(), "authorization");
         assert_eq!(definition.scheme(), Some("Scheme"));
     }
 
     #[test]
     fn auth_definition_fails_with_scheme_not_allowed() {
-        let result = HttpAuthDefinition::new_with_header("Invalid".to_owned(), "Scheme".to_owned())
+        let result = HttpAuthDefinition::header("Invalid".to_owned(), "Scheme".to_owned())
             .map_err(|e| e.kind);
         let expected = Err(AuthErrorKind::SchemeNotAllowed);
         assert_eq!(expected, result);
@@ -242,11 +327,11 @@ mod tests {
 
     #[test]
     fn auth_definition_for_basic() {
-        let definition = HttpAuthDefinition::new_with_basic_auth();
+        let definition = HttpAuthDefinition::basic_auth().unwrap();
         assert_eq!(
             definition,
             HttpAuthDefinition {
-                location: "header".to_owned(),
+                location: HttpAuthLocation::Header,
                 name: "Authorization".to_owned(),
                 scheme: Some("Basic".to_owned()),
             }
@@ -255,24 +340,24 @@ mod tests {
 
     #[test]
     fn auth_definition_for_digest() {
-        let definition = HttpAuthDefinition::new_with_digest_auth();
-        assert_eq!(definition.location(), "header");
+        let definition = HttpAuthDefinition::digest_auth().unwrap();
+        assert_eq!(definition.location(), HttpAuthLocation::Header);
         assert_eq!(definition.name(), "Authorization");
         assert_eq!(definition.scheme(), Some("Digest"));
     }
 
     #[test]
     fn auth_definition_for_bearer_token() {
-        let definition = HttpAuthDefinition::new_with_bearer_auth();
-        assert_eq!(definition.location(), "header");
+        let definition = HttpAuthDefinition::bearer_auth().unwrap();
+        assert_eq!(definition.location(), HttpAuthLocation::Header);
         assert_eq!(definition.name(), "Authorization");
         assert_eq!(definition.scheme(), Some("Bearer"));
     }
 
     #[test]
     fn auth_definition_for_query() {
-        let definition = HttpAuthDefinition::new_with_query("query_key");
-        assert_eq!(definition.location(), "query");
+        let definition = HttpAuthDefinition::query("query_key").unwrap();
+        assert_eq!(definition.location(), HttpAuthLocation::Query);
         assert_eq!(definition.name(), "query_key");
         assert_eq!(definition.scheme(), None);
     }
