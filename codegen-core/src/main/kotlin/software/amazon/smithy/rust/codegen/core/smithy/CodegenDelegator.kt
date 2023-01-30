@@ -215,8 +215,8 @@ fun WriterDelegator<RustWriter>.finalize(
 
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
             .filterIsInstance<CargoDependency>().distinct()
-            .let { mergeIdenticalTestDependencies(it) }
-            .let { mergeIdenticalTestDependencies(it) }
+            .mergeDependencyFeatures()
+            .mergeIdenticalTestDependencies()
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
             settings,
@@ -238,16 +238,16 @@ private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
     )
 }
 
-fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> =
-    cargoDependencies.groupBy { it.key }
+internal fun List<CargoDependency>.mergeDependencyFeatures(): List<CargoDependency> =
+    this.groupBy { it.key }
         .mapValues { group -> group.value.reduce { acc, next -> acc.mergeWith(next) } }
         .values
         .toList()
         .sortedBy { it.name }
 
-fun mergeIdenticalTestDependencies(cargoDependencies: List<CargoDependency>): List<CargoDependency> {
+internal fun List<CargoDependency>.mergeIdenticalTestDependencies(): List<CargoDependency> {
     val compileDeps =
-        cargoDependencies.filter { it.scope == DependencyScope.Compile }.toSet()
+        this.filter { it.scope == DependencyScope.Compile }.toSet()
 
-    return cargoDependencies.filterNot { it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile)) }
+    return this.filterNot { it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile)) }
 }
