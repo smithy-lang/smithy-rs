@@ -12,7 +12,7 @@ use aws_smithy_http_server::{
 use clap::Parser;
 use pokemon_service::{capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing};
 use pokemon_service_server_sdk::{
-    error::{GetStorageError, NotAuthorized},
+    error::{GetStorageError, StorageAccessNotAuthorized},
     input::{DoNothingInput, GetStorageInput},
     output::{DoNothingOutput, GetStorageOutput},
     PokemonService,
@@ -53,7 +53,9 @@ pub async fn get_storage_with_local_approved(
         });
     }
     tracing::debug!("authentication failed");
-    Err(GetStorageError::NotAuthorized(NotAuthorized {}))
+    Err(GetStorageError::StorageAccessNotAuthorized(
+        StorageAccessNotAuthorized {},
+    ))
 }
 
 pub async fn do_nothing_but_log_request_ids(

@@ -80,7 +80,7 @@ class RustClientCodegenPlugin : DecoratableBuildPlugin() {
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(NonExhaustive)) }
-                // Streaming shapes need different derives (e.g. they cannot derive Eq)
+                // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input

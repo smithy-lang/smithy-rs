@@ -9,10 +9,9 @@ set -eux
 cargo --version
 changelogger --version
 crate-hasher --version
-diff2html --version
+difftags --version
 git --version
 java --version
-node --version
 publisher --version
 python3 --version
 rustc +"${RUST_NIGHTLY_VERSION}" --version

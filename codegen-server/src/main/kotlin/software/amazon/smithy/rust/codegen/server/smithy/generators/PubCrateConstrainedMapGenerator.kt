@@ -9,8 +9,14 @@ import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -54,15 +60,15 @@ class PubCrateConstrainedMapGenerator(
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
         val keySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
-        val valueSymbol = if (valueShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
-            pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
+        val valueMemberSymbol = if (valueShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
         } else {
-            constrainedShapeSymbolProvider.toSymbol(valueShape)
+            constrainedShapeSymbolProvider.toSymbol(shape.value)
         }
 
         val codegenScope = arrayOf(
             "KeySymbol" to keySymbol,
-            "ValueSymbol" to valueSymbol,
+            "ValueMemberSymbol" to valueMemberSymbol,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "UnconstrainedSymbol" to unconstrainedSymbol,
             "Symbol" to symbol,
@@ -73,7 +79,7 @@ class PubCrateConstrainedMapGenerator(
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
+                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueMemberSymbol}>);
 
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};
@@ -117,22 +123,27 @@ class PubCrateConstrainedMapGenerator(
                 val keyNeedsConversion = keyShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
                 val valueNeedsConversion = valueShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
-                rustTemplate(
-                    """
-                    impl #{From}<$name> for #{Symbol} {
-                        fn from(v: $name) -> Self {
-                            ${ if (keyNeedsConversion || valueNeedsConversion) {
-                        val keyConversion = if (keyNeedsConversion) { ".into()" } else { "" }
-                        val valueConversion = if (valueNeedsConversion) { ".into()" } else { "" }
-                        "v.0.into_iter().map(|(k, v)| (k$keyConversion, v$valueConversion)).collect()"
-                    } else {
-                        "v.0"
-                    } }
+                rustBlockTemplate("impl #{From}<$name> for #{Symbol}", *codegenScope) {
+                    rustBlock("fn from(v: $name) -> Self") {
+                        if (keyNeedsConversion || valueNeedsConversion) {
+                            withBlock("v.0.into_iter().map(|(k, v)| {", "}).collect()") {
+                                if (keyNeedsConversion) {
+                                    rust("let k = k.into();")
+                                }
+                                if (valueNeedsConversion) {
+                                    withBlock("let v = {", "};") {
+                                        conditionalBlock("v.map(|v| ", ")", valueMemberSymbol.isOptional()) {
+                                            rust("v.into()")
+                                        }
+                                    }
+                                }
+                                rust("(k, v)")
+                            }
+                        } else {
+                            rust("v.0")
                         }
                     }
-                    """,
-                    *codegenScope,
-                )
+                }
             }
         }
     }

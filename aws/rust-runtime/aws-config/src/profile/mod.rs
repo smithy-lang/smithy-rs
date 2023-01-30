@@ -16,13 +16,12 @@ mod parser;
 #[doc(inline)]
 pub use parser::ProfileParseError;
 #[doc(inline)]
-pub use parser::{load, Profile, ProfileSet, Property};
+pub use parser::{load, Profile, ProfileFileLoadError, ProfileSet, Property};
 
 pub mod app_name;
 pub mod credentials;
 pub mod profile_file;
 pub mod region;
-pub mod retry_config;
 
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;

@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.transformers
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -15,6 +14,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -74,7 +74,8 @@ fun OperationShape.operationErrors(model: Model): List<Shape> {
 }
 
 fun eventStreamErrors(model: Model, shape: Shape): Map<UnionShape, List<StructureShape>> {
-    return Walker(model).walkShapes(shape)
+    return DirectedWalker(model)
+        .walkShapes(shape)
         .filter { it is UnionShape && it.isEventStream() }
         .map { it.asUnionShape().get() }
         .associateWith { unionShape ->

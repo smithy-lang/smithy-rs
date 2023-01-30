@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -44,7 +43,7 @@ open class ServerOperationErrorGenerator(
         operationSymbol: Symbol,
     ) {
         val meta = RustMetadata(
-            derives = Attribute.Derives(setOf(RuntimeType.Debug)),
+            derives = setOf(RuntimeType.Debug),
             visibility = Visibility.PUBLIC,
         )
 

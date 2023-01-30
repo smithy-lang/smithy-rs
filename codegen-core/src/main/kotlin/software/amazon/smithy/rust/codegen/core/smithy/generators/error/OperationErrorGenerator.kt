@@ -77,7 +77,7 @@ class OperationErrorGenerator(
         operationSymbol: Symbol,
     ) {
         val meta = RustMetadata(
-            derives = Attribute.Derives(setOf(RuntimeType.Debug)),
+            derives = setOf(RuntimeType.Debug),
             additionalAttributes = listOf(Attribute.NonExhaustive),
             visibility = Visibility.PUBLIC,
         )

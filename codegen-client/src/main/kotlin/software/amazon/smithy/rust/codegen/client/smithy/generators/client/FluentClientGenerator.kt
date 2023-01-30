@@ -15,6 +15,8 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -230,7 +232,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+                // Filter out any derive that isn't Clone. Then add a Debug derive
+                val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -240,7 +243,7 @@ class FluentClientGenerator(
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 deprecatedShape(operation)
-                baseDerives.copy(derives = derives).render(this)
+                Attribute(derive(derives.toSet())).render(this)
                 rustTemplate(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {

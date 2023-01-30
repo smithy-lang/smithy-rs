@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
@@ -42,18 +43,44 @@ interface EndpointCustomization {
      * Provide the default value for [parameter] given a reference to the service config struct ([configRef])
      *
      * If this parameter is not recognized, return null.
+     *
+     * Example:
+     * ```kotlin
+     * override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
+     *     return when (parameter.builtIn) {
+     *         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+     *         else -> null
+     *     }
+     * }
+     * ```
      */
-    fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? = null
+    fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? = null
+
+    /**
+     * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
+     *
+     * Example:
+     * ```kotlin
+     * override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+     *     if (name != Builtins.REGION.builtIn.get()) {
+     *         return null
+     *     }
+     *     return writable {
+     *         rustTemplate(
+     *             "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+     *             "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+     *         )
+     *     }
+     * }
+     * ```
+     */
+
+    fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 
     /**
      * Provide a list of additional endpoints standard library functions that rules can use
      */
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
-
-    /**
-     * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
-     */
-    fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 }
 
 /**
@@ -100,7 +127,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + ClientContextDecorator(codegenContext) +
+        return baseCustomizations + ClientContextConfigCustomization(codegenContext) +
             EndpointConfigCustomization(codegenContext, EndpointTypesGenerator.fromContext(codegenContext))
     }
 
@@ -167,6 +194,17 @@ class EndpointsDecorator : ClientCodegenDecorator {
             }
         }
 
+        private fun Node.toWritable(): Writable {
+            val node = this
+            return writable {
+                when (node) {
+                    is StringNode -> rust("Some(${node.value.dq()}.to_string())")
+                    is BooleanNode -> rust("Some(${node.value})")
+                    else -> PANIC("unsupported default value: $node")
+                }
+            }
+        }
+
         private fun builderFields(params: Parameters, section: OperationSection.MutateInput) = writable {
             val memberParams = idx.getContextParams(operationShape)
             val builtInParams = params.toList().filter { it.isBuiltIn }
@@ -189,13 +227,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
             idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
                 val setterName = EndpointParamsGenerator.setterName(name)
-                val value = writable {
-                    when (val v = param.value) {
-                        is BooleanNode -> rust("Some(${v.value})")
-                        is StringNode -> rust("Some(${v.value.dq()}.to_string())")
-                        else -> TODO("Unexpected static value type: $v")
-                    }
-                }
+                val value = param.value.toWritable()
                 rust(".$setterName(#W)", value)
             }
 

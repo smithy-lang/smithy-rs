@@ -153,7 +153,7 @@ open class StructureGenerator(
         }
 
         renderStructureImpl()
-        if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
+        if (!containerMeta.hasDebugDerive()) {
             renderDebugImpl()
         }
     }

@@ -5,6 +5,7 @@
 
 import aws.sdk.AwsServices
 import aws.sdk.Membership
+import aws.sdk.RootTest
 import aws.sdk.discoverServices
 import aws.sdk.docsLandingPage
 import aws.sdk.parseMembership
@@ -198,6 +199,28 @@ tasks.register("relocateExamples") {
     outputs.dir(outputDir)
 }
 
+tasks.register("relocateTests") {
+    description = "relocate the root integration tests and rewrite path dependencies"
+    doLast {
+        if (awsServices.rootTests.isNotEmpty()) {
+            copy {
+                val testDir = projectDir.resolve("integration-tests")
+                from(testDir)
+                awsServices.rootTests.forEach { test ->
+                    include(test.path.toRelativeString(testDir) + "/**")
+                }
+                into(outputDir.resolve("tests"))
+                exclude("**/target")
+                filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
+            }
+        }
+    }
+    for (test in awsServices.rootTests) {
+        inputs.dir(test.path)
+    }
+    outputs.dir(outputDir)
+}
+
 tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     description = "Adds dependency path and corrects version number of examples after relocation"
     enabled = awsServices.examples.isNotEmpty()
@@ -272,6 +295,8 @@ tasks.register<Copy>("relocateChangelog") {
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
+    |exclude = [${"\n"}${services.rootTests.map(RootTest::manifestName).joinToString(",\n") { "|    \"$it\"" }}
+    |]
     |members = [${"\n"}${services.allModules.joinToString(",\n") { "|    \"$it\"" }}
     |]
     """.trimMargin()
@@ -286,6 +311,9 @@ tasks.register("generateCargoWorkspace") {
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {
         inputs.dir(projectDir.resolve("examples"))
+    }
+    for (test in awsServices.rootTests) {
+        inputs.dir(test.path)
     }
     outputs.file(outputDir.resolve("Cargo.toml"))
     outputs.upToDateWhen { false }
@@ -310,6 +338,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
     dependsOn("relocateExamples")
+    dependsOn("relocateTests")
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
@@ -371,6 +400,7 @@ tasks.register("finalizeSdk") {
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
+        "relocateTests",
         "generateIndexMd",
         "fixManifests",
         "generateVersionManifest",

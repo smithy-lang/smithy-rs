@@ -88,7 +88,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider(#{Credentials}::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.default_auth().send().await;
@@ -98,6 +98,8 @@ class EndpointsCredentialsTest {
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
                             .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
+                            .withFeature("test-util").toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -110,7 +112,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider(#{Credentials}::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.custom_auth().send().await;
@@ -120,6 +122,8 @@ class EndpointsCredentialsTest {
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
                             .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
+                            .withFeature("test-util").toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
