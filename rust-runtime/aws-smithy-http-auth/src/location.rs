@@ -2,7 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-//! Smithy HTTP Auth Types
+
+//! HTTP Auth Location
 
 use std::cmp::PartialEq;
 use std::fmt::Debug;

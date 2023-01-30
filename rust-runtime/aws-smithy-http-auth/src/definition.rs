@@ -2,7 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-//! Smithy HTTP Auth Types
+
+//! HTTP Auth Definition
 
 use crate::error::AuthError;
 use crate::location::HttpAuthLocation;

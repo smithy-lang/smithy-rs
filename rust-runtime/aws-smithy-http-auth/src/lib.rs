@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![warn(missing_debug_implementations, missing_docs, rustdoc::all)]
+
 //! Smithy HTTP Auth Types
 
 pub mod api_key;
