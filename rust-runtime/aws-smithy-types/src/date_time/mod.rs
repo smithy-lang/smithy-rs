@@ -14,6 +14,7 @@ use std::fmt;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use time::OffsetDateTime;
 
 mod format;
 pub use self::format::DateTimeFormatError;
@@ -25,6 +26,17 @@ const NANOS_PER_SECOND: i128 = 1_000_000_000;
 const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 
 /* ANCHOR: date_time */
+
+// A std::time replacement that works on WASM as well .
+#[doc(hidden)]
+pub fn now_utc() -> OffsetDateTime {
+    OffsetDateTime::now_utc()
+}
+
+#[doc(hidden)]
+pub fn now() -> SystemTime {
+    OffsetDateTime::now_utc().into()
+}
 
 /// DateTime in time.
 ///

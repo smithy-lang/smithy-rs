@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_types::date_time;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -39,7 +40,7 @@ impl TimeSource {
     /// Returns the current system time based on the mode.
     pub fn now(&self) -> SystemTime {
         match &self.0 {
-            Inner::Default => SystemTime::now(),
+            Inner::Default => date_time::now(),
             Inner::Testing(testing) => testing.now(),
         }
     }

@@ -10,6 +10,7 @@ use std::time::SystemTime;
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
 use aws_smithy_http::property_bag::PropertyBag;
+use aws_smithy_types::date_time;
 
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
@@ -147,7 +148,7 @@ fn signing_config(
         request_ts: config
             .get::<SystemTime>()
             .copied()
-            .unwrap_or_else(SystemTime::now),
+            .unwrap_or_else(date_time::now),
         region,
         payload_override,
         service: signing_service,

@@ -11,7 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 itoa = "1.0.0"
 num-integer = "0.1.44"
 ryu = "1.0.5"
-time = { version = "0.3.4", features = ["parsing"] }
+time = { version = "0.3.17", features = ["parsing", "wasm-bindgen"] }
 base64-simd = "0.7"
 
 [dev-dependencies]

@@ -6,10 +6,11 @@
 //! Lazy, credentials cache implementation
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_types::date_time;
 use tracing::{debug, info, info_span, Instrument};
 
 use crate::cache::{ExpiringCache, ProvideCachedCredentials};
@@ -74,7 +75,7 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
                 let future = Timeout::new(provider.provide_credentials(), timeout_future);
-                let start_time = Instant::now();
+                let start_time = date_time::now();
                 let result = cache
                     .get_or_load(|| {
                         let span = info_span!("lazy_load_credentials");

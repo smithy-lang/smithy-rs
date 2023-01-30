@@ -7,6 +7,7 @@
 
 /// Presigning config and builder
 pub mod config {
+    use aws_smithy_types::date_time;
     use std::fmt;
     use std::time::{Duration, SystemTime};
 
@@ -149,7 +150,7 @@ pub mod config {
                 return Err(ErrorKind::ExpiresInDurationTooLong.into());
             }
             Ok(PresigningConfig {
-                start_time: self.start_time.unwrap_or_else(SystemTime::now),
+                start_time: self.start_time.unwrap_or_else(date_time::now),
                 expires_in,
             })
         }

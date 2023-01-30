@@ -9,6 +9,7 @@ use aws_sigv4::event_stream::{sign_empty_message, sign_message};
 use aws_sigv4::SigningParams;
 use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
 use aws_smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
+use aws_smithy_types::date_time;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use std::time::SystemTime;
@@ -37,7 +38,7 @@ impl SigV4Signer {
         let time = properties
             .get::<SystemTime>()
             .copied()
-            .unwrap_or_else(SystemTime::now);
+            .unwrap_or_else(date_time::now);
         let mut builder = SigningParams::builder()
             .access_key(credentials.access_key_id())
             .secret_key(credentials.secret_access_key())
