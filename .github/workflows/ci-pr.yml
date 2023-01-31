@@ -36,7 +36,7 @@ jobs:
       id: set-token
       run: |
         ENCRYPTED_PAYLOAD=$(
-          gpg --symmetric --batch --passphrase "(AWS_REGION=us-east-1 aws secretsmanager get-secret-value --secret-id github-pgp-key --query SecretString --output text)" --output - <(echo "not-a-real-token") | base64 -w0
+          gpg --symmetric --batch --passphrase "{{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(echo "not-a-real-token") | base64 -w0
         )
         echo "payload: $ENCRYPTED_PAYLOAD"
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
     steps:
     - name: debug token
       run: echo $ENCRYPTED_DOCKER_PASSWORD

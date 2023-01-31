@@ -154,17 +154,38 @@ def run(command, cwd=None):
 
 
 # Returns (status, output) from a shell command
-def get_cmd_output(command, cwd=None, check=True):
+def get_cmd_output(command, cwd=None, check=True, **kwargs):
     result = subprocess.run(
         shlex.split(command),
         capture_output=True,
         check=check,
-        cwd=cwd
+        cwd=cwd,
+        **kwargs
     )
     return (result.returncode, result.stdout.decode("utf-8").strip(), result.stderr.decode("utf-8").strip())
 
 
+def decrypt_and_login(secret):
+    import base64
+    decoded = base64.b64decode(secret, validate=True)
+    token = os.getenv("DOCKER_PASSPHRASE")
+    if token is None:
+        print('no passphrase')
+        return
+    (code, password, err) = (get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase {token} --output -", check=False,
+                         input=decoded))
+    if code != 0:
+        print(err)
+        return
+    (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+    print(output)
+
+
 def acquire_build_image(context=Context.default(), shell=Shell()):
+    import os
+    docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD")
+    if docker_password is not None:
+        decrypt_and_login(docker_password)
     # If the image doesn't already exist locally, then look remotely
     if not shell.docker_image_exists_locally(LOCAL_BASE_IMAGE_NAME, context.image_tag):
         announce("Base image not found locally.")
