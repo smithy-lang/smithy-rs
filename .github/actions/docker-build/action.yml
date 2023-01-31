@@ -15,15 +15,15 @@ inputs:
 runs:
   using: composite
   steps:
-#  - uses: actions/cache@v3
-#    name: Gradle Cache
-#    with:
-#      path: |
-#        gradle/caches
-#        gradle/wrapper
-#      key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
-#      restore-keys: |
-#        ${{ runner.os }}-gradle-
+  - uses: actions/cache@v3
+    name: Gradle Cache
+    with:
+      path: |
+        gradle/caches
+        gradle/wrapper
+      key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+      restore-keys: |
+        ${{ runner.os }}-gradle-
     # Pinned to the commit hash of v2.1.0
   - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
     with:
