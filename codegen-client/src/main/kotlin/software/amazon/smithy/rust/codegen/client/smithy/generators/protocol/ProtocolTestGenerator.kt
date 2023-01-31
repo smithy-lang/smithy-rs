@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
@@ -22,6 +21,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -36,9 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -96,8 +94,8 @@ class ProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 visibility = Visibility.PRIVATE,
                 additionalAttributes = listOf(
-                    Attribute.Cfg("test"),
-                    Attribute.Custom("allow(unreachable_code, unused_variables)"),
+                    Attribute.CfgTest,
+                    Attribute(allow("unreachable_code", "unused_variables")),
                 ),
             )
             writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true)) {
@@ -142,7 +140,7 @@ class ProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
-        TokioTest.render(testModuleWriter)
+        Attribute.TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -167,20 +165,17 @@ class ProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(codegenContext.model) != null) {
-            """.make_token("00000000-0000-4000-8000-000000000000")"""
-        } else ""
         val customParams = httpRequestTestCase.vendorParams.getObjectMember("endpointParams").orNull()?.let { params ->
             writable {
                 val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
                 params.getObjectMember("builtInParams").orNull()?.members?.forEach { (name, value) ->
-                    customizations.firstNotNullOf { it.setBuiltInOnConfig(name.value, value, "builder") }(this)
+                    customizations.firstNotNullOf { it.setBuiltInOnServiceConfig(name.value, value, "builder") }(this)
                 }
             }
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder().endpoint_resolver("https://example.com")$customToken;
+            let builder = #{Config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
             let config = builder.build();
 

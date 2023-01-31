@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -147,6 +148,16 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust
+ */
+fun RustWriter.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents, *args)
+}
+
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
@@ -251,27 +262,36 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 }
 
 fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
-    docs: String? = null,
+    docString: String? = null,
     autoSuppressMissingDocs: Boolean = true,
     note: String? = null,
 ): T {
-    when (docs?.isNotBlank()) {
-        // If docs are modeled, then place them on the code generated shape
-        true -> {
-            this.docs(normalizeHtml(escape(docs)))
-            note?.also {
-                // Add a blank line between the docs and the note to visually differentiate
-                write("///")
-                docs("_Note: ${it}_")
-            }
-        }
-        // Otherwise, suppress the missing docs lint for this shape since
-        // the lack of documentation is a modeling issue rather than a codegen issue.
-        else -> if (autoSuppressMissingDocs) {
-            rust("##[allow(missing_docs)] // documentation missing in model")
-        }
+    val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
+        true -> { { docs(normalizeHtml(escape(docString))) } }
+        else -> null
     }
+    return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
+}
 
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docsWritable: (T.() -> Unit)? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    if (docsWritable != null) {
+        // If docs are modeled, then place them on the code generated shape
+
+        docsWritable(this)
+        note?.also {
+            // Add a blank line between the docs and the note to visually differentiate
+            write("///")
+            docs("_Note: ${it}_")
+        }
+    } else if (autoSuppressMissingDocs) {
+        rust("##[allow(missing_docs)] // documentation missing in model")
+    }
+    // Otherwise, suppress the missing docs lint for this shape since
+    // the lack of documentation is a modeling issue rather than a codegen issue.
     return this
 }
 
@@ -324,7 +344,7 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val note = deprecatedTrait.message.orNull()
     val since = deprecatedTrait.since.orNull()
 
-    Attribute.Custom.deprecated(note, since).render(this)
+    Attribute(deprecated(since, note)).render(this)
 
     return this
 }

@@ -6,12 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import com.moandjiezana.toml.TomlWriter
-import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -57,6 +58,7 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
                 rustBlock("pub mod python_types") {
                     rust("pub use #T;", PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
                     rust("pub use #T;", PythonServerRuntimeType.dateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.document(codegenContext.runtimeConfig).toSymbol())
                 }
             }
             else -> emptySection
@@ -73,7 +75,7 @@ class PythonExportModuleDecorator : ServerCodegenDecorator {
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         val service = codegenContext.settings.getService(codegenContext.model)
-        val serviceShapes = Walker(codegenContext.model).walkShapes(service)
+        val serviceShapes = DirectedWalker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
 }
@@ -114,6 +116,24 @@ class PyProjectTomlDecorator : ServerCodegenDecorator {
     }
 }
 
+/**
+ * Adds `pyo3/extension-module` feature to default features.
+ *
+ * To be able to run `cargo test` with PyO3 we need two things:
+ *  - Make `pyo3/extension-module` optional and default
+ *  - Run tests with `cargo test --no-default-features`
+ * See: https://pyo3.rs/main/faq#i-cant-run-cargo-test-or-i-cant-build-in-a-cargo-workspace-im-having-linker-issues-like-symbol-not-found-or-undefined-reference-to-_pyexc_systemerror
+ */
+class PyO3ExtensionModuleDecorator : ServerCodegenDecorator {
+    override val name: String = "PyO3ExtensionModuleDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        // Add `pyo3/extension-module` to default features.
+        rustCrate.mergeFeature(Feature("extension-module", true, listOf("pyo3/extension-module")))
+    }
+}
+
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -128,4 +148,6 @@ val DECORATORS = listOf(
     PythonExportModuleDecorator(),
     // Generate `pyproject.toml` for the crate.
     PyProjectTomlDecorator(),
+    // Add PyO3 extension module feature.
+    PyO3ExtensionModuleDecorator(),
 )

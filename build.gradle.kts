@@ -31,7 +31,7 @@ allprojects.forEach {
 
     it.the<JacocoPluginExtension>().apply {
         toolVersion = "0.8.8"
-        reportsDirectory.set(file("${buildDir}/jacoco-reports"))
+        reportsDirectory.set(file("$buildDir/jacoco-reports"))
     }
 }
 

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -35,26 +36,41 @@ class PythonServerStructureGenerator(
     private val shape: StructureShape,
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
 
-    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())
+    private val pyO3 = PythonServerCargoDependency.PyO3.toType()
 
     override fun renderStructure() {
         if (shape.hasTrait<ErrorTrait>()) {
-            Attribute.Custom("pyo3::pyclass(extends = pyo3::exceptions::PyException)", symbols = pyo3Symbols).render(writer)
+            Attribute(
+                writable {
+                    rustInlineTemplate(
+                        "#{pyclass}(extends = #{PyException})",
+                        "pyclass" to pyO3.resolve("pyclass"),
+                        "PyException" to pyO3.resolve("exceptions::PyException"),
+                    )
+                },
+            ).render(writer)
         } else {
-            Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
+            Attribute(pyO3.resolve("pyclass")).render(writer)
         }
         super.renderStructure()
         renderPyO3Methods()
     }
 
-    override fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
-        Attribute.Custom("pyo3(get, set)", symbols = pyo3Symbols).render(writer)
+    override fun renderStructureMember(
+        writer: RustWriter,
+        member: MemberShape,
+        memberName: String,
+        memberSymbol: Symbol,
+    ) {
+        writer.addDependency(PythonServerCargoDependency.PyO3)
+        // Above, we manually add dependency since we can't use a `RuntimeType` below
+        Attribute("pyo3(get, set)").render(writer)
         super.renderStructureMember(writer, member, memberName, memberSymbol)
     }
 
     private fun renderPyO3Methods() {
-        Attribute.Custom("allow(clippy::new_without_default)").render(writer)
-        Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
+        Attribute.AllowClippyNewWithoutDefault.render(writer)
+        Attribute(pyO3.resolve("pymethods")).render(writer)
         writer.rustTemplate(
             """
             impl $name {

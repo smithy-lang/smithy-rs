@@ -22,7 +22,7 @@ ifndef HAS_MATURIN
     $(error "maturin is not available; please install it via 'pip install maturin' or 'cargo install maturin'")
 endif
 
-# Note on `--compatibility linux`: Maturin by default uses `manylinux_x_y` but it is not supported 
+# Note on `--compatibility linux`: Maturin by default uses `manylinux_x_y` but it is not supported
 # by our current CI version (3.7.10), we can drop `--compatibility linux` when we switch to higher Python version.
 # For more detail: https://github.com/pypa/manylinux
 build-wheel: ensure-maturin codegen

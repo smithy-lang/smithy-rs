@@ -4,10 +4,9 @@
  */
 
 use std::borrow::Cow;
-use std::time::Duration;
 
-use aws_credential_types::lazy_caching::{self, LazyCachingCredentialsProvider};
 use aws_credential_types::provider::{self, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -60,7 +59,9 @@ pub async fn default_provider() -> impl ProvideCredentials {
 ///     .build();
 /// ```
 #[derive(Debug)]
-pub struct DefaultCredentialsChain(LazyCachingCredentialsProvider);
+pub struct DefaultCredentialsChain {
+    provider_chain: CredentialsProviderChain,
+}
 
 impl DefaultCredentialsChain {
     /// Builder for `DefaultCredentialsChain`
@@ -69,7 +70,7 @@ impl DefaultCredentialsChain {
     }
 
     async fn credentials(&self) -> provider::Result {
-        self.0
+        self.provider_chain
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
             .await
@@ -83,6 +84,10 @@ impl ProvideCredentials for DefaultCredentialsChain {
     {
         future::ProvideCredentials::new(self.credentials())
     }
+
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        self.provider_chain.fallback_on_interrupt()
+    }
 }
 
 /// Builder for [`DefaultCredentialsChain`](DefaultCredentialsChain)
@@ -92,7 +97,6 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: lazy_caching::Builder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -112,71 +116,6 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
         self.region_override = region.map(|provider| Box::new(provider) as _);
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn load_timeout(mut self, timeout: Duration) -> Self {
-        self.set_load_timeout(Some(timeout));
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_load_timeout(timeout);
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
-        self.set_buffer_time(Some(buffer_time));
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_buffer_time(buffer_time);
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
-        self.set_default_credential_expiration(Some(duration));
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn set_default_credential_expiration(&mut self, duration: Option<Duration>) -> &mut Self {
-        self.credential_cache
-            .set_default_credential_expiration(duration);
         self
     }
 
@@ -252,12 +191,8 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self
-            .credential_cache
-            .configure(conf.sleep(), conf.time_source())
-            .load(provider_chain);
 
-        DefaultCredentialsChain(cached_provider.build())
+        DefaultCredentialsChain { provider_chain }
     }
 }
 
@@ -266,12 +201,9 @@ mod test {
     use tracing_test::traced_test;
 
     use aws_credential_types::provider::ProvideCredentials;
-    use aws_smithy_types::retry::{RetryConfig, RetryMode};
-    use aws_types::os_shim_internal::{Env, Fs};
 
     use crate::default_provider::credentials::DefaultCredentialsChain;
-    use crate::default_provider::retry_config;
-    use crate::provider_config::ProviderConfig;
+
     use crate::test_case::TestEnvironment;
 
     /// Test generation macro
@@ -373,6 +305,7 @@ mod test {
     #[traced_test]
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
+        use crate::provider_config::ProviderConfig;
         use aws_credential_types::provider::error::CredentialsError;
         use aws_credential_types::time_source::TimeSource;
         use aws_smithy_async::rt::sleep::TokioSleep;
@@ -397,121 +330,5 @@ mod test {
             "should be NotLoaded: {:?}",
             creds
         )
-    }
-
-    #[tokio::test]
-    async fn test_returns_default_retry_config_from_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard();
-
-        assert_eq!(actual_retry_config, expected_retry_config);
-        // This is redundant but it's really important to make sure that
-        // we're setting these exact values by default so we check twice
-        assert_eq!(actual_retry_config.max_attempts(), 3);
-        assert_eq!(actual_retry_config.mode(), RetryMode::Standard);
-    }
-
-    #[tokio::test]
-    async fn test_no_retry_config_in_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard();
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    async fn test_creation_of_retry_config_from_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): standard is the default mode;
-        // this test would be better if it was setting it to adaptive mode
-        // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = 1
-retry_mode = standard
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard().with_max_attempts(1);
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    async fn test_env_retry_config_takes_precedence_over_profile_retry_config() {
-        let env = Env::from_slice(&[
-            ("AWS_CONFIG_FILE", "config"),
-            ("AWS_MAX_ATTEMPTS", "42"),
-            ("AWS_RETRY_MODE", "standard"),
-        ]);
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247) standard is the default mode;
-        // this test would be better if it was setting it to adaptive mode
-        // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = 88
-retry_mode = standard
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard().with_max_attempts(42);
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    #[should_panic = "failed to parse max attempts set by aws profile: invalid digit found in string"]
-    async fn test_invalid_profile_retry_config_panics() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = potato
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let _ = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
     }
 }

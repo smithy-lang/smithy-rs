@@ -10,8 +10,11 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.ExpectedEndpoint
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -20,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -31,8 +34,13 @@ internal class EndpointTestGenerator(
     private val paramsType: RuntimeType,
     private val resolverType: RuntimeType,
     private val params: Parameters,
-    runtimeConfig: RuntimeConfig,
+    private val endpointCustomizations: List<EndpointCustomization>,
+    codegenContext: CodegenContext,
+
 ) {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val serviceShape = codegenContext.serviceShape
+    private val model = codegenContext.model
     private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
         "Endpoint" to types.smithyEndpoint,
@@ -40,52 +48,64 @@ internal class EndpointTestGenerator(
         "Error" to types.resolveEndpointError,
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
+        "capture_request" to CargoDependency.smithyClient(runtimeConfig)
+            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
     )
+
+    private val instantiator = clientInstantiator(codegenContext)
+
+    private fun EndpointTestCase.docs(): Writable {
+        val self = this
+        return writable { docs(self.documentation.orElse("no docs")) }
+    }
+
+    private fun generateBaseTest(testCase: EndpointTestCase, id: Int): Writable = writable {
+        rustTemplate(
+            """
+            #{docs:W}
+            ##[test]
+            fn test_$id() {
+                use #{ResolveEndpoint};
+                let params = #{params:W};
+                let resolver = #{resolver}::new();
+                let endpoint = resolver.resolve_endpoint(&params);
+                #{assertion:W}
+            }
+            """,
+            *codegenScope,
+            "docs" to testCase.docs(),
+            "params" to params(testCase),
+            "resolver" to resolverType,
+            "assertion" to writable {
+                testCase.expect.endpoint.ifPresent { endpoint ->
+                    rustTemplate(
+                        """
+                        let endpoint = endpoint.expect("Expected valid endpoint: ${escape(endpoint.url)}");
+                        assert_eq!(endpoint, #{expected:W});
+                        """,
+                        *codegenScope, "expected" to generateEndpoint(endpoint),
+                    )
+                }
+                testCase.expect.error.ifPresent { error ->
+                    val expectedError =
+                        escape("expected error: $error [${testCase.documentation.orNull() ?: "no docs"}]")
+                    rustTemplate(
+                        """
+                        let error = endpoint.expect_err(${expectedError.dq()});
+                        assert_eq!(format!("{}", error), ${escape(error).dq()})
+                        """,
+                        *codegenScope,
+                    )
+                }
+            },
+        )
+    }
 
     fun generate(): Writable = writable {
         var id = 0
         testCases.forEach { testCase ->
             id += 1
-
-            rustTemplate(
-                """
-                #{docs:W}
-                ##[test]
-                fn test_$id() {
-                    use #{ResolveEndpoint};
-                    let params = #{params:W};
-                    let resolver = #{resolver}::new();
-                    let endpoint = resolver.resolve_endpoint(&params);
-                    #{assertion:W}
-                }
-                """,
-                *codegenScope,
-                "docs" to writable { docs(testCase.documentation.orNull() ?: "no docs") },
-                "params" to params(testCase),
-                "resolver" to resolverType,
-                "assertion" to writable {
-                    testCase.expect.endpoint.ifPresent { endpoint ->
-                        rustTemplate(
-                            """
-                            let endpoint = endpoint.expect("Expected valid endpoint: ${escape(endpoint.url)}");
-                            assert_eq!(endpoint, #{expected:W});
-                            """,
-                            *codegenScope, "expected" to generateEndpoint(endpoint),
-                        )
-                    }
-                    testCase.expect.error.ifPresent { error ->
-                        val expectedError =
-                            escape("expected error: $error [${testCase.documentation.orNull() ?: "no docs"}]")
-                        rustTemplate(
-                            """
-                            let error = endpoint.expect_err(${expectedError.dq()});
-                            assert_eq!(format!("{}", error), ${escape(error).dq()})
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                },
-            )
+            generateBaseTest(testCase, id)(this)
         }
     }
 
@@ -118,6 +138,7 @@ internal class EndpointTestGenerator(
                         }.join(","),
                     )
                 }
+
                 is Value.Integer -> rust(value.expectInteger().toString())
 
                 is Value.Record ->
@@ -140,6 +161,7 @@ internal class EndpointTestGenerator(
                         }
                         rustTemplate("out")
                     }
+
                 else -> PANIC("unexpected type: $value")
             }
         }

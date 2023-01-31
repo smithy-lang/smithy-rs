@@ -122,6 +122,7 @@ pub mod profile;
 pub mod provider_config;
 pub mod retry;
 pub mod sso;
+pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
@@ -149,16 +150,20 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
 mod loader {
     use std::sync::Arc;
 
+    use aws_credential_types::cache::CredentialsCache;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
+    use aws_types::docs_for;
     use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
     use crate::connector::default_connector;
+    use crate::default_provider::use_dual_stack::use_dual_stack_provider;
+    use crate::default_provider::use_fips::use_fips_provider;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::profile::profile_file::ProfileFiles;
@@ -173,6 +178,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        credentials_cache: Option<CredentialsCache>,
         credentials_provider: Option<SharedCredentialsProvider>,
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
         endpoint_url: Option<String>,
@@ -184,6 +190,8 @@ mod loader {
         http_connector: Option<HttpConnector>,
         profile_name_override: Option<String>,
         profile_files_override: Option<ProfileFiles>,
+        use_fips: Option<bool>,
+        use_dual_stack: Option<bool>,
     }
 
     impl ConfigLoader {
@@ -289,6 +297,25 @@ mod loader {
         /// ```
         pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
             self.http_connector = Some(http_connector.into());
+            self
+        }
+
+        /// Override the credentials cache used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
+        /// # Examples
+        ///
+        /// Override the credentials cache but load the default value for region:
+        /// ```no_run
+        /// # use aws_credential_types::cache::CredentialsCache;
+        /// # async fn create_config() {
+        /// let config = aws_config::from_env()
+        ///     .credentials_cache(CredentialsCache::lazy())
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn credentials_cache(mut self, credentials_cache: CredentialsCache) -> Self {
+            self.credentials_cache = Some(credentials_cache);
             self
         }
 
@@ -440,6 +467,18 @@ mod loader {
             self
         }
 
+        #[doc = docs_for!(use_fips)]
+        pub fn use_fips(mut self, use_fips: bool) -> Self {
+            self.use_fips = Some(use_fips);
+            self
+        }
+
+        #[doc = docs_for!(use_dual_stack)]
+        pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
+            self.use_dual_stack = Some(use_dual_stack);
+            self
+        }
+
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
@@ -506,7 +545,9 @@ mod loader {
                     .await
             };
 
-            let sleep_impl = if self.sleep.is_none() {
+            let sleep_impl = if self.sleep.is_some() {
+                self.sleep
+            } else {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
                         "An implementation of AsyncSleep was requested by calling default_async_sleep \
@@ -517,8 +558,6 @@ mod loader {
                     );
                 }
                 default_async_sleep()
-            } else {
-                self.sleep
             };
 
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
@@ -530,13 +569,29 @@ mod loader {
                     .await
             };
 
-            let http_connector = if let Some(http_connector) = self.http_connector {
-                http_connector
-            } else {
+            let http_connector = self.http_connector.unwrap_or_else(|| {
                 HttpConnector::Prebuilt(default_connector(
                     &ConnectorSettings::from_timeout_config(&timeout_config),
                     sleep_impl.clone(),
                 ))
+            });
+
+            let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
+                let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+                builder.set_sleep(conf.sleep());
+                builder.into_credentials_cache()
+            });
+
+            let use_fips = if let Some(use_fips) = self.use_fips {
+                Some(use_fips)
+            } else {
+                use_fips_provider(&conf).await
+            };
+
+            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
+                Some(use_dual_stack)
+            } else {
+                use_dual_stack_provider(&conf).await
             };
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {
@@ -553,6 +608,7 @@ mod loader {
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
+                .credentials_cache(credentials_cache)
                 .credentials_provider(credentials_provider)
                 .http_connector(http_connector);
 
@@ -560,6 +616,8 @@ mod loader {
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.set_endpoint_url(self.endpoint_url);
+            builder.set_use_fips(use_fips);
+            builder.set_use_dual_stack(use_dual_stack);
             builder.build()
         }
     }
@@ -574,9 +632,10 @@ mod loader {
         use aws_types::os_shim_internal::{Env, Fs};
         use tracing_test::traced_test;
 
-        use crate::from_env;
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::provider_config::ProviderConfig;
+        use crate::test_case::{no_traffic_connector, InstantSleep};
+        use crate::{from_env, ConfigLoader};
 
         #[tokio::test]
         #[traced_test]
@@ -633,6 +692,29 @@ mod loader {
                     )),
                 }
             });
+        }
+
+        fn base_conf() -> ConfigLoader {
+            from_env().configure(
+                ProviderConfig::empty()
+                    .with_sleep(InstantSleep)
+                    .with_http_connector(no_traffic_connector()),
+            )
+        }
+
+        #[tokio::test]
+        async fn load_fips() {
+            let conf = base_conf().use_fips(true).load().await;
+            assert_eq!(conf.use_fips(), Some(true));
+        }
+
+        #[tokio::test]
+        async fn load_dual_stack() {
+            let conf = base_conf().use_dual_stack(false).load().await;
+            assert_eq!(conf.use_dual_stack(), Some(false));
+
+            let conf = base_conf().load().await;
+            assert_eq!(conf.use_dual_stack(), None);
         }
     }
 }
