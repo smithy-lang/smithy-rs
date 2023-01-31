@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow runs CI and the PR Bot on pull requests.
+# This workflow runs CI and the PR Bot on pull requests that are not from forked repositories.
 
 name: CI
 on:
@@ -18,7 +18,11 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
     - uses: actions/checkout@v3
       with:
@@ -29,27 +33,13 @@ jobs:
       env:
         DOCKER_BUILDKIT: 1
       run: ./smithy-rs/.github/scripts/acquire-build-image
-    - name: Upload base image
-      # Upload as an artifact if the PR is from a fork since forks can't access secrets
-      if: ${{ github.event.pull_request.head.repo.full_name != 'awslabs/smithy-rs' }}
-      uses: actions/upload-artifact@v3
-      with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v1-node16
-      # Uploading in PRs is an optimization that reduces image rebuilds, and it won't work
-      # for PRs from forks since secrets aren't available. Thus, skip this if from a fork.
-      if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Upload image
-      # Uploading in PRs is an optimization that reduces image rebuilds, and it won't work
-      # for PRs from forks since secrets aren't available. Thus, skip this if from a fork.
-      if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
       run: |
         IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
@@ -59,6 +49,7 @@ jobs:
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
     needs: acquire-base-image
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
@@ -66,9 +57,8 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     needs: acquire-base-image
-    # Only run this job on pull requests (not directly on main)
-    if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
     with:
       issue_number: ${{ github.event.number }}
