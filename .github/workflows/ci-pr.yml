@@ -12,6 +12,9 @@ concurrency:
   group: ci-yaml-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
+
 jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
