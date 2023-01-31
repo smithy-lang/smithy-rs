@@ -2,13 +2,14 @@ ci-build
 ========
 
 This directory includes everything to build the build/release/CI Docker image.
-- `../Dockerfile`: Dockerfile used to create the base build image. Needs to be in `tools/` root so that it
+- `Dockerfile`: Dockerfile used to create the base build image. Needs to be in `tools/ci-build` so that it
   can copy all the tools source code into the image at build time.
 - `add-local-user.dockerfile`: Creates a user in the build image with the host's user ID
 - `build.docker-compose.yml`: Docker Compose file for using the build image
 - `ci-action`: Script for running CI actions inside the Docker build image
 - `ci-create-workspace`: Used by `ci-action`, but can be run manually to create a one-off workspace for debugging
 - `scripts/`: CI scripts that get copied into the build image
+- Other directories include various tools written in Rust for build/release/CI
 
 There are three spaces you need to conceptualize for testing this locally:
 - **Origin:** The original `smithy-rs` where you're iterating on CI scripts.

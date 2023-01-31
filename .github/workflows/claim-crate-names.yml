@@ -72,7 +72,7 @@ jobs:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path tools/publisher
+        cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully
         publisher --version
         publisher claim-crate-names -y
