@@ -15,7 +15,6 @@ use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
-use aws_smithy_types::auth::AuthApiKey;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -54,7 +53,6 @@ pub struct SdkConfig {
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     endpoint_url: Option<String>,
-    api_key: Option<AuthApiKey>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -76,7 +74,6 @@ pub struct Builder {
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     endpoint_url: Option<String>,
-    api_key: Option<AuthApiKey>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -182,23 +179,6 @@ impl Builder {
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     ) -> &mut Self {
         self.endpoint_resolver = endpoint_resolver;
-        self
-    }
-
-    /// Set the api key to use when making requests.
-    /// # Examples
-    /// ```
-    /// use aws_types::SdkConfig;
-    /// let config = SdkConfig::builder().api_key("some-api-key").build();
-    /// ```
-    pub fn api_key(mut self, api_key: impl Into<AuthApiKey>) -> Self {
-        self.set_api_key(Some(api_key.into()));
-        self
-    }
-
-    /// Set the api key to use when making requests.
-    pub fn set_api_key(&mut self, api_key: Option<AuthApiKey>) -> &mut Self {
-        self.api_key = api_key;
         self
     }
 
@@ -579,7 +559,6 @@ impl Builder {
             region: self.region,
             endpoint_resolver: self.endpoint_resolver,
             endpoint_url: self.endpoint_url,
-            api_key: self.api_key,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
@@ -604,11 +583,6 @@ impl SdkConfig {
     /// Configured endpoint URL
     pub fn endpoint_url(&self) -> Option<&str> {
         self.endpoint_url.as_deref()
-    }
-
-    /// Configured API key
-    pub fn api_key(&self) -> Option<&AuthApiKey> {
-        self.api_key.as_ref()
     }
 
     /// Configured retry config
