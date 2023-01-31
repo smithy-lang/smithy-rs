@@ -52,7 +52,7 @@ runs:
       # or from ECR. We disable building the image from scratch so that any mistakes in the CI
       # configuration won't cause each individual action to build its own image, which would
       # drastically increase the total CI time. Fail fast!
-      ALLOW_LOCAL_BUILD=false ./smithy-rs/tools/ci-build/acquire-build-image
+      ALLOW_LOCAL_BUILD=false ./smithy-rs/.github/scripts/acquire-build-image
     # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash

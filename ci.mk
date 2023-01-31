@@ -14,7 +14,7 @@ CI_ACTION=$(CI_BUILD)/ci-action
 
 .PHONY: acquire-build-image
 acquire-build-image:
-	$(CI_BUILD)/acquire-build-image
+	./smithy-rs/.github/scripts/acquire-build-image
 
 .PHONY: check-aws-config
 check-aws-config: generate-aws-sdk-smoketest
