@@ -3,12 +3,17 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
+set -e
 
 # Split on the dots
 version_array=( ${SEMANTIC_VERSION//./ } )
 major=${version_array[0]}
 minor=${version_array[1]}
 patch=${version_array[2]}
+if [[ "${major}" == "" || "${minor}" == "" || "${patch}" == "" ]]; then
+  echo "'${SEMANTIC_VERSION}' is not a valid semver tag"
+  exit 1
+fi
 if [[ $major == 0 ]]; then
   branch_name="smithy-rs-release-${major}.${minor}.x"
   if [[ $patch == 0 ]]; then
