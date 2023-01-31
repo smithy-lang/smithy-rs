@@ -50,6 +50,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
         ),
         CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService", "minimal_constraints_without_public_constrained_types",
+            imports = listOf("$commonModels/minimal-constraints.smithy"),
+            extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        ),
+        CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
             "constraints",
             imports = listOf("$commonModels/constraints.smithy"),
