@@ -22,8 +22,7 @@ struct Inner {
 impl Debug for AuthApiKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut auth_api_key = f.debug_struct("AuthApiKey");
-        auth_api_key.field("api_key", &"** redacted **");
-        auth_api_key.finish()
+        auth_api_key.field("api_key", &"** redacted **").finish()
     }
 }
 
@@ -43,9 +42,7 @@ impl AuthApiKey {
 
 impl From<&str> for AuthApiKey {
     fn from(api_key: &str) -> Self {
-        Self(Arc::new(Inner {
-            api_key: Zeroizing::new(api_key.to_owned()),
-        }))
+        Self::from(api_key.to_owned())
     }
 }
 
