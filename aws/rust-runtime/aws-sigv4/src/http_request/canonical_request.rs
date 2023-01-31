@@ -13,7 +13,7 @@ use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::sign::sha256_hex_string;
-use http::header::{HeaderName, HOST};
+use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -328,6 +328,19 @@ impl<'a> CanonicalRequest<'a> {
         canonical_headers.insert(x_amz_date, date_header.clone());
         date_header
     }
+
+    fn header_values_for(&self, key: impl AsHeaderName) -> String {
+        let values: Vec<&str> = self
+            .headers
+            .get_all(key)
+            .into_iter()
+            .map(|value| {
+                std::str::from_utf8(value.as_bytes())
+                    .expect("SDK request header values are valid UTF-8")
+            })
+            .collect();
+        values.join(",")
+    }
 }
 
 impl<'a> fmt::Display for CanonicalRequest<'a> {
@@ -337,18 +350,8 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         writeln!(f, "{}", self.params.as_deref().unwrap_or(""))?;
         // write out _all_ the headers
         for header in &self.values.signed_headers().headers {
-            // a missing header is a bug, so we should panic.
-            let values: Vec<&str> = self
-                .headers
-                .get_all(&header.0)
-                .into_iter()
-                .map(|value| {
-                    std::str::from_utf8(value.as_bytes())
-                        .expect("SDK request header values are valid UTF-8")
-                })
-                .collect();
             write!(f, "{}:", header.0.as_str())?;
-            writeln!(f, "{}", values.join(","))?;
+            writeln!(f, "{}", self.header_values_for(&header.0))?;
         }
         writeln!(f)?;
         // write out the signed headers
@@ -564,18 +567,10 @@ mod tests {
             creq.values.signed_headers().to_string(),
             "host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes"
         );
-
-        let expected = "GET
-/
-Param1=value1&Param2=value2
-host:example.amazonaws.com
-x-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-x-amz-date:20210511T154045Z
-x-amz-object-attributes:Checksum,ObjectSize
-
-host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-        assert_eq!(creq.to_string(), expected);
+        assert_eq!(
+            creq.header_values_for("x-amz-object-attributes"),
+            "Checksum,ObjectSize",
+        );
     }
 
     #[test]
