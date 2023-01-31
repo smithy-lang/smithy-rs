@@ -155,5 +155,5 @@ ENV PATH=/opt/cargo/bin:$PATH \
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 WORKDIR /home/build
-COPY scripts/sanity-test /home/build/sanity-test
+COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

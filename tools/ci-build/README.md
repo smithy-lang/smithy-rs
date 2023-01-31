@@ -8,7 +8,7 @@ This directory includes everything to build the build/release/CI Docker image.
 - `build.docker-compose.yml`: Docker Compose file for using the build image
 - `ci-action`: Script for running CI actions inside the Docker build image
 - `ci-create-workspace`: Used by `ci-action`, but can be run manually to create a one-off workspace for debugging
-- `scripts/`: CI scripts that get copied into the build image
+- `sanity-test`: Script that sanity tests the Docker build image
 - Other directories include various tools written in Rust for build/release/CI
 
 There are three spaces you need to conceptualize for testing this locally:
@@ -31,7 +31,7 @@ Then you can test CI against that starting space by running:
 $ORIGIN_PATH/tools/ci-build/ci-action <action> [args...]
 ```
 
-The action names are the names of the scripts in `scripts/`, and `[args...]` get forwarded to those scripts.
+The action names are the names of the scripts in `tools/ci-scripts/`, and `[args...]` get forwarded to those scripts.
 
 __Note:__ `ci-action` does not rebuild the build image, so if you modified a script,
 you need to run `./acquire-build-image` from the origin `.github/scripts` path.

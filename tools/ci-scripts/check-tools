@@ -32,4 +32,4 @@ test_tool "tools/ci-build/smithy-rs-tool-common" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-cdk/canary-runner" "${RUST_STABLE_VERSION}"
 
 echo -e "${C_YELLOW}Running additional per-crate checks...${C_RESET}"
-./tools/scripts/additional-per-crate-checks.sh ./tools/
+./tools/ci-scripts/additional-per-crate-checks.sh ./tools/

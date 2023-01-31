@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         actions:
         - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
@@ -100,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-config
         - action: check-aws-sdk-canary

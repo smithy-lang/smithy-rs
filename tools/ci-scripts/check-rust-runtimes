@@ -45,5 +45,5 @@ do
     popd &>/dev/null
 
     echo -e "${C_YELLOW}Running additional per-crate checks for ${runtime_path}...${C_RESET}"
-    ./tools/additional-per-crate-checks.sh "${runtime_path}"
+    ./tools/ci-scripts/additional-per-crate-checks.sh "${runtime_path}"
 done
