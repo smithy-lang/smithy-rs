@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServic
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.RequiredMemberTransform
 import java.util.logging.Logger
 
 val DefaultServerPublicModules = setOf(
@@ -111,6 +112,7 @@ open class ServerCodegenVisitor(
         model
             // Flattens mixins out of the model and removes them from the model
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
+            .let (RequiredMemberTransform::transform)
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary

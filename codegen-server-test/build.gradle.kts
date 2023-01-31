@@ -40,6 +40,8 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
         CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs", imports = listOf("$commonModels/naming-obstacle-course-structs.smithy")),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        CodegenTest("com.amazonaws.constraints#ConstraintsService", "minimal_constraints_without_public_constrained_types",
+            imports = listOf("$commonModels/minimal-constraints.smithy")),
         CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
         CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras", imports = listOf("$commonModels/rest-json-extras.smithy")),
         CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
