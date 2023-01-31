@@ -22,4 +22,7 @@ object PythonServerRuntimeType {
 
     fun dateTime(runtimeConfig: RuntimeConfig) =
         PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::DateTime")
+
+    fun document(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::Document")
 }
