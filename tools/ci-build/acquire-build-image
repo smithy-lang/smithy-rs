@@ -172,11 +172,11 @@ def decrypt_and_login(secret):
     if token is None:
         print('no passphrase')
         return
-    (code, password, err) = (get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase {token} --output -", check=False,
+    (code, password, err) = (get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase '{token}' --output -", check=False,
                          input=decoded))
     if code != 0:
         print(err)
-        return
+        raise
     (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
     print(output)
 
