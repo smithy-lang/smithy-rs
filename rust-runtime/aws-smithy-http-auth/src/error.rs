@@ -11,6 +11,7 @@ use std::fmt::Debug;
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum AuthErrorKind {
     InvalidLocation,
+    MissingRequiredField(&'static str),
     SchemeNotAllowed,
 }
 
@@ -25,6 +26,7 @@ impl std::fmt::Display for AuthError {
         use AuthErrorKind::*;
         match &self.kind {
             InvalidLocation => write!(f, "invalid location: expected `header` or `query`"),
+            MissingRequiredField(field) => write!(f, "missing required field: {}", field),
             SchemeNotAllowed => write!(
                 f,
                 "scheme only allowed when it is set into the `Authorization` header"
