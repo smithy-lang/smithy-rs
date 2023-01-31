@@ -16,46 +16,41 @@ jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
-  acquire-base-image-with-login:
+  save-docker-login-token:
+    outputs:
+      docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
       id-token: write
       contents: read
     continue-on-error: true
-    name: Acquire Base Image (with ECR login)
+    name: Save a docker login token
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-      with:
-        path: smithy-rs
-        fetch-depth: 0
-    - name: Acquire credentials (optional)
-      continue-on-error: true
+    - name: Attempt to load a docker login password
       uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
-    - name: Login to ECR
-      continue-on-error: true
+    - name: Save the docker login password to the output
+      id: set-token
       run: |
-        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-    - name: Acquire base image
-      id: acquire
-      env:
-        DOCKER_BUILDKIT: 1
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
-    - name: Upload base image
-      uses: actions/upload-artifact@v3
-      with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
+        ENCRYPTED_PAYLOAD=$(
+          gpg --symmetric --batch --passphrase "(AWS_REGION=us-east-1 aws secretsmanager get-secret-value --secret-id github-pgp-key --query SecretString --output text)" --output - <(echo "not-a-real-token") | base64 -w0
+        )
+        echo "payload: $ENCRYPTED_PAYLOAD"
+        echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
+
 
   acquire-base-image:
     name: Acquire Base Image
-    needs: acquire-base-image-with-login
+    needs: save-docker-login-token
     runs-on: ubuntu-latest
+    env:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
     steps:
+    - name: debug token
+      run: echo $ENCRYPTED_DOCKER_PASSWORD
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
