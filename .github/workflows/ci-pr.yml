@@ -41,7 +41,7 @@ jobs:
         aws-region: us-west-2
     - name: Upload image
       run: |
-        IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
+        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
         docker push "${{ env.ecr_repository }}:main"
