@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
+import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
@@ -150,6 +151,11 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
         .filter { operationShape ->
             // Walk the shapes reachable via this operation input.
             walker.walkShapes(operationShape.inputShape(model))
+                // All @httpLabel members MUST be @required.
+                // If they are not present though, the request fails to be routed - it doesn't return a validation
+                // exception to the caller.
+                // We should not force users to add a validation exception if this is their only usage of @required.
+                .filterNot { it.isOnlyRequired() && it.hasTrait<HttpLabelTrait>() }
                 .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
         }
         .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }

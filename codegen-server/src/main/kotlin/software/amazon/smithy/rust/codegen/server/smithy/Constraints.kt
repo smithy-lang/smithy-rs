@@ -52,6 +52,16 @@ val allConstraintTraits = setOf(
     RequiredTrait::class.java,
 )
 
+val allConstraintTraitsWithoutRequired = setOf(
+    LengthTrait::class.java,
+    PatternTrait::class.java,
+    RangeTrait::class.java,
+    UniqueItemsTrait::class.java,
+    EnumTrait::class.java,
+)
+fun Shape.isOnlyRequired() = this.hasTrait<RequiredTrait>() && allConstraintTraitsWithoutRequired.none(this::hasTrait)
+
+
 val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
