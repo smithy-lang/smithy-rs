@@ -117,42 +117,10 @@ jobs:
           fi
           echo "commit_sha=$(git rev-parse --verify --short HEAD)" > $GITHUB_OUTPUT
 
-  # We'll need to build a base image again if the previous job upgraded the gradle.properties file.
-  # This job will be a no-op if the version in gradle.properties had already been upgraded.
-  acquire-base-image-2:
-    name: Acquire Base Image
-    runs-on: ubuntu-latest
-    needs:
-      - upgrade-gradle-properties
-    outputs:
-      commit_sha: ${{ steps.output.outputs.commit_sha }}
-      release_branch: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          path: smithy-rs
-          # The ref for the commit after the gradle.properties upgrade
-          ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
-          fetch-depth: 0
-      - name: Acquire base image
-        id: acquire
-        run: ./smithy-rs/tools/ci-build/acquire-build-image
-      - name: Upload base image
-        uses: actions/upload-artifact@v3
-        with:
-          name: smithy-rs-base-image
-          path: smithy-rs-base-image
-          retention-days: 1
-      - name: Persist the SHA we used to build the Docker image
-        id: output
-        shell: bash
-        run: |
-          echo "commit_sha=$(git rev-parse --verify --short HEAD)" > $GITHUB_OUTPUT
-
   release:
     name: Release
     needs:
-    - acquire-base-image-2
+    - upgrade-gradle-properties
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
@@ -162,7 +130,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
-        ref: ${{ needs.acquire-base-image-2.outputs.release_branch }}
+        ref: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
