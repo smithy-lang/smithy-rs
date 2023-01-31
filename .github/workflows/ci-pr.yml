@@ -68,6 +68,9 @@ jobs:
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
     needs: acquire-base-image
+    env:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
