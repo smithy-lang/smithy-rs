@@ -40,7 +40,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v1-node16
       # Uploading in PRs is an optimization that reduces image rebuilds, and it won't work
       # for PRs from forks since secrets aren't available. Thus, skip this if from a fork.
-      if: ${{ github.event.pull_request.organization == "awslabs" }}
+      if: ${{ github.event.pull_request.organization == 'awslabs' }}
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -48,7 +48,7 @@ jobs:
     - name: Upload image
       # Uploading in PRs is an optimization that reduces image rebuilds, and it won't work
       # for PRs from forks since secrets aren't available. Thus, skip this if from a fork.
-      if: ${{ github.event.pull_request.organization == "awslabs" }}
+      if: ${{ github.event.pull_request.organization == 'awslabs' }}
       run: |
         IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
