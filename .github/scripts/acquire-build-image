@@ -116,11 +116,7 @@ class Shell:
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
     def docker_build_base_image(self, image_tag, path):
-        additional_flags = ""
-        # Squash the layers when acquiring in CI
-        if os.getenv("GITHUB_ACTIONS"):
-            additional_flags = "--squash"
-        run(f"docker build {additional_flags} -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
+        run(f"docker build -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
 
     # Builds the local build image
     def docker_build_build_image(self, user_id, docker_image_path):
