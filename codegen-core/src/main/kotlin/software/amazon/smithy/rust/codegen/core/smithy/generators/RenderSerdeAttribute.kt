@@ -1,7 +1,13 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 
@@ -13,7 +19,6 @@ public object RenderSerdeAttribute {
     }
 
     public fun writeAttributes(writer: RustWriter) {
-        writer.write("##[cfg_attr(aws_sdk_unstable, feature = \"serde-serialize\", serde::Serialize)]")
-        writer.write("##[cfg_attr(aws_sdk_unstable, feature = \"serde-deserialize\", serde::Deserialize)]")
+        Attribute.UnstableSerdeDerive(writer)
     }
 }
