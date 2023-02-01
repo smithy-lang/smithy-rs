@@ -119,7 +119,7 @@ jobs:
             echo "Pushing upgraded gradle.properties commit..."
             git push origin
           fi
-          echo "commit_sha=$(git rev-parse --verify --short HEAD)" > $GITHUB_OUTPUT
+          echo "commit_sha=$(git rev-parse --short HEAD)" > $GITHUB_OUTPUT
 
   release:
     name: Release
