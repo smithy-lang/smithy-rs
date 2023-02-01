@@ -47,7 +47,7 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
@@ -68,58 +68,58 @@ jobs:
   get-or-create-release-branch:
     name: Get or create a release branch
     needs:
-      - release-ci
+    - release-ci
     outputs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.commit_sha }}
-          token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-      - name: Get or create release branch
-        id: branch-push
-        shell: bash
-        env:
-          SEMANTIC_VERSION: ${{ inputs.semantic_version }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -e
-          
-          ./.github/scripts/get-or-create-release-branch.sh output
-          cat output > $GITHUB_OUTPUT
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.commit_sha }}
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Get or create release branch
+      id: branch-push
+      shell: bash
+      env:
+        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -e
+
+        ./.github/scripts/get-or-create-release-branch.sh output
+        cat output > $GITHUB_OUTPUT
 
   upgrade-gradle-properties:
     name: Upgrade gradle.properties
     if: inputs.dry_run == false
     needs:
-      - get-or-create-release-branch
+    - get-or-create-release-branch
     outputs:
       commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.release_branch }}
-          token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-      - name: Upgrade gradle.properties
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: upgrade-gradle-smithy-rs-release ${{ inputs.semantic_version }}
-      - name: Push gradle.properties changes
-        id: gradle-push
-        shell: bash
-        env:
-          SEMANTIC_VERSION: ${{ inputs.semantic_version }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          if [[ git diff-index --quiet HEAD ]]; then
-            # The file was actually changed, we need to commit and push the changes
-            git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-            echo "Pushing upgraded gradle.properties commit..."
-            git push origin
-          fi
-          echo "commit_sha=$(git rev-parse --short HEAD)" > $GITHUB_OUTPUT
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.release_branch }}
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Upgrade gradle.properties
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: upgrade-gradle-smithy-rs-release ${{ inputs.semantic_version }}
+    - name: Push gradle.properties changes
+      id: gradle-push
+      shell: bash
+      env:
+        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        if [[ git diff-index --quiet HEAD ]]; then
+          # The file was actually changed, we need to commit and push the changes
+          git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
+          echo "Pushing upgraded gradle.properties commit..."
+          git push origin
+        fi
+        echo "commit_sha=$(git rev-parse --short HEAD)" > $GITHUB_OUTPUT
 
   release:
     name: Release
@@ -167,7 +167,7 @@ jobs:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path "$(realpath ../smithy-rs/tools/publisher)"
+        cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version
 
@@ -187,26 +187,26 @@ jobs:
     name: Remove released entries from CHANGELOG.next.toml on the main branch
     if: inputs.dry_run == false && needs.get-or-create-release-branch.outputs.new_release_series == true
     needs:
-      - get-or-create-release-branch
-      - release
+    - get-or-create-release-branch
+    - release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout smithy-rs
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.commit_sha }}
-          token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-      - name: Empty CHANGELOG.next.toml
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: generate-new-changelog-next-toml
-      - name: Push smithy-rs changes
-        shell: bash
-        run: |
-          # This will fail if other commits have been pushed to `main` after `commit_sha`
-          # In particular, this will ALWAYS fail if you are creating a new release series from
-          # a commit that is not the current tip of `main`.
-          # We can build more refined automation to handle this case in the future - until then, it'll require 
-          # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
-          git commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
-          git push origin main
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.commit_sha }}
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Empty CHANGELOG.next.toml
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-new-changelog-next-toml
+    - name: Push smithy-rs changes
+      shell: bash
+      run: |
+        # This will fail if other commits have been pushed to `main` after `commit_sha`
+        # In particular, this will ALWAYS fail if you are creating a new release series from
+        # a commit that is not the current tip of `main`.
+        # We can build more refined automation to handle this case in the future - until then, it'll require
+        # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
+        git commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
+        git push origin main

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 // All "TODOs" must include (...) that gives them context
 pub(crate) struct TodosHaveContext;
 
-const IGNORE_DIRS: &[&str] = &["tools/sdk-lints/src/todos.rs"];
+const IGNORE_DIRS: &[&str] = &["tools/ci-build/sdk-lints/src/todos.rs"];
 
 impl Lint for TodosHaveContext {
     fn name(&self) -> &str {
