@@ -14,7 +14,7 @@ if [[ $# -lt 1 ]]; then
   echo
   echo "Runs the given action (or opens a shell) in the build Docker container."
   echo "The build image must already be acquired with 'acquire-build-image' before this is run."
-  echo "The <action> is the name of a script in 'scripts', and the [args...] will be forwarded to it."
+  echo "The <action> is the name of a script in 'tools/ci-scripts', and the [args...] will be forwarded to it."
   exit 1
 fi
 
@@ -55,6 +55,6 @@ docker-compose -f build.docker-compose.yml up -d
 if [[ "${ACTION_NAME}" == "--shell" ]]; then
     docker-compose -f build.docker-compose.yml exec smithy-rs-build /bin/bash
 else
-    docker-compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./scripts/${ACTION_NAME} ${ACTION_ARGS[*]}"
+    docker-compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./ci-scripts/${ACTION_NAME} ${ACTION_ARGS[*]}"
 fi
 exit $?
