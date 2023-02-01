@@ -47,7 +47,7 @@ private sealed class UnsupportedConstraintMessageKind {
             if (canBeIgnored) {
                 msg += """
                     If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints`
-                    inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`."""
+                    inside the `runtimeConfig.codegen` JSON object in your `smithy-build.json` to `true`."""
             }
             return msg.trimIndent().replace("\n", " ")
         }
