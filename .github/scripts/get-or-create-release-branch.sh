@@ -71,7 +71,7 @@ else
     # We need to make sure that the commit SHA that we are releasing is on `main`.
     git fetch origin main
     if git branch --contains "${commit_sha}" | grep main; then
-      # We can then create create the release branch and set the current commit as its tip
+      # We can then create the release branch and set the current commit as its tip
       git checkout -b "${branch_name}"
       git push origin "${branch_name}"
     else
