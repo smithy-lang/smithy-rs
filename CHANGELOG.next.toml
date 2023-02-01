@@ -56,3 +56,9 @@ let result = cache
 references = ["smithy-rs#2246"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs."
+references = ["smithy-rs#2232", "smithy-rs#1670"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
+author = "david-perez"
