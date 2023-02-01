@@ -5,14 +5,14 @@
 
 //! Unhandled error type.
 
-use crate::error::{Error as GenericError, ProvideErrorMetadata};
+use crate::error::{metadata::ProvideErrorMetadata, ErrorMetadata};
 use std::error::Error as StdError;
 
 /// Builder for [`Unhandled`]
 #[derive(Default, Debug)]
 pub struct Builder {
     source: Option<Box<dyn StdError + Send + Sync + 'static>>,
-    meta: Option<GenericError>,
+    meta: Option<ErrorMetadata>,
 }
 
 impl Builder {
@@ -32,13 +32,13 @@ impl Builder {
     }
 
     /// Sets the error metadata
-    pub fn meta(mut self, meta: GenericError) -> Self {
+    pub fn meta(mut self, meta: ErrorMetadata) -> Self {
         self.meta = Some(meta);
         self
     }
 
     /// Sets the error metadata
-    pub fn set_meta(&mut self, meta: Option<GenericError>) -> &mut Self {
+    pub fn set_meta(&mut self, meta: Option<ErrorMetadata>) -> &mut Self {
         self.meta = meta;
         self
     }
@@ -61,7 +61,7 @@ impl Builder {
 #[derive(Debug)]
 pub struct Unhandled {
     source: Box<dyn StdError + Send + Sync + 'static>,
-    meta: GenericError,
+    meta: ErrorMetadata,
 }
 
 impl Unhandled {
@@ -84,7 +84,7 @@ impl StdError for Unhandled {
 }
 
 impl ProvideErrorMetadata for Unhandled {
-    fn meta(&self) -> &GenericError {
+    fn meta(&self) -> &ErrorMetadata {
         &self.meta
     }
 }

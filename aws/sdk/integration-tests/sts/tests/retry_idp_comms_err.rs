@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_sts as sts;
-use aws_smithy_types::error::Error as ErrorMeta;
+use aws_smithy_types::error::ErrorMetadata;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use sts::error::{AssumeRoleWithWebIdentityError, IdpCommunicationErrorException};
 
@@ -14,7 +14,7 @@ async fn idp_comms_err_retryable() {
         IdpCommunicationErrorException::builder()
             .message("test")
             .meta(
-                ErrorMeta::builder()
+                ErrorMetadata::builder()
                     .code("IDPCommunicationError")
                     .message("test")
                     .build(),

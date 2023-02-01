@@ -6,9 +6,10 @@
 use aws_smithy_client::SdkError;
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
-use aws_smithy_types::error::{
-    Builder as GenericErrorBuilder, Error as GenericError, ProvideErrorMetadata, Unhandled,
+use aws_smithy_types::error::metadata::{
+    Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
 };
+use aws_smithy_types::error::Unhandled;
 use http::{HeaderMap, HeaderValue};
 
 const EXTENDED_REQUEST_ID: &str = "s3_extended_request_id";
@@ -34,7 +35,7 @@ where
     }
 }
 
-impl RequestIdExt for GenericError {
+impl RequestIdExt for ErrorMetadata {
     fn extended_request_id(&self) -> Option<&str> {
         self.extra(EXTENDED_REQUEST_ID)
     }
@@ -74,9 +75,9 @@ where
 /// Applies the extended request ID to a generic error builder
 #[doc(hidden)]
 pub fn apply_extended_request_id(
-    builder: GenericErrorBuilder,
+    builder: ErrorMetadataBuilder,
     headers: &HeaderMap<HeaderValue>,
-) -> GenericErrorBuilder {
+) -> ErrorMetadataBuilder {
     if let Some(extended_request_id) = extract_extended_request_id(headers) {
         builder.custom(EXTENDED_REQUEST_ID, extended_request_id)
     } else {
@@ -154,22 +155,22 @@ mod test {
     fn test_apply_extended_request_id() {
         let mut headers = HeaderMap::new();
         assert_eq!(
-            GenericError::builder().build(),
-            apply_extended_request_id(GenericError::builder(), &headers).build(),
+            ErrorMetadata::builder().build(),
+            apply_extended_request_id(ErrorMetadata::builder(), &headers).build(),
         );
 
         headers.append("x-amz-id-2", HeaderValue::from_static("some-request-id"));
         assert_eq!(
-            GenericError::builder()
+            ErrorMetadata::builder()
                 .custom(EXTENDED_REQUEST_ID, "some-request-id")
                 .build(),
-            apply_extended_request_id(GenericError::builder(), &headers).build(),
+            apply_extended_request_id(ErrorMetadata::builder(), &headers).build(),
         );
     }
 
     #[test]
-    fn test_generic_error_extended_request_id_impl() {
-        let err = GenericError::builder()
+    fn test_error_metadata_extended_request_id_impl() {
+        let err = ErrorMetadata::builder()
             .custom(EXTENDED_REQUEST_ID, "some-request-id")
             .build();
         assert_eq!(Some("some-request-id"), err.extended_request_id());

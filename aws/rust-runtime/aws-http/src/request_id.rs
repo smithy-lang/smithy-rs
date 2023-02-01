@@ -6,9 +6,10 @@
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_types::error::{
-    Builder as GenericErrorBuilder, Error as GenericError, ProvideErrorMetadata, Unhandled,
+use aws_smithy_types::error::metadata::{
+    Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
 };
+use aws_smithy_types::error::Unhandled;
 use http::{HeaderMap, HeaderValue};
 
 /// Constant for the [`aws_smithy_types::error::Error`] extra field that contains the request ID
@@ -33,7 +34,7 @@ where
     }
 }
 
-impl RequestId for GenericError {
+impl RequestId for ErrorMetadata {
     fn request_id(&self) -> Option<&str> {
         self.extra(AWS_REQUEST_ID)
     }
@@ -73,9 +74,9 @@ where
 /// Applies a request ID to a generic error builder
 #[doc(hidden)]
 pub fn apply_request_id(
-    builder: GenericErrorBuilder,
+    builder: ErrorMetadataBuilder,
     headers: &HeaderMap<HeaderValue>,
-) -> GenericErrorBuilder {
+) -> ErrorMetadataBuilder {
     if let Some(request_id) = extract_request_id(headers) {
         builder.custom(AWS_REQUEST_ID, request_id)
     } else {
@@ -155,8 +156,8 @@ mod tests {
     fn test_apply_request_id() {
         let mut headers = HeaderMap::new();
         assert_eq!(
-            GenericError::builder().build(),
-            apply_request_id(GenericError::builder(), &headers).build(),
+            ErrorMetadata::builder().build(),
+            apply_request_id(ErrorMetadata::builder(), &headers).build(),
         );
 
         headers.append(
@@ -164,16 +165,16 @@ mod tests {
             HeaderValue::from_static("some-request-id"),
         );
         assert_eq!(
-            GenericError::builder()
+            ErrorMetadata::builder()
                 .custom(AWS_REQUEST_ID, "some-request-id")
                 .build(),
-            apply_request_id(GenericError::builder(), &headers).build(),
+            apply_request_id(ErrorMetadata::builder(), &headers).build(),
         );
     }
 
     #[test]
-    fn test_generic_error_request_id_impl() {
-        let err = GenericError::builder()
+    fn test_error_metadata_request_id_impl() {
+        let err = ErrorMetadata::builder()
             .custom(AWS_REQUEST_ID, "some-request-id")
             .build();
         assert_eq!(Some("some-request-id"), err.request_id());

@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.genericError
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.errorMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
@@ -47,7 +47,7 @@ class ErrorGenerator(
                 override fun section(section: StructureSection): Writable = writable {
                     when (section) {
                         is StructureSection.AdditionalFields -> {
-                            rust("pub(crate) meta: #T,", genericError(runtimeConfig))
+                            rust("pub(crate) meta: #T,", errorMetadata(runtimeConfig))
                         }
                         is StructureSection.AdditionalDebugFields -> {
                             rust("""${section.formatterName}.field("meta", &self.meta);""")
@@ -65,25 +65,25 @@ class ErrorGenerator(
                     override fun section(section: BuilderSection): Writable = writable {
                         when (section) {
                             is BuilderSection.AdditionalFields -> {
-                                rust("meta: Option<#T>,", genericError(runtimeConfig))
+                                rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
                             }
 
                             is BuilderSection.AdditionalMethods -> {
                                 rustTemplate(
                                     """
                                     /// Sets error metadata
-                                    pub fn meta(mut self, meta: #{generic_error}) -> Self {
+                                    pub fn meta(mut self, meta: #{error_metadata}) -> Self {
                                         self.meta = Some(meta);
                                         self
                                     }
 
                                     /// Sets error metadata
-                                    pub fn set_meta(&mut self, meta: Option<#{generic_error}>) -> &mut Self {
+                                    pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
                                         self.meta = meta;
                                         self
                                     }
                                     """,
-                                    "generic_error" to genericError(runtimeConfig),
+                                    "error_metadata" to errorMetadata(runtimeConfig),
                                 )
                             }
 
@@ -104,7 +104,7 @@ class ErrorGenerator(
         ErrorImplGenerator(model, symbolProvider, writer, shape, error, implCustomizations).render(CodegenTarget.CLIENT)
 
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorMetadataTrait(runtimeConfig)) {
-            rust("fn meta(&self) -> &#T { &self.meta }", genericError(runtimeConfig))
+            rust("fn meta(&self) -> &#T { &self.meta }", errorMetadata(runtimeConfig))
         }
     }
 }

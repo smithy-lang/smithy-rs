@@ -45,7 +45,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "ErrorBuilder" to RuntimeType.genericErrorBuilder(runtimeConfig),
+        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
@@ -65,23 +65,23 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsQuerySerializerGenerator(codegenContext)
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_error_metadata", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_generic_error(response.body().as_ref())", awsQueryErrors)
+                rust("#T::parse_error_metadata(response.body().as_ref())", awsQueryErrors)
             }
         }
 
-    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) {
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_error_metadata", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_generic_error(payload.as_ref())", awsQueryErrors)
+                rust("#T::parse_error_metadata(payload.as_ref())", awsQueryErrors)
             }
         }
 }

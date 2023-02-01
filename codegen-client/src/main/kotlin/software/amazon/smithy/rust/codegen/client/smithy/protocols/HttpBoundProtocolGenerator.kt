@@ -183,12 +183,12 @@ class HttpBoundProtocolTraitImplGenerator(
                 Attribute.AllowUnusedMut.render(this)
                 rust(
                     "let mut generic_builder = #T(response).map_err(#T::unhandled)?;",
-                    protocol.parseHttpGenericError(operationShape),
+                    protocol.parseHttpErrorMetadata(operationShape),
                     errorSymbol,
                 )
                 writeCustomizations(
                     customizations,
-                    OperationSection.PopulateGenericErrorExtras(customizations, "generic_builder", "response"),
+                    OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "response"),
                 )
                 rust("let generic = generic_builder.build();")
                 if (operationShape.operationErrors(model).isNotEmpty()) {

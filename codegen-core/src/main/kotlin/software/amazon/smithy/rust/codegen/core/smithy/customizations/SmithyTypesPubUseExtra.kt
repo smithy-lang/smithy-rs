@@ -54,7 +54,7 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         ) + RuntimeType.smithyTypes(runtimeConfig).let { types ->
             listOf(
                 PubUseType(types.resolve("error::display::DisplayErrorContext")) { true },
-                PubUseType(types.resolve("error::ProvideErrorMetadata")) { true },
+                PubUseType(types.resolve("error::metadata::ProvideErrorMetadata")) { true },
             )
         } + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(

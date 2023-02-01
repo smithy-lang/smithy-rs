@@ -56,15 +56,15 @@ sealed class OperationSection(name: String) : Section(name) {
 
     /**
      * Allows for adding additional properties to the `extras` field on the
-     * `aws_smithy_types::error::Error` generic error type.
+     * `aws_smithy_types::error::ErrorMetadata`.
      */
-    data class PopulateGenericErrorExtras(
+    data class PopulateErrorMetadataExtras(
         override val customizations: List<OperationCustomization>,
         /** Name of the generic error builder (for referring to it in Rust code) */
         val builderName: String,
         /** Name of the response (for referring to it in Rust code) */
         val responseName: String,
-    ) : OperationSection("PopulateGenericErrorExtras")
+    ) : OperationSection("PopulateErrorMetadataExtras")
 
     /**
      * Hook to add custom code right before the response is parsed.

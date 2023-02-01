@@ -13,7 +13,8 @@
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
 use crate::operation;
-use aws_smithy_types::error::{Error as GenericError, ProvideErrorMetadata, EMPTY_GENERIC_ERROR};
+use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::ErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
@@ -130,7 +131,7 @@ pub trait CreateUnhandledError {
     /// Creates an unhandled error variant with the given `source` and error metadata.
     fn create_unhandled_error(
         source: Box<dyn Error + Send + Sync + 'static>,
-        meta: Option<GenericError>,
+        meta: Option<ErrorMetadata>,
     ) -> Self;
 }
 
@@ -212,7 +213,7 @@ impl<E, R> SdkError<E, R> {
     /// # impl CreateUnhandledError for GetObjectError {
     /// #     fn create_unhandled_error(
     /// #         _: Box<dyn std::error::Error + Send + Sync + 'static>,
-    /// #         _: Option<aws_smithy_types::error::Error>,
+    /// #         _: Option<aws_smithy_types::error::ErrorMetadata>,
     /// #     ) -> Self { unimplemented!() }
     /// # }
     /// # fn example() -> Result<(), GetObjectError> {
@@ -290,10 +291,10 @@ where
 {
     fn meta(&self) -> &aws_smithy_types::Error {
         match self {
-            Self::ConstructionFailure(_) => &EMPTY_GENERIC_ERROR,
-            Self::TimeoutError(_) => &EMPTY_GENERIC_ERROR,
-            Self::DispatchFailure(_) => &EMPTY_GENERIC_ERROR,
-            Self::ResponseError(_) => &EMPTY_GENERIC_ERROR,
+            Self::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
+            Self::TimeoutError(_) => &EMPTY_ERROR_METADATA,
+            Self::DispatchFailure(_) => &EMPTY_ERROR_METADATA,
+            Self::ResponseError(_) => &EMPTY_ERROR_METADATA,
             Self::ServiceError(err) => err.source.meta(),
         }
     }

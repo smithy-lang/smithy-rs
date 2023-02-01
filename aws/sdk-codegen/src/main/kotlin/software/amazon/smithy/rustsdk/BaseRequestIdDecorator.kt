@@ -76,7 +76,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
         OperationCustomization() {
         override fun section(section: OperationSection): Writable = writable {
             when (section) {
-                is OperationSection.PopulateGenericErrorExtras -> {
+                is OperationSection.PopulateErrorMetadataExtras -> {
                     rustTemplate(
                         "${section.builderName} = #{apply_to_error}(${section.builderName}, ${section.responseName}.headers());",
                         "apply_to_error" to applyToError(codegenContext),

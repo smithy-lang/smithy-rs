@@ -306,12 +306,12 @@ class EventStreamUnmarshallerGenerator(
             CodegenTarget.CLIENT -> {
                 rustTemplate(
                     """
-                    let generic = match #{parse_generic_error}(message.payload()) {
+                    let generic = match #{parse_error_metadata}(message.payload()) {
                         Ok(builder) => builder.build(),
                         Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
                     };
                     """,
-                    "parse_generic_error" to protocol.parseEventStreamGenericError(operationShape),
+                    "parse_error_metadata" to protocol.parseEventStreamErrorMetadata(operationShape),
                     *codegenScope,
                 )
             }

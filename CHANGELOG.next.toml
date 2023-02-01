@@ -206,3 +206,15 @@ match result {
 references = ["smithy-rs#76", "smithy-rs#2129", "smithy-rs#2075"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"

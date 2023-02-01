@@ -230,7 +230,7 @@ internal object EventStreamUnmarshallTestCases {
 
         if (codegenTarget == CodegenTarget.CLIENT) {
             unitTest(
-                "generic_error",
+                "error_metadata",
                 """
                 let message = msg(
                     "exception",
@@ -246,7 +246,7 @@ internal object EventStreamUnmarshallTestCases {
                         let expected = "message: \"unmodeled error\"";
                         assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
                     }
-                    kind => panic!("expected generic error, but got {:?}", kind),
+                    kind => panic!("expected error metadata, but got {:?}", kind),
                 }
                 """,
             )

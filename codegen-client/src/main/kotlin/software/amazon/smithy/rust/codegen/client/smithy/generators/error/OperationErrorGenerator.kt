@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.genericError
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.errorMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -61,7 +61,7 @@ class OperationErrorGenerator(
     private val customizations: List<ErrorCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
-    private val genericError = genericError(symbolProvider.config().runtimeConfig)
+    private val errorMetadata = errorMetadata(symbolProvider.config().runtimeConfig)
     private val createUnhandledError =
         RuntimeType.smithyHttp(runtimeConfig).resolve("result::CreateUnhandledError")
 
@@ -122,7 +122,7 @@ class OperationErrorGenerator(
                     meta: Option<#T>
                 ) -> Self
                 """,
-                genericError,
+                errorMetadata,
             ) {
                 rust(
                     """
@@ -146,7 +146,7 @@ class OperationErrorGenerator(
 
         val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
         writer.rustBlock("impl #T for ${errorType.name}", errorMetadataTrait) {
-            rustBlock("fn meta(&self) -> &#T", genericError(runtimeConfig)) {
+            rustBlock("fn meta(&self) -> &#T", errorMetadata(runtimeConfig)) {
                 delegateToVariants(errors) {
                     writable { rust("#T::meta(_inner)", errorMetadataTrait) }
                 }
@@ -188,12 +188,12 @@ class OperationErrorGenerator(
                     Self::Unhandled(#{Unhandled}::builder().source(err).build())
                 }
 
-                /// Creates the `${errorType.name}::Unhandled` variant from a `#{generic_error}`.
-                pub fn generic(err: #{generic_error}) -> Self {
+                /// Creates the `${errorType.name}::Unhandled` variant from a `#{error_metadata}`.
+                pub fn generic(err: #{error_metadata}) -> Self {
                     Self::Unhandled(#{Unhandled}::builder().source(err.clone()).meta(err).build())
                 }
                 """,
-                "generic_error" to genericError,
+                "error_metadata" to errorMetadata,
                 "std_error" to RuntimeType.StdError,
                 "Unhandled" to unhandledError(runtimeConfig),
             )
@@ -203,7 +203,7 @@ class OperationErrorGenerator(
                 request ID, and potentially additional information.
                 """,
             )
-            writer.rustBlock("pub fn meta(&self) -> &#T", genericError) {
+            writer.rustBlock("pub fn meta(&self) -> &#T", errorMetadata) {
                 rust("use #T;", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
                 rustBlock("match self") {
                     errors.forEach { error ->

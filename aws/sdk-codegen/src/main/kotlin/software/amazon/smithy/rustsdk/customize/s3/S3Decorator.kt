@@ -92,18 +92,18 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
-        "ErrorBuilder" to RuntimeType.genericErrorBuilder(runtimeConfig),
+        "Error" to RuntimeType.errorMetadata(runtimeConfig),
+        "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
     )
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
+        return RuntimeType.forInlineFun("parse_http_error_metadata", RustModule.private("xml_deser")) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(
@@ -117,7 +117,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
                         }
                         Ok(builder)
                     } else {
-                        #{base_errors}::parse_generic_error(response.body().as_ref())
+                        #{base_errors}::parse_error_metadata(response.body().as_ref())
                     }
                     """,
                     *errorScope,
