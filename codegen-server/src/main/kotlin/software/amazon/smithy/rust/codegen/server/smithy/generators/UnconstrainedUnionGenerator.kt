@@ -140,8 +140,9 @@ class UnconstrainedUnionGenerator(
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
-            if (shape.isReachableFromOperationInput()) {
+            if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
                 rustBlock("impl $constraintViolationName") {
+                    Attribute.AllowDeadCode.render(this)
                     rustBlockTemplate(
                         "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
                         "String" to RuntimeType.String,

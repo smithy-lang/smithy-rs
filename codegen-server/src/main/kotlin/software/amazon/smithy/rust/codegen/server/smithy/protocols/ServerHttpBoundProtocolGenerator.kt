@@ -693,7 +693,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 takeInUnconstrainedTypes = true,
             )
         ) {
-            if (inputShape.itsConstraintViolationMayBeReturnedToTheCaller()) {
+            if (inputShape.itsConstraintViolationMayBeReturnedToTheCaller(model)) {
                 "?"
             } else {
                 ".unwrap()"

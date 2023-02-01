@@ -10,10 +10,12 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.SimpleShape
@@ -70,8 +72,15 @@ fun Shape.isOnlyRequired() = this.hasTrait<RequiredTrait>() && allConstraintTrai
  *
  * The latter never results on a validation exception being sent on the wire.
  */
-fun StructureShape.itsConstraintViolationMayBeReturnedToTheCaller() =
-    this.members().filterNot { it.isOnlyRequired() && it.hasTrait<HttpLabelTrait>() }.any { it.hasConstraintTrait() }
+fun StructureShape.itsConstraintViolationMayBeReturnedToTheCaller(model: Model) =
+    DirectedWalker(model).walkShapes(this)
+        // All @httpLabel members MUST be @required.
+        // If they are not present though, the request fails to be routed - it doesn't return a validation
+        // exception to the caller.
+        // We should not force users to add a validation exception if this is their only usage of @required.
+        .filterNot { it.isOnlyRequired() && it.hasTrait<HttpLabelTrait>() }
+        .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+
 
 val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
 

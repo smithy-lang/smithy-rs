@@ -151,10 +151,11 @@ class ConstrainedStringGenerator(
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
         )
 
-        if (shape.isReachableFromOperationInput()) {
+        if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
+                    ##[allow(dead_code)]
                     pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                         match self {
                             #{ValidationExceptionFields:W}

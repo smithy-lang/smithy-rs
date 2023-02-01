@@ -177,6 +177,7 @@ class ServerBuilderConstraintViolations(
         writer.rustTemplate(
             """
             impl ConstraintViolation {
+                ##[allow(dead_code)]
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                     #{ValidationExceptionFieldWritable:W}
                 }

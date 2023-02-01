@@ -51,13 +51,14 @@ open class ServerEnumGenerator(
                 *codegenScope,
             )
 
-            if (shape.isReachableFromOperationInput()) {
+            if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
                 val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
                 val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
 
                 rustTemplate(
                     """
                     impl $constraintViolationName {
+                        ##[allow(dead_code)]
                         pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                             crate::model::ValidationExceptionField {
                                 message: format!(r##"$message"##, &self.0, &path),

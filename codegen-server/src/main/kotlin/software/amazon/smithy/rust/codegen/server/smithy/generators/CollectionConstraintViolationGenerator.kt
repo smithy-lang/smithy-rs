@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -24,6 +25,7 @@ class CollectionConstraintViolationGenerator(
     private val shape: CollectionShape,
     private val constraintsInfo: List<TraitInfo>,
 ) {
+    private val codegenContext = codegenContext
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
@@ -74,7 +76,7 @@ class CollectionConstraintViolationGenerator(
                 "ConstraintViolationVariants" to constraintViolationVariants.join(",\n"),
             )
 
-            if (shape.isReachableFromOperationInput()) {
+            if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
                 val validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }.toMutableList()
                 if (isMemberConstrained) {
                     validationExceptionFields += {
@@ -90,6 +92,7 @@ class CollectionConstraintViolationGenerator(
                 rustTemplate(
                     """
                     impl $constraintViolationName {
+                        ##[allow(dead_code)]
                         pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                             match self {
                                 #{AsValidationExceptionFields:W}

@@ -142,8 +142,9 @@ class ConstrainedNumberGenerator(
                 """,
             )
 
-            if (shape.isReachableFromOperationInput()) {
+            if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
                 rustBlock("impl ${constraintViolation.name}") {
+                    Attribute.AllowDeadCode.render(writer)
                     rustBlockTemplate(
                         "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
                         "String" to RuntimeType.String,

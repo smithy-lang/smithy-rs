@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -124,10 +125,11 @@ class ConstrainedBlobGenerator(
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
         )
 
-        if (shape.isReachableFromOperationInput()) {
+        if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
+                    ##[allow(dead_code)]
                     pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                         match self {
                             #{ValidationExceptionFields:W}

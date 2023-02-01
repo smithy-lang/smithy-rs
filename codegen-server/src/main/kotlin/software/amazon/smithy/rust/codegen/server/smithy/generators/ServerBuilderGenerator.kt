@@ -48,9 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.server.smithy.isOnlyRequired
 import software.amazon.smithy.rust.codegen.server.smithy.itsConstraintViolationMayBeReturnedToTheCaller
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -90,7 +88,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
  * [derive_builder]: https://docs.rs/derive_builder/latest/derive_builder/index.html
  */
 class ServerBuilderGenerator(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
 ) {
     companion object {
@@ -168,12 +166,12 @@ class ServerBuilderGenerator(
                 writer,
                 visibility,
                 nonExhaustive = true,
-                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput() && shape.itsConstraintViolationMayBeReturnedToTheCaller(),
+                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure,
             )
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
             // an operation input shape.
-            if (shape.hasTrait<SyntheticInputTrait>() && shape.itsConstraintViolationMayBeReturnedToTheCaller()) {
+            if (shape.hasTrait<SyntheticInputTrait>() && shape.itsConstraintViolationMayBeReturnedToTheCaller(model)) {
                 renderImplFromConstraintViolationForRequestRejection(writer)
             }
 

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,7 +25,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 class MapConstraintViolationGenerator(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val modelsModuleWriter: RustWriter,
     val shape: MapShape,
 ) {
@@ -79,8 +80,9 @@ class MapConstraintViolationGenerator(
                 *constraintViolationCodegenScope,
             )
 
-            if (shape.isReachableFromOperationInput()) {
+            if (shape.isReachableFromOperationInput() && codegenContext.validationExceptionIsInTheServiceClosure) {
                 rustBlock("impl $constraintViolationName") {
+                    Attribute.AllowDeadCode.render(this)
                     rustBlockTemplate(
                         "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
                         "String" to RuntimeType.String,

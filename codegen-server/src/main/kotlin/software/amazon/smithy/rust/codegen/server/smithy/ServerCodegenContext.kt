@@ -5,7 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -33,4 +35,10 @@ data class ServerCodegenContext(
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
 ) : CodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
-)
+) {
+    val validationExceptionIsInTheServiceClosure = DirectedWalker(model).walkShapes(serviceShape)
+        .filterIsInstance<OperationShape>()
+        .any { operationShape ->
+            operationShape.errors.contains(ShapeId.from("smithy.framework#ValidationException"))
+        }
+}
