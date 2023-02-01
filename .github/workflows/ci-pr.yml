@@ -15,6 +15,7 @@ concurrency:
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
   # be encrypted with the passphrase stored as a GitHub secret. The login password expires after 12h.
+  # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
@@ -49,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
-      DOCKER_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -77,7 +78,7 @@ jobs:
       run_sdk_examples: true
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
-      DOCKER_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
