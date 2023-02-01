@@ -54,7 +54,7 @@ fi
 echo "release_branch=${branch_name}" > "${output_file}"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-  git push -f origin "HEAD:${branch_name}"
+  git push --force origin "HEAD:${branch_name}"
 else
   commit_sha=$(git rev-parse --short HEAD)
   if git ls-remote --exit-code --heads origin "${branch_name}"; then
