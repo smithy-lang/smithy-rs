@@ -4,9 +4,9 @@
 # This workflow claims the names of the unpublished crates in this repository
 # on crates.io (by publishing a dummy empty package)
 
-# Allow only one release to run at a time
+# Allow only one crate claim workflow to run at a time
 concurrency:
-  group: release-smithy-rs
+  group: claim-crates-smithy-rs
   cancel-in-progress: true
 
 env:
@@ -45,7 +45,7 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
@@ -56,6 +56,7 @@ jobs:
   claim:
     name: Claim crate names
     needs:
+    - main-branch-check
     - acquire-base-image
     runs-on: ubuntu-latest
     steps:
@@ -65,15 +66,13 @@ jobs:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Publish to crates.io
       shell: bash
       env:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path tools/publisher
+        cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully
         publisher --version
         publisher claim-crate-names -y

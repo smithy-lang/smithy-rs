@@ -10,3 +10,55 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Provide a way to retrieve fallback credentials if a call to `provide_credentials` is interrupted. An interrupt can occur when a timeout future is raced against a future for `provide_credentials`, and the former wins the race. A new method, `fallback_on_interrupt` on the `ProvideCredentials` trait, can be used in that case. The following code snippet from `LazyCredentialsCache::provide_cached_credentials` has been updated like so:
+
+Before:
+```rust
+let timeout_future = self.sleeper.sleep(self.load_timeout);
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+    .get_or_load(|| {
+        async move {
+            let credentials = future.await.map_err(|_err| {
+                CredentialsError::provider_timed_out(load_timeout)
+            })??;
+            // --snip--
+        }
+    }).await;
+// --snip--
+```
+
+After:
+```rust
+let timeout_future = self.sleeper.sleep(self.load_timeout);
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+    .get_or_load(|| {
+        async move {
+           let credentials = match future.await {
+                Ok(creds) => creds?,
+                Err(_err) => match provider.fallback_on_interrupt() { // can provide fallback credentials
+                    Some(creds) => creds,
+                    None => return Err(CredentialsError::provider_timed_out(load_timeout)),
+                }
+            };
+            // --snip--
+        }
+    }).await;
+// --snip--
+```
+"""
+references = ["smithy-rs#2246"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs."
+references = ["smithy-rs#2232", "smithy-rs#1670"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
+author = "david-perez"
