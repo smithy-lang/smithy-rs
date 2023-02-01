@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.js.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -102,7 +103,7 @@ class JsApplicationGenerator(
     }
 
     fun renderHandlers(writer: RustWriter) {
-        writer.rustBlock("pub(crate) struct Handlers") {
+        writer.rustBlock("pub struct Handlers") {
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val input = "crate::input::${operationName}Input"
@@ -115,6 +116,23 @@ class JsApplicationGenerator(
                         $input,
                         #{napi}::threadsafe_function::ErrorStrategy::CalleeHandled
                     >,
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+        Attribute(JsServerCargoDependency.NapiDerive.toType().resolve("napi")).render(writer)
+        writer.rustBlock("pub struct JsHandlers") {
+            operations.map { operation ->
+                val operationName = symbolProvider.toSymbol(operation).name
+                val input = "crate::input::${operationName}Input"
+                val output = "crate::output::${operationName}Output"
+                val error = "crate::error::${operationName}Error"
+                val fnName = operationName.toSnakeCase()
+                rustTemplate(
+                    """
+                    ##[napi_derive::napi(ts_type = "(input: $input) => Promise<$output|$error>")]
+                    pub(crate) $fnName: #{napi}::JsFunction,
                     """,
                     *codegenScope,
                 )

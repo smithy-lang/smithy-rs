@@ -5,10 +5,8 @@
 
 //! Socket implementation that can be shared between multiple Python processes.
 
-use pyo3::{exceptions::PyIOError, prelude::*};
-
-// use socket2::{Domain, Protocol, Socket, Type};
 use aws_smithy_http_server::socket::Socket;
+use napi_derive::napi;
 
 /// Socket implementation that can be shared between multiple Python processes.
 ///
@@ -20,38 +18,39 @@ use aws_smithy_http_server::socket::Socket;
 /// computing capacity of the host.
 ///
 /// [GIL]: https://wiki.python.org/moin/GlobalInterpreterLock
-#[pyclass]
+#[napi]
 #[derive(Debug)]
-pub struct PySocket(socket2::Socket);
+pub struct JsSocket(socket2::Socket);
 
-#[pymethods]
-impl PySocket {
+#[napi]
+impl JsSocket {
     /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
-    #[new]
-    pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
+    #[napi(constructor)]
+    pub fn new(address: String, port: i32, backlog: Option<i32>) -> napi::Result<Self> {
         Ok(Self(
-            Socket::new(address, port, backlog).map_err(|e| PyIOError::new_err(e.to_string()))?,
+            Socket::new(address, port, backlog)
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?,
         ))
     }
 
     /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
-    #[pyo3(text_signature = "($self)")]
-    pub fn try_clone(&self) -> PyResult<PySocket> {
-        Ok(PySocket(
+    #[napi]
+    pub fn try_clone(&self) -> napi::Result<JsSocket> {
+        Ok(JsSocket(
             self.0
                 .try_clone()
-                .map_err(|e| PyIOError::new_err(e.to_string()))?,
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?,
         ))
     }
 }
 
-impl PySocket {
-    pub fn to_raw_socket(&self) -> PyResult<socket2::Socket> {
+impl JsSocket {
+    pub fn to_raw_socket(&self) -> napi::Result<socket2::Socket> {
         Ok(self
             .0
             .try_clone()
-            .map_err(|e| PyIOError::new_err(e.to_string()))?)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?)
     }
 }
