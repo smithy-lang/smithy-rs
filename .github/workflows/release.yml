@@ -116,7 +116,7 @@ jobs:
           if [[ git diff-index --quiet HEAD ]]; then
             # The file was actually changed, we need to commit and push the changes
             git commit gradle.properties -m "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-            echo "Pushing upgraded gradle.properties commits..."
+            echo "Pushing upgraded gradle.properties commit..."
             git push origin
           fi
           echo "commit_sha=$(git rev-parse --verify --short HEAD)" > $GITHUB_OUTPUT
