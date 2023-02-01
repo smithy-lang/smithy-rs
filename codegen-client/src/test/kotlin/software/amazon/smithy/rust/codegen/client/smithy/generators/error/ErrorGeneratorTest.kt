@@ -40,7 +40,7 @@ class ErrorGeneratorTest {
                     """
                     ##[test]
                     fn test_error_generator() {
-                        use aws_smithy_types::error::{Error as GenericError, ErrorMetadata};
+                        use aws_smithy_types::error::{Error as GenericError, ProvideErrorMetadata};
                         use aws_smithy_types::retry::ErrorKind;
 
                         let err = MyError::builder()

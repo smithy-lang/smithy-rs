@@ -103,7 +103,7 @@ class ErrorGenerator(
 
         ErrorImplGenerator(model, symbolProvider, writer, shape, error, implCustomizations).render(CodegenTarget.CLIENT)
 
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.errorMetadataTrait(runtimeConfig)) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorMetadataTrait(runtimeConfig)) {
             rust("fn meta(&self) -> &#T { &self.meta }", genericError(runtimeConfig))
         }
     }

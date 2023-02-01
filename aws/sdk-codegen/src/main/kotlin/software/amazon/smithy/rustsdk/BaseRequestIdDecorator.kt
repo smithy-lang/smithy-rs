@@ -142,7 +142,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                 is ErrorImplSection.ErrorAdditionalTraitImpls -> {
                     rustBlock("impl #1T for #2T", accessorTrait(codegenContext), section.errorType) {
                         rustBlock("fn $accessorFunctionName(&self) -> Option<&str>") {
-                            rust("use #T;", RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig))
+                            rust("use #T;", RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig))
                             rust("self.meta().$accessorFunctionName()")
                         }
                     }

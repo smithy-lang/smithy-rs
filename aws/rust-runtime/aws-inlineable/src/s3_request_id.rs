@@ -7,7 +7,7 @@ use aws_smithy_client::SdkError;
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
 use aws_smithy_types::error::{
-    Builder as GenericErrorBuilder, Error as GenericError, ErrorMetadata, Unhandled,
+    Builder as GenericErrorBuilder, Error as GenericError, ProvideErrorMetadata, Unhandled,
 };
 use http::{HeaderMap, HeaderValue};
 

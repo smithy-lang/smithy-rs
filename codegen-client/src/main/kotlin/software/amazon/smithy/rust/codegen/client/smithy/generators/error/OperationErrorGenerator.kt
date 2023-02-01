@@ -144,7 +144,7 @@ class OperationErrorGenerator(
             }
         }
 
-        val errorMetadataTrait = RuntimeType.errorMetadataTrait(runtimeConfig)
+        val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
         writer.rustBlock("impl #T for ${errorType.name}", errorMetadataTrait) {
             rustBlock("fn meta(&self) -> &#T", genericError(runtimeConfig)) {
                 delegateToVariants(errors) {
@@ -161,7 +161,7 @@ class OperationErrorGenerator(
             RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig),
         ) {
             rustBlock("fn code(&self) -> Option<&str>") {
-                rust("#T::code(self)", RuntimeType.errorMetadataTrait(runtimeConfig))
+                rust("#T::code(self)", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
             }
 
             rustBlock("fn retryable_error_kind(&self) -> Option<#T>", retryErrorKindT) {
@@ -204,7 +204,7 @@ class OperationErrorGenerator(
                 """,
             )
             writer.rustBlock("pub fn meta(&self) -> &#T", genericError) {
-                rust("use #T;", RuntimeType.errorMetadataTrait(runtimeConfig))
+                rust("use #T;", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
                 rustBlock("match self") {
                     errors.forEach { error ->
                         val errorVariantSymbol = symbolProvider.toSymbol(error)

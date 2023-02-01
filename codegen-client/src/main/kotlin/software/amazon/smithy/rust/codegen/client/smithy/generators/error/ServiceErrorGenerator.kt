@@ -116,13 +116,13 @@ class ServiceErrorGenerator(
                             """
                             _ => Error::Unhandled(
                                 #{Unhandled}::builder()
-                                    .meta(#{ErrorMetadata}::meta(&err).clone())
+                                    .meta(#{ProvideErrorMetadata}::meta(&err).clone())
                                     .source(err)
                                     .build()
                             ),
                             """,
                             "Unhandled" to unhandledError(codegenContext.runtimeConfig),
-                            "ErrorMetadata" to RuntimeType.errorMetadataTrait(codegenContext.runtimeConfig),
+                            "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig),
                         )
                     }
                 }

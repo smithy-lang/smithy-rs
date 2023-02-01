@@ -15,7 +15,7 @@ mod unhandled;
 pub use unhandled::Unhandled;
 
 /// Trait to retrieve error metadata from a result
-pub trait ErrorMetadata {
+pub trait ProvideErrorMetadata {
     /// Returns error metadata, which includes the error code, message,
     /// request ID, and potentially additional information.
     fn meta(&self) -> &Error;

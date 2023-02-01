@@ -13,7 +13,7 @@
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
 use crate::operation;
-use aws_smithy_types::error::{Error as GenericError, ErrorMetadata, EMPTY_GENERIC_ERROR};
+use aws_smithy_types::error::{Error as GenericError, ProvideErrorMetadata, EMPTY_GENERIC_ERROR};
 use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
@@ -284,9 +284,9 @@ where
     }
 }
 
-impl<E, R> ErrorMetadata for SdkError<E, R>
+impl<E, R> ProvideErrorMetadata for SdkError<E, R>
 where
-    E: ErrorMetadata,
+    E: ProvideErrorMetadata,
 {
     fn meta(&self) -> &aws_smithy_types::Error {
         match self {

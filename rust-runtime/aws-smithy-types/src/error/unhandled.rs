@@ -5,7 +5,7 @@
 
 //! Unhandled error type.
 
-use crate::error::{Error as GenericError, ErrorMetadata};
+use crate::error::{Error as GenericError, ProvideErrorMetadata};
 use std::error::Error as StdError;
 
 /// Builder for [`Unhandled`]
@@ -83,7 +83,7 @@ impl StdError for Unhandled {
     }
 }
 
-impl ErrorMetadata for Unhandled {
+impl ProvideErrorMetadata for Unhandled {
     fn meta(&self) -> &GenericError {
         &self.meta
     }
