@@ -5,9 +5,5 @@
 #
 
 set -eux
-cd aws-sdk
 
-# Remove examples from workspace
-sed -i '/"examples\//d' Cargo.toml
-
-cargo test --all-features
+publisher upgrade-runtime-crates-version --version ${1}

@@ -22,14 +22,14 @@ function test_tool {
     popd &>/dev/null
 }
 
-test_tool "tools/changelogger" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/changelogger" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/crate-hasher" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/difftags" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/publisher" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/sdk-lints" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/sdk-versioner" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/smithy-rs-tool-common" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-cdk/canary-runner" "${RUST_STABLE_VERSION}"
-test_tool "tools/crate-hasher" "${RUST_STABLE_VERSION}"
-test_tool "tools/difftags" "${RUST_STABLE_VERSION}"
-test_tool "tools/publisher" "${RUST_STABLE_VERSION}"
-test_tool "tools/sdk-lints" "${RUST_STABLE_VERSION}"
-test_tool "tools/sdk-versioner" "${RUST_STABLE_VERSION}"
-test_tool "tools/smithy-rs-tool-common" "${RUST_STABLE_VERSION}"
 
 echo -e "${C_YELLOW}Running additional per-crate checks...${C_RESET}"
-./tools/additional-per-crate-checks.sh ./tools/
+./tools/ci-scripts/additional-per-crate-checks.sh ./tools/
