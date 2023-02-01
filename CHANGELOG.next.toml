@@ -56,3 +56,15 @@ let result = cache
 references = ["smithy-rs#2246"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
