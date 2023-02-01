@@ -44,7 +44,7 @@ class ErrorGeneratorTest {
                         use aws_smithy_types::retry::ErrorKind;
 
                         let err = MyError::builder()
-                            ._meta(GenericError::builder().code("test").message("testmsg").build())
+                            .meta(GenericError::builder().code("test").message("testmsg").build())
                             .message("testmsg")
                             .build();
                         assert_eq!(err.retryable_error_kind(), ErrorKind::ServerError);

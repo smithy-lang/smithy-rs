@@ -225,7 +225,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                             listOf(object : OperationCustomization() {
                                                 override fun section(section: OperationSection): Writable = writable {
                                                     if (section is OperationSection.MutateOutput) {
-                                                        rust("let output = output._meta(generic);")
+                                                        rust("let output = output.meta(generic);")
                                                     }
                                                 }
                                             },

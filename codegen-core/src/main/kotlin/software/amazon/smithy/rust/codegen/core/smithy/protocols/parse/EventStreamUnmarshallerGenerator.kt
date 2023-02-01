@@ -343,7 +343,7 @@ class EventStreamUnmarshallerGenerator(
                                         .map_err(|err| {
                                             #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
                                         })?;
-                                    builder._set_meta(Some(generic));
+                                    builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
                                         #{OpError}::${member.target.name}(builder.build())
                                     ))

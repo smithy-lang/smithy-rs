@@ -13,7 +13,7 @@ async fn idp_comms_err_retryable() {
     let error = AssumeRoleWithWebIdentityError::IdpCommunicationErrorException(
         IdpCommunicationErrorException::builder()
             .message("test")
-            ._meta(
+            .meta(
                 ErrorMeta::builder()
                     .code("IDPCommunicationError")
                     .message("test")

@@ -47,10 +47,10 @@ class ErrorGenerator(
                 override fun section(section: StructureSection): Writable = writable {
                     when (section) {
                         is StructureSection.AdditionalFields -> {
-                            rust("pub(crate) _meta: #T,", genericError(runtimeConfig))
+                            rust("pub(crate) meta: #T,", genericError(runtimeConfig))
                         }
                         is StructureSection.AdditionalDebugFields -> {
-                            rust("""${section.formatterName}.field("_meta", &self._meta);""")
+                            rust("""${section.formatterName}.field("meta", &self.meta);""")
                         }
                     }
                 }
@@ -65,21 +65,21 @@ class ErrorGenerator(
                     override fun section(section: BuilderSection): Writable = writable {
                         when (section) {
                             is BuilderSection.AdditionalFields -> {
-                                rust("_meta: Option<#T>,", genericError(runtimeConfig))
+                                rust("meta: Option<#T>,", genericError(runtimeConfig))
                             }
 
                             is BuilderSection.AdditionalMethods -> {
                                 rustTemplate(
                                     """
-                                    ##[doc(hidden)]
-                                    pub fn _meta(mut self, _meta: #{generic_error}) -> Self {
-                                        self._meta = Some(_meta);
+                                    /// Sets error metadata
+                                    pub fn meta(mut self, meta: #{generic_error}) -> Self {
+                                        self.meta = Some(meta);
                                         self
                                     }
 
-                                    ##[doc(hidden)]
-                                    pub fn _set_meta(&mut self, _meta: Option<#{generic_error}>) -> &mut Self {
-                                        self._meta = _meta;
+                                    /// Sets error metadata
+                                    pub fn set_meta(&mut self, meta: Option<#{generic_error}>) -> &mut Self {
+                                        self.meta = meta;
                                         self
                                     }
                                     """,
@@ -88,7 +88,7 @@ class ErrorGenerator(
                             }
 
                             is BuilderSection.AdditionalFieldsInBuild -> {
-                                rust("_meta: self._meta.unwrap_or_default(),")
+                                rust("meta: self.meta.unwrap_or_default(),")
                             }
                         }
                     }
@@ -104,7 +104,7 @@ class ErrorGenerator(
         ErrorImplGenerator(model, symbolProvider, writer, shape, error, implCustomizations).render(CodegenTarget.CLIENT)
 
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.errorMetadataTrait(runtimeConfig)) {
-            rust("fn meta(&self) -> &#T { &self._meta }", genericError(runtimeConfig))
+            rust("fn meta(&self) -> &#T { &self.meta }", genericError(runtimeConfig))
         }
     }
 }
