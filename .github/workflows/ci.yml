@@ -17,7 +17,7 @@ on:
       git_ref:
         description: |
           The git reference that all checks should be run against. It can be a branch, a tag or a commit SHA.
-          If unspecified, it will default to the git reference that triggered the execution of this workflow.
+          If unspecified, it will default to the git reference or SHA that triggered the execution of this workflow.
         required: false
         type: string
         default: ""
