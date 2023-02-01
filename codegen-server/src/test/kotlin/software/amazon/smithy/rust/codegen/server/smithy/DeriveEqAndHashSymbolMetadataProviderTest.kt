@@ -35,29 +35,29 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
             input: TestInputOutput
             output: TestInputOutput
         }
-        
+
         operation StreamingOperation {
             input: StreamingOperationInputOutput
             output: StreamingOperationInputOutput
         }
-        
+
         operation EventStreamOperation {
             input: EventStreamOperationInputOutput
             output: EventStreamOperationInputOutput
         }
-        
+
         structure EventStreamOperationInputOutput {
             @httpPayload
             @required
             union: StreamingUnion
         }
-        
+
         structure StreamingOperationInputOutput {
             @httpPayload
             @required
             blobStream: BlobStream
         }
-        
+
         @streaming
         blob BlobStream
 
@@ -68,14 +68,14 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
             containsFloat: ContainsFloat
             containsDouble: ContainsDouble
             containsDocument: ContainsDocument
-            
+
             hasList: HasList
             hasListWithMap: HasListWithMap
             hasMap: HasMap
-            
+
             eqAndHashStruct: EqAndHashStruct
         }
-        
+
         structure EqAndHashStruct {
             blob: Blob
             boolean: Boolean
@@ -86,27 +86,27 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
             long: Long
             enum: Enum
             timestamp: Timestamp
-            
+
             list: List
             union: EqAndHashUnion
-            
+
             // bigInteger: BigInteger
             // bigDecimal: BigDecimal
         }
-        
+
         list List {
             member: String
         }
-        
+
         list ListWithMap {
             member: Map
         }
-        
+
         map Map {
             key: String
             value: String
         }
-        
+
         union EqAndHashUnion {
             blob: Blob
             boolean: Boolean
@@ -117,51 +117,51 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
             long: Long
             enum: Enum
             timestamp: Timestamp
-            
+
             list: List
         }
-        
+
         @streaming
         union StreamingUnion {
             eqAndHashStruct: EqAndHashStruct
         }
-        
+
         structure HasFloat {
             float: Float
         }
-        
+
         structure HasDouble {
             double: Double
         }
-        
+
         structure HasDocument {
             document: Document
         }
-        
+
         structure HasList {
             list: List
         }
-        
+
         structure HasListWithMap {
             list: ListWithMap
         }
-        
+
         structure HasMap {
             map: Map
         }
-        
+
         structure ContainsFloat {
             hasFloat: HasFloat
         }
-        
+
         structure ContainsDouble {
             hasDouble: HasDouble
         }
-        
+
         structure ContainsDocument {
             containsDocument: HasDocument
         }
-        
+
         enum Enum {
             DIAMOND
             CLUB

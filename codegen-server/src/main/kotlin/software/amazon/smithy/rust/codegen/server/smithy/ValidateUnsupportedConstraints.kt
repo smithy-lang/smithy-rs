@@ -38,7 +38,7 @@ private sealed class UnsupportedConstraintMessageKind {
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
         fun buildMessage(intro: String, willSupport: Boolean, trackingIssue: String, canBeIgnored: Boolean = true): String {
             var msg = """
-                    $intro
+                $intro
                     This is not supported in the smithy-rs server SDK."""
             if (willSupport) {
                 msg += """
@@ -160,10 +160,10 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
             LogMessage(
                 Level.SEVERE,
                 """
-                Operation ${it.shape.id} takes in input that is constrained 
-                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a 
+                Operation ${it.shape.id} takes in input that is constrained
+                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
                 validation exception. You must model this behavior in the operation shape in your model file.
-                """.trimIndent().replace("\n", "") +
+                """.trimIndent().replace("\n", " ") +
                     """
 
                     ```smithy

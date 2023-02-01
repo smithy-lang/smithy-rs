@@ -35,7 +35,7 @@ import shlex
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
 BASE_BRANCH_NAME = "__tmp-localonly-base"
-OUTPUT_PATH = "tmp-codegen-diff/"
+OUTPUT_PATH = "tmp-codegen-diff"
 
 COMMIT_AUTHOR_NAME = "GitHub Action (generated code preview)"
 COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
@@ -99,9 +99,9 @@ def generate_and_commit_generated_code(revision_sha):
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
-    run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}")
-    run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}")
-    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}")
+    run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+    run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
+    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}/")
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
@@ -120,61 +120,27 @@ def generate_and_commit_generated_code(revision_sha):
         f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
 
 
-# Writes an HTML template for diff2html so that we can add contextual information
-def write_html_template(title, subtitle, tmp_file):
-    tmp_file.writelines(map(lambda line: line.encode(), [
-        "<!doctype html>",
-        "<html>",
-        "<head>",
-        '  <metadata charset="utf-8">',
-        f'  <title>Codegen diff for the {title}: {subtitle}</title>',
-        '  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.9.0/styles/github.min.css" / >',
-        '  <!--diff2html-css-->',
-        '  <!--diff2html-js-ui-->',
-        '  <script>',
-        '  document.addEventListener("DOMContentLoaded", () => {',
-        '    const targetElement = document.getElementById("diff");',
-        '    const diff2htmlUi = new Diff2HtmlUI(targetElement);',
-        '    //diff2html-fileListToggle',
-        '    //diff2html-synchronisedScroll',
-        '    //diff2html-highlightCode',
-        '  });',
-        '  </script>',
-        "</head>",
-        "<body>",
-        f"  <h1>Codegen diff for the {title}</h1>",
-        f"  <p>{subtitle}</p>",
-        '  <div id="diff">',
-        '    <!--diff2html-diff-->',
-        '  </div>',
-        "</body>",
-        "</html>",
-    ]))
-    tmp_file.flush()
-
-
 def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whitespace):
     whitespace_flag = "" if whitespace else "-b"
     diff_exists = get_cmd_status(f"git diff --quiet {whitespace_flag} "
                                  f"{BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
     if diff_exists == 0:
-        eprint(f"No diff output for {base_commit_sha}..{head_commit_sha}")
+        eprint(f"No diff output for {base_commit_sha}..{head_commit_sha} ({suffix})")
         return None
     else:
-        run(f"mkdir -p {OUTPUT_PATH}/{base_commit_sha}/{head_commit_sha}")
-        dest_path = f"{base_commit_sha}/{head_commit_sha}/diff-{suffix}.html"
-        whitespace_context = "" if whitespace else "(ignoring whitespace)"
-        with tempfile.NamedTemporaryFile() as tmp_file:
-            write_html_template(title, f"rev. {head_commit_sha} {whitespace_context}", tmp_file)
+        partial_output_path = f"{base_commit_sha}/{head_commit_sha}/{suffix}"
+        full_output_path = f"{OUTPUT_PATH}/{partial_output_path}"
+        run(f"mkdir -p {full_output_path}")
+        run(f"git diff --output=codegen-diff.txt -U30 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}")
 
-            # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
-            # All arguments after the first `--` go to the `git diff` command.
-            diff_cmd = f"diff2html -s line -f html -d word -i command --hwt "\
-                f"{tmp_file.name} -F {OUTPUT_PATH}/{dest_path} -- "\
-                f"-U20 {whitespace_flag} {BASE_BRANCH_NAME} {HEAD_BRANCH_NAME} -- {path_to_diff}"
-            eprint(f"Running diff cmd: {diff_cmd}")
-            run(diff_cmd)
-        return dest_path
+        # Generate HTML diff. This uses the `difftags` tool from the `tools/` directory.
+        # All arguments after the first `--` go to the `git diff` command.
+        whitespace_context = "" if whitespace else "(ignoring whitespace)"
+        subtitle = f"rev. {head_commit_sha} {whitespace_context}"
+        diff_cmd = f"difftags --output-dir {full_output_path} --title \"{title}\" --subtitle \"{subtitle}\" codegen-diff.txt"
+        eprint(f"Running diff cmd: {diff_cmd}")
+        run(diff_cmd)
+        return f"{partial_output_path}/index.html"
 
 
 def diff_link(diff_text, empty_diff_text, diff_location, alternate_text, alternate_location):
