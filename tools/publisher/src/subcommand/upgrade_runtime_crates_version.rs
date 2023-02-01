@@ -31,7 +31,10 @@ pub async fn subcommand_upgrade_runtime_crates_version(
         Regex::new(r"(?P<field>smithy\.rs\.runtime\.crate\.version=)(?P<version>\d+\.\d+\.\d+-.*)")
             .unwrap();
     let current_version = version_regex.captures(&gradle_properties).ok_or_else(|| {
-        anyhow!("Failed to extract the expected runtime crates version from `{:?}`", &args.gradle_properties_path)
+        anyhow!(
+            "Failed to extract the expected runtime crates version from `{:?}`",
+            &args.gradle_properties_path
+        )
     })?;
     let current_version = current_version.name("version").unwrap();
     let current_version = semver::Version::parse(current_version.as_str())
@@ -57,8 +60,8 @@ pub async fn subcommand_upgrade_runtime_crates_version(
 
 async fn read_gradle_properties(fs: Fs, path: &Path) -> Result<String, anyhow::Error> {
     let bytes = fs.read_file(path).await?;
-    let contents =
-        String::from_utf8(bytes).with_context(|| format!("`{:?}` contained non-UTF8 data", path))?;
+    let contents = String::from_utf8(bytes)
+        .with_context(|| format!("`{:?}` contained non-UTF8 data", path))?;
     Ok(contents)
 }
 
