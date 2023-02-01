@@ -95,13 +95,8 @@ class ConstraintsTest {
     private val structAString = model.lookup<MemberShape>("test#StructureA\$string")
 
     @Test
-    fun `it should not recognize uniqueItems as a constraint trait because it's deprecated`() {
-        listA.isDirectlyConstrained(symbolProvider) shouldBe false
-    }
-
-    @Test
     fun `it should detect supported constrained traits as constrained`() {
-        listOf(mapA, structA, lengthString).forAll {
+        listOf(listA, mapA, structA, lengthString).forAll {
             it.isDirectlyConstrained(symbolProvider) shouldBe true
         }
     }
