@@ -9,7 +9,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Abstraction of the filesystem to allow for more tests to be added in the future.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Fs {
     Real,
 }
