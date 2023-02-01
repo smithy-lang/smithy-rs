@@ -494,7 +494,7 @@ class RustWriter private constructor(
             dependencyContainer.dependencies.forEach { dependency ->
                 super.addDependency(
                     when (val dep = RustDependency.fromSymbolDependency(dependency)) {
-                        is CargoDependency -> dep.copy(scope = DependencyScope.Dev)
+                        is CargoDependency -> dep.toDevDependency()
                         else -> dependencyContainer
                     },
                 )

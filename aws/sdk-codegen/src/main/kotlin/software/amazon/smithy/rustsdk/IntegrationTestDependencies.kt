@@ -82,7 +82,7 @@ class IntegrationTestDependencies(
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
-                addDependency(Tracing.copy(scope = DependencyScope.Dev))
+                addDependency(Tracing.toDevDependency())
                 addDependency(TracingSubscriber)
             }
             if (hasBenches) {
@@ -116,8 +116,8 @@ class S3TestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStd)
-            addDependency(BytesUtils)
-            addDependency(FastRand.copy(scope = DependencyScope.Dev))
+            addDependency(BytesUtils.toDevDependency())
+            addDependency(FastRand.toDevDependency())
             addDependency(HdrHistogram)
             addDependency(Smol)
             addDependency(TempFile)

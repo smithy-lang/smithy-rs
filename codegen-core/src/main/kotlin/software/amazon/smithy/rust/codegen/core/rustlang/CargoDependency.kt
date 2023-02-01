@@ -129,11 +129,11 @@ data class CargoDependency(
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
-    val nameAndLocation: Pair<String, DependencyLocation> = name to location
-
     fun withFeature(feature: String): CargoDependency {
         return copy(features = features.toMutableSet().apply { add(feature) })
     }
+
+    fun toDevDependency() = copy(scope = DependencyScope.Dev)
 
     override fun version(): String = when (location) {
         is CratesIo -> location.version
@@ -192,7 +192,7 @@ data class CargoDependency(
         val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
-        val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"), DependencyScope.Dev)
+        val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
@@ -244,7 +244,7 @@ data class CargoDependency(
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
         fun smithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-client")
         fun smithyClientTestUtil(runtimeConfig: RuntimeConfig) =
-            smithyClient(runtimeConfig).copy(scope = DependencyScope.Dev).withFeature("test-util")
+            smithyClient(runtimeConfig).toDevDependency().withFeature("test-util")
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
