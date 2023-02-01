@@ -70,6 +70,7 @@ class ServerBuilderConstraintViolations(
         Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
+        Attribute.AllowClippyEnumVariantNames.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
         writer.rustBlock("pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName") {
             renderConstraintViolations(writer)
