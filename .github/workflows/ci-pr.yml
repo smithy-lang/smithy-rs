@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow runs CI and the PR Bot on pull requests.
+# This workflow runs CI and the PR Bot on pull requests that are not from forked repositories.
 
 name: CI
 on:
@@ -11,6 +11,9 @@ on:
 concurrency:
   group: ci-yaml-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
@@ -47,10 +50,14 @@ jobs:
   acquire-base-image:
     name: Acquire Base Image
     needs: save-docker-login-token
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     runs-on: ubuntu-latest
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
     - uses: actions/checkout@v3
       with:
@@ -59,19 +66,26 @@ jobs:
       id: acquire
       env:
         DOCKER_BUILDKIT: 1
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
-    - name: Upload base image
-      uses: actions/upload-artifact@v3
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v1-node16
       with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
+        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Upload image
+      run: |
+        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+        docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
 
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
     needs:
     - save-docker-login-token
     - acquire-base-image
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
@@ -82,9 +96,8 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     needs: acquire-base-image
-    # Only run this job on pull requests (not directly on main)
-    if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
     with:
       issue_number: ${{ github.event.number }}

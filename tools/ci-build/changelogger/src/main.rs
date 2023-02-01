@@ -4,36 +4,36 @@
  */
 
 use anyhow::Result;
+use changelogger::init::subcommand_init;
+use changelogger::render::subcommand_render;
+use changelogger::split::subcommand_split;
 use clap::Parser;
-use render::subcommand_render;
-use split::subcommand_split;
-
-mod entry;
-mod render;
-mod split;
 
 #[derive(Parser, Debug, Eq, PartialEq)]
 #[clap(name = "changelogger", author, version, about)]
 pub enum Args {
     /// Split SDK changelog entries into a separate file
-    Split(split::SplitArgs),
+    Split(changelogger::split::SplitArgs),
     /// Render a TOML/JSON changelog into GitHub-flavored Markdown
-    Render(render::RenderArgs),
+    Render(changelogger::render::RenderArgs),
+    /// Print to stdout the empty "next" CHANGELOG template.
+    Init(changelogger::init::InitArgs),
 }
 
 fn main() -> Result<()> {
     match Args::parse() {
         Args::Split(split) => subcommand_split(&split),
         Args::Render(render) => subcommand_render(&render),
+        Args::Init(init) => subcommand_init(&init),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Args;
-    use crate::entry::ChangeSet;
-    use crate::render::RenderArgs;
-    use crate::split::SplitArgs;
+    use changelogger::entry::ChangeSet;
+    use changelogger::render::RenderArgs;
+    use changelogger::split::SplitArgs;
     use clap::Parser;
     use std::path::PathBuf;
 

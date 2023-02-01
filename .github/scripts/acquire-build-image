@@ -45,6 +45,7 @@ class Context:
         self.start_path = start_path
         self.script_path = script_path
         self.tools_path = tools_path
+        self.docker_image_path = tools_path + "/ci-build"
         self.user_id = user_id
         self.image_tag = image_tag
         self.allow_local_build = allow_local_build
@@ -56,7 +57,7 @@ class Context:
         script_path = os.path.dirname(os.path.realpath(__file__))
         tools_path = get_cmd_output("git rev-parse --show-toplevel", cwd=script_path)[1] + "/tools"
         user_id = get_cmd_output("id -u")[1]
-        image_tag = get_cmd_output("./ci-build/tools-hash", cwd=tools_path)[1]
+        image_tag = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
         allow_local_build = os.getenv("ALLOW_LOCAL_BUILD") != "false"
         github_actions = os.getenv("GITHUB_ACTIONS") == "true"
         print(f"Start path: {start_path}")
@@ -113,10 +114,10 @@ class Shell:
         run(f"docker build -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
 
     # Builds the local build image
-    def docker_build_build_image(self, user_id, script_path):
+    def docker_build_build_image(self, user_id, docker_image_path):
         run(
             f"docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID={user_id} .",
-            cwd=script_path
+            cwd=docker_image_path
         )
 
     # Saves the Docker image named `image_name` with `image_tag` to `output_path`
@@ -207,7 +208,7 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
                 return 1
 
             announce("Building a new image locally.")
-            shell.docker_build_base_image(context.image_tag, context.tools_path)
+            shell.docker_build_base_image(context.image_tag, context.docker_image_path)
 
             if context.github_actions:
                 announce("Saving base image for use in later jobs...")
@@ -224,7 +225,7 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
 
     announce("Creating local build image...")
     shell.docker_tag(LOCAL_BASE_IMAGE_NAME, context.image_tag, LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-    shell.docker_build_build_image(context.user_id, context.script_path)
+    shell.docker_build_build_image(context.user_id, context.docker_image_path)
     return 0
 
 
@@ -392,7 +393,7 @@ class SelfTest(unittest.TestCase):
 
         shell.docker_image_exists_locally.assert_called_once()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
 
     # When:
     #  - the base image doesn't exist locally
@@ -412,7 +413,7 @@ class SelfTest(unittest.TestCase):
         shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
 
     # When:
     #  - the base image doesn't exist locally
@@ -432,7 +433,7 @@ class SelfTest(unittest.TestCase):
         shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
 
     # When:
     #  - the base image doesn't exist locally
@@ -456,7 +457,7 @@ class SelfTest(unittest.TestCase):
             "/tmp/test/start-path/smithy-rs-base-image"
         )
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
 
     # When:
     #  - the base image doesn't exist locally
@@ -496,7 +497,7 @@ class SelfTest(unittest.TestCase):
             call(REMOTE_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, "someimagetag"),
             call(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
         ])
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
 
 
 def main():
