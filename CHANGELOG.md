@@ -1,4 +1,31 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 25th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#920](https://github.com/awslabs/smithy-rs/issues/920)) Fix bug in `OperationExtensionFuture`s `Future::poll` implementation
+
+
+January 24th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (server, [smithy-rs#2161](https://github.com/awslabs/smithy-rs/issues/2161)) Remove deprecated service builder, this includes:
+
+    - Remove `aws_smithy_http_server::routing::Router` and `aws_smithy_http_server::request::RequestParts`.
+    - Move the `aws_smithy_http_server::routers::Router` trait and `aws_smithy_http_server::routing::RoutingService` into `aws_smithy_http_server::routing`.
+    - Remove the following from the generated SDK:
+        - `operation_registry.rs`
+        - `operation_handler.rs`
+        - `server_operation_handler_trait.rs`
+
+    If migration to the new service builder API has not already been completed a brief summary of required changes can be seen in [previous release notes](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) and in API documentation of the root crate.
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2213](https://github.com/awslabs/smithy-rs/issues/2213)) `@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported
+- 🐛 (server, [smithy-rs#2200](https://github.com/awslabs/smithy-rs/pull/2200)) Event streams no longer generate empty error enums when their operations don’t have modeled errors
+- (all, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) `aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `Eq` and `Hash` traits
+- (server, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) Code-generated types for server SDKs now implement the `Eq` and `Hash` traits when possible
+
+
 January 12th, 2023
 ==================
 **New this release:**

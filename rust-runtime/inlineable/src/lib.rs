@@ -15,8 +15,6 @@ mod json_errors;
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
 mod rest_xml_wrapped_errors;
-#[allow(unused)]
-mod server_operation_handler_trait;
 
 #[allow(unused)]
 mod endpoint_lib;

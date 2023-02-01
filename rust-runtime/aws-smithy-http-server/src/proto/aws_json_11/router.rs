@@ -7,7 +7,7 @@ use crate::body::{empty, BoxBody};
 use crate::extension::RuntimeErrorExtension;
 use crate::proto::aws_json::router::Error;
 use crate::response::IntoResponse;
-use crate::routers::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
+use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::AwsJson1_1;
 

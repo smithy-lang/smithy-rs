@@ -44,7 +44,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         listOf(
             SdkConfigSection.create { section ->
                 writable {
-                    rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().clone());")
+                    rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
                 }
             },
         )
@@ -62,28 +62,23 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
         "provider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider"),
         "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
         "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
-        "DefaultProvider" to defaultProvider(),
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.BuilderStruct ->
-                rustTemplate(
-                    "credentials_provider: Option<std::sync::Arc<dyn #{provider}::ProvideCredentials>>,",
-                    *codegenScope,
-                )
-
+                rustTemplate("credentials_provider: Option<#{provider}::SharedCredentialsProvider>,", *codegenScope)
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
                     /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{provider}::ProvideCredentials + 'static) -> Self {
-                        self.set_credentials_provider(Some(std::sync::Arc::new(credentials_provider)));
+                        self.set_credentials_provider(Some(#{provider}::SharedCredentialsProvider::new(credentials_provider)));
                         self
                     }
 
                     /// Sets the credentials provider for this service
-                    pub fn set_credentials_provider(&mut self, credentials_provider: Option<std::sync::Arc<dyn #{provider}::ProvideCredentials>>) -> &mut Self {
+                    pub fn set_credentials_provider(&mut self, credentials_provider: Option<#{provider}::SharedCredentialsProvider>) -> &mut Self {
                         self.credentials_provider = credentials_provider;
                         self
                     }
@@ -93,7 +88,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             }
 
             is ServiceConfig.DefaultForTests -> rustTemplate(
-                "${section.configBuilderRef}.set_credentials_provider(Some(std::sync::Arc::new(#{TestCredentials}::for_tests())));",
+                "${section.configBuilderRef}.set_credentials_provider(Some(#{provider}::SharedCredentialsProvider::new(#{TestCredentials}::for_tests())));",
                 *codegenScope,
             )
 
