@@ -86,7 +86,6 @@ jobs:
         run: |
           set -e
           
-          touch output
           ./.github/scripts/get-or-create-release-branch.sh output
           cat output > $GITHUB_OUTPUT
 
