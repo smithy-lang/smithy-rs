@@ -115,7 +115,7 @@ jobs:
         run: |
           if [[ git diff-index --quiet HEAD ]]; then
             # The file was actually changed, we need to commit and push the changes
-            git commit gradle.properties -m "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
+            git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
             echo "Pushing upgraded gradle.properties commit..."
             git push origin
           fi
@@ -208,5 +208,5 @@ jobs:
           # a commit that is not the current tip of `main`.
           # We can build more refined automation to handle this case in the future - until then, it'll require 
           # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
-          git commit CHANGELOG.next.toml -m "Remove released entries from CHANGELOG.next.toml"
+          git commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
           git push origin main
