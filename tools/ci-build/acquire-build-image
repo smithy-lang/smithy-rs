@@ -172,6 +172,7 @@ def decrypt_and_login(secret):
     if token is None:
         print('no passphrase')
         return
+    print(f'decrypting. input len: {len(decoded)}, token len: {len(token)}')
     (code, password, err) = (get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase '{token}' --output -", check=False,
                          input=decoded))
     if code != 0:
