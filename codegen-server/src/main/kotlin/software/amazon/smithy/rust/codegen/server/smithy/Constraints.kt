@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
@@ -59,8 +60,18 @@ val allConstraintTraitsWithoutRequired = setOf(
     UniqueItemsTrait::class.java,
     EnumTrait::class.java,
 )
+
 fun Shape.isOnlyRequired() = this.hasTrait<RequiredTrait>() && allConstraintTraitsWithoutRequired.none(this::hasTrait)
 
+/**
+ * Returns `false` if:
+ * - none of the structure members are constrained; or
+ * - the only constraint trait on the structure members is `@required`, used in combination with `@httpLabel`.
+ *
+ * The latter never results on a validation exception being sent on the wire.
+ */
+fun StructureShape.itsConstraintViolationMayBeReturnedToTheCaller() =
+    this.members().filterNot { it.isOnlyRequired() && it.hasTrait<HttpLabelTrait>() }.any { it.hasConstraintTrait() }
 
 val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
 

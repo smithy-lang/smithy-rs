@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -47,7 +48,10 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
+import software.amazon.smithy.rust.codegen.server.smithy.isOnlyRequired
+import software.amazon.smithy.rust.codegen.server.smithy.itsConstraintViolationMayBeReturnedToTheCaller
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
@@ -164,12 +168,12 @@ class ServerBuilderGenerator(
                 writer,
                 visibility,
                 nonExhaustive = true,
-                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
+                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput() && shape.itsConstraintViolationMayBeReturnedToTheCaller(),
             )
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
             // an operation input shape.
-            if (shape.hasTrait<SyntheticInputTrait>()) {
+            if (shape.hasTrait<SyntheticInputTrait>() && shape.itsConstraintViolationMayBeReturnedToTheCaller()) {
                 renderImplFromConstraintViolationForRequestRejection(writer)
             }
 
@@ -187,7 +191,8 @@ class ServerBuilderGenerator(
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         // Filter out any derive that isn't Debug or Clone. Then add a Default derive
-        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        val builderDerives =
+            baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
         Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
@@ -315,7 +320,8 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isRustBoxed()
-        val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
+        val wrapInMaybeConstrained =
+            takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
@@ -340,7 +346,11 @@ class ServerBuilderGenerator(
                     if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
 
                     if (wrapInMaybeConstrained) {
-                        conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
+                        conditionalBlock(
+                            "input.map(##[allow(clippy::redundant_closure)] |v| ",
+                            ")",
+                            conditional = symbol.isOptional(),
+                        ) {
                             conditionalBlock("Box::new(", ")", conditional = hasBox) {
                                 rust("$maybeConstrainedVariant($varExpr)")
                             }
@@ -401,12 +411,12 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
-                if (symbolProvider.toSymbol(member).isOptional()) {
-                    "input.map(|v| v.into())"
-                } else {
-                    "Some(input.into())"
-                }
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+                    if (symbolProvider.toSymbol(member).isOptional()) {
+                        "input.map(|v| v.into())"
+                    } else {
+                        "Some(input.into())"
+                    }
                 };
                 self
                 """,
@@ -518,9 +528,10 @@ class ServerBuilderGenerator(
                     // Write the modifier(s).
 
                     // 1. Enforce constraint traits of data from incoming requests.
-                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
-                        enforceConstraints(this, member, constraintViolation)
-                    }
+                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)
+                        ?.also { constraintViolation ->
+                            enforceConstraints(this, member, constraintViolation)
+                        }
 
                     if (member.hasNonNullDefault()) {
                         // 2a. If a `@default` value is modeled and the user did not set a value, fall back to using the
@@ -560,7 +571,7 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                 })
                 .map(|res|
-                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
+                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
                 )
                 .transpose()?
@@ -589,7 +600,10 @@ class ServerBuilderGenerator(
         // We've just checked the constraints hold by going through the non-public
         // constrained type, but the user wants to work with the unconstrained type, so we have to
         // unwrap it.
-        if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)) {
+        if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
+                model,
+            )
+        ) {
             writer.rust(
                 ".map(|v: #T| v.into())",
                 constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
