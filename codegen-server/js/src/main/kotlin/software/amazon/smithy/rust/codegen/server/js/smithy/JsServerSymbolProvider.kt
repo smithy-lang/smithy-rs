@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
@@ -111,7 +112,12 @@ class JsStreamingShapeMetadataProvider(private val base: RustSymbolProvider, pri
     }
 
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
-    override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
+    override fun enumMeta(stringShape: StringShape): RustMetadata =
+        RustMetadata(
+            setOf(RuntimeType.Eq, RuntimeType.Ord, RuntimeType.PartialEq, RuntimeType.PartialOrd, RuntimeType.Debug),
+            listOf(),
+            Visibility.PUBLIC,
+        )
 
     override fun listMeta(listShape: ListShape) = base.toSymbol(listShape).expectRustMetadata()
     override fun mapMeta(mapShape: MapShape) = base.toSymbol(mapShape).expectRustMetadata()

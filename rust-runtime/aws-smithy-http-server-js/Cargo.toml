@@ -6,3 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda", "shared-socket"] }
+napi = "2.10"
+napi-derive = "2.10"
+socket2 = "0.4"

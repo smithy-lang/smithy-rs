@@ -238,7 +238,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
         let held_socket: &PySocket = &borrow;
-        let raw_socket = held_socket.get_socket()?;
+        let raw_socket = held_socket.to_raw_socket()?;
 
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
