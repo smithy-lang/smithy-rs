@@ -319,7 +319,7 @@ open class ServerCodegenVisitor(
             }
         }
 
-        val constraintsInfo = CollectionTraitInfo.fromShape(shape)
+        val constraintsInfo = CollectionTraitInfo.fromShape(shape, codegenContext.constrainedShapeSymbolProvider)
         if (isDirectlyConstrained) {
             rustCrate.withModule(ModelsModule) {
                 ConstrainedCollectionGenerator(
