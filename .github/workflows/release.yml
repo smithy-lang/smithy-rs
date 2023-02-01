@@ -83,7 +83,7 @@ jobs:
         env:
           SEMANTIC_VERSION: ${{ inputs.semantic_version }}
           DRY_RUN: ${{ inputs.dry_run }}
-        run: ./tools/get-or-create-release-branch.sh
+        run: ./.github/scripts/get-or-create-release-branch.sh
 
   upgrade-gradle-properties:
     name: Upgrade gradle.properties
