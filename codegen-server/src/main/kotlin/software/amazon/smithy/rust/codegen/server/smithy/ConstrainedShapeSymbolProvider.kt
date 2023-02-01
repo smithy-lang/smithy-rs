@@ -79,7 +79,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
+                    check(shape.hasTrait<LengthTrait>()) {
+                        "Only the `length` constraint trait can be applied to map shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val keySymbol = this.toSymbol(shape.key)
@@ -92,7 +94,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
+                    check(constrainedCollectionCheck(shape)) {
+                        "Only the `length` and `uniqueItems` constraint traits can be applied to list shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)

@@ -27,7 +27,6 @@ import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -48,7 +47,7 @@ private sealed class UnsupportedConstraintMessageKind {
             if (canBeIgnored) {
                 msg += """
                     If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints`
-                    inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`."""
+                    inside the `runtimeConfig.codegen` JSON object in your `smithy-build.json` to `true`."""
             }
             return msg.trimIndent().replace("\n", " ")
         }
@@ -242,26 +241,11 @@ fun validateUnsupportedConstraints(
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
 
-    // 5. UniqueItems trait on any shape is used. It has not been implemented yet.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    val unsupportedUniqueItemsTraitOnShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
-        .map { (shape, uniqueItemsTrait) ->
-            UnsupportedUniqueItemsTraitOnShape(
-                shape,
-                uniqueItemsTrait as UniqueItemsTrait,
-            )
-        }
-        .toSet()
-
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
+            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
