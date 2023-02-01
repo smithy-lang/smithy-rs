@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unh
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -78,6 +79,22 @@ class OperationErrorGenerator(
             derives = setOf(RuntimeType.Debug),
             additionalAttributes = listOf(Attribute.NonExhaustive),
             visibility = Visibility.PUBLIC,
+        )
+
+        // TODO(deprecated): Remove this temporary alias. This was added so that the compiler
+        // points customers in the right direction when they are upgrading. Unfortunately there's no
+        // way to provide better backwards compatibility on this change.
+        val kindDeprecationMessage = "Operation `*Error/*ErrorKind` types were combined into a single `*Error` enum. " +
+            "The `.kind` field on `*Error` no longer exists and isn't needed anymore (you can just match on the " +
+            "error directly since it's an enum now)."
+        writer.rust(
+            """
+            /// Do not use this.
+            ///
+            /// $kindDeprecationMessage
+            ##[deprecated(note = ${kindDeprecationMessage.dq()})]
+            pub type ${errorType.name}Kind = ${errorType.name};
+            """,
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
