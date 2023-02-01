@@ -5,6 +5,13 @@
 #
 set -e
 
+if [ -z "$1" ]; then
+  echo "You need to specify the path of the file where you want to collect the output"
+  exit 1
+else
+  output_file="$1"
+fi
+
 # Split on the dots
 version_array=( ${SEMANTIC_VERSION//./ } )
 major=${version_array[0]}
@@ -17,19 +24,19 @@ fi
 if [[ $major == 0 ]]; then
   branch_name="smithy-rs-release-${major}.${minor}.x"
   if [[ $patch == 0 ]]; then
-    echo "new_release_series=true" > $GITHUB_OUTPUT
+    echo "new_release_series=true" > "${output_file}"
   fi
 else
   branch_name="smithy-rs-release-${major}.x.y"
   if [[ $minor == 0 && $patch == 0 ]]; then
-    echo "new_release_series=true" > $GITHUB_OUTPUT
+    echo "new_release_series=true" > "${output_file}"
   fi
 fi
 
 if [[ "${DRY_RUN}" == "true" ]]; then
   branch_name="${branch_name}-preview"
 fi
-echo "release_branch=${branch_name}" > $GITHUB_OUTPUT
+echo "release_branch=${branch_name}" > "${output_file}"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
   git push -f origin "HEAD:${branch_name}"
