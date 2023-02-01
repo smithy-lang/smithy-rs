@@ -56,7 +56,7 @@ echo "release_branch=${branch_name}" > "${output_file}"
 if [[ "${DRY_RUN}" == "true" ]]; then
   git push -f origin "HEAD:${branch_name}"
 else
-  commit_sha=$(git rev-parse --verify --short HEAD)
+  commit_sha=$(git rev-parse --short HEAD)
   if git ls-remote --exit-code --heads origin "${branch_name}"; then
     # The release branch already exists, we need to make sure that our commit is its current tip
     branch_head_sha=$(git rev-parse --verify --short refs/heads/patches)
