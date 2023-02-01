@@ -158,11 +158,16 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
     result = subprocess.run(
         shlex.split(command),
         capture_output=True,
-        check=check,
+        check=False,
         cwd=cwd,
         **kwargs
     )
-    return (result.returncode, result.stdout.decode("utf-8").strip(), result.stderr.decode("utf-8").strip())
+    stdout = result.stdout.decode("utf-8").strip()
+    stderr = result.stderr.decode("utf-8").strip()
+    if check and result.returncode != 0:
+        raise Exception(f"failed to run '{command}.\n{stdout}\n{stderr}")
+
+    return result.returncode, stdout, stderr
 
 
 def decrypt_and_login(secret):
@@ -172,13 +177,10 @@ def decrypt_and_login(secret):
     if token is None:
         print('no passphrase')
         return
-    print(f'decrypting. input len: {len(decoded)}, token len: {len(token)}')
-    (code, password, err) = (get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase '{token}' --output -", check=False,
-                         input=decoded))
-    if code != 0:
-        print(err)
-        raise
-    (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+    (code, password, err) = get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase '{token}' --output -",
+                                           input=decoded)
+    (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws",
+                                    input=password.encode('utf-8'))
     print(output)
 
 
