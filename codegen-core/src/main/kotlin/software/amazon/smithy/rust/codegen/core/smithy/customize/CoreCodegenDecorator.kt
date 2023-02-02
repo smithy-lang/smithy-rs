@@ -65,7 +65,7 @@ interface CoreCodegenDecorator<CodegenContext> {
     /**
      * Extra sections allow one decorator to influence another. This is intended to be used by querying the `rootDecorator`
      */
-    fun extraSections(codegenContext: CodegenContext): List<AdHocCustomizationWriter> = listOf()
+    fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> = listOf()
 }
 
 /**
@@ -98,7 +98,7 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
             decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
         }
 
-    final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomizationWriter> =
+    final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> =
         addCustomizations { decorator -> decorator.extraSections(codegenContext) }
 
     /**

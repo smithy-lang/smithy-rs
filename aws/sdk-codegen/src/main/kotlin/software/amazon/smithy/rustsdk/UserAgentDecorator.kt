@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -56,7 +55,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return listOf(
             AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust("${section.serviceConfigBuilder}.set_app_name(${section.sdkConfig}.app_name().cloned());")

@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.extendIf
@@ -133,7 +132,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return codegenContext.isRegionalized().thenSingletonListOf {
             AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust(

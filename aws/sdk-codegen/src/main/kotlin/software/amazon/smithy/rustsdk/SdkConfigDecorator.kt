@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 
@@ -66,7 +65,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
     override val name: String = "GenericSmithySdkConfigSettings"
     override val order: Byte = 0
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
             AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust(
