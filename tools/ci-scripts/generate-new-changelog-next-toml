@@ -6,4 +6,4 @@
 
 set -eux
 
-changelogger init > CHANGELOG.next.toml
+changelogger init > smithy-rs/CHANGELOG.next.toml
