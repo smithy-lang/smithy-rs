@@ -8,7 +8,7 @@ set -eux
 
 SEMANTIC_VERSION="${1}"
 SMITHY_RS_DIR="$(pwd)/smithy-rs"
-ARTIFACTS_DIR="$(pwd)/artifacts"
+ARTIFACTS_DIR="$(pwd)/artifacts/upgrade-gradle-properties"
 mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
@@ -24,5 +24,5 @@ popd
 pushd "${ARTIFACTS_DIR}"
 git clone "${SMITHY_RS_DIR}"
 # Copy over the original remotes so that it's possible to push to `origin`
-cp "${SMITHY_RS_DIR}/.git/config" .git/config
+cp "${SMITHY_RS_DIR}/.git/config" smithy-rs/.git/config
 popd
