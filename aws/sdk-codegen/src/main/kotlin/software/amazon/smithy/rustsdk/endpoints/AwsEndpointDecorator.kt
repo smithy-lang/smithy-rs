@@ -29,8 +29,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.extendIf
@@ -133,16 +133,14 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return codegenContext.isRegionalized().thenSingletonListOf {
-            SdkConfigSection.create { section ->
-                {
-                    rust(
-                        """
-                        ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
-                        """,
-                    )
-                }
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
+                    """,
+                )
             }
         }
     }
