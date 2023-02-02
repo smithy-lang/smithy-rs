@@ -11,5 +11,4 @@ set -eo pipefail
 cd "$(dirname "$0")"
 cd "$(git rev-parse --show-toplevel)"
 
-# git ls-files -s --full-name "tools" | grep -v acquire-build-image | git hash-object --stdin
-echo "ef34a35a310a993d1fbc39c0a6e869dda7e80af1"
+git ls-files -s --full-name "tools" | grep -v acquire-build-image | git hash-object --stdin
