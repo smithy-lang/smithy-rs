@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.typescript.smithy.customizati
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -30,8 +29,6 @@ class CdylibManifestDecorator : ServerCodegenDecorator {
     ): ManifestCustomizations =
         mapOf(
             "lib" to mapOf(
-                // Library target names cannot contain hyphen names.
-                "name" to codegenContext.settings.moduleName.toSnakeCase(),
                 "crate-type" to listOf("cdylib"),
             ),
         )
