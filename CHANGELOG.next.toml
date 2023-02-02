@@ -58,6 +58,20 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[smithy-rs]]
+message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs."
+references = ["smithy-rs#2232", "smithy-rs#1670"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
+author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """
+Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.
+"""
+references = ["smithy-rs#2258"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
 message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
 references = ["smithy-rs#2271"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}

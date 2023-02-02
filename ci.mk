@@ -4,7 +4,7 @@
 #
 
 # This is a makefile executed by the `./ci` script that
-# has a target for every single CI script in `tools/ci-build/scripts`,
+# has a target for every single CI script in `tools/ci-scripts`,
 # with dependencies between targets included so that it's not necessary
 # to remember to generate a SDK for the targets that require one.
 
@@ -14,7 +14,7 @@ CI_ACTION=$(CI_BUILD)/ci-action
 
 .PHONY: acquire-build-image
 acquire-build-image:
-	$(CI_BUILD)/acquire-build-image
+	./smithy-rs/.github/scripts/acquire-build-image
 
 .PHONY: check-aws-config
 check-aws-config: generate-aws-sdk-smoketest
@@ -118,8 +118,4 @@ generate-codegen-diff:
 
 .PHONY: generate-smithy-rs-release
 generate-smithy-rs-release:
-	$(CI_ACTION) $@ $(ARGS)
-
-.PHONY: sanity-test
-sanity-test:
 	$(CI_ACTION) $@ $(ARGS)

@@ -53,7 +53,7 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
