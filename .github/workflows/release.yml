@@ -18,7 +18,9 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: The SHA of the git commit that you want to release (e.g. b2318b0)
+        description: | 
+          The SHA of the git commit that you want to release.  
+          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
         required: true
         type: string
       semantic_version:
@@ -69,6 +71,13 @@ jobs:
     name: Get or create a release branch
     needs:
     - release-ci
+    - acquire-base-image
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: |
+      always() && 
+      needs.acquire-base-image.result == 'success' && 
+      (needs.release-ci.result == 'success' || needs.release-ci.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
@@ -121,7 +130,7 @@ jobs:
           echo "Pushing upgraded gradle.properties commit..."
           git push origin
         fi
-        echo "commit_sha=$(git rev-parse --short HEAD)" > $GITHUB_OUTPUT
+        echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
 
   release:
     name: Release
