@@ -131,7 +131,7 @@ jobs:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
-        if [[ git diff-index --quiet HEAD ]]; then
+        if git diff-index --quiet HEAD; then
           # The file was actually changed, we need to commit and push the changes
           git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
           echo "Pushing upgraded gradle.properties commit..."
