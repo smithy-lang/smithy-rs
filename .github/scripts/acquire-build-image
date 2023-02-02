@@ -185,9 +185,8 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
 
 def decrypt_and_login(secret, passphrase):
     decoded = base64.b64decode(secret, validate=True)
-    if not token:
+    if not passphrase:
         raise Exception("a secret was set but no passphrase was set (or it was empty)")
-    assert not "'" in token  # prevent shell escape funny business
     (code, password, err) = get_cmd_output(
         ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", "{token}", "--output", "-"],
         input=decoded)
@@ -239,17 +238,18 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
 
 
 class SelfTest(unittest.TestCase):
-    def test_context(self, github_actions=False, **kwargs):
+    def test_context(self, github_actions=False, allow_local_build=False, encrypted_docker_password=None,
+                     docker_passphrase=None):
         return Context(
             start_path="/tmp/test/start-path",
             script_path="/tmp/test/script-path",
             tools_path="/tmp/test/tools-path",
             user_id="123",
             image_tag="someimagetag",
-            encrpyted_docker_password=None,
-            docker_passphrase=None,
+            encrpyted_docker_password=encrypted_docker_password,
+            docker_passphrase=docker_passphrase,
             github_actions=github_actions,
-            **kwargs
+            allow_local_build=allow_local_build,
         )
 
     def mock_shell(self):
@@ -279,7 +279,7 @@ class SelfTest(unittest.TestCase):
 
     def test_docker_login(self):
         shell = self.mock_shell()
-        acquire_build_image(self.test_context(encrpyted_docker_password="asdf", docker_passphrase="1234"))
+        acquire_build_image(self.test_context(encrypted_docker_password="asdf", docker_passphrase="1234"))
 
     def test_retry_immediate_success(self):
         shell = self.mock_shell()
@@ -408,7 +408,7 @@ class SelfTest(unittest.TestCase):
 
         shell.docker_image_exists_locally.assert_called_once()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -425,10 +425,10 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -445,10 +445,10 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -465,14 +465,14 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_called_with(
             LOCAL_BASE_IMAGE_NAME,
             "someimagetag",
             "/tmp/test/start-path/smithy-rs-base-image"
         )
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -512,7 +512,7 @@ class SelfTest(unittest.TestCase):
             call(REMOTE_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, "someimagetag"),
             call(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
         ])
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
 
 def main():
