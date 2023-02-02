@@ -17,10 +17,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 
-sealed class SdkConfigSection(name: String) : Section(name) {
+sealed class SdkConfigSection(name: String) : AdHocSection(name) {
     /**
      * [sdkConfig]: A reference to the SDK config struct
      * [serviceConfigBuilder]: A reference (owned) to the `<service>::config::Builder` struct.
@@ -49,7 +50,7 @@ object SdkConfigCustomization {
      * ```
      */
     fun copyField(fieldName: String, map: Writable?) =
-        AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+        adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
             val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
             rustTemplate(
                 "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
@@ -67,7 +68,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
-            AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust(
                     """
                     // resiliency

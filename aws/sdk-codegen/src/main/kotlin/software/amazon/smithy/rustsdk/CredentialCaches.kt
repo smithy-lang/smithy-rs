@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
 class CredentialsCacheDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsCache"
@@ -39,7 +40,7 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
-            AdHocCustomization.customize { section: SdkConfigSection.CopySdkConfigToClientConfig ->
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust("${section.serviceConfigBuilder}.set_credentials_cache(${section.sdkConfig}.credentials_cache().cloned());")
             },
         )
