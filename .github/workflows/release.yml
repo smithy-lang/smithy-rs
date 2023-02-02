@@ -95,6 +95,7 @@ jobs:
     if: inputs.dry_run == false
     needs:
     - get-or-create-release-branch
+    runs-on: ubuntu-latest
     outputs:
       commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
