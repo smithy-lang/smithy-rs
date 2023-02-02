@@ -127,7 +127,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Push gradle.properties changes
       id: gradle-push
-      working-directory: artifacts
+      working-directory: upgrade-gradle-properties/smithy-rs
       shell: bash
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
