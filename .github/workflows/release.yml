@@ -40,7 +40,7 @@ jobs:
   # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_16-core
     steps:
     - uses: actions/checkout@v3
       with:
@@ -103,38 +103,49 @@ jobs:
     name: Upgrade gradle.properties
     needs:
     - get-or-create-release-branch
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     outputs:
-      commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
     steps:
     - uses: actions/checkout@v3
       with:
         ref: ${{ inputs.release_branch }}
+        path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Upgrade gradle.properties
       uses: ./smithy-rs/.github/actions/docker-build
       with:
-        action: upgrade-gradle-smithy-rs-release ${{ inputs.semantic_version }}
+        action: upgrade-gradle-properties
+        action-arguments: ${{ inputs.semantic_version }}
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Push gradle.properties changes
       id: gradle-push
+      working-directory: upgrade-gradle-properties/smithy-rs
       shell: bash
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
-        if [[ git diff-index --quiet HEAD ]]; then
-          # The file was actually changed, we need to commit and push the changes
-          git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-          echo "Pushing upgraded gradle.properties commit..."
-          git push origin
-        fi
-        echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
+        echo "Pushing upgraded gradle.properties commit..."
+        git push origin
 
   release:
     name: Release
     needs:
     - upgrade-gradle-properties
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
@@ -205,6 +216,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: ${{ inputs.commit_sha }}
+        path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Empty CHANGELOG.next.toml
       uses: ./smithy-rs/.github/actions/docker-build
