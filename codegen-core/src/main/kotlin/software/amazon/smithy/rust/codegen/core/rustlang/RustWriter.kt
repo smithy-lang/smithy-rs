@@ -454,7 +454,7 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate") || filename.startsWith("tests/")) { "We can only write into files in the crate (got $namespace)" }
+            require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") { "We can only write into files in the crate (got $namespace)" }
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
