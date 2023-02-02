@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -16,12 +17,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
@@ -39,21 +40,12 @@ class UserAgentDecorator : ClientCodegenDecorator {
         return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        // We are generating an AWS SDK, the service needs to have the AWS service trait
-        val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
-        return baseCustomizations + ApiVersionAndPubUse(codegenContext.runtimeConfig, serviceTrait)
-    }
-
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
+        return baseCustomizations + UserAgentFeature(codegenContext)
     }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
@@ -65,44 +57,66 @@ class UserAgentDecorator : ClientCodegenDecorator {
     }
 
     /**
-     * Adds a static `API_METADATA` variable to the crate root containing the serviceId & the version of the crate for this individual service
+     * Adds a static `API_METADATA` variable to the crate `config` containing the serviceId & the version of the crate for this individual service
      */
-    private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) :
-        LibRsCustomization() {
-        private val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
-        override fun section(section: LibRsSection): Writable = when (section) {
-            is LibRsSection.Body -> writable {
-                // PKG_VERSION comes from CrateVersionGenerator
-                rust(
-                    "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
-                    AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
-                )
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val runtimeConfig = codegenContext.runtimeConfig
 
-                // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
-                rustTemplate(
-                    "pub use #{AppName};",
-                    "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
-                )
-            }
+        // We are generating an AWS SDK, the service needs to have the AWS service trait
+        val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
+        val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
 
-            else -> emptySection
+        val metaModule = when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+            true -> ClientRustModule.Meta
+            else -> ClientRustModule.root
+        }
+        rustCrate.withModule(metaModule) {
+            rustTemplate(
+                """
+                pub(crate) static API_METADATA: #{user_agent}::ApiMetadata =
+                    #{user_agent}::ApiMetadata::new(${serviceId.dq()}, #{PKG_VERSION});
+                """,
+                "user_agent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
+                "PKG_VERSION" to CrateVersionCustomization.pkgVersion(metaModule),
+            )
+        }
+
+        val configModule = when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+            true -> ClientRustModule.Config
+            else -> ClientRustModule.root
+        }
+        rustCrate.withModule(configModule) {
+            // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
+            rustTemplate(
+                "pub use #{AppName};",
+                "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+            )
         }
     }
 
-    private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
+    private class UserAgentFeature(
+        private val codegenContext: ClientCodegenContext,
+    ) : OperationCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
+
         override fun section(section: OperationSection): Writable = when (section) {
             is OperationSection.MutateRequest -> writable {
+                val metaModule = when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                    true -> ClientRustModule.Meta
+                    else -> ClientRustModule.root
+                }
                 rustTemplate(
                     """
                     let mut user_agent = #{ua_module}::AwsUserAgent::new_from_environment(
                         #{Env}::real(),
-                        crate::API_METADATA.clone(),
+                        #{meta}::API_METADATA.clone(),
                     );
                     if let Some(app_name) = _config.app_name() {
                         user_agent = user_agent.with_app_name(app_name.clone());
                     }
                     ${section.request}.properties_mut().insert(user_agent);
                     """,
+                    "meta" to metaModule,
                     "ua_module" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
                     "Env" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("os_shim_internal::Env"),
                 )

@@ -55,7 +55,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
+        baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -68,6 +68,14 @@ class RequiredCustomizations : ClientCodegenDecorator {
 
         rustCrate.withModule(ClientRustModule.Types) {
             pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
+        }
+
+        val metaModule = when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+            true -> ClientRustModule.Meta
+            else -> ClientRustModule.root
+        }
+        rustCrate.withModule(metaModule) {
+            CrateVersionCustomization.extras(rustCrate, metaModule)
         }
     }
 }
