@@ -6,4 +6,4 @@
 
 set -eux
 
-publisher upgrade-runtime-crates-version --version ${1}
+publisher upgrade-runtime-crates-version --version ${1} --gradle-properties-path smithy-rs/gradle.properties
