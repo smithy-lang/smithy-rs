@@ -119,7 +119,7 @@ jobs:
         ref: ${{ inputs.release_branch }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Upgrade gradle.properties
-      uses: ./smithy-rs/.github/actions/docker-build
+      uses: ./.github/actions/docker-build
       with:
         action: upgrade-gradle-smithy-rs-release ${{ inputs.semantic_version }}
     - name: Push gradle.properties changes
@@ -219,7 +219,7 @@ jobs:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Empty CHANGELOG.next.toml
-      uses: ./smithy-rs/.github/actions/docker-build
+      uses: ./.github/actions/docker-build
       with:
         action: generate-new-changelog-next-toml
     - name: Push smithy-rs changes
