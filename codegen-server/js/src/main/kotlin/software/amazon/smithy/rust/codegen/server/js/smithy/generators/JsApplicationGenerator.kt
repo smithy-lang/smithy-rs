@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.js.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -77,10 +78,12 @@ class JsApplicationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyPython" to JsServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyJs" to JsServerCargoDependency.smithyHttpServerJs(runtimeConfig).toType(),
             "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to JsServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to JsServerCargoDependency.PyO3Asyncio.toType(),
             "napi" to JsServerCargoDependency.Napi.toType(),
+            "napi_derive" to JsServerCargoDependency.NapiDerive.toType(),
             "tokio" to JsServerCargoDependency.Tokio.toType(),
             "tracing" to JsServerCargoDependency.Tracing.toType(),
             "tower" to JsServerCargoDependency.Tower.toType(),
@@ -93,22 +96,18 @@ class JsApplicationGenerator(
         )
 
     fun render(writer: RustWriter) {
-        renderPyApplicationRustDocs(writer)
-        // renderAppStruct(writer)
-        // renderAppDefault(writer)
-        // renderAppClone(writer)
-        // renderPyAppTrait(writer)
-        // renderPyMethods(writer)
+        writer.write("use napi_derive::napi;")
         renderHandlers(writer)
+        // renderPyApplicationRustDocs(writer)
+        renderApp(writer)
     }
 
     fun renderHandlers(writer: RustWriter) {
-        writer.rustBlock("pub struct Handlers") {
+        Attribute(derive(RuntimeType.Clone)).render(writer)
+        writer.rustBlock("""pub struct Handlers""") {
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val input = "crate::input::${operationName}Input"
-                val output = "crate::output::${operationName}Output"
-                val error = "crate::error::${operationName}Error"
                 val fnName = operationName.toSnakeCase()
                 rustTemplate(
                     """
@@ -121,7 +120,7 @@ class JsApplicationGenerator(
                 )
             }
         }
-        Attribute(JsServerCargoDependency.NapiDerive.toType().resolve("napi")).render(writer)
+        Attribute("napi(object)").render(writer)
         writer.rustBlock("pub struct JsHandlers") {
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
@@ -131,8 +130,8 @@ class JsApplicationGenerator(
                 val fnName = operationName.toSnakeCase()
                 rustTemplate(
                     """
-                    ##[napi_derive::napi(ts_type = "(input: $input) => Promise<$output|$error>")]
-                    pub(crate) $fnName: #{napi}::JsFunction,
+                    ##[napi(ts_type = "(input: $input) => Promise<$output|$error>")]
+                    pub $fnName: #{napi}::JsFunction,
                     """,
                     *codegenScope,
                 )
@@ -140,227 +139,79 @@ class JsApplicationGenerator(
         }
     }
 
-    fun renderAppStruct(writer: RustWriter) {
-        writer.rustTemplate(
+    private fun renderApp(writer: RustWriter) {
+        Attribute("napi").render(writer)
+        writer.rust(
             """
-            ##[#{pyo3}::pyclass]
-            ##[derive(Debug)]
             pub struct App {
-                handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
-                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
-                context: Option<#{pyo3}::PyObject>,
-                workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
+                handlers: Handlers,
             }
             """,
-            *codegenScope,
         )
-    }
-
-    private fun renderAppClone(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl Clone for App {
-                fn clone(&self) -> Self {
-                    Self {
-                        handlers: self.handlers.clone(),
-                        middlewares: self.middlewares.clone(),
-                        context: self.context.clone(),
-                        workers: #{parking_lot}::Mutex::new(vec![]),
-                    }
-                }
-            }
-            """,
-            *codegenScope,
-        )
-    }
-
-    private fun renderAppDefault(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl Default for App {
-                fn default() -> Self {
-                    Self {
-                        handlers: Default::default(),
-                        middlewares: vec![],
-                        context: None,
-                        workers: #{parking_lot}::Mutex::new(vec![]),
-                    }
-                }
-            }
-            """,
-            "Protocol" to protocol.markerStruct(),
-            *codegenScope,
-        )
-    }
-
-    private fun renderPyAppTrait(writer: RustWriter) {
-        writer.rustBlockTemplate(
-            """
-            impl #{SmithyPython}::PyApp for App
-            """,
-            *codegenScope,
-        ) {
-            rustTemplate(
-                """
-                fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
-                    &self.workers
-                }
-                fn context(&self) -> &Option<#{pyo3}::PyObject> {
-                    &self.context
-                }
-                fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
-                    &mut self.handlers
-                }
-                """,
-                *codegenScope,
-            )
-
-            rustBlockTemplate(
-                """
-                fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
-                    #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>,
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
-                        std::convert::Infallible
-                    >
-                >
-                """,
-                *codegenScope,
-            ) {
-                rustTemplate(
-                    """
-                    let builder = crate::service::$serviceName::builder_without_plugins();
-                    """,
-                    *codegenScope,
-                )
-                for (operation in operations) {
-                    val operationName = symbolProvider.toSymbol(operation).name
-                    val name = operationName.toSnakeCase()
-                    rustTemplate(
-                        """
-                        let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                        let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
-                        let builder = builder.$name(move |input, state| {
-                            #{pyo3_asyncio}::tokio::scope(${name}_locals.clone(), crate::python_operation_adaptor::$name(input, state, handler.clone()))
-                        });
-                        """,
-                        *codegenScope,
-                    )
-                }
-                rustTemplate(
-                    """
-                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
-
-                    {
-                        use #{tower}::Layer;
-                        #{tracing}::trace!("adding middlewares to rust python router");
-                        let mut middlewares = self.middlewares.clone();
-                        // Reverse the middlewares, so they run with same order as they defined
-                        middlewares.reverse();
-                        for handler in middlewares {
-                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
-                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
-                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
-                        }
-                    }
-                    Ok(service)
-                    """,
-                    "Protocol" to protocol.markerStruct(),
-                    *codegenScope,
-                )
-            }
+        Attribute("napi").render(writer)
+        writer.rustBlock("impl App") {
+            renderAppCreate(writer)
+            renderAppStart(writer)
         }
     }
 
-    private fun renderPyMethods(writer: RustWriter) {
+    private fun renderAppCreate(writer: RustWriter) {
+        Attribute("napi(constructor)").render(writer)
         writer.rustBlockTemplate(
-            """
-            ##[#{pyo3}::pymethods]
-            impl App
-            """,
+            """pub fn create(js_handlers: JsHandlers) -> #{napi}::Result<Self>""",
+            *codegenScope,
+        ) {
+            operations.map { operation ->
+                val operationName = symbolProvider.toSymbol(operation).name
+                val input = "crate::input::${operationName}Input"
+                val fnName = operationName.toSnakeCase()
+                rustTemplate(
+                    """
+                    let $fnName: #{napi}::threadsafe_function::ThreadsafeFunction<
+                        $input, #{napi}::threadsafe_function::ErrorStrategy::CalleeHandled
+                    > = js_handlers.$fnName.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
+                    """,
+                    *codegenScope,
+                )
+            }
+            rust("let handlers = Handlers {")
+            operations.map { operation ->
+                val operationName = symbolProvider.toSymbol(operation).name.toSnakeCase()
+                rust("    $operationName: $operationName.clone(),")
+            }
+            rust("};")
+            writer.rust("Ok(Self{ handlers })")
+        }
+    }
+
+    private fun renderAppStart(writer: RustWriter) {
+        Attribute("napi").render(writer)
+        writer.rustBlockTemplate(
+            """pub fn start(&self, socket: &#{SmithyJs}::socket::JsSocket) -> #{napi}::Result<()>""",
             *codegenScope,
         ) {
             rustTemplate(
                 """
-                /// Create a new [App].
-                ##[new]
-                pub fn new() -> Self {
-                    Self::default()
-                }
-                /// Register a context object that will be shared between handlers.
-                ##[pyo3(text_signature = "(${'$'}self, context)")]
-                pub fn context(&mut self, context: #{pyo3}::PyObject) {
-                   self.context = Some(context);
-                }
-                /// Register a Python function to be executed inside a Tower middleware layer.
-                ##[pyo3(text_signature = "(${'$'}self, func)")]
-                pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                    let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
-                    #{tracing}::trace!(
-                        name = &handler.name,
-                        is_coroutine = handler.is_coroutine,
-                        "registering middleware function",
-                    );
-                    self.middlewares.push(handler);
-                    Ok(())
-                }
-                /// Main entrypoint: start the server on multiple workers.
-                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers, tls)")]
-                pub fn run(
-                    &mut self,
-                    py: #{pyo3}::Python,
-                    address: Option<String>,
-                    port: Option<i32>,
-                    backlog: Option<i32>,
-                    workers: Option<usize>,
-                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
-                ) -> #{pyo3}::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    self.run_server(py, address, port, backlog, workers, tls)
-                }
-                /// Lambda entrypoint: start the server on Lambda.
-                ##[pyo3(text_signature = "(${'$'}self)")]
-                pub fn run_lambda(
-                    &mut self,
-                    py: #{pyo3}::Python,
-                ) -> #{pyo3}::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    self.run_lambda_handler(py)
-                }
-                /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls)")]
-                pub fn start_worker(
-                    &mut self,
-                    py: pyo3::Python,
-                    socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
-                    worker_number: isize,
-                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
-                ) -> pyo3::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    let event_loop = self.configure_python_event_loop(py)?;
-                    let service = self.build_and_configure_service(py, event_loop)?;
-                    self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
-                }
+                // #{SmithyJs}::setup_tracing();
+                let plugins = #{SmithyServer}::plugin::PluginPipeline::new();
+                let builder = crate::service::PokemonService::builder_with_plugins(plugins);
                 """,
                 *codegenScope,
             )
             operations.map { operation ->
-                val operationName = symbolProvider.toSymbol(operation).name
-                val name = operationName.toSnakeCase()
-                rustTemplate(
-                    """
-                    /// Method to register `$name` Python implementation inside the handlers map.
-                    /// It can be used as a function decorator in Python.
-                    ##[pyo3(text_signature = "(${'$'}self, func)")]
-                    pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                        use #{SmithyPython}::PyApp;
-                        self.register_operation(py, "$name", func)
-                    }
-                    """,
-                    *codegenScope,
-                )
+                val operationName = symbolProvider.toSymbol(operation).name.toSnakeCase()
+                rust("let builder = builder.$operationName(crate::js_operation_adaptor::$operationName);")
             }
+            rustTemplate(
+                """
+                let app = builder.build().expect("failed to build instance of PokemonService")
+                    .layer(&#{SmithyServer}::AddExtensionLayer::new(self.handlers.clone()));
+                let service = #{tower}::util::BoxCloneService::new(app);
+                #{SmithyJs}::server::start_hyper_worker(socket, service).expect("failed to start the hyper server");
+                Ok(())
+                """,
+                *codegenScope,
+            )
         }
     }
 
