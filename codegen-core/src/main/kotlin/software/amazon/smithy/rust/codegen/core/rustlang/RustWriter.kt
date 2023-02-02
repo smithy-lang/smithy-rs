@@ -705,6 +705,10 @@ class RustWriter private constructor(
                     t.fullyQualifiedName()
                 }
 
+                is RustModule -> {
+                    t.fullyQualifiedPath()
+                }
+
                 is Symbol -> {
                     addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)

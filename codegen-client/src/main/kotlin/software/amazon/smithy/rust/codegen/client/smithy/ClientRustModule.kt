@@ -20,6 +20,9 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * Modules for code generated client crates.
  */
 object ClientRustModule {
+    /** crate */
+    val root = RustModule.LibRs
+
     /** crate::client */
     val client = Client.self
     object Client {
@@ -33,6 +36,7 @@ object ClientRustModule {
     val Config = RustModule.public("config", documentation = "Configuration for the service.")
     val Error = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
     val Operation = RustModule.public("operation", documentation = "All operations that this crate can perform.")
+    val Meta = RustModule.public("meta", documentation = "Information about this crate.")
     val Model = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
     val Input = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
     val Output = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
@@ -56,4 +60,16 @@ object ClientModuleProvider : ModuleProvider {
 
     override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
         ClientRustModule.Error
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedConfigModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Config
+    else -> ClientRustModule.root
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedMetaModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Meta
+    else -> ClientRustModule.root
 }
