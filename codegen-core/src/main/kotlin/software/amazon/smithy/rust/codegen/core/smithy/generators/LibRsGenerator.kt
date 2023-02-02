@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
@@ -27,7 +27,7 @@ sealed class LibRsSection(name: String) : Section(name) {
     }
 }
 
-typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
+typealias LibRsCustomization = NamedCustomization<LibRsSection>
 
 class LibRsGenerator(
     private val settings: CoreRustSettings,

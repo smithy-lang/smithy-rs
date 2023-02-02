@@ -27,7 +27,7 @@ abstract class Section(val name: String)
  * Detached section abstraction to allow adhoc sections to be created. By using the `.writer` method, an
  * instantiation of this section can be easily created.
  */
-abstract class AdHocCustomization : NamedSectionGenerator<Section>() {
+abstract class AdHocCustomization : NamedCustomization<Section>() {
     companion object {
         /**
          * Helper to enable easily combining detached sections with the [CoreCodegenDecorator.extraSections] method.
@@ -58,13 +58,13 @@ abstract class AdHocCustomization : NamedSectionGenerator<Section>() {
  *
  * Implementors MUST override section and use a `when` clause to handle each section individually
  */
-abstract class NamedSectionGenerator<T : Section> {
+abstract class NamedCustomization<T : Section> {
     abstract fun section(section: T): Writable
     protected val emptySection = writable { }
 }
 
 /** Convenience for rendering a list of customizations for a given section */
-fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedSectionGenerator<T>>, section: T) {
+fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedCustomization<T>>, section: T) {
     for (customization in customizations) {
         customization.section(section)(this)
     }

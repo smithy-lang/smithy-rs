@@ -40,7 +40,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -70,7 +70,7 @@ sealed class JsonParserSection(name: String) : Section(name) {
 /**
  * Customization for the JSON parser.
  */
-typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
+typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
 data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
 
