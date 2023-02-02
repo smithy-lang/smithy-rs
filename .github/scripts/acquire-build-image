@@ -43,7 +43,7 @@ class Platform(Enum):
 # Script context
 class Context:
     def __init__(self, start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions,
-                 encrpyted_docker_password, docker_passphrase):
+                 encrypted_docker_password, docker_passphrase):
         self.start_path = start_path
         self.script_path = script_path
         self.tools_path = tools_path
@@ -52,7 +52,7 @@ class Context:
         self.image_tag = image_tag
         self.allow_local_build = allow_local_build
         self.github_actions = github_actions
-        self.encrypted_docker_password = encrpyted_docker_password
+        self.encrypted_docker_password = encrypted_docker_password
         self.docker_passphrase = docker_passphrase
 
     @staticmethod
@@ -76,8 +76,14 @@ class Context:
         print(f"Running in GitHub Actions: {github_actions}")
         return Context(start_path=start_path, script_path=script_path, tools_path=tools_path, user_id=user_id,
                        image_tag=image_tag, allow_local_build=allow_local_build, github_actions=github_actions,
-                       encrpyted_docker_password=encrypted_docker_password, docker_passphrase=docker_passphrase)
+                       encrypted_docker_password=encrypted_docker_password, docker_passphrase=docker_passphrase)
 
+
+def output_contains_any(stdout, stderr, messages):
+    for message in messages:
+        if message in stdout or message in stderr:
+            return True
+    return False
 
 # Mockable shell commands
 class Shell:
@@ -106,19 +112,17 @@ class Shell:
         print(stderr)
         print("-------------------")
 
-        not_found_message = "not found: manifest unknown"
-        throttle_message = "toomanyrequests: Rate exceeded"
+        not_found_messages = ["not found: manifest unknown"]
+        throttle_messages = ["toomanyrequests:"]
         retryable_messages = ["net/http: TLS handshake timeout"]
         if status == 0:
             return DockerPullResult.SUCCESS
-        elif throttle_message in stdout or throttle_message in stderr:
+        elif output_contains_any(stdout, stderr, throttle_messages):
             return DockerPullResult.ERROR_THROTTLED
-        elif not_found_message in stdout or not_found_message in stderr:
+        elif output_contains_any(stdout, stderr, not_found_messages):
             return DockerPullResult.NOT_FOUND
-        else:
-            for message in retryable_messages:
-                if message in stdout or message in stderr:
-                    return DockerPullResult.RETRYABLE_ERROR
+        elif output_contains_any(stdout, stderr, retryable_messages):
+            return DockerPullResult.RETRYABLE_ERROR
         return DockerPullResult.UNKNOWN_ERROR
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
@@ -248,7 +252,7 @@ class SelfTest(unittest.TestCase):
             tools_path="/tmp/test/tools-path",
             user_id="123",
             image_tag="someimagetag",
-            encrpyted_docker_password=encrypted_docker_password,
+            encrypted_docker_password=encrypted_docker_password,
             docker_passphrase=docker_passphrase,
             github_actions=github_actions,
             allow_local_build=allow_local_build,
