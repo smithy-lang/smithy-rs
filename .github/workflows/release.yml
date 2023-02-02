@@ -69,6 +69,7 @@ jobs:
     name: Get or create a release branch
     needs:
     - release-ci
+    runs-on: ubuntu-latest
     outputs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
