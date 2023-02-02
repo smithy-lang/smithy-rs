@@ -56,7 +56,7 @@ RUN set -eux; \
 
 FROM install_rust AS local_tools
 ARG rust_nightly_version
-COPY . tools/
+COPY . tools/ci-build
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
 # If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
@@ -68,12 +68,12 @@ RUN set -eux; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/publisher; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/changelogger; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/crate-hasher; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/difftags; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-lints; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-versioner; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/publisher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/changelogger; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/crate-hasher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/difftags; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/sdk-lints; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
@@ -155,5 +155,5 @@ ENV PATH=/opt/cargo/bin:$PATH \
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 WORKDIR /home/build
-COPY ci-build/scripts/sanity-test /home/build/sanity-test
+COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

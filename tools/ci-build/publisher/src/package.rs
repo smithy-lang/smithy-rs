@@ -7,7 +7,7 @@
 
 use crate::fs::Fs;
 use crate::sort::dependency_order;
-use crate::{RUST_SDK_CI_OWNER, RUST_SDK_OWNER, SMITHY_RS_SERVER_OWNER};
+use crate::RUST_SDK_CI_OWNER;
 use anyhow::{Context, Result};
 use cargo_toml::{Dependency, DepsSet, Manifest};
 use semver::Version;
@@ -95,23 +95,11 @@ impl Package {
 }
 
 /// Returns the expected owners of the crate.
-pub fn expected_package_owners(category: &PackageCategory, package_name: &str) -> HashSet<String> {
-    let mut ret = HashSet::new();
-
-    // Crate ownership for SDK crates. Crates.io requires that at least one owner
-    // is an individual rather than a team, so we use the automation user for that.
-    ret.insert(String::from(RUST_SDK_CI_OWNER));
-
-    if category.is_sdk() {
-        ret.insert(String::from(RUST_SDK_OWNER));
-    } else if package_name.starts_with("aws-smithy-http-server") {
-        ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
-    } else {
-        ret.insert(String::from(RUST_SDK_OWNER));
-        ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
-    }
-
-    ret
+pub fn expected_package_owners(
+    _category: &PackageCategory,
+    _package_name: &str,
+) -> HashSet<String> {
+    [RUST_SDK_CI_OWNER.to_string()].into_iter().collect()
 }
 
 /// Batch of packages.
@@ -536,12 +524,9 @@ mod tests {
         ];
         for pkg in server_packages {
             assert_eq!(
-                [
-                    String::from("github:awslabs:smithy-rs-server"),
-                    String::from("aws-sdk-rust-ci")
-                ]
-                .into_iter()
-                .collect::<HashSet<String>>(),
+                [String::from("aws-sdk-rust-ci")]
+                    .into_iter()
+                    .collect::<HashSet<String>>(),
                 pkg.expected_owners()
             );
         }
@@ -551,12 +536,9 @@ mod tests {
     fn test_expected_package_owners_sdk_crate() {
         let sdk_package = package("aws-types", &[]);
         assert_eq!(
-            [
-                String::from("github:awslabs:rust-sdk-owners"),
-                String::from("aws-sdk-rust-ci")
-            ]
-            .into_iter()
-            .collect::<HashSet<String>>(),
+            [String::from("aws-sdk-rust-ci")]
+                .into_iter()
+                .collect::<HashSet<String>>(),
             sdk_package.expected_owners()
         );
     }
@@ -565,13 +547,9 @@ mod tests {
     fn test_expected_package_owners_smithy_runtime_crate() {
         let smithy_runtime_package = package("aws-smithy-types", &[]);
         assert_eq!(
-            [
-                String::from("github:awslabs:smithy-rs-server"),
-                String::from("github:awslabs:rust-sdk-owners"),
-                String::from("aws-sdk-rust-ci")
-            ]
-            .into_iter()
-            .collect::<HashSet<String>>(),
+            [String::from("aws-sdk-rust-ci")]
+                .into_iter()
+                .collect::<HashSet<String>>(),
             smithy_runtime_package.expected_owners()
         );
     }

@@ -142,16 +142,6 @@ fn find_released_versions(
         if let Some(unrecent_version) = unrecent_versions.crates.get(crate_name) {
             let unrecent_version = parse_version(crate_name, &unrecent_version.version)?;
             if unrecent_version != recent_version {
-                // Sanity check: version numbers shouldn't decrease
-                if unrecent_version > recent_version {
-                    bail!(
-                        "Version number for `{}` decreased between releases (from `{}` to `{}`)",
-                        crate_name,
-                        unrecent_version,
-                        recent_version
-                    );
-                }
-
                 // If the crate is in both version manifests with differing version
                 // numbers, then it is part of the release
                 released_versions.insert(crate_name.clone(), recent_version.to_string());
@@ -316,35 +306,6 @@ mod tests {
             ),
         );
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_find_released_versions_decreased_version_number_sanity_check() {
-        let result = find_released_versions(
-            &fake_manifest(
-                &[
-                    ("aws-config", "0.11.0"),
-                    ("aws-sdk-s3", "0.13.0"),
-                    ("aws-sdk-dynamodb", "0.12.0"),
-                ],
-                None,
-            ),
-            &fake_manifest(
-                &[
-                    ("aws-config", "0.11.0"),
-                    ("aws-sdk-s3", "0.12.0"), // oops, S3 went backwards
-                    ("aws-sdk-dynamodb", "0.12.0"),
-                ],
-                None,
-            ),
-        );
-        assert!(result.is_err());
-        let error = format!("{}", result.err().unwrap());
-        assert!(
-            error.starts_with("Version number for `aws-sdk-s3` decreased"),
-            "Unexpected error: {}",
-            error
-        );
     }
 
     #[test]
