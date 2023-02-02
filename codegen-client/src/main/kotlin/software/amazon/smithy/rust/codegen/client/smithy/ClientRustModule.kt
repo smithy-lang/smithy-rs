@@ -20,6 +20,9 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * Modules for code generated client crates.
  */
 object ClientRustModule {
+    /** crate */
+    val root = RustModule.LibRs
+
     /** crate::client */
     val client = Client.self
     object Client {
@@ -56,4 +59,10 @@ object ClientModuleProvider : ModuleProvider {
 
     override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
         ClientRustModule.Error
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedConfigModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Config
+    else -> ClientRustModule.root
 }
