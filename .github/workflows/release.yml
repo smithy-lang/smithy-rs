@@ -122,7 +122,8 @@ jobs:
     - name: Upgrade gradle.properties
       uses: ./smithy-rs/.github/actions/docker-build
       with:
-        action: upgrade-gradle-properties ${{ inputs.semantic_version }}
+        action: upgrade-gradle-properties
+        action-arguments: ${{ inputs.semantic_version }}
     - name: Push gradle.properties changes
       id: gradle-push
       shell: bash
