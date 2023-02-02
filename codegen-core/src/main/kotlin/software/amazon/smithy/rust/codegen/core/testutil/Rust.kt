@@ -294,6 +294,13 @@ class TestWriterDelegator(
     fun generatedFiles() = fileManifest.files.map { baseDir.relativize(it) }
 }
 
+/**
+ * Generate a newtest module
+ *
+ * This should only be used in test code—the generated module name will be something like `tests_123`
+ */
+fun RustCrate.testModule(block: Writable) = lib { withInlineModule(RustModule.inlineTests(safeName("tests")), block) }
+
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path ->
         println("file:///$path")

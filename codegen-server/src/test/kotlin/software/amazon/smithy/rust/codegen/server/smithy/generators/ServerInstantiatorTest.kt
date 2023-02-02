@@ -144,37 +144,39 @@ class ServerInstantiatorTest {
             nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
-            unitTest("server_instantiator_test") {
-                withBlock("let result = ", ";") {
-                    sut.render(this, structure, data)
+            withInlineModule(RustModule.inlineTests()) {
+                unitTest("server_instantiator_test") {
+                    withBlock("let result = ", ";") {
+                        sut.render(this, structure, data)
+                    }
+
+                    rust(
+                        """
+                        use std::collections::HashMap;
+                        use aws_smithy_types::{DateTime, Document};
+
+                        let expected = MyStructRequired {
+                            str: "".to_owned(),
+                            primitive_int: 0,
+                            int: 0,
+                            ts: DateTime::from_secs(0),
+                            byte: 0,
+                            union: NestedUnion::Struct(NestedStruct {
+                                str: "".to_owned(),
+                                num: 0,
+                            }),
+                            structure: NestedStruct {
+                                str: "".to_owned(),
+                                num: 0,
+                            },
+                            list: Vec::new(),
+                            map: HashMap::new(),
+                            doc: Document::Object(HashMap::new()),
+                        };
+                        assert_eq!(result, expected);
+                        """,
+                    )
                 }
-
-                rust(
-                    """
-                    use std::collections::HashMap;
-                    use aws_smithy_types::{DateTime, Document};
-
-                    let expected = MyStructRequired {
-                        str: "".to_owned(),
-                        primitive_int: 0,
-                        int: 0,
-                        ts: DateTime::from_secs(0),
-                        byte: 0,
-                        union: NestedUnion::Struct(NestedStruct {
-                            str: "".to_owned(),
-                            num: 0,
-                        }),
-                        structure: NestedStruct {
-                            str: "".to_owned(),
-                            num: 0,
-                        },
-                        list: Vec::new(),
-                        map: HashMap::new(),
-                        doc: Document::Object(HashMap::new()),
-                    };
-                    assert_eq!(result, expected);
-                    """,
-                )
             }
         }
         project.compileAndTest()
