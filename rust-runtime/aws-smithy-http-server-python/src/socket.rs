@@ -45,9 +45,8 @@ impl PySocket {
 
 impl PySocket {
     pub fn to_raw_socket(&self) -> PyResult<socket2::Socket> {
-        Ok(self
-            .0
+        self.0
             .try_clone()
-            .map_err(|e| PyIOError::new_err(e.to_string()))?)
+            .map_err(|e| PyIOError::new_err(e.to_string()))
     }
 }

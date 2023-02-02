@@ -44,9 +44,8 @@ impl TsSocket {
 
 impl TsSocket {
     pub fn to_raw_socket(&self) -> napi::Result<socket2::Socket> {
-        Ok(self
-            .0
+        self.0
             .try_clone()
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 }
