@@ -14,7 +14,7 @@
 message = """
 Fix `name` and `absolute` methods on `OperationExtension`.
 
-The older, [now removed](https://github.com/awslabs/smithy-rs/pull/2161), service builder would insert `OperationExtension` into the `http::Response` containing the [absolute shape ID](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-AbsoluteRootShapeId) with the `#` symbol replaced with a `.`. When [reintroduced](https://github.com/awslabs/smithy-rs/pull/2157) into the new service builder machinery the behavior was changed - we now do _not_ perform the replace. This change fixes the documentation and `name`/`abosolute` methods of the `OperationExtension` API to match this new behavior.
+The older, [now removed](https://github.com/awslabs/smithy-rs/pull/2161), service builder would insert `OperationExtension` into the `http::Response` containing the [absolute shape ID](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-AbsoluteRootShapeId) with the `#` symbol replaced with a `.`. When [reintroduced](https://github.com/awslabs/smithy-rs/pull/2157) into the new service builder machinery the behavior was changed - we now do _not_ perform the replace. This change fixes the documentation and `name`/`absolute` methods of the `OperationExtension` API to match this new behavior.
 
 In the old service builder, `OperationExtension` was initialized, by the framework, and then used as follows:
 
@@ -26,7 +26,7 @@ let name = ext.name(); // "CompleteSnapshot"
 let namespace = ext.namespace(); // = "com.amazonaws";
 ```
 
-On reintroduction, `OperationExtension` was iniialized, by the `Plugin`, and then used as follows:
+When reintroduced, `OperationExtension` was initialized by the `Plugin` and then used as follows:
 
 ```rust
 let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
