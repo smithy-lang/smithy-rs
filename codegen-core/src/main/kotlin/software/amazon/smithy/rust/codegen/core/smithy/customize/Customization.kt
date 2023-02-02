@@ -23,10 +23,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
  */
 abstract class Section(val name: String)
 
+/** Customization type returned by [adhocCustomization] */
 typealias AdHocCustomization = NamedCustomization<AdHocSection>
 
+/** Adhoc section for code generation. Similar to [Section], but for use with [adhocCustomization]. */
 abstract class AdHocSection(name: String) : Section(name)
 
+/**
+ * Allows for one-off customizations such that a `when` statement switching on
+ * the section type is not necessary.
+ */
 inline fun <reified T : AdHocSection> adhocCustomization(
     crossinline customization: RustWriter.(T) -> Unit,
 ): AdHocCustomization =
@@ -39,7 +45,7 @@ inline fun <reified T : AdHocSection> adhocCustomization(
     }
 
 /**
- * A named section generator allows customization via a predefined set of named sections.
+ * A named section generator that allows customization via a predefined set of named sections.
  *
  * Implementors MUST override section and use a `when` clause to handle each section individually
  */
