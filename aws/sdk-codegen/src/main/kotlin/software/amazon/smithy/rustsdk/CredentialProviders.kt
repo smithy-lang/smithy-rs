@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -40,9 +40,9 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocCustomization<*>, (Section) -> Writable>> =
         listOf(
-            SdkConfigSection.create { section ->
+            SdkConfigCustomization.create { section ->
                 writable {
                     rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
                 }

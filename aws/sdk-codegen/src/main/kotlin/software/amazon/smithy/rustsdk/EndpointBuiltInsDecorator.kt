@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -71,7 +71,7 @@ fun Model.sdkConfigSetter(
     serviceId: ShapeId,
     builtInSrc: Parameter,
     configParameterNameOverride: String?,
-): Pair<AdHocSection<*>, (Section) -> Writable>? {
+): Pair<AdHocCustomization<*>, (Section) -> Writable>? {
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
@@ -79,7 +79,7 @@ fun Model.sdkConfigSetter(
         ParameterType.STRING -> writable { rust("|s|s.to_string()") }
         ParameterType.BOOLEAN -> null
     }
-    return SdkConfigSection.copyField(fieldName, map)
+    return SdkConfigCustomization.copyField(fieldName, map)
 }
 
 /**
@@ -99,7 +99,7 @@ fun decoratorForBuiltIn(
         private fun rulesetContainsBuiltIn(codegenContext: ClientCodegenContext) =
             codegenContext.getBuiltIn(builtIn) != null
 
-        override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+        override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocCustomization<*>, (Section) -> Writable>> {
             return listOfNotNull(
                 codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, builtIn, clientParam?.name),
             )

@@ -17,13 +17,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
 /**
  * Section enabling linkage between `SdkConfig` and <service>::Config
  */
-object SdkConfigSection : AdHocSection<SdkConfigSection.CopySdkConfigToClientConfig>("SdkConfig") {
+object SdkConfigCustomization : AdHocCustomization<SdkConfigCustomization.CopySdkConfigToClientConfig>("SdkConfig") {
     /**
      * [sdkConfig]: A reference to the SDK config struct
      * [serviceConfigBuilder]: A reference (owned) to the `<service>::config::Builder` struct.
@@ -43,10 +43,10 @@ object SdkConfigSection : AdHocSection<SdkConfigSection.CopySdkConfigToClientCon
      *
      * # Examples
      * ```kotlin
-     * SdkConfigSection.copyField("some_string_field") { rust("|s|s.to_to_string()") }
+     * SdkConfigCustomization.copyField("some_string_field") { rust("|s|s.to_to_string()") }
      * ```
      */
-    fun copyField(fieldName: String, map: Writable?) = SdkConfigSection.create { section ->
+    fun copyField(fieldName: String, map: Writable?) = SdkConfigCustomization.create { section ->
         {
             val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
             rustTemplate(
@@ -64,9 +64,9 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
     override val name: String = "GenericSmithySdkConfigSettings"
     override val order: Byte = 0
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocCustomization<*>, (Section) -> Writable>> =
         listOf(
-            SdkConfigSection.create { section ->
+            SdkConfigCustomization.create { section ->
                 writable {
                     rust(
                         """
@@ -125,9 +125,9 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                 }
                 """,
                 "augmentBuilder" to codegenContext.rootDecorator.extraSections(codegenContext)
-                    .filter { (t, _) -> t is SdkConfigSection }.map { (_, sectionWriter) ->
+                    .filter { (t, _) -> t is SdkConfigCustomization }.map { (_, sectionWriter) ->
                         sectionWriter(
-                            SdkConfigSection.CopySdkConfigToClientConfig(
+                            SdkConfigCustomization.CopySdkConfigToClientConfig(
                                 sdkConfig = "input",
                                 serviceConfigBuilder = "builder",
                             ),
