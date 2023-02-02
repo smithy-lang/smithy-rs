@@ -35,8 +35,6 @@ pub use crate::request::extension::{Extension, MissingExtension};
 /// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
 /// that the request should be routed to a particular operation. The operation handler might not even get invoked
 /// because the request fails to deserialize into the modeled operation input.
-///
-/// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
     absolute: &'static str,
@@ -49,16 +47,16 @@ pub struct OperationExtension {
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error(". was not found - missing namespace")]
+    #[error("# was not found - missing namespace")]
     MissingNamespace,
 }
 
 #[allow(deprecated)]
 impl OperationExtension {
-    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    /// Creates a new [`OperationExtension`] from the absolute shape ID.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
         let (namespace, name) = absolute_operation_id
-            .rsplit_once('.')
+            .rsplit_once('#')
             .ok_or(ParseError::MissingNamespace)?;
         Ok(Self {
             absolute: absolute_operation_id,
@@ -240,7 +238,7 @@ mod tests {
 
     #[test]
     fn ext_accept() {
-        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let value = "com.amazonaws.ebs#CompleteSnapshot";
         let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
