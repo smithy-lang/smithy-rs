@@ -20,10 +20,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -108,7 +107,7 @@ class RegionDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocCustomization<*>, (Section) -> Writable>> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
         return usesRegion(codegenContext).thenSingletonListOf {
             SdkConfigCustomization.create { section ->
                 {

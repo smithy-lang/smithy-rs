@@ -29,8 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
@@ -71,7 +70,7 @@ fun Model.sdkConfigSetter(
     serviceId: ShapeId,
     builtInSrc: Parameter,
     configParameterNameOverride: String?,
-): Pair<AdHocCustomization<*>, (Section) -> Writable>? {
+): AdHocCustomizationWriter? {
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
@@ -99,7 +98,7 @@ fun decoratorForBuiltIn(
         private fun rulesetContainsBuiltIn(codegenContext: ClientCodegenContext) =
             codegenContext.getBuiltIn(builtIn) != null
 
-        override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocCustomization<*>, (Section) -> Writable>> {
+        override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
             return listOfNotNull(
                 codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, builtIn, clientParam?.name),
             )

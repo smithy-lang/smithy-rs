@@ -23,6 +23,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
  */
 abstract class Section(val name: String)
 
+typealias AdHocCustomizationWriter = Pair<AdHocCustomization<*>, (Section) -> Writable>
+
 /**
  * Detached section abstraction to allow adhoc sections to be created. By using the `.writer` method, an
  * instantiation of this section can be easily created.
@@ -31,7 +33,7 @@ abstract class AdHocCustomization<T : Section>(val name: String) {
     /**
      * Helper to enable easily combining detached sections with the [CoreCodegenDecorator.extraSections] method.
      */
-    fun create(w: (T) -> Writable): Pair<AdHocCustomization<*>, (Section) -> Writable> = this to { s: Section ->
+    fun create(w: (T) -> Writable): AdHocCustomizationWriter = this to { s: Section ->
         w((s as T))
     }
 }
