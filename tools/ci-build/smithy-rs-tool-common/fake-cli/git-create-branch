@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+expected = [os.path.realpath("/tmp"), ["branch", "test-branch-name", "test-revision"]]
+actual = [os.getcwd(), sys.argv[1:]]
+if expected != actual:
+    print(f"ERROR\nExpect: {expected}\nActual: {actual}")
+    sys.exit(1)

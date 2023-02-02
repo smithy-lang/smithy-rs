@@ -24,7 +24,7 @@ cp build.docker-compose.yml "${ACTION_PATH}/"
 mkdir -p "${ACTION_PATH}/workspace/artifacts"
 
 # Copy scripts into workspace
-cp -r "${SCRIPT_PATH}/scripts" "${ACTION_PATH}/workspace/"
+cp -r "${SCRIPT_PATH}/../ci-scripts" "${ACTION_PATH}/workspace/"
 
 # Copy inputs into workspace
 for input_name in \

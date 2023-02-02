@@ -523,6 +523,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -555,7 +556,7 @@ class JsonParserGenerator(
                                         } else {
                                             withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                unwrapOrDefaultOrError(member)
+                                                unwrapOrDefaultOrError(member, checkValueSet)
                                             }
                                         }
                                     }
@@ -593,8 +594,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(
