@@ -134,7 +134,7 @@ jobs:
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         # The file was actually changed, we need to commit the changes
-        git diff-index --quiet HEAD || git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin
+        git diff-index --quiet HEAD || { git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin }
 
   release:
     name: Release
