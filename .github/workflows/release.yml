@@ -133,7 +133,10 @@ jobs:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
+        # The file was actually changed, we need to commit the changes
+        git diff-index --quiet HEAD || git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
         echo "Pushing upgraded gradle.properties commit..."
+        # This will succeed even if nothing new was committed
         git push origin
 
   release:
@@ -230,5 +233,5 @@ jobs:
         # a commit that is not the current tip of `main`.
         # We can build more refined automation to handle this case in the future - until then, it'll require
         # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
-        git commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
+        git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
         git push origin main
