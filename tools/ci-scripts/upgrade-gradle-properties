@@ -13,10 +13,8 @@ mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
 publisher upgrade-runtime-crates-version --version "${SEMANTIC_VERSION}"
-if git diff-index --quiet HEAD; then
-  # The file was actually changed, we need to commit the changes
-  git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-fi
+# The file was actually changed, we need to commit the changes
+git diff-index --quiet HEAD || git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
 popd
 
 # Clone smithy-rs repo changes (changelog updates) into
