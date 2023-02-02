@@ -6,12 +6,13 @@
 
 set -eux
 
+SEMANTIC_VERSION="${1}"
 SMITHY_RS_DIR="$(pwd)/smithy-rs"
 ARTIFACTS_DIR="$(pwd)/artifacts"
 mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
-publisher upgrade-runtime-crates-version --version ${1}
+publisher upgrade-runtime-crates-version --version "${SEMANTIC_VERSION}"
 if git diff-index --quiet HEAD; then
   # The file was actually changed, we need to commit the changes
   git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
