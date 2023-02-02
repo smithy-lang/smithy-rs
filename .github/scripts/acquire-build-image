@@ -93,6 +93,9 @@ class Shell:
         (status, _, _) = get_cmd_output(f"docker inspect \"{image_name}:{image_tag}\"", check=False)
         return status == 0
 
+    def docker_login(self, password):
+        get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
         (status, stdout, stderr) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
@@ -183,21 +186,20 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
     return result.returncode, stdout, stderr
 
 
-def decrypt_and_login(secret, passphrase):
+def decrypt_and_login(shell, secret, passphrase):
     decoded = base64.b64decode(secret, validate=True)
     if not passphrase:
         raise Exception("a secret was set but no passphrase was set (or it was empty)")
     (code, password, err) = get_cmd_output(
-        ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", "{token}", "--output", "-"],
+        ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", passphrase, "--output", "-"],
         input=decoded)
-    (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws",
-                                    input=password.encode('utf-8'))
+    shell.docker_login(password)
     print("Docker login success!")
 
 
 def acquire_build_image(context=Context.default(), shell=Shell()):
     if context.encrypted_docker_password is not None:
-        decrypt_and_login(context.encrypted_docker_password, context.docker_passphrase)
+        decrypt_and_login(shell, context.encrypted_docker_password, context.docker_passphrase)
     # If the image doesn't already exist locally, then look remotely
     if not shell.docker_image_exists_locally(LOCAL_BASE_IMAGE_NAME, context.image_tag):
         announce("Base image not found locally.")
@@ -261,6 +263,7 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull = MagicMock()
         shell.docker_save = MagicMock()
         shell.docker_tag = MagicMock()
+        shell.docker_login = MagicMock()
         return shell
 
     def test_retry_architecture_mismatch(self):
@@ -279,7 +282,10 @@ class SelfTest(unittest.TestCase):
 
     def test_docker_login(self):
         shell = self.mock_shell()
-        acquire_build_image(self.test_context(encrypted_docker_password="asdf", docker_passphrase="1234"))
+        acquire_build_image(self.test_context(
+            encrypted_docker_password="jA0ECQMCvYU/JxsX3g/70j0BxbLLW8QaFWWb/DqY9gPhTuEN/xdYVxaoDnV6Fha+lAWdT7xN0qZr5DHPBalLfVvvM1SEXRBI8qnfXyGI",
+            docker_passphrase="secret"), shell)
+        shell.docker_login.assert_called_with("payload")
 
     def test_retry_immediate_success(self):
         shell = self.mock_shell()
