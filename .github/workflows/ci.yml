@@ -108,7 +108,7 @@ jobs:
   test-sdk:
     name: Test the SDK
     needs: generate
-    runs-on: ${{ matrix.test.action }}
+    runs-on: ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
