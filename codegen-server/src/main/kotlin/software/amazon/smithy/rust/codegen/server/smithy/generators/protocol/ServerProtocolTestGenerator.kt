@@ -774,8 +774,6 @@ class ServerProtocolTestGenerator(
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
 
-            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
-
             // Tests involving constraint traits, which are not yet fully implemented.
             // See https://github.com/awslabs/smithy-rs/issues/1401.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
