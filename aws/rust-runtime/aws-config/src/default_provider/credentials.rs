@@ -4,10 +4,9 @@
  */
 
 use std::borrow::Cow;
-use std::time::Duration;
 
-use aws_credential_types::lazy_caching::{self, LazyCachingCredentialsProvider};
 use aws_credential_types::provider::{self, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -60,7 +59,9 @@ pub async fn default_provider() -> impl ProvideCredentials {
 ///     .build();
 /// ```
 #[derive(Debug)]
-pub struct DefaultCredentialsChain(LazyCachingCredentialsProvider);
+pub struct DefaultCredentialsChain {
+    provider_chain: CredentialsProviderChain,
+}
 
 impl DefaultCredentialsChain {
     /// Builder for `DefaultCredentialsChain`
@@ -69,7 +70,7 @@ impl DefaultCredentialsChain {
     }
 
     async fn credentials(&self) -> provider::Result {
-        self.0
+        self.provider_chain
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
             .await
@@ -83,6 +84,10 @@ impl ProvideCredentials for DefaultCredentialsChain {
     {
         future::ProvideCredentials::new(self.credentials())
     }
+
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        self.provider_chain.fallback_on_interrupt()
+    }
 }
 
 /// Builder for [`DefaultCredentialsChain`](DefaultCredentialsChain)
@@ -92,7 +97,6 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: lazy_caching::Builder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -112,71 +116,6 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
         self.region_override = region.map(|provider| Box::new(provider) as _);
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn load_timeout(mut self, timeout: Duration) -> Self {
-        self.set_load_timeout(Some(timeout));
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_load_timeout(timeout);
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
-        self.set_buffer_time(Some(buffer_time));
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_buffer_time(buffer_time);
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
-        self.set_default_credential_expiration(Some(duration));
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn set_default_credential_expiration(&mut self, duration: Option<Duration>) -> &mut Self {
-        self.credential_cache
-            .set_default_credential_expiration(duration);
         self
     }
 
@@ -252,12 +191,8 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self
-            .credential_cache
-            .configure(conf.sleep(), conf.time_source())
-            .load(provider_chain);
 
-        DefaultCredentialsChain(cached_provider.build())
+        DefaultCredentialsChain { provider_chain }
     }
 }
 
@@ -301,6 +236,12 @@ mod test {
             make_test!($name, execute_from_live_traffic);
         };
         ($name: ident, $func: ident) => {
+            make_test!($name, $func, std::convert::identity);
+        };
+        ($name: ident, $provider_config_builder: expr) => {
+            make_test!($name, execute, $provider_config_builder);
+        };
+        ($name: ident, $func: ident, $provider_config_builder: expr) => {
             #[traced_test]
             #[tokio::test]
             async fn $name() {
@@ -308,7 +249,9 @@ mod test {
                     "./test-data/default-provider-chain/",
                     stringify!($name)
                 ))
+                .await
                 .unwrap()
+                .with_provider_config($provider_config_builder)
                 .$func(|conf| async {
                     crate::default_provider::credentials::Builder::default()
                         .configure(conf)
@@ -334,12 +277,23 @@ mod test {
 
     make_test!(imds_no_iam_role);
     make_test!(imds_default_chain_error);
-    make_test!(imds_default_chain_success);
+    make_test!(imds_default_chain_success, |config| {
+        config.with_time_source(aws_credential_types::time_source::TimeSource::testing(
+            &aws_credential_types::time_source::TestingTimeSource::new(std::time::UNIX_EPOCH),
+        ))
+    });
     make_test!(imds_assume_role);
-    make_test!(imds_config_with_no_creds);
+    make_test!(imds_config_with_no_creds, |config| {
+        config.with_time_source(aws_credential_types::time_source::TimeSource::testing(
+            &aws_credential_types::time_source::TestingTimeSource::new(std::time::UNIX_EPOCH),
+        ))
+    });
     make_test!(imds_disabled);
-    make_test!(imds_default_chain_retries);
-
+    make_test!(imds_default_chain_retries, |config| {
+        config.with_time_source(aws_credential_types::time_source::TimeSource::testing(
+            &aws_credential_types::time_source::TestingTimeSource::new(std::time::UNIX_EPOCH),
+        ))
+    });
     make_test!(ecs_assume_role);
     make_test!(ecs_credentials);
     make_test!(ecs_credentials_invalid_profile);
@@ -349,11 +303,12 @@ mod test {
 
     #[tokio::test]
     async fn profile_name_override() {
-        let (_, conf) =
+        let conf =
             TestEnvironment::from_dir("./test-data/default-provider-chain/profile_static_keys")
+                .await
                 .unwrap()
                 .provider_config()
-                .await;
+                .clone();
         let provider = DefaultCredentialsChain::builder()
             .profile_name("secondary")
             .configure(conf)

@@ -1,4 +1,53 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 25th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#920](https://github.com/awslabs/smithy-rs/issues/920)) Fix bug in `OperationExtensionFuture`s `Future::poll` implementation
+
+
+January 24th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (server, [smithy-rs#2161](https://github.com/awslabs/smithy-rs/issues/2161)) Remove deprecated service builder, this includes:
+
+    - Remove `aws_smithy_http_server::routing::Router` and `aws_smithy_http_server::request::RequestParts`.
+    - Move the `aws_smithy_http_server::routers::Router` trait and `aws_smithy_http_server::routing::RoutingService` into `aws_smithy_http_server::routing`.
+    - Remove the following from the generated SDK:
+        - `operation_registry.rs`
+        - `operation_handler.rs`
+        - `server_operation_handler_trait.rs`
+
+    If migration to the new service builder API has not already been completed a brief summary of required changes can be seen in [previous release notes](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) and in API documentation of the root crate.
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2213](https://github.com/awslabs/smithy-rs/issues/2213)) `@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported
+- 🐛 (server, [smithy-rs#2200](https://github.com/awslabs/smithy-rs/pull/2200)) Event streams no longer generate empty error enums when their operations don’t have modeled errors
+- (all, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) `aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `Eq` and `Hash` traits
+- (server, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) Code-generated types for server SDKs now implement the `Eq` and `Hash` traits when possible
+
+
+January 12th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#2201](https://github.com/awslabs/smithy-rs/issues/2201)) Fix severe bug where a router fails to deserialize percent-encoded query strings, reporting no operation match when there could be one. If your Smithy model uses an operation with a request URI spec containing [query string literals](https://smithy.io/2.0/spec/http-bindings.html#query-string-literals), you are affected. This fix was released in `aws-smithy-http-server` v0.53.1.
+
+
+January 11th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name.
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+- ⚠ (server, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2103](https://github.com/awslabs/smithy-rs/issues/2103)) In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed.
+- (server, [smithy-rs#1879](https://github.com/awslabs/smithy-rs/issues/1879)) Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set.
+- (server, [smithy-rs#2131](https://github.com/awslabs/smithy-rs/issues/2131)) The constraint `@length` on non-streaming blob shapes is supported.
+- 🐛 (client, [smithy-rs#2150](https://github.com/awslabs/smithy-rs/issues/2150)) Fix bug where string default values were not supported for endpoint parameters
+- 🐛 (all, [smithy-rs#2170](https://github.com/awslabs/smithy-rs/issues/2170), [aws-sdk-rust#706](https://github.com/awslabs/aws-sdk-rust/issues/706)) Remove the webpki-roots feature from `hyper-rustls`
+- 🐛 (server, [smithy-rs#2054](https://github.com/awslabs/smithy-rs/issues/2054)) Servers can generate a unique request ID and use it in their handlers.
+
+
 December 12th, 2022
 ===================
 **Breaking Changes:**
@@ -16,7 +65,19 @@ December 12th, 2022
 
     Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
 
-    Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegenConfig.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
+    Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegen.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
+
+    ```json
+    {
+        ...
+        "rust-server-codegen": {
+            ...
+            "codegen": {
+                "ignoreUnsupportedConstraints": true
+            }
+        }
+    }
+    ```
 - ⚠🎉 (server, [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342), [smithy-rs#1119](https://github.com/awslabs/smithy-rs/issues/1119)) Server SDKs now generate "constrained types" for constrained shapes. Constrained types are [newtypes](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html) that encapsulate the modeled constraints. They constitute a [widespread pattern to guarantee domain invariants](https://www.lpalmieri.com/posts/2020-12-11-zero-to-production-6-domain-modelling/) and promote correctness in your business logic. So, for example, the model:
 
     ```smithy
@@ -35,7 +96,19 @@ December 12th, 2022
 
     Constrained types _guarantee_, by virtue of the type system, that your service's operation outputs adhere to the modeled constraints. To learn more about the motivation for constrained types and how they work, see [the RFC](https://github.com/awslabs/smithy-rs/pull/1199).
 
-    If you'd like to opt-out of generating constrained types, you can set `codegenConfig.publicConstrainedTypes` to `false`. Note that if you do, the generated server SDK will still honor your operation input's modeled constraints upon receiving a request, but will not help you in writing business logic code that adheres to the constraints, and _will not prevent you from returning responses containing operation outputs that violate said constraints_.
+    If you'd like to opt-out of generating constrained types, you can set `codegen.publicConstrainedTypes` to `false`. Note that if you do, the generated server SDK will still honor your operation input's modeled constraints upon receiving a request, but will not help you in writing business logic code that adheres to the constraints, and _will not prevent you from returning responses containing operation outputs that violate said constraints_.
+
+    ```json
+    {
+        ...
+        "rust-server-codegen": {
+            ...
+            "codegen": {
+                "publicConstrainedTypes": false
+            }
+        }
+    }
+    ```
 - 🐛⚠🎉 (server, [smithy-rs#1714](https://github.com/awslabs/smithy-rs/issues/1714), [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342)) Structure builders in server SDKs have undergone significant changes.
 
     The API surface has been reduced. It is now simpler and closely follows what you would get when using the [`derive_builder`](https://docs.rs/derive_builder/latest/derive_builder/) crate:

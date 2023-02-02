@@ -388,8 +388,22 @@ class JsonParserGenerator(
                                     withBlock("let value =", ";") {
                                         deserializeMember(shape.member)
                                     }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                    rust(
+                                        """
+                                        if let Some(value) = value {
+                                            items.push(value);
+                                        }
+                                        """,
+                                    )
+                                    codegenTarget.ifServer {
+                                        rustTemplate(
+                                            """
+                                            else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
+                                            }
+                                            """,
+                                            *codegenScope,
+                                        )
                                     }
                                 }
                             }
@@ -435,8 +449,24 @@ class JsonParserGenerator(
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
-                            rustBlock("if let Some(value) = value") {
-                                rust("map.insert(key, value);")
+                            codegenTarget.ifServer {
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                            }""",
+                                    *codegenScope,
+                                )
+                            }
+                            codegenTarget.ifClient {
+                                rustTemplate(
+                                    """
+                                    if let Some(value) = value {
+                                        map.insert(key, value);
+                                    }
+                                    """,
+                                )
                             }
                         }
                     }
@@ -492,6 +522,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -524,7 +555,7 @@ class JsonParserGenerator(
                                         } else {
                                             withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                unwrapOrDefaultOrError(member)
+                                                unwrapOrDefaultOrError(member, checkValueSet)
                                             }
                                         }
                                     }
@@ -562,8 +593,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(

@@ -88,12 +88,12 @@ fun generateFallbackCodeToDefaultValue(
         //  storing the result in a `OnceCell` that could be reused.
         writer.rustTemplate(
             """
-                    .unwrap_or_else(|| 
-                        #{DefaultValue:W}
-                            .try_into()
-                            .expect("this check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
-                    )
-                    """,
+            .unwrap_or_else(||
+                #{DefaultValue:W}
+                    .try_into()
+                    .expect("this check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            )
+            """,
             "DefaultValue" to defaultValue,
         )
     } else {

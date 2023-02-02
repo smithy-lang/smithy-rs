@@ -4,6 +4,9 @@ name = "qldb-tests"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>", "Shing Lyu <shinglyu@amazon.com"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
