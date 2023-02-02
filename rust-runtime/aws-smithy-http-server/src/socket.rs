@@ -11,7 +11,7 @@
 //! to bind to a sigle socket where requests are balanced automatically by the kernel.
 //! The implementation is based on the [`socket2`] crate.
 //!
-//! Language-dependent implementations will specialize over the [`Socket`] that is returned
+//! Language-dependent implementations will specialize over the [`socket2::Socket`] that is returned
 //! by `new_socket`.
 use socket2::{Domain, Protocol, Type};
 use std::{error::Error, net::SocketAddr};
