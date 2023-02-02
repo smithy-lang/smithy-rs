@@ -6,4 +6,22 @@
 
 set -eux
 
-publisher upgrade-runtime-crates-version --version ${1} --gradle-properties-path smithy-rs/gradle.properties
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+ARTIFACTS_DIR="$(pwd)/artifacts"
+mkdir -p "${ARTIFACTS_DIR}"
+
+pushd "${SMITHY_RS_DIR}"
+publisher upgrade-runtime-crates-version --version ${1}
+if git diff-index --quiet HEAD; then
+  # The file was actually changed, we need to commit the changes
+  git commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
+fi
+popd
+
+# Clone smithy-rs repo changes (changelog updates) into
+# the `smithy-rs-release` artifact for push to GitHub
+pushd "${ARTIFACTS_DIR}"
+git clone "${SMITHY_RS_DIR}"
+# Copy over the original remotes so that it's possible to push to `origin`
+cp "${SMITHY_RS_DIR}/.git/config" .git/config
+popd
