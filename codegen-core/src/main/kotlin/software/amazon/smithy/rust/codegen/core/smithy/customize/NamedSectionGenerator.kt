@@ -24,8 +24,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 abstract class Section(val name: String)
 
 /**
- * Detatched section abstraction to allow adhoc sections to be created. By using the `.writer` method, a instantiation
- * of this section can be easily created.
+ * Detached section abstraction to allow adhoc sections to be created. By using the `.writer` method, an
+ * instantiation of this section can be easily created.
  */
 abstract class AdHocCustomization<T : Section>(val name: String) {
     /**
