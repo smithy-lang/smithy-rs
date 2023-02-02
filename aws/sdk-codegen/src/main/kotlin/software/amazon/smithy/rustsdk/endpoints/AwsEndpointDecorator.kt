@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -36,7 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
-import software.amazon.smithy.rustsdk.SdkConfigCustomization
+import software.amazon.smithy.rustsdk.SdkConfigSection
 import software.amazon.smithy.rustsdk.getBuiltIn
 
 class AwsEndpointDecorator : ClientCodegenDecorator {
@@ -134,14 +135,12 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
         return codegenContext.isRegionalized().thenSingletonListOf {
-            SdkConfigCustomization.create { section ->
-                {
-                    rust(
-                        """
-                        ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
-                        """,
-                    )
-                }
+            AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
+                    """,
+                )
             }
         }
     }

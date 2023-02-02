@@ -23,19 +23,34 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
  */
 abstract class Section(val name: String)
 
-typealias AdHocCustomizationWriter = Pair<AdHocCustomization<*>, (Section) -> Writable>
+typealias AdHocCustomizationWriter = NamedSectionGenerator<Section>
 
 /**
  * Detached section abstraction to allow adhoc sections to be created. By using the `.writer` method, an
  * instantiation of this section can be easily created.
  */
-abstract class AdHocCustomization<T : Section>(val name: String) {
+object AdHocCustomization {
     /**
      * Helper to enable easily combining detached sections with the [CoreCodegenDecorator.extraSections] method.
+     *
+     * Note: When calling this, be sure to set the type of the section. For example:
+     * ```
+     * // The part in angle brackets is important:
+     * AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+     *     // snip
+     * },
+     * ```
      */
-    fun create(w: (T) -> Writable): AdHocCustomizationWriter = this to { s: Section ->
-        w((s as T))
-    }
+    inline fun <reified T> customize(
+        crossinline customization: RustWriter.(T) -> Unit,
+    ): NamedSectionGenerator<Section> =
+        object : NamedSectionGenerator<Section>() {
+            override fun section(section: Section): Writable = writable {
+                if (section is T) {
+                    customization(section)
+                }
+            }
+        }
 }
 
 /**

@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -20,11 +19,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 
-/**
- * Section enabling linkage between `SdkConfig` and <service>::Config
- */
-object SdkConfigCustomization : AdHocCustomization<SdkConfigCustomization.CopySdkConfigToClientConfig>("SdkConfig") {
+sealed class SdkConfigSection(name: String) : Section(name) {
     /**
      * [sdkConfig]: A reference to the SDK config struct
      * [serviceConfigBuilder]: A reference (owned) to the `<service>::config::Builder` struct.
@@ -35,8 +32,13 @@ object SdkConfigCustomization : AdHocCustomization<SdkConfigCustomization.CopySd
      * ```
      */
     data class CopySdkConfigToClientConfig(val sdkConfig: String, val serviceConfigBuilder: String) :
-        Section("CopyConfig")
+        SdkConfigSection("CopySdkConfigToClientConfig")
+}
 
+/**
+ * Section enabling linkage between `SdkConfig` and <service>::Config
+ */
+object SdkConfigCustomization {
     /**
      * Copy a field from SDK config to service config with an optional map block.
      *
@@ -47,15 +49,14 @@ object SdkConfigCustomization : AdHocCustomization<SdkConfigCustomization.CopySd
      * SdkConfigCustomization.copyField("some_string_field") { rust("|s|s.to_to_string()") }
      * ```
      */
-    fun copyField(fieldName: String, map: Writable?) = SdkConfigCustomization.create { section ->
-        {
+    fun copyField(fieldName: String, map: Writable?) =
+        AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
             val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
             rustTemplate(
                 "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
                 "map" to mapBlock,
             )
         }
-    }
 }
 
 /**
@@ -67,20 +68,18 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> =
         listOf(
-            SdkConfigCustomization.create { section ->
-                writable {
-                    rust(
-                        """
-                        // resiliency
-                        ${section.serviceConfigBuilder}.set_retry_config(${section.sdkConfig}.retry_config().cloned());
-                        ${section.serviceConfigBuilder}.set_timeout_config(${section.sdkConfig}.timeout_config().cloned());
-                        ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
+            AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    // resiliency
+                    ${section.serviceConfigBuilder}.set_retry_config(${section.sdkConfig}.retry_config().cloned());
+                    ${section.serviceConfigBuilder}.set_timeout_config(${section.sdkConfig}.timeout_config().cloned());
+                    ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
 
-                        ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
+                    ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
 
-                        """,
-                    )
-                }
+                    """,
+                )
             },
         )
 }
@@ -112,8 +111,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                 impl From<&#{SdkConfig}> for Builder {
                     fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
-                        #{augmentBuilder}
-
+                        #{augmentBuilder:W}
 
                         builder
                     }
@@ -125,15 +123,15 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                     }
                 }
                 """,
-                "augmentBuilder" to codegenContext.rootDecorator.extraSections(codegenContext)
-                    .filter { (t, _) -> t is SdkConfigCustomization }.map { (_, sectionWriter) ->
-                        sectionWriter(
-                            SdkConfigCustomization.CopySdkConfigToClientConfig(
-                                sdkConfig = "input",
-                                serviceConfigBuilder = "builder",
-                            ),
-                        )
-                    }.join("\n"),
+                "augmentBuilder" to writable {
+                    writeCustomizations(
+                        codegenContext.rootDecorator.extraSections(codegenContext),
+                        SdkConfigSection.CopySdkConfigToClientConfig(
+                            sdkConfig = "input",
+                            serviceConfigBuilder = "builder",
+                        ),
+                    )
+                },
                 *codegenScope,
             )
         }

@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizationWriter
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -109,15 +110,13 @@ class RegionDecorator : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomizationWriter> {
         return usesRegion(codegenContext).thenSingletonListOf {
-            SdkConfigCustomization.create { section ->
-                {
-                    rust(
-                        """
-                        ${section.serviceConfigBuilder} =
-                             ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
-                        """,
-                    )
-                }
+            AdHocCustomization.customize<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder} =
+                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                    """,
+                )
             }
         }
     }
