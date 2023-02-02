@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import unittest
+import base64
 
 REMOTE_BASE_IMAGE_NAME = "public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
 LOCAL_BASE_IMAGE_NAME = "smithy-rs-base-image"
@@ -41,7 +42,8 @@ class Platform(Enum):
 
 # Script context
 class Context:
-    def __init__(self, start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions):
+    def __init__(self, start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions,
+                 encrpyted_docker_password, docker_passphrase):
         self.start_path = start_path
         self.script_path = script_path
         self.tools_path = tools_path
@@ -50,6 +52,8 @@ class Context:
         self.image_tag = image_tag
         self.allow_local_build = allow_local_build
         self.github_actions = github_actions
+        self.encrypted_docker_password = encrpyted_docker_password
+        self.docker_passphrase = docker_passphrase
 
     @staticmethod
     def default():
@@ -60,6 +64,9 @@ class Context:
         image_tag = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
         allow_local_build = os.getenv("ALLOW_LOCAL_BUILD") != "false"
         github_actions = os.getenv("GITHUB_ACTIONS") == "true"
+        encrypted_docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD")
+        docker_passphrase = os.getenv("DOCKER_LOGIN_TOKEN_PASSPHRASE")
+
         print(f"Start path: {start_path}")
         print(f"Script path: {script_path}")
         print(f"Tools path: {tools_path}")
@@ -67,7 +74,9 @@ class Context:
         print(f"Required base image tag: {image_tag}")
         print(f"Allow local build: {allow_local_build}")
         print(f"Running in GitHub Actions: {github_actions}")
-        return Context(start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions)
+        return Context(start_path=start_path, script_path=script_path, tools_path=tools_path, user_id=user_id,
+                       image_tag=image_tag, allow_local_build=allow_local_build, github_actions=github_actions,
+                       encrpyted_docker_password=encrypted_docker_password, docker_passphrase=docker_passphrase)
 
 
 # Mockable shell commands
@@ -156,8 +165,11 @@ def run(command, cwd=None):
 
 # Returns (status, output) from a shell command
 def get_cmd_output(command, cwd=None, check=True, **kwargs):
+    if isinstance(command, str):
+        command = shlex.split(command)
+
     result = subprocess.run(
-        shlex.split(command),
+        command,
         capture_output=True,
         check=False,
         cwd=cwd,
@@ -171,25 +183,22 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
     return result.returncode, stdout, stderr
 
 
-def decrypt_and_login(secret):
-    import base64
+def decrypt_and_login(secret, passphrase):
     decoded = base64.b64decode(secret, validate=True)
-    token = os.getenv("DOCKER_PASSPHRASE")
-    if token is None:
-        print('no passphrase')
-        return
-    (code, password, err) = get_cmd_output(f"gpg --decrypt --batch --quiet --passphrase '{token}' --output -",
-                                           input=decoded)
+    if not token:
+        raise Exception("a secret was set but no passphrase was set (or it was empty)")
+    assert not "'" in token  # prevent shell escape funny business
+    (code, password, err) = get_cmd_output(
+        ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", "{token}", "--output", "-"],
+        input=decoded)
     (_, output, _) = get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws",
                                     input=password.encode('utf-8'))
-    print(output)
+    print("Docker login success!")
 
 
 def acquire_build_image(context=Context.default(), shell=Shell()):
-    import os
-    docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD")
-    if docker_password is not None:
-        decrypt_and_login(docker_password)
+    if context.encrypted_docker_password is not None:
+        decrypt_and_login(context.encrypted_docker_password, context.docker_passphrase)
     # If the image doesn't already exist locally, then look remotely
     if not shell.docker_image_exists_locally(LOCAL_BASE_IMAGE_NAME, context.image_tag):
         announce("Base image not found locally.")
@@ -230,15 +239,17 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
 
 
 class SelfTest(unittest.TestCase):
-    def test_context(self, allow_local_build=False, github_actions=False):
+    def test_context(self, github_actions=False, **kwargs):
         return Context(
             start_path="/tmp/test/start-path",
             script_path="/tmp/test/script-path",
             tools_path="/tmp/test/tools-path",
             user_id="123",
             image_tag="someimagetag",
-            allow_local_build=allow_local_build,
-            github_actions=github_actions
+            encrpyted_docker_password=None,
+            docker_passphrase=None,
+            github_actions=github_actions,
+            **kwargs
         )
 
     def mock_shell(self):
@@ -265,6 +276,10 @@ class SelfTest(unittest.TestCase):
                 retryable_error_sleep_time=0
             )
         )
+
+    def test_docker_login(self):
+        shell = self.mock_shell()
+        acquire_build_image(self.test_context(encrpyted_docker_password="asdf", docker_passphrase="1234"))
 
     def test_retry_immediate_success(self):
         shell = self.mock_shell()
