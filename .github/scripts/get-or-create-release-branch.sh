@@ -3,7 +3,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-set -e
+set -eux
 
 # Compute the name of the release branch starting from the version that needs to be released ($SEMANTIC_VERSION).
 # If it's the beginning of a new release series, the branch is created and pushed to the remote (chosen according to
@@ -54,7 +54,7 @@ fi
 echo "release_branch=${branch_name}" >"${output_file}"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-    git push --force origin "HEAD:${branch_name}"
+    git push --force origin "HEAD:refs/heads/${branch_name}"
 else
     commit_sha=$(git rev-parse --short HEAD)
     if git ls-remote --exit-code --heads origin "${branch_name}"; then
