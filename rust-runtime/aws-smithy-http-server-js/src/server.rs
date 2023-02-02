@@ -1,7 +1,11 @@
-use aws_smithy_http_server::routing::IntoMakeService;
-use tokio::runtime::Handle;
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 use crate::socket::JsSocket;
+use aws_smithy_http_server::routing::IntoMakeService;
+use tokio::runtime::Handle;
 
 pub fn start_hyper_worker(
     socket: &JsSocket,

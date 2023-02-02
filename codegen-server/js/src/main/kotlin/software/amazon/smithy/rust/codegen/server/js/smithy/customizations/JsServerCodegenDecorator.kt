@@ -5,9 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.js.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.js.smithy.JsServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -35,6 +37,25 @@ class CdylibManifestDecorator : ServerCodegenDecorator {
         )
 }
 
+class NapiBuildRsDecorator : ServerCodegenDecorator {
+    override val name: String = "NapiBuildRsDecorator"
+    override val order: Byte = 0
+    private val napi_build = JsServerCargoDependency.NapiBuild.toType()
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        rustCrate.withFile("build.rs") {
+            rustTemplate(
+                """
+                fn main() {
+                    #{napi_build}::setup();
+                }
+                """,
+                "napi_build" to napi_build,
+            )
+        }
+    }
+}
+
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -43,5 +64,6 @@ val DECORATORS = listOf(
     AddInternalServerErrorToAllOperationsDecorator(),
     // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
     CdylibManifestDecorator(),
-    // Add `pub use` of `aws_smithy_http_server_python::types`.
+    //
+    NapiBuildRsDecorator(),
 )

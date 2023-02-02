@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.js.smithy
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
@@ -17,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 object JsServerCargoDependency {
     val Napi: CargoDependency = CargoDependency("napi", CratesIo("2.10"), features = setOf("tokio_rt", "napi4"))
     val NapiDerive: CargoDependency = CargoDependency("napi-derive", CratesIo("2.10"))
+    val NapiBuild: CargoDependency = CargoDependency("napi-build", CratesIo("2.0"), DependencyScope.Build)
     val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.17"))
     val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.17"), features = setOf("attributes", "tokio-runtime"))
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
