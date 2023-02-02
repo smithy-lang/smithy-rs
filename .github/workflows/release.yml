@@ -103,6 +103,12 @@ jobs:
     name: Upgrade gradle.properties
     needs:
     - get-or-create-release-branch
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     outputs:
       commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
@@ -135,6 +141,12 @@ jobs:
     name: Release
     needs:
     - upgrade-gradle-properties
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
