@@ -101,7 +101,6 @@ jobs:
 
   upgrade-gradle-properties:
     name: Upgrade gradle.properties
-    if: inputs.dry_run == false
     needs:
     - get-or-create-release-branch
     runs-on: ubuntu-latest
