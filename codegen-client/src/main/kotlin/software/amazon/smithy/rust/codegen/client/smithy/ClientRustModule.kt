@@ -66,3 +66,13 @@ fun ClientCodegenContext.featureGatedConfigModule() = when (settings.codegenConf
     true -> ClientRustModule.Config
     else -> ClientRustModule.root
 }
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedCustomizeModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Client.customize
+    else -> RustModule.public(
+        "customize",
+        "Operation customization and supporting types",
+        parent = ClientRustModule.Operation,
+    )
+}

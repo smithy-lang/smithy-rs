@@ -13,6 +13,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -65,11 +67,6 @@ class FluentClientGenerator(
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
-
-        val clientModule = RustModule.public(
-            "client",
-            "Client and fluent builders for calling the service.",
-        )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -81,15 +78,11 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(clientModule) {
+        crate.withModule(ClientRustModule.client) {
             renderFluentClient(this)
         }
 
-        CustomizableOperationGenerator(
-            runtimeConfig,
-            generics,
-            codegenContext.settings.codegenConfig.includeFluentClient,
-        ).render(crate)
+        CustomizableOperationGenerator(codegenContext, generics).render(crate)
     }
 
     private fun renderFluentClient(writer: RustWriter) {
@@ -278,7 +271,7 @@ class FluentClientGenerator(
                         /// Consume this builder, creating a customizable operation that can be modified before being
                         /// sent. The operation's inner [http::Request] can be modified as well.
                         pub async fn customize(self) -> std::result::Result<
-                            crate::operation::customize::CustomizableOperation#{customizable_op_type_params:W},
+                            #{CustomizableOperation}#{customizable_op_type_params:W},
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
@@ -286,7 +279,7 @@ class FluentClientGenerator(
                                 .make_operation(&handle.conf)
                                 .await
                                 .map_err(#{SdkError}::construction_failure)?;
-                            Ok(crate::operation::customize::CustomizableOperation { handle, operation })
+                            Ok(#{CustomizableOperation} { handle, operation })
                         }
 
                         /// Sends the request and returns the response.
@@ -306,6 +299,8 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
+                        "CustomizableOperation" to codegenContext.featureGatedCustomizeModule().toType()
+                            .resolve("CustomizableOperation"),
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
