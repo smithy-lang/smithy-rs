@@ -10,12 +10,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 
 /**
  * Add a `make_token` field to Service config. See below for the resulting generated code.
  */
-class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfig>() {
+class IdempotencyTokenProviderCustomization : NamedCustomization<ServiceConfig>() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {

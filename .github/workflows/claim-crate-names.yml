@@ -45,7 +45,7 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
@@ -72,7 +72,7 @@ jobs:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path tools/publisher
+        cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully
         publisher --version
         publisher claim-crate-names -y

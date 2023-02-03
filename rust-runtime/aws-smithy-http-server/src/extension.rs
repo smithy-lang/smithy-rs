@@ -35,9 +35,7 @@ pub use crate::request::extension::{Extension, MissingExtension};
 /// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
 /// that the request should be routed to a particular operation. The operation handler might not even get invoked
 /// because the request fails to deserialize into the modeled operation input.
-///
-/// The format given must be the absolute shape ID with `#` replaced with a `.`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -49,16 +47,16 @@ pub struct OperationExtension {
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error(". was not found - missing namespace")]
+    #[error("# was not found - missing namespace")]
     MissingNamespace,
 }
 
 #[allow(deprecated)]
 impl OperationExtension {
-    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    /// Creates a new [`OperationExtension`] from the absolute shape ID.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
         let (namespace, name) = absolute_operation_id
-            .rsplit_once('.')
+            .rsplit_once('#')
             .ok_or(ParseError::MissingNamespace)?;
         Ok(Self {
             absolute: absolute_operation_id,
@@ -236,11 +234,15 @@ impl Deref for RuntimeErrorExtension {
 
 #[cfg(test)]
 mod tests {
+    use tower::{service_fn, ServiceExt};
+
+    use crate::{operation::OperationShapeExt, proto::rest_json_1::RestJson1};
+
     use super::*;
 
     #[test]
     fn ext_accept() {
-        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let value = "com.amazonaws.ebs#CompleteSnapshot";
         let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
@@ -255,5 +257,34 @@ mod tests {
             OperationExtension::new(value).unwrap_err(),
             ParseError::MissingNamespace
         )
+    }
+
+    #[tokio::test]
+    async fn plugin() {
+        struct DummyOp;
+
+        impl OperationShape for DummyOp {
+            const NAME: &'static str = "com.amazonaws.ebs#CompleteSnapshot";
+
+            type Input = ();
+            type Output = ();
+            type Error = ();
+        }
+
+        // Apply `Plugin`.
+        let operation = DummyOp::from_handler(|_| async { Ok(()) });
+        let plugins = PluginPipeline::new().insert_operation_extension();
+        let op = Plugin::<RestJson1, DummyOp, _, _>::map(&plugins, operation);
+
+        // Apply `Plugin`s `Layer`.
+        let layer = op.layer;
+        let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
+        let svc = layer.layer(svc);
+
+        // Check for `OperationExtension`.
+        let response = svc.oneshot(http::Request::new(())).await.unwrap();
+        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
+        let actual = response.extensions().get::<OperationExtension>().unwrap();
+        assert_eq!(*actual, expected);
     }
 }

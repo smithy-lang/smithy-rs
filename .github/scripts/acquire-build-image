@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import unittest
+import base64
 
 REMOTE_BASE_IMAGE_NAME = "public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
 LOCAL_BASE_IMAGE_NAME = "smithy-rs-base-image"
@@ -41,14 +42,18 @@ class Platform(Enum):
 
 # Script context
 class Context:
-    def __init__(self, start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions):
+    def __init__(self, start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions,
+                 encrypted_docker_password, docker_passphrase):
         self.start_path = start_path
         self.script_path = script_path
         self.tools_path = tools_path
+        self.docker_image_path = tools_path + "/ci-build"
         self.user_id = user_id
         self.image_tag = image_tag
         self.allow_local_build = allow_local_build
         self.github_actions = github_actions
+        self.encrypted_docker_password = encrypted_docker_password
+        self.docker_passphrase = docker_passphrase
 
     @staticmethod
     def default():
@@ -56,9 +61,12 @@ class Context:
         script_path = os.path.dirname(os.path.realpath(__file__))
         tools_path = get_cmd_output("git rev-parse --show-toplevel", cwd=script_path)[1] + "/tools"
         user_id = get_cmd_output("id -u")[1]
-        image_tag = get_cmd_output("./ci-build/tools-hash", cwd=tools_path)[1]
+        image_tag = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
         allow_local_build = os.getenv("ALLOW_LOCAL_BUILD") != "false"
         github_actions = os.getenv("GITHUB_ACTIONS") == "true"
+        encrypted_docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD") or None
+        docker_passphrase = os.getenv("DOCKER_LOGIN_TOKEN_PASSPHRASE") or None
+
         print(f"Start path: {start_path}")
         print(f"Script path: {script_path}")
         print(f"Tools path: {tools_path}")
@@ -66,7 +74,9 @@ class Context:
         print(f"Required base image tag: {image_tag}")
         print(f"Allow local build: {allow_local_build}")
         print(f"Running in GitHub Actions: {github_actions}")
-        return Context(start_path, script_path, tools_path, user_id, image_tag, allow_local_build, github_actions)
+        return Context(start_path=start_path, script_path=script_path, tools_path=tools_path, user_id=user_id,
+                       image_tag=image_tag, allow_local_build=allow_local_build, github_actions=github_actions,
+                       encrypted_docker_password=encrypted_docker_password, docker_passphrase=docker_passphrase)
 
 
 def output_contains_any(stdout, stderr, messages):
@@ -74,7 +84,6 @@ def output_contains_any(stdout, stderr, messages):
         if message in stdout or message in stderr:
             return True
     return False
-
 
 # Mockable shell commands
 class Shell:
@@ -90,6 +99,9 @@ class Shell:
         (status, _, _) = get_cmd_output(f"docker inspect \"{image_name}:{image_tag}\"", check=False)
         return status == 0
 
+    def docker_login(self, password):
+        get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
         (status, stdout, stderr) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
@@ -101,7 +113,7 @@ class Shell:
         print("-------------------")
 
         not_found_messages = ["not found: manifest unknown"]
-        throttle_messages = ["toomanyrequests: Rate exceeded", "toomanyrequests: Data limit exceeded"]
+        throttle_messages = ["toomanyrequests:"]
         retryable_messages = ["net/http: TLS handshake timeout"]
         if status == 0:
             return DockerPullResult.SUCCESS
@@ -118,10 +130,10 @@ class Shell:
         run(f"docker build -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
 
     # Builds the local build image
-    def docker_build_build_image(self, user_id, script_path):
+    def docker_build_build_image(self, user_id, docker_image_path):
         run(
             f"docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID={user_id} .",
-            cwd=script_path
+            cwd=docker_image_path
         )
 
     # Saves the Docker image named `image_name` with `image_tag` to `output_path`
@@ -134,10 +146,10 @@ class Shell:
 
 
 # Pulls a Docker image and retries if it gets throttled
-def docker_pull_with_retry(shell, image_name, image_tag, throttle_sleep_time=45, retryable_error_sleep_time=1):
+def docker_pull_with_retry(shell, image_name, image_tag, throttle_sleep_time=120, retryable_error_sleep_time=1):
     if shell.platform() == Platform.ARM_64:
         return DockerPullResult.REMOTE_ARCHITECTURE_MISMATCH
-    for attempt in range(1, 5):
+    for attempt in range(1, 6):
         announce(f"Attempting to pull remote image {image_name}:{image_tag} (attempt {attempt})...")
         result = shell.docker_pull(image_name, image_tag)
         if result == DockerPullResult.ERROR_THROTTLED:
@@ -159,17 +171,39 @@ def run(command, cwd=None):
 
 
 # Returns (status, output) from a shell command
-def get_cmd_output(command, cwd=None, check=True):
+def get_cmd_output(command, cwd=None, check=True, **kwargs):
+    if isinstance(command, str):
+        command = shlex.split(command)
+
     result = subprocess.run(
-        shlex.split(command),
+        command,
         capture_output=True,
-        check=check,
-        cwd=cwd
+        check=False,
+        cwd=cwd,
+        **kwargs
     )
-    return (result.returncode, result.stdout.decode("utf-8").strip(), result.stderr.decode("utf-8").strip())
+    stdout = result.stdout.decode("utf-8").strip()
+    stderr = result.stderr.decode("utf-8").strip()
+    if check and result.returncode != 0:
+        raise Exception(f"failed to run '{command}.\n{stdout}\n{stderr}")
+
+    return result.returncode, stdout, stderr
+
+
+def decrypt_and_login(shell, secret, passphrase):
+    decoded = base64.b64decode(secret, validate=True)
+    if not passphrase:
+        raise Exception("a secret was set but no passphrase was set (or it was empty)")
+    (code, password, err) = get_cmd_output(
+        ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", passphrase, "--output", "-"],
+        input=decoded)
+    shell.docker_login(password)
+    print("Docker login success!")
 
 
 def acquire_build_image(context=Context.default(), shell=Shell()):
+    if context.encrypted_docker_password is not None:
+        decrypt_and_login(shell, context.encrypted_docker_password, context.docker_passphrase)
     # If the image doesn't already exist locally, then look remotely
     if not shell.docker_image_exists_locally(LOCAL_BASE_IMAGE_NAME, context.image_tag):
         announce("Base image not found locally.")
@@ -188,7 +222,7 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
                 return 1
 
             announce("Building a new image locally.")
-            shell.docker_build_base_image(context.image_tag, context.tools_path)
+            shell.docker_build_base_image(context.image_tag, context.docker_image_path)
 
             if context.github_actions:
                 announce("Saving base image for use in later jobs...")
@@ -205,20 +239,23 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
 
     announce("Creating local build image...")
     shell.docker_tag(LOCAL_BASE_IMAGE_NAME, context.image_tag, LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-    shell.docker_build_build_image(context.user_id, context.script_path)
+    shell.docker_build_build_image(context.user_id, context.docker_image_path)
     return 0
 
 
 class SelfTest(unittest.TestCase):
-    def test_context(self, allow_local_build=False, github_actions=False):
+    def test_context(self, github_actions=False, allow_local_build=False, encrypted_docker_password=None,
+                     docker_passphrase=None):
         return Context(
             start_path="/tmp/test/start-path",
             script_path="/tmp/test/script-path",
             tools_path="/tmp/test/tools-path",
             user_id="123",
             image_tag="someimagetag",
+            encrypted_docker_password=encrypted_docker_password,
+            docker_passphrase=docker_passphrase,
+            github_actions=github_actions,
             allow_local_build=allow_local_build,
-            github_actions=github_actions
         )
 
     def mock_shell(self):
@@ -230,6 +267,7 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull = MagicMock()
         shell.docker_save = MagicMock()
         shell.docker_tag = MagicMock()
+        shell.docker_login = MagicMock()
         return shell
 
     def test_retry_architecture_mismatch(self):
@@ -245,6 +283,13 @@ class SelfTest(unittest.TestCase):
                 retryable_error_sleep_time=0
             )
         )
+
+    def test_docker_login(self):
+        shell = self.mock_shell()
+        acquire_build_image(self.test_context(
+            encrypted_docker_password="jA0ECQMCvYU/JxsX3g/70j0BxbLLW8QaFWWb/DqY9gPhTuEN/xdYVxaoDnV6Fha+lAWdT7xN0qZr5DHPBalLfVvvM1SEXRBI8qnfXyGI",
+            docker_passphrase="secret"), shell)
+        shell.docker_login.assert_called_with("payload")
 
     def test_retry_immediate_success(self):
         shell = self.mock_shell()
@@ -373,7 +418,7 @@ class SelfTest(unittest.TestCase):
 
         shell.docker_image_exists_locally.assert_called_once()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -390,10 +435,10 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -410,10 +455,10 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -430,14 +475,14 @@ class SelfTest(unittest.TestCase):
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
-        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path/ci-build")
         shell.docker_save.assert_called_with(
             LOCAL_BASE_IMAGE_NAME,
             "someimagetag",
             "/tmp/test/start-path/smithy-rs-base-image"
         )
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
     # When:
     #  - the base image doesn't exist locally
@@ -477,7 +522,7 @@ class SelfTest(unittest.TestCase):
             call(REMOTE_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, "someimagetag"),
             call(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
         ])
-        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
 
 def main():

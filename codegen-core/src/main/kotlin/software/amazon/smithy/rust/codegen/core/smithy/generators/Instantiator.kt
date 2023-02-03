@@ -46,6 +46,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -55,7 +57,19 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
- * Instantiator generates code to instantiate a given Shape given a `Node` representing the value.
+ * Class describing an instantiator section that can be used in a customization.
+ */
+sealed class InstantiatorSection(name: String) : Section(name) {
+    data class AfterInstantiatingValue(val shape: Shape) : InstantiatorSection("AfterInstantiatingValue")
+}
+
+/**
+ * Customization for the instantiator.
+ */
+typealias InstantiatorCustomization = NamedCustomization<InstantiatorSection>
+
+/**
+ * Instantiator generates code to instantiate a given shape given a `Node` representing the value.
  *
  * This is only used during protocol test generation.
  */
@@ -72,6 +86,7 @@ open class Instantiator(
     private val enumFromStringFn: (Symbol, String) -> Writable,
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
+    private val customizations: List<InstantiatorCustomization> = listOf(),
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
@@ -280,6 +295,9 @@ open class Instantiator(
                 renderMember(this, shape.member, v, ctx)
                 rust(",")
             }
+        }
+        for (customization in customizations) {
+            customization.section(InstantiatorSection.AfterInstantiatingValue(shape))(writer)
         }
     }
 
