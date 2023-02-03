@@ -89,8 +89,11 @@ impl From<i32> for Document {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Document;
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Number;
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use std::collections::HashMap;
 
     /// checks if a) serialization of json suceeds and b) it is compatible with serde_json

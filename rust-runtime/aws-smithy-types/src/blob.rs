@@ -105,7 +105,9 @@ impl<'de> Deserialize<'de> for Blob {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Blob;
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use std::collections::HashMap;
 
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
