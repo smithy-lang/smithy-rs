@@ -54,7 +54,8 @@ jobs:
     - name: Tag and upload image
       run: |
         IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
-        docker tag "${{ env.ecr_repository }}:${IMAGE_TAG}" "${{ env.ecr_repository }}:main"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:main"
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
         docker push "${{ env.ecr_repository }}:main"
 
