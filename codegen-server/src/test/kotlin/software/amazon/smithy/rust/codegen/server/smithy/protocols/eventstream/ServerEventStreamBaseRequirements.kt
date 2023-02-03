@@ -56,7 +56,8 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): ServerCodegenContext = serverTestCodegenContext(
-        model, serviceShape,
+        model,
+        serviceShape,
         serverTestRustSettings(
             codegenConfig = ServerCodegenConfig(publicConstrainedTypes = publicConstrainedTypes),
         ),
