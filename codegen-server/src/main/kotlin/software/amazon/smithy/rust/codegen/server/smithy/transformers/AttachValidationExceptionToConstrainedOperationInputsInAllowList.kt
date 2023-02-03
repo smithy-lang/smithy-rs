@@ -61,7 +61,6 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
                 walker.walkShapes(operationShape.inputShape(model))
                     .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
             }
-            // TODO Dry
             .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
         return ModelTransformer.create().mapShapes(model) { shape ->
