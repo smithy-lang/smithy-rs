@@ -225,9 +225,14 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-new-changelog-next-toml
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Push smithy-rs changes
+      working-directory: generate-new-changelog-next-toml/smithy-rs
       shell: bash
       run: |
+        set -eux
+        
         # This will fail if other commits have been pushed to `main` after `commit_sha`
         # In particular, this will ALWAYS fail if you are creating a new release series from
         # a commit that is not the current tip of `main`.
