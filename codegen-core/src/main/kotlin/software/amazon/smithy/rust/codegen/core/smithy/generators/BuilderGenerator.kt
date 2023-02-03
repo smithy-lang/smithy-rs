@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.shape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -211,12 +212,14 @@ class BuilderGenerator(
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
         RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        SensitiveWarning.addDoc(writer, shape)
         writer.rustBlock("pub struct $builderName") {
             // add serde
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
+                SensitiveWarning.addDoc(writer, member)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
         }

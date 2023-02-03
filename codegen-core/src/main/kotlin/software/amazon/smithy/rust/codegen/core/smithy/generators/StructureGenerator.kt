@@ -133,11 +133,7 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
-
-        // todo! check if it is sensitive
-        // if {
-        //     writer.writeInline("This data contains sensitive information; It will not be obscured when serialized.")
-        // }
+        SensitiveWarning.addDoc(writer, shape)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
@@ -149,10 +145,12 @@ open class StructureGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
         RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        SensitiveWarning.addDoc(writer, shape)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
+                SensitiveWarning.addDoc(writer, shape)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }

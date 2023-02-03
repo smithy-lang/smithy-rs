@@ -139,6 +139,7 @@ open class EnumGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
         RenderSerdeAttribute.writeAttributes(writer)
+        SensitiveWarning.addDoc(writer, shape)
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
@@ -179,6 +180,7 @@ open class EnumGenerator(
         )
         writer.deprecatedShape(shape)
         RenderSerdeAttribute.writeAttributes(writer)
+        SensitiveWarning.addDoc(writer, shape)
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
