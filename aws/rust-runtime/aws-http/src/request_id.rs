@@ -12,7 +12,7 @@ use aws_smithy_types::error::metadata::{
 use aws_smithy_types::error::Unhandled;
 use http::{HeaderMap, HeaderValue};
 
-/// Constant for the [`aws_smithy_types::error::Error`] extra field that contains the request ID
+/// Constant for the [`ErrorMetadata`] extra field that contains the request ID
 const AWS_REQUEST_ID: &str = "aws_request_id";
 
 /// Implementers add a function to return an AWS request ID
