@@ -30,33 +30,30 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustCodegenServerPlugin : SmithyBuildPlugin {
+class RustServerCodegenPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen"
 
-    override fun execute(context: PluginContext) {
-        // Suppress extremely noisy logs about reserved words
+    /**
+     * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+     */
+    override fun execute(
+        context: PluginContext,
+    ) {
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] returns different types of
-        // customizations. A customization is a function of:
-        // - location (e.g. the mutate section of an operation)
-        // - context (e.g. the of the operation)
-        // - writer: The active RustWriter at the given location
-        val codegenDecorator: CombinedServerCodegenDecorator =
-            CombinedServerCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
-
-        // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
+        val codegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(
+                context,
+                ServerRequiredCustomizations(),
+            )
         logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
     companion object {
         /**
-         * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider.
-         *
-         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
-         * with other symbol providers, documented inline, to handle the full scope of Smithy types.
+         * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
          */
         fun baseSymbolProvider(
             model: Model,
