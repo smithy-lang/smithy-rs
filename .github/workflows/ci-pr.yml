@@ -20,13 +20,14 @@ jobs:
   # be encrypted with the passphrase stored as a GitHub secret. The login password expires after 12h.
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
+    name: Save a docker login token
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
       id-token: write
       contents: read
     continue-on-error: true
-    name: Save a docker login token
     runs-on: ubuntu-latest
     steps:
     - name: Attempt to load a docker login password
