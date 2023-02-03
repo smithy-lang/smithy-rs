@@ -14,11 +14,12 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 public object RenderSerdeAttribute {
     public fun forStructureShape(writer: RustWriter, shape: StructureShape, model: Model) {
         if (shape.members().none { it.isEventStream(model) }) {
-            this.writeAttributes(writer)
+            writeAttributes(writer)
         }
     }
 
     public fun writeAttributes(writer: RustWriter) {
-        Attribute.UnstableSerdeDerive(writer)
+        Attribute("").SerdeSerialize().render(writer)
+        Attribute("").SerdeDeserialize().render(writer)
     }
 }

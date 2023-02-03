@@ -241,8 +241,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
         // serde types. Gated behind `CfgUnstable`.
-        val SerdeSerialize = CargoDependency.Serde.toType().resolve("Serialize")
-        val SerdeDeserialize = CargoDependency.Serde.toType().resolve("Deserialize")
+        val Serde = CargoDependency.Serde.toType()
+        val SerdeSerialize = Serde.resolve("Serialize")
+        val SerdeDeserialize = Serde.resolve("Deserialize")
 
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()

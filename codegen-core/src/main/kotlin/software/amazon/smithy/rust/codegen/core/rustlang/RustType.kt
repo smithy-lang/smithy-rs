@@ -446,6 +446,16 @@ class Attribute(val inner: Writable) {
         }
     }
 
+    // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
+    // You can find the discussion here.
+    // https://github.com/awslabs/smithy-rs/discussions/2248
+    public fun SerdeSerialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+    }
+    public fun SerdeDeserialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+    }
+
     companion object {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
@@ -470,10 +480,6 @@ class Attribute(val inner: Writable) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
-        val UnstableSerdeDerive = fun(writer: RustWriter) = {
-            Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize"), derive(RuntimeType.SerdeSerialize)))).render(writer)
-            Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize"), derive(RuntimeType.SerdeDeserialize)))).render(writer)
-        }
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
