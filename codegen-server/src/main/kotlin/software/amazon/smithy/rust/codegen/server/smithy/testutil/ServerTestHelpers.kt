@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
+import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -54,7 +54,7 @@ fun serverTestSymbolProviders(
                 (serviceShape ?: testServiceShapeFor(model)).id,
             )
             ).codegenConfig.publicConstrainedTypes,
-        RustCodegenServerPlugin::baseSymbolProvider,
+        RustServerCodegenPlugin::baseSymbolProvider,
     )
 
 fun serverTestRustSettings(
@@ -99,7 +99,7 @@ fun serverTestCodegenContext(
         service,
         ServerTestSymbolVisitorConfig,
         settings.codegenConfig.publicConstrainedTypes,
-        RustCodegenServerPlugin::baseSymbolProvider,
+        RustServerCodegenPlugin::baseSymbolProvider,
     )
 
     return ServerCodegenContext(

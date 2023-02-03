@@ -33,7 +33,7 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustCodegenServerPlugin : ServerDecoratableBuildPlugin() {
+class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen"

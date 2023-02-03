@@ -11,7 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.codegenIntegrationTest
-import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
+import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.nio.file.Path
@@ -37,8 +37,7 @@ fun serverIntegrationTest(
                 test(codegenContext, rustCrate)
             }
         }
-        // TODO Rename
-        RustCodegenServerPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
+        RustServerCodegenPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     }
     return codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)
 }
