@@ -6,4 +6,12 @@
 
 set -eux
 
-changelogger init > smithy-rs/CHANGELOG.next.toml
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+ARTIFACTS_DIR="$(pwd)/artifacts/generate-new-changelog-next-toml"
+
+changelogger init > "${SMITHY_RS_DIR}/CHANGELOG.next.toml"
+
+pushd "${ARTIFACTS_DIR}"
+cp -r "${SMITHY_RS_DIR}" .
+git -C smithy-rs status
+popd
