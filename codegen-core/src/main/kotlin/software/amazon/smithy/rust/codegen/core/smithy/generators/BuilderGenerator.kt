@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
@@ -74,7 +74,7 @@ sealed class BuilderSection(name: String) : Section(name) {
 }
 
 /** Customizations for BuilderGenerator */
-abstract class BuilderCustomization : NamedSectionGenerator<BuilderSection>()
+abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
 fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
     structureShape.builderSymbol(symbolProvider)

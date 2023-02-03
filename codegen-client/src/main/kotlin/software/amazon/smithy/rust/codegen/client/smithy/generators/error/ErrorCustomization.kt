@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
 /** Error customization sections */
@@ -22,4 +22,4 @@ sealed class ErrorSection(name: String) : Section(name) {
 }
 
 /** Customizations for generated errors */
-abstract class ErrorCustomization : NamedSectionGenerator<ErrorSection>()
+abstract class ErrorCustomization : NamedCustomization<ErrorSection>()

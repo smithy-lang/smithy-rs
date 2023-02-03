@@ -321,7 +321,7 @@ class FluentClientGenerator(
                             """
                             /// Create a paginator for this request
                             ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
                             pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
                                 #{Paginator}::new(self.handle, self.inner)
                             }

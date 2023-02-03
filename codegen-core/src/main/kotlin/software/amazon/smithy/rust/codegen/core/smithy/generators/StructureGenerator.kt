@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -51,7 +51,7 @@ sealed class StructureSection(name: String) : Section(name) {
 }
 
 /** Customizations for StructureGenerator */
-abstract class StructureCustomization : NamedSectionGenerator<StructureSection>()
+abstract class StructureCustomization : NamedCustomization<StructureSection>()
 
 open class StructureGenerator(
     val model: Model,

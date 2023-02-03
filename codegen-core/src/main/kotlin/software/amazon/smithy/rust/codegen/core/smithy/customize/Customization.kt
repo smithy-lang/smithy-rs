@@ -23,31 +23,39 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
  */
 abstract class Section(val name: String)
 
-/**
- * Detatched section abstraction to allow adhoc sections to be created. By using the `.writer` method, a instantiation
- * of this section can be easily created.
- */
-abstract class AdHocSection<T : Section>(val name: String) {
-    /**
-     * Helper to enable easily combining detached sections with the [CoreCodegenDecorator.extraSections] method.
-     */
-    fun create(w: (T) -> Writable): Pair<AdHocSection<*>, (Section) -> Writable> = this to { s: Section ->
-        w((s as T))
-    }
-}
+/** Customization type returned by [adhocCustomization] */
+typealias AdHocCustomization = NamedCustomization<AdHocSection>
+
+/** Adhoc section for code generation. Similar to [Section], but for use with [adhocCustomization]. */
+abstract class AdHocSection(name: String) : Section(name)
 
 /**
- * A named section generator allows customization via a predefined set of named sections.
+ * Allows for one-off customizations such that a `when` statement switching on
+ * the section type is not necessary.
+ */
+inline fun <reified T : AdHocSection> adhocCustomization(
+    crossinline customization: RustWriter.(T) -> Unit,
+): AdHocCustomization =
+    object : AdHocCustomization() {
+        override fun section(section: AdHocSection): Writable = writable {
+            if (section is T) {
+                customization(section)
+            }
+        }
+    }
+
+/**
+ * A named section generator that allows customization via a predefined set of named sections.
  *
  * Implementors MUST override section and use a `when` clause to handle each section individually
  */
-abstract class NamedSectionGenerator<T : Section> {
+abstract class NamedCustomization<T : Section> {
     abstract fun section(section: T): Writable
     protected val emptySection = writable { }
 }
 
 /** Convenience for rendering a list of customizations for a given section */
-fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedSectionGenerator<T>>, section: T) {
+fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedCustomization<T>>, section: T) {
     for (customization in customizations) {
         customization.section(section)(this)
     }

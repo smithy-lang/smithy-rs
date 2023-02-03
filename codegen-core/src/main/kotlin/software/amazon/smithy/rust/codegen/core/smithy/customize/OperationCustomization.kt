@@ -75,7 +75,7 @@ sealed class OperationSection(name: String) : Section(name) {
     ) : OperationSection("BeforeParseResponse")
 }
 
-abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
+abstract class OperationCustomization : NamedCustomization<OperationSection>() {
     open fun retryType(): RuntimeType? = null
 
     /**

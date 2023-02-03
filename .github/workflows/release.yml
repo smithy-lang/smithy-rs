@@ -115,7 +115,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        ref: ${{ inputs.release_branch }}
+        ref: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Upgrade gradle.properties
@@ -133,6 +133,9 @@ jobs:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
+        set -x
+        # For debugging purposes
+        git status
         # The file was actually changed, we need to commit the changes
         git diff-index --quiet HEAD || { git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin; }
 
@@ -222,9 +225,14 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-new-changelog-next-toml
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Push smithy-rs changes
+      working-directory: generate-new-changelog-next-toml/smithy-rs
       shell: bash
       run: |
+        set -eux
+        
         # This will fail if other commits have been pushed to `main` after `commit_sha`
         # In particular, this will ALWAYS fail if you are creating a new release series from
         # a commit that is not the current tip of `main`.

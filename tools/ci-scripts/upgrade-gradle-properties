@@ -12,13 +12,16 @@ ARTIFACTS_DIR="$(pwd)/artifacts/upgrade-gradle-properties"
 mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
+echo "gradle.properties BEFORE the upgrade"
+cat gradle.properties
 publisher upgrade-runtime-crates-version --version "${SEMANTIC_VERSION}"
+echo "gradle.properties AFTER the upgrade"
+cat gradle.properties
+git status
 popd
 
-# Clone smithy-rs repo changes (changelog updates) into
-# the `smithy-rs-release` artifact for push to GitHub
 pushd "${ARTIFACTS_DIR}"
-git clone "${SMITHY_RS_DIR}"
-# Copy over the original remotes so that it's possible to push to `origin`
-cp "${SMITHY_RS_DIR}/.git/config" smithy-rs/.git/config
+mkdir -p smithy-rs
+cp -r "${SMITHY_RS_DIR}" .
+git -C smithy-rs status
 popd

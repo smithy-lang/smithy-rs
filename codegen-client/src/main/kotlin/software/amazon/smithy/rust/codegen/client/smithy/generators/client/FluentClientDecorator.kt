@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -72,7 +72,7 @@ sealed class FluentClientSection(name: String) : Section(name) {
     data class FluentClientDocs(val serviceShape: ServiceShape) : FluentClientSection("FluentClientDocs")
 }
 
-abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
+abstract class FluentClientCustomization : NamedCustomization<FluentClientSection>()
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
