@@ -48,11 +48,17 @@ use smithy.rules#endpointTests
             }
         },
         "params": { }
+        "operationInputs": [
+            { "operationName": "TestOperation", "operationParams": {
+                "bar": { f: "blah" }
+              } }
+        ]
     }]
 })
 @restJson1
 @title("Test Service")
 @service(sdkId: "Test")
+@aws.auth#sigv4(name: "test-service")
 service TestService {
     operations: [TestOperation]
 }
@@ -60,7 +66,7 @@ service TestService {
 @input
 structure Foo { bar: Bar }
 
-structure Bar {}
+structure Bar { f: String }
 
 @http(uri: "/foo", method: "POST")
 operation TestOperation {

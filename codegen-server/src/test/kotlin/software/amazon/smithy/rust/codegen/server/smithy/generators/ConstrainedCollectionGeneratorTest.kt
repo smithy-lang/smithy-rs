@@ -12,13 +12,19 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -33,10 +39,36 @@ import java.util.stream.Stream
 
 @Suppress("DEPRECATION")
 class ConstrainedCollectionGeneratorTest {
-    data class TestCase(val model: Model, val validList: ArrayNode, val invalidList: ArrayNode)
+    data class TestCase(
+        val model: Model,
+        val validLists: List<ArrayNode>,
+        val invalidLists: List<InvalidList>,
+    )
+
+    data class InvalidList(
+        val node: ArrayNode,
+        // A function returning a writable that renders the expected Rust value that the constructor error should
+        // return.
+        val expectedErrorFn: ((constraintViolation: Symbol, originalValueBindingName: String) -> Writable)?,
+    )
 
     class ConstrainedListGeneratorTestProvider : ArgumentsProvider {
-        private val testCases = listOf(
+        private fun generateModel(trait: String): Model =
+            """
+            namespace test
+
+            $trait
+            list ConstrainedList {
+                member: String
+            }
+
+            $trait
+            set ConstrainedSet {
+                member: String
+            }
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+
+        private val lengthTraitTestCases = listOf(
             // Min and max.
             Triple("@length(min: 11, max: 12)", 11, 13),
             // Min equal to max.
@@ -46,51 +78,99 @@ class ConstrainedCollectionGeneratorTest {
             // Only max.
             Triple("@length(max: 11)", 11, 12),
         ).map {
+            // Generate lists of strings of the specified length with consecutive items "0", "1", ...
             val validList = List(it.second, Int::toString)
             val invalidList = List(it.third, Int::toString)
 
             Triple(it.first, ArrayNode.fromStrings(validList), ArrayNode.fromStrings(invalidList))
         }.map { (trait, validList, invalidList) ->
             TestCase(
-                """
-                namespace test
-
-                $trait
-                list ConstrainedList {
-                    member: String
-                }
-
-                $trait
-                set ConstrainedSet {
-                    member: String
-                }
-                """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform),
-                validList,
-                invalidList,
+                model = generateModel(trait),
+                validLists = listOf(validList),
+                invalidLists = listOf(InvalidList(invalidList, expectedErrorFn = null)),
             )
         }
 
+        private fun constraintViolationForDuplicateIndices(duplicateIndices: List<Int>):
+            ((constraintViolation: Symbol, originalValueBindingName: String) -> Writable) {
+            fun ret(constraintViolation: Symbol, originalValueBindingName: String): Writable = writable {
+                // Public documentation for the unique items constraint violation states that callers should not
+                // rely on the order of the elements in `duplicate_indices`. However, the algorithm is deterministic,
+                // so we can internally assert the order. If the algorithm changes, the test cases will need to be
+                // adjusted.
+                rustTemplate(
+                    """
+                    #{ConstraintViolation}::UniqueItems {
+                        duplicate_indices: vec![${duplicateIndices.joinToString(", ")}],
+                        original: $originalValueBindingName,
+                    }
+                    """,
+                    "ConstraintViolation" to constraintViolation,
+                )
+            }
+
+            return ::ret
+        }
+
+        private val uniqueItemsTraitTestCases = listOf(
+            // We only need one test case, since `@uniqueItems` is not parameterizable.
+            TestCase(
+                model = generateModel("@uniqueItems"),
+                validLists = listOf(
+                    ArrayNode.fromStrings(),
+                    ArrayNode.fromStrings("0", "1"),
+                    ArrayNode.fromStrings("a", "b", "a2"),
+                    ArrayNode.fromStrings((0..69).map(Int::toString).toList()),
+                ),
+                invalidLists = listOf(
+                    // Two elements, both duplicate.
+                    InvalidList(
+                        node = ArrayNode.fromStrings("0", "0"),
+                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1)),
+                    ),
+                    // Two duplicate items, one at the beginning, one at the end.
+                    InvalidList(
+                        node = ArrayNode.fromStrings("0", "1", "2", "3", "4", "5", "0"),
+                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 6)),
+                    ),
+                    // Several duplicate items, all the same.
+                    InvalidList(
+                        node = ArrayNode.fromStrings("0", "1", "0", "0", "4", "0", "6", "7"),
+                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 2, 3, 5)),
+                    ),
+                    // Several equivalence classes.
+                    InvalidList(
+                        node = ArrayNode.fromStrings("0", "1", "0", "2", "1", "0", "2", "7", "2"),
+                        // Note how the duplicate indices are not ordered.
+                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1, 2, 3, 6, 5, 4, 8)),
+                    ),
+                    // The worst case: a fairly large number of elements, all duplicate.
+                    InvalidList(
+                        node = ArrayNode.fromStrings(generateSequence { "69" }.take(69).toList()),
+                        expectedErrorFn = constraintViolationForDuplicateIndices((0..68).toList()),
+                    ),
+                ),
+            ),
+        )
+
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-            testCases.map { Arguments.of(it) }.stream()
+            (lengthTraitTestCases + uniqueItemsTraitTestCases).map { Arguments.of(it) }.stream()
     }
 
     @ParameterizedTest
     @ArgumentsSource(ConstrainedListGeneratorTestProvider::class)
     fun `it should generate constrained collection types`(testCase: TestCase) {
         val constrainedListShape = testCase.model.lookup<CollectionShape>("test#ConstrainedList")
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
-        //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
-        // val constrainedSetShape = testCase.model.lookup<CollectionShape>("test#ConstrainedSet")
+        val constrainedSetShape = testCase.model.lookup<CollectionShape>("test#ConstrainedSet")
 
         val codegenContext = serverTestCodegenContext(testCase.model)
-        val symbolProvider = codegenContext.symbolProvider
 
-        val project = TestWorkspace.testProject(symbolProvider)
+        val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
-        listOf(constrainedListShape /*, constrainedSetShape */).forEach { shape ->
+        for (shape in listOf(constrainedListShape, constrainedSetShape)) {
             val shapeName = when (shape) {
-                is ListShape -> "list"
                 is SetShape -> "set"
+                is ListShape -> "list"
                 else -> UNREACHABLE("Shape is either list or set.")
             }
 
@@ -98,46 +178,77 @@ class ConstrainedCollectionGeneratorTest {
                 render(codegenContext, this, shape)
 
                 val instantiator = serverInstantiator(codegenContext)
-                rustBlock("##[cfg(test)] fn build_valid_$shapeName() -> std::vec::Vec<std::string::String>") {
-                    instantiator.render(this, shape, testCase.validList)
+                for ((idx, validList) in testCase.validLists.withIndex()) {
+                    val shapeNameIdx = "${shapeName}_$idx"
+                    val buildValidFnName = "build_valid_$shapeNameIdx"
+                    val typeName = "Constrained${shapeName.replaceFirstChar { it.uppercaseChar() }}"
+
+                    rustBlock("##[cfg(test)] fn $buildValidFnName() -> std::vec::Vec<std::string::String>") {
+                        instantiator.render(this, shape, validList)
+                    }
+
+                    unitTest(
+                        name = "${shapeNameIdx}_try_from_success",
+                        test = """
+                            let $shapeNameIdx = $buildValidFnName();
+                            let _constrained: $typeName = $shapeNameIdx.try_into().unwrap();
+                        """,
+                    )
+                    unitTest(
+                        name = "${shapeNameIdx}_inner",
+                        test = """
+                            let $shapeNameIdx = $buildValidFnName();
+                            let constrained = $typeName::try_from($shapeNameIdx.clone()).unwrap();
+
+                            assert_eq!(constrained.inner(), &$shapeNameIdx);
+                        """,
+                    )
+                    unitTest(
+                        name = "${shapeNameIdx}_into_inner",
+                        test = """
+                            let $shapeNameIdx = $buildValidFnName();
+                            let constrained = $typeName::try_from($shapeNameIdx.clone()).unwrap();
+
+                            assert_eq!(constrained.into_inner(), $shapeNameIdx);
+                        """,
+                    )
                 }
-                rustBlock("##[cfg(test)] fn build_invalid_$shapeName() -> std::vec::Vec<std::string::String>") {
-                    instantiator.render(this, shape, testCase.invalidList)
+
+                for ((idx, invalidList) in testCase.invalidLists.withIndex()) {
+                    val shapeNameIdx = "${shapeName}_$idx"
+                    val buildInvalidFnName = "build_invalid_$shapeNameIdx"
+                    val typeName = "Constrained${shapeName.replaceFirstChar { it.uppercaseChar() }}"
+
+                    rustBlock("##[cfg(test)] fn $buildInvalidFnName() -> std::vec::Vec<std::string::String>") {
+                        instantiator.render(this, shape, invalidList.node)
+                    }
+                    unitTest(
+                        name = "${shapeNameIdx}_try_from_fail",
+                        block = writable {
+                            rust(
+                                """
+                                let $shapeNameIdx = $buildInvalidFnName();
+                                let constrained_res: Result <$typeName, _> = $shapeNameIdx.clone().try_into();
+                                """,
+                            )
+
+                            invalidList.expectedErrorFn?.also { expectedErrorFn ->
+                                val expectedErrorWritable = expectedErrorFn(
+                                    codegenContext.constraintViolationSymbolProvider.toSymbol(shape),
+                                    shapeNameIdx,
+                                )
+
+                                rust("let err = constrained_res.unwrap_err();")
+                                withBlock("let expected_err = ", ";") {
+                                    rustTemplate("#{ExpectedError:W}", "ExpectedError" to expectedErrorWritable)
+                                }
+                                rust("assert_eq!(err, expected_err);")
+                            } ?: run {
+                                rust("constrained_res.unwrap_err();")
+                            }
+                        },
+                    )
                 }
-
-                unitTest(
-                    name = "try_from_success",
-                    test = """
-                        let $shapeName = build_valid_$shapeName();
-                        let _constrained: ConstrainedList = $shapeName.try_into().unwrap();
-                    """,
-                )
-                unitTest(
-                    name = "try_from_fail",
-                    test = """
-                        let $shapeName = build_invalid_$shapeName();
-                        let constrained_res: Result<ConstrainedList, _> = $shapeName.try_into();
-                        constrained_res.unwrap_err();
-                    """,
-                )
-                unitTest(
-                    name = "inner",
-                    test = """
-                        let $shapeName = build_valid_$shapeName();
-                        let constrained = ConstrainedList::try_from($shapeName.clone()).unwrap();
-
-                        assert_eq!(constrained.inner(), &$shapeName);
-                    """,
-                )
-                unitTest(
-                    name = "into_inner",
-                    test = """
-                        let $shapeName = build_valid_$shapeName();
-                        let constrained = ConstrainedList::try_from($shapeName.clone()).unwrap();
-
-                        assert_eq!(constrained.into_inner(), $shapeName);
-                    """,
-                )
             }
         }
 
@@ -146,14 +257,15 @@ class ConstrainedCollectionGeneratorTest {
 
     @Test
     fun `type should not be constructible without using a constructor`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @length(min: 1, max: 69)
             list ConstrainedList {
                 member: String
             }
-        """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedCollectionShape = model.lookup<CollectionShape>("test#ConstrainedList")
 
         val writer = RustWriter.forModule(ModelsModule.name)
@@ -170,7 +282,7 @@ class ConstrainedCollectionGeneratorTest {
         writer: RustWriter,
         constrainedCollectionShape: CollectionShape,
     ) {
-        val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape)
+        val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape, codegenContext.symbolProvider)
         ConstrainedCollectionGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
         CollectionConstraintViolationGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
     }

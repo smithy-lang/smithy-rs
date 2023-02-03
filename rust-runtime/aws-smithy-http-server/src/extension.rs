@@ -28,8 +28,6 @@ use tower::{layer::util::Stack, Layer, Service};
 
 use crate::operation::{Operation, OperationShape};
 use crate::plugin::{plugin_from_operation_name_fn, OperationNameFn, Plugin, PluginPipeline, PluginStack};
-#[allow(deprecated)]
-use crate::request::RequestParts;
 
 pub use crate::request::extension::{Extension, MissingExtension};
 
@@ -37,9 +35,7 @@ pub use crate::request::extension::{Extension, MissingExtension};
 /// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
 /// that the request should be routed to a particular operation. The operation handler might not even get invoked
 /// because the request fails to deserialize into the modeled operation input.
-///
-/// The format given must be the absolute shape ID with `#` replaced with a `.`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -51,16 +47,16 @@ pub struct OperationExtension {
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error(". was not found - missing namespace")]
+    #[error("# was not found - missing namespace")]
     MissingNamespace,
 }
 
 #[allow(deprecated)]
 impl OperationExtension {
-    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    /// Creates a new [`OperationExtension`] from the absolute shape ID.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
         let (namespace, name) = absolute_operation_id
-            .rsplit_once('.')
+            .rsplit_once('#')
             .ok_or(ParseError::MissingNamespace)?;
         Ok(Self {
             absolute: absolute_operation_id,
@@ -103,11 +99,11 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
+        let resp = ready!(this.inner.try_poll(cx));
         let ext = this
             .operation_extension
             .take()
             .expect("futures cannot be polled after completion");
-        let resp = ready!(this.inner.try_poll(cx));
         Poll::Ready(resp.map(|mut resp| {
             resp.extensions_mut().insert(ext);
             resp
@@ -236,44 +232,17 @@ impl Deref for RuntimeErrorExtension {
     }
 }
 
-/// Extract an [`Extension`] from a request.
-/// This is essentially the implementation of `FromRequest` for `Extension`, but with a
-/// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
-/// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
-#[deprecated(
-    since = "0.52.0",
-    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
-)]
-#[allow(deprecated)]
-pub async fn extract_extension<T, B>(
-    req: &mut RequestParts<B>,
-) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
-where
-    T: Clone + Send + Sync + 'static,
-    B: Send,
-{
-    let value = req
-        .extensions()
-        .ok_or(crate::rejection::RequestExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
-        .get::<T>()
-        .ok_or_else(|| {
-            crate::rejection::RequestExtensionNotFoundRejection::MissingExtension(format!(
-                "Extension of type `{}` was not found. Perhaps you forgot to add it?",
-                std::any::type_name::<T>()
-            ))
-        })
-        .map(|x| x.clone())?;
-
-    Ok(Extension(value))
-}
-
 #[cfg(test)]
 mod tests {
+    use tower::{service_fn, ServiceExt};
+
+    use crate::{operation::OperationShapeExt, proto::rest_json_1::RestJson1};
+
     use super::*;
 
     #[test]
     fn ext_accept() {
-        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let value = "com.amazonaws.ebs#CompleteSnapshot";
         let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
@@ -288,5 +257,34 @@ mod tests {
             OperationExtension::new(value).unwrap_err(),
             ParseError::MissingNamespace
         )
+    }
+
+    #[tokio::test]
+    async fn plugin() {
+        struct DummyOp;
+
+        impl OperationShape for DummyOp {
+            const NAME: &'static str = "com.amazonaws.ebs#CompleteSnapshot";
+
+            type Input = ();
+            type Output = ();
+            type Error = ();
+        }
+
+        // Apply `Plugin`.
+        let operation = DummyOp::from_handler(|_| async { Ok(()) });
+        let plugins = PluginPipeline::new().insert_operation_extension();
+        let op = Plugin::<RestJson1, DummyOp, _, _>::map(&plugins, operation);
+
+        // Apply `Plugin`s `Layer`.
+        let layer = op.layer;
+        let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
+        let svc = layer.layer(svc);
+
+        // Check for `OperationExtension`.
+        let response = svc.oneshot(http::Request::new(())).await.unwrap();
+        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
+        let actual = response.extensions().get::<OperationExtension>().unwrap();
+        assert_eq!(*actual, expected);
     }
 }

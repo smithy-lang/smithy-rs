@@ -231,7 +231,7 @@ class ServerServiceGeneratorV2(
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
-                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 })
             }
             """,
@@ -306,7 +306,7 @@ class ServerServiceGeneratorV2(
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
                 $serviceName {
-                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 }
             }
             """,
@@ -387,7 +387,7 @@ class ServerServiceGeneratorV2(
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
-                router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
+                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
             impl $serviceName<()> {
@@ -459,7 +459,7 @@ class ServerServiceGeneratorV2(
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routers::RoutingFuture<S, B>;
+                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
                     self.router.poll_ready(cx)

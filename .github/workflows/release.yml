@@ -6,52 +6,50 @@
 
 # Allow only one release to run at a time
 concurrency:
-  group: release-smithy-rs
+  group: release-smithy-rs-${{ inputs.dry_run }}
   cancel-in-progress: true
 
 env:
   rust_version: 1.62.1
 
 name: Release smithy-rs
-run-name: ${{ github.workflow }} - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
+run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
 on:
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: | 
+          The SHA of the git commit that you want to release.  
+          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
+        required: true
+        type: string
+      semantic_version:
+        description: The semver tag that you want to release (e.g. 0.52.1)
+        required: true
+        type: string
       dry_run:
-        description: Dry runs will only produce release artifacts, but will not cut a release tag in GitHub nor publish to crates.io
+        description: Dry runs will only produce release artifacts, but they will not cut a release tag in GitHub nor publish to crates.io
         required: true
         type: boolean
         default: true
 
 jobs:
-  main-branch-check:
-    name: Check that workflow is running in main
-    runs-on: ubuntu-latest
-    steps:
-    - name: Main branch check
-      if: ${{ github.ref_name != 'main' }}
-      uses: actions/github-script@v6
-      with:
-        script: |
-          core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
-
-  # If a release is kicked off before an image is built after push to main,
-  # or if a dry-run release is kicked off against a non-main branch to test
-  # automation changes, we'll need to build a base image to work against.
-  # This job will be a no-op if an image was already built on main.
+  # We'll need to build a base image to work against if:
+  # - a release was kicked off before the image build step triggered by a push to the release branch/main completed
+  # - a dry-run release was kicked off against a feature branch to test automation changes
+  # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
-    needs:
-    - main-branch-check
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_16-core
     steps:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
@@ -61,17 +59,96 @@ jobs:
 
   release-ci:
     name: Prerelease checks
+    if: inputs.dry_run == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: false
+      git_ref: ${{ inputs.commit_sha }}
+
+  get-or-create-release-branch:
+    name: Get or create a release branch
+    needs:
+    - release-ci
+    - acquire-base-image
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: |
+      always() && 
+      needs.acquire-base-image.result == 'success' && 
+      (needs.release-ci.result == 'success' || needs.release-ci.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      release_branch: ${{ steps.branch-push.outputs.release_branch }}
+      new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.commit_sha }}
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Get or create release branch
+      id: branch-push
+      shell: bash
+      env:
+        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -e
+
+        ./.github/scripts/get-or-create-release-branch.sh output
+        cat output > $GITHUB_OUTPUT
+
+  upgrade-gradle-properties:
+    name: Upgrade gradle.properties
+    needs:
+    - get-or-create-release-branch
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    outputs:
+      release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+        path: smithy-rs
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Upgrade gradle.properties
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: upgrade-gradle-properties
+        action-arguments: ${{ inputs.semantic_version }}
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Push gradle.properties changes
+      id: gradle-push
+      working-directory: upgrade-gradle-properties/smithy-rs
+      shell: bash
+      env:
+        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -x
+        # For debugging purposes
+        git status
+        # The file was actually changed, we need to commit the changes
+        git diff-index --quiet HEAD || { git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin; }
 
   release:
     name: Release
     needs:
-    - acquire-base-image
-    - release-ci
+    - upgrade-gradle-properties
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
@@ -81,6 +158,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
+        ref: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -93,13 +171,8 @@ jobs:
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
       run: |
-        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
-          echo "Pushing a preview of the release to the smithy-rs-release-preview branch"
-          git push --force origin HEAD:smithy-rs-release-preview
-        else
-          echo "Pushing release commits..."
-          git push origin
-        fi
+        echo "Pushing release commits..."
+        git push origin
     - name: Tag release
       uses: actions/github-script@v6
       with:
@@ -118,7 +191,7 @@ jobs:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path "$(realpath ../smithy-rs/tools/publisher)"
+        cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version
 
@@ -133,3 +206,37 @@ jobs:
         else
           publisher publish -y --location .
         fi
+
+  trim-changelog-next-on-main:
+    name: Remove released entries from CHANGELOG.next.toml on the main branch
+    if: inputs.dry_run == false && needs.get-or-create-release-branch.outputs.new_release_series == true
+    needs:
+    - get-or-create-release-branch
+    - release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.commit_sha }}
+        path: smithy-rs
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Empty CHANGELOG.next.toml
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-new-changelog-next-toml
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Push smithy-rs changes
+      working-directory: generate-new-changelog-next-toml/smithy-rs
+      shell: bash
+      run: |
+        set -eux
+        
+        # This will fail if other commits have been pushed to `main` after `commit_sha`
+        # In particular, this will ALWAYS fail if you are creating a new release series from
+        # a commit that is not the current tip of `main`.
+        # We can build more refined automation to handle this case in the future - until then, it'll require
+        # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
+        git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
+        git push origin main

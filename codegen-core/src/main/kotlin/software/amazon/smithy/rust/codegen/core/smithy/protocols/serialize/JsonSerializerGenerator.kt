@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -81,7 +81,7 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
 /**
  * Customization for the JSON serializer.
  */
-typealias JsonSerializerCustomization = NamedSectionGenerator<JsonSerializerSection>
+typealias JsonSerializerCustomization = NamedCustomization<JsonSerializerSection>
 
 class JsonSerializerGenerator(
     codegenContext: CodegenContext,

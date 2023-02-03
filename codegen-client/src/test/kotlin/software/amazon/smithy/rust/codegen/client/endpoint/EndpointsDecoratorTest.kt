@@ -81,7 +81,7 @@ class EndpointsDecoratorTest {
                 "Region": "test-region"
               },
               "operationInputs": [
-                { "operationName": "TestOperation" }
+                { "operationName": "TestOperation", "operationParams": { "nested": { "field": "test" } } }
               ],
               "expect": {
                 "endpoint": {
@@ -110,7 +110,12 @@ class EndpointsDecoratorTest {
 
         structure TestOperationInput {
             @contextParam(name: "Bucket")
-            bucket: String
+            bucket: String,
+            nested: NestedStructure
+        }
+
+        structure NestedStructure {
+            field: String
         }
     """.asSmithyModel()
 

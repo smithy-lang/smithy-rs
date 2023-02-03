@@ -250,8 +250,9 @@ impl RequestSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::super::rest_tests::req;
     use super::*;
+    use crate::proto::test_helpers::req;
+
     use http::Method;
 
     #[test]

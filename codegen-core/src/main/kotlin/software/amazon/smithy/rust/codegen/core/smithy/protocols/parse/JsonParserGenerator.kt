@@ -35,12 +35,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -51,7 +50,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -70,7 +68,7 @@ sealed class JsonParserSection(name: String) : Section(name) {
 /**
  * Customization for the JSON parser.
  */
-typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
+typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
 data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
 
@@ -298,8 +296,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeBlob(target: BlobShape) {
         rustTemplate(
-            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to writable { RuntimeType.blob(runtimeConfig).toSymbol().rustType().render() },
+            "#{expect_blob_or_null}(tokens.next())?",
             *codegenScope,
         )
     }
@@ -389,8 +386,22 @@ class JsonParserGenerator(
                                     withBlock("let value =", ";") {
                                         deserializeMember(shape.member)
                                     }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                    rust(
+                                        """
+                                        if let Some(value) = value {
+                                            items.push(value);
+                                        }
+                                        """,
+                                    )
+                                    codegenTarget.ifServer {
+                                        rustTemplate(
+                                            """
+                                            else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
+                                            }
+                                            """,
+                                            *codegenScope,
+                                        )
                                     }
                                 }
                             }
@@ -436,8 +447,24 @@ class JsonParserGenerator(
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
-                            rustBlock("if let Some(value) = value") {
-                                rust("map.insert(key, value);")
+                            codegenTarget.ifServer {
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                            }""",
+                                    *codegenScope,
+                                )
+                            }
+                            codegenTarget.ifClient {
+                                rustTemplate(
+                                    """
+                                    if let Some(value) = value {
+                                        map.insert(key, value);
+                                    }
+                                    """,
+                                )
                             }
                         }
                     }
@@ -493,6 +520,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -525,7 +553,7 @@ class JsonParserGenerator(
                                         } else {
                                             withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                unwrapOrDefaultOrError(member)
+                                                unwrapOrDefaultOrError(member, checkValueSet)
                                             }
                                         }
                                     }
@@ -563,8 +591,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(
