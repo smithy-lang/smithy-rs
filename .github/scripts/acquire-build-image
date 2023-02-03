@@ -64,8 +64,8 @@ class Context:
         image_tag = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
         allow_local_build = os.getenv("ALLOW_LOCAL_BUILD") != "false"
         github_actions = os.getenv("GITHUB_ACTIONS") == "true"
-        encrypted_docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD")
-        docker_passphrase = os.getenv("DOCKER_LOGIN_TOKEN_PASSPHRASE")
+        encrypted_docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD") or None
+        docker_passphrase = os.getenv("DOCKER_LOGIN_TOKEN_PASSPHRASE") or None
 
         print(f"Start path: {start_path}")
         print(f"Script path: {script_path}")
