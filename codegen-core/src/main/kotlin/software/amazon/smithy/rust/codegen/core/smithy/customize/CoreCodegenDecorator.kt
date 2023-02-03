@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
@@ -66,7 +65,7 @@ interface CoreCodegenDecorator<CodegenContext> {
     /**
      * Extra sections allow one decorator to influence another. This is intended to be used by querying the `rootDecorator`
      */
-    fun extraSections(codegenContext: CodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> = listOf()
+    fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> = listOf()
 }
 
 /**
@@ -99,7 +98,7 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
             decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
         }
 
-    final override fun extraSections(codegenContext: CodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+    final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> =
         addCustomizations { decorator -> decorator.extraSections(codegenContext) }
 
     /**

@@ -10,6 +10,79 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Provide a way to retrieve fallback credentials if a call to `provide_credentials` is interrupted. An interrupt can occur when a timeout future is raced against a future for `provide_credentials`, and the former wins the race. A new method, `fallback_on_interrupt` on the `ProvideCredentials` trait, can be used in that case. The following code snippet from `LazyCredentialsCache::provide_cached_credentials` has been updated like so:
+
+Before:
+```rust
+let timeout_future = self.sleeper.sleep(self.load_timeout);
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+    .get_or_load(|| {
+        async move {
+            let credentials = future.await.map_err(|_err| {
+                CredentialsError::provider_timed_out(load_timeout)
+            })??;
+            // --snip--
+        }
+    }).await;
+// --snip--
+```
+
+After:
+```rust
+let timeout_future = self.sleeper.sleep(self.load_timeout);
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+    .get_or_load(|| {
+        async move {
+           let credentials = match future.await {
+                Ok(creds) => creds?,
+                Err(_err) => match provider.fallback_on_interrupt() { // can provide fallback credentials
+                    Some(creds) => creds,
+                    None => return Err(CredentialsError::provider_timed_out(load_timeout)),
+                }
+            };
+            // --snip--
+        }
+    }).await;
+// --snip--
+```
+"""
+references = ["smithy-rs#2246"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs."
+references = ["smithy-rs#2232", "smithy-rs#1670"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
+author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """
+Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.
+"""
+references = ["smithy-rs#2258"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
 [[smithy-rs]]
 message = """
 Fix `name` and `absolute` methods on `OperationExtension`.
