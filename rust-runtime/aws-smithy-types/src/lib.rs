@@ -27,7 +27,7 @@ pub mod timeout;
 pub use crate::date_time::DateTime;
 
 // TODO(deprecated): Remove deprecated re-export
-/// Use [ErrorMetadata] instead.
+/// Use [error::ErrorMetadata] instead.
 #[deprecated(
     note = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`"
 )]
