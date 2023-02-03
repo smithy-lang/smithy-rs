@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
-class SmithyTypesPubUseGeneratorTest {
+class SmithyTypesPubUseExtraTest {
     private fun modelWithMember(
         inputMember: String = "",
         outputMember: String = "",

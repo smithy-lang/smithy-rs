@@ -92,7 +92,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.errorMetadata(runtimeConfig),
+        "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
         "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
@@ -111,7 +111,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
                     // S3 HEAD responses have no response body to for an error code. Therefore,
                     // check the HTTP response status and populate an error code for 404s.
                     if response.body().is_empty() {
-                        let mut builder = #{Error}::builder();
+                        let mut builder = #{ErrorMetadata}::builder();
                         if response.status().as_u16() == 404 {
                             builder = builder.code("NotFound");
                         }
