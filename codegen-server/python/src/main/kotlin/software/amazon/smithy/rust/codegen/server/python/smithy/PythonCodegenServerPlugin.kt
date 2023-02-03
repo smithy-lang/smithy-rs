@@ -20,7 +20,9 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.D
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -47,7 +49,10 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         val codegenDecorator: CombinedServerCodegenDecorator =
             CombinedServerCodegenDecorator.fromClasspath(
                 context,
-                CombinedServerCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
+                ServerRequiredCustomizations(),
+                SmithyValidationExceptionDecorator(),
+                CustomValidationExceptionWithReasonDecorator(),
+                *DECORATORS,
             )
 
         // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code

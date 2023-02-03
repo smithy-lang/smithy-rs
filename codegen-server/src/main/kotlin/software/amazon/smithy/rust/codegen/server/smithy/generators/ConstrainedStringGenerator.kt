@@ -47,6 +47,7 @@ class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: StringShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -60,10 +61,12 @@ class ConstrainedStringGenerator(
             }
         }
     private val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-    private val constraintsInfo: List<TraitInfo> =
+    private val stringConstraintsInfo: List<StringTraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
             .map { StringTraitInfo.fromTrait(symbol, it) }
+    private val constraintsInfo: List<TraitInfo> =
+        stringConstraintsInfo
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
@@ -155,15 +158,10 @@ class ConstrainedStringGenerator(
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
-                    pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                        match self {
-                            #{ValidationExceptionFields:W}
-                        }
-                    }
+                    #{StringShapeConstraintViolationImplBlock:W}
                 }
                 """,
-                "String" to RuntimeType.String,
-                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+                "StringShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.stringShapeConstraintViolationImplBlock(stringConstraintsInfo),
             )
         }
     }
@@ -184,7 +182,7 @@ class ConstrainedStringGenerator(
         }
     }
 }
-private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
+data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo = TraitInfo(
         tryFromCheck = { rust("Self::check_length(&value)?;") },
         constraintViolationVariant = {
@@ -229,7 +227,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     }
 }
 
-private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) : StringTraitInfo() {
+data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         val pattern = patternTrait.pattern
 
@@ -301,7 +299,7 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) :
     }
 }
 
-private sealed class StringTraitInfo {
+sealed class StringTraitInfo {
     companion object {
         fun fromTrait(symbol: Symbol, trait: Trait) =
             when (trait) {

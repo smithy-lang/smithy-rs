@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
@@ -153,6 +154,11 @@ class ConstrainedMapGeneratorTest {
         constrainedMapShape: MapShape,
     ) {
         ConstrainedMapGenerator(codegenContext, writer, constrainedMapShape).render()
-        MapConstraintViolationGenerator(codegenContext, writer, constrainedMapShape).render()
+        MapConstraintViolationGenerator(
+            codegenContext,
+            writer,
+            constrainedMapShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
     }
 }

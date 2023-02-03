@@ -51,6 +51,12 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
         ),
         CodegenTest(
+            "com.amazonaws.constraints#CustomValidationExceptionsExperimental",
+            "custom_validation_exceptions_experimental",
+            imports = listOf("$commonModels/custom-validation-exceptions-experimental.smithy"),
+            extraConfig = """, "codegen": { "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse": "com.amazonaws.constraints#ValidationException" } """.trimMargin(),
+        ),
+        CodegenTest(
             "com.amazonaws.constraints#UniqueItemsService",
             "unique_items",
             imports = listOf("$commonModels/unique-items.smithy"),
