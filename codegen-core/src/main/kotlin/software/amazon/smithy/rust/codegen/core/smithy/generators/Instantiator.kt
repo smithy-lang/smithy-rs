@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -66,7 +66,7 @@ sealed class InstantiatorSection(name: String) : Section(name) {
 /**
  * Customization for the instantiator.
  */
-typealias InstantiatorCustomization = NamedSectionGenerator<InstantiatorSection>
+typealias InstantiatorCustomization = NamedCustomization<InstantiatorSection>
 
 /**
  * Instantiator generates code to instantiate a given shape given a `Node` representing the value.

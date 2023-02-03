@@ -21,10 +21,18 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      # the docker login password for ECR. This is
+      ENCRYPTED_DOCKER_PASSWORD:
+        required: false
+      DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: false
 
 env:
   rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
+  ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
+  DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
 jobs:
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
