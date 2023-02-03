@@ -124,6 +124,14 @@ meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
 author = "hlbarber"
 
 [[aws-sdk-rust]]
+message = """
+Fix request canonicalization for HTTP requests with repeated headers (for example S3's `GetObjectAttributes`). Previously requests with repeated headers would fail with a 403 signature mismatch due to this bug.
+"""
+references = ["smithy-rs#2261", "aws-sdk-rust#720"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "nipunn1313"
+
+[[aws-sdk-rust]]
 message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
 ```rust
 // Import the trait to get the `request_id` method on outputs
