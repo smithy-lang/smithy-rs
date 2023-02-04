@@ -100,6 +100,9 @@ mod test {
     #[test]
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     fn serialize_json() {
+        use crate::Document;
+        use crate::Number;
+        use std::collections::HashMap;
         let mut map: HashMap<String, Document> = HashMap::new();
         // string
         map.insert("hello".into(), "world".to_string().into());

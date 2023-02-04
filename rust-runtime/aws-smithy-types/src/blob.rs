@@ -104,6 +104,7 @@ impl<'de> Deserialize<'de> for Blob {
 }
 
 #[cfg(test)]
+#[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
 mod test {
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Blob;
@@ -112,14 +113,12 @@ mod test {
 
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use serde::{Deserialize, Serialize};
-
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    use std::collections::HashMap;
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct ForTest {
         blob: Blob,
     }
 
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     #[test]
     fn human_readable_blob() {
         let aws_in_base64 = r#"{"blob":"QVdT"}"#;
@@ -132,7 +131,6 @@ mod test {
         assert_eq!(serde_json::to_string(&for_test).unwrap(), aws_in_base64);
     }
 
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     #[test]
     fn not_human_readable_blob() {
         use std::ffi::CString;
