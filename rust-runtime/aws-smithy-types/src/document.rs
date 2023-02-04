@@ -89,14 +89,20 @@ impl From<i32> for Document {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Document;
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Number;
+    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use std::collections::HashMap;
 
     /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
     #[test]
     #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     fn serialize_json() {
+        use crate::Document;
+        use crate::Number;
+        use std::collections::HashMap;
         let mut map: HashMap<String, Document> = HashMap::new();
         // string
         map.insert("hello".into(), "world".to_string().into());
