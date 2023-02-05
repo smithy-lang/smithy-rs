@@ -28,6 +28,7 @@ private fun runCli(
                 }
             }
             .copyTo(action)
+        action.environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         action.execute()
     }
 }
