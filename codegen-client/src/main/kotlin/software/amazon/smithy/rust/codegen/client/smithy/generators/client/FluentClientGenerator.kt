@@ -287,6 +287,14 @@ class FluentClientGenerator(
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
+                        #[cfg(aws_sdk_unstable)]
+                        /// This function replaces the parameter with new one.
+                        /// It is useful when you want to replace the existing data with de-serialized data.
+                        pub fn set_fields(mut self, data: #{InputBuilderType}) -> Self {
+                            self.inner = data;
+                            self
+                        }
+
                         /// Sends the request and returns the response.
                         ///
                         /// If an error occurs, an `SdkError` will be returned with additional details that
@@ -304,6 +312,7 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
+                        "InputBuilderType" to input,
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
