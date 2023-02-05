@@ -264,7 +264,7 @@ class FluentClientGenerator(
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(symbolProvider)
-
+                    val cfgAttribute = "##[cfg(aws_sdk_unstable)]"
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
                         """
@@ -287,7 +287,7 @@ class FluentClientGenerator(
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
-                        #[cfg(aws_sdk_unstable)]
+                        $cfgAttribute
                         /// This function replaces the parameter with new one.
                         /// It is useful when you want to replace the existing data with de-serialized data.
                         pub fn set_fields(mut self, data: #{InputBuilderType}) -> Self {
@@ -312,7 +312,7 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "InputBuilderType" to input,
+                        "InputBuilderType" to input.builderSymbol(symbolProvider),
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
