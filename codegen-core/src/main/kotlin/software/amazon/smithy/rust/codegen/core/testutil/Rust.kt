@@ -14,8 +14,10 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -118,19 +120,15 @@ object TestWorkspace {
 
     @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
+        val error = "The test project's default symbol provider is unusable. If your test requires " +
+            "a symbol provider, please pass one in."
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
-            override fun config(): SymbolVisitorConfig {
-                PANIC("")
-            }
-
-            override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-                PANIC("")
-            }
-
-            override fun toSymbol(shape: Shape?): Symbol {
-                PANIC("")
-            }
+            override fun config(): SymbolVisitorConfig = PANIC(error)
+            override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = PANIC(error)
+            override fun toSymbol(shape: Shape?): Symbol = PANIC(error)
+            override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC(error)
+            override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC(error)
         }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
@@ -311,7 +309,10 @@ fun FileManifest.printGeneratedFiles() {
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
  */
-fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
+fun TestWriterDelegator.compileAndTest(
+    runClippy: Boolean = false,
+    expectFailure: Boolean = false,
+): String {
     val stubModel = """
         namespace fake
         service Fake {
@@ -332,10 +333,11 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         // cargo fmt errors are useless, ignore
     }
     val env = mapOf("RUSTFLAGS" to "-A dead_code")
-    "cargo test".runCommand(baseDir, env)
+    val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
         "cargo clippy".runCommand(baseDir, env)
     }
+    return testOutput
 }
 
 fun TestWriterDelegator.rustSettings() =

@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -116,10 +115,9 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 rust("##![allow(deprecated)]")
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                EnumGenerator(model, provider, this, shape, trait).render()
                 unitTest(
                     "it_generates_named_enums",
                     """
@@ -131,12 +129,13 @@ class EnumGeneratorTest {
                     assert_eq!(InstanceType::from("other").as_str(), "other");
                     """,
                 )
-                val output = toString()
-                output.shouldContain("#[non_exhaustive]")
-                // on enum variant `T2Micro`
-                output.shouldContain("#[deprecated]")
-                // on enum itself
-                output.shouldContain("#[deprecated(since = \"1.2.3\")]")
+                toString().also { output ->
+                    output.shouldContain("#[non_exhaustive]")
+                    // on enum variant `T2Micro`
+                    output.shouldContain("#[deprecated]")
+                    // on enum itself
+                    output.shouldContain("#[deprecated(since = \"1.2.3\")]")
+                }
             }
             project.compileAndTest()
         }
@@ -161,9 +160,8 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+            project.moduleFor(shape) {
+                EnumGenerator(model, provider, this, shape, trait).render()
                 unitTest(
                     "named_enums_implement_eq_and_hash",
                     """
@@ -196,10 +194,9 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 rust("##![allow(deprecated)]")
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                EnumGenerator(model, provider, this, shape, trait).render()
                 unitTest(
                     "unnamed_enums_implement_eq_and_hash",
                     """
@@ -241,7 +238,7 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 rust("##![allow(deprecated)]")
                 val generator = EnumGenerator(model, provider, this, shape, trait)
                 generator.render()
@@ -272,9 +269,8 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+            project.moduleFor(shape) {
+                EnumGenerator(model, provider, this, shape, trait).render()
                 unitTest(
                     "it_escapes_the_unknown_variant_if_the_enum_has_an_unknown_value_in_the_model",
                     """
@@ -304,9 +300,8 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+            project.moduleFor(shape) {
+                EnumGenerator(model, provider, this, shape, trait).render()
                 val rendered = toString()
                 rendered shouldContain
                     """
@@ -335,9 +330,8 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+            project.moduleFor(shape) {
+                EnumGenerator(model, provider, this, shape, trait).render()
                 val rendered = toString()
                 rendered shouldContain
                     """
@@ -363,9 +357,8 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
+        project.moduleFor(shape) {
+            EnumGenerator(model, provider, this, shape, trait).render()
             unitTest(
                 "it_handles_variants_that_clash_with_rust_reserved_words",
                 """
@@ -384,9 +377,8 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+            project.moduleFor(shape) {
+                EnumGenerator(model, provider, this, shape, trait).render()
                 unitTest(
                     "matching_on_enum_should_be_forward_compatible",
                     """
@@ -443,9 +435,8 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
+        project.moduleFor(shape) {
+            EnumGenerator(model, provider, this, shape, trait).render()
             unitTest(
                 "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
                 """
@@ -477,9 +468,8 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
+        project.moduleFor(shape) {
+            EnumGenerator(model, provider, this, shape, trait).render()
             unitTest(
                 "impl_debug_for_sensitive_enum_should_redact_text",
                 """
@@ -506,7 +496,7 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
+        project.moduleFor(shape) {
             val generator = EnumGenerator(model, provider, this, shape, trait)
             generator.render()
             unitTest(
@@ -540,9 +530,8 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
+        project.moduleFor(shape) {
+            EnumGenerator(model, provider, this, shape, trait).render()
             unitTest(
                 "impl_debug_for_sensitive_unnamed_enum_should_redact_text",
                 """

@@ -163,6 +163,12 @@ open class RustCrate(
     }
 
     /**
+     * Returns the module for a given Shape.
+     */
+    fun moduleFor(shape: Shape, moduleWriter: Writable): RustCrate =
+        withModule((symbolProvider as RustSymbolProvider).moduleForShape(shape), moduleWriter)
+
+    /**
      * Create a new file directly
      */
     fun withFile(filename: String, fileWriter: Writable) {
@@ -171,24 +177,6 @@ open class RustCrate(
         }
     }
 }
-
-val ErrorsModule = RustModule.public(
-    "error",
-    documentation = "All error types that operations can return. Documentation on these types is copied from the model.",
-)
-val OperationsModule = RustModule.public("operation", documentation = "All operations that this crate can perform.")
-val ModelsModule = RustModule.public(
-    "model",
-    documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.",
-)
-val InputsModule = RustModule.public(
-    "input",
-    documentation = "Input structures for operations. Documentation on these types is copied from the model.",
-)
-val OutputsModule = RustModule.public(
-    "output",
-    documentation = "Output structures for operations. Documentation on these types is copied from the model.",
-)
 
 val UnconstrainedModule =
     RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")

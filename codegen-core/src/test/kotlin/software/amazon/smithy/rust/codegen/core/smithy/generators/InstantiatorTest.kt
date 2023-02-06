@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -26,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -109,8 +109,9 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "stringVariant": "ok!" }""")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(union) {
             UnionGenerator(model, symbolProvider, this, union).render()
             unitTest("generate_unions") {
                 withBlock("let result = ", ";") {
@@ -129,8 +130,9 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_struct_builders") {
                 withBlock("let result = ", ";") {
@@ -163,8 +165,9 @@ class InstantiatorTest {
             """,
         )
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_builders_for_boxed_structs") {
                 withBlock("let result = ", ";") {
@@ -193,7 +196,7 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.lib {
             unitTest("generate_lists") {
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#MyList"), data)
@@ -215,7 +218,7 @@ class InstantiatorTest {
         )
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.lib {
             unitTest("generate_sparse_lists") {
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#MySparseList"), data)
@@ -246,8 +249,9 @@ class InstantiatorTest {
         )
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(inner) {
             inner.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_maps_of_maps") {
                 withBlock("let result = ", ";") {
