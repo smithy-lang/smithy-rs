@@ -1,0 +1,10 @@
+launch_template_name = "COMP_TIME_BENCH"
+version_Description = ""
+[launch_template_data]
+image_id = ""
+ebs_optimized = true
+user_data = ""
+instance_type = "C7g2Xlarge"
+
+[[tag_specifications]]
+resource_type = "instance"
