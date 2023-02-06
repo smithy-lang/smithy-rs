@@ -35,25 +35,22 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ModelsModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -106,12 +103,12 @@ open class ServerCodegenVisitor(
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
     init {
-        val symbolVisitorConfig =
-            SymbolVisitorConfig(
-                runtimeConfig = settings.runtimeConfig,
-                renameExceptions = false,
-                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
-            )
+        val symbolVisitorConfig = SymbolVisitorConfig(
+            runtimeConfig = settings.runtimeConfig,
+            renameExceptions = false,
+            nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+            moduleProvider = ServerModuleProvider,
+        )
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -483,15 +480,8 @@ open class ServerCodegenVisitor(
         }
 
         if (shape.isEventStream()) {
-            val errors = shape.eventStreamErrors()
-                .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
-            if (errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) {
-                    val symbol = codegenContext.symbolProvider.toSymbol(shape)
-                    val errorSymbol = shape.eventStreamErrorSymbol(codegenContext.symbolProvider)
-                    ServerOperationErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
-                        .renderErrors(this, errorSymbol, symbol)
-                }
+            rustCrate.withModule(RustModule.Error) {
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
             }
         }
     }
@@ -522,13 +512,7 @@ open class ServerCodegenVisitor(
      */
     override fun operationShape(shape: OperationShape) {
         rustCrate.withModule(RustModule.Error) {
-            val symbol = codegenContext.symbolProvider.toSymbol(shape)
-            ServerOperationErrorGenerator(
-                model,
-                codegenContext.symbolProvider,
-                symbol,
-                shape.operationErrors(model).map { it.asStructureShape().get() },
-            ).render(this)
+            ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
     }
 

@@ -15,7 +15,6 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -24,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ModelsModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 

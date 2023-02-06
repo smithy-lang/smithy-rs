@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -88,7 +87,7 @@ class ConstraintViolationSymbolProvider(
             // Need to use the context name so we get the correct name for maps.
             name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
             visibility = visibility,
-            parent = ModelsModule,
+            parent = ServerRustModule.ModelsModule,
             inline = true,
             documentation = documentation,
         )

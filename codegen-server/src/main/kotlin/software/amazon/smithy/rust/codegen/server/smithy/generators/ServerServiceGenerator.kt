@@ -15,14 +15,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ErrorsModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.InputsModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.OutputsModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator

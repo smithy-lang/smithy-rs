@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ModelsModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -138,7 +139,7 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.withModule(ModelsModule) {
             structure.serverRenderWithModelBuilder(model, symbolProvider, this)
             inner.serverRenderWithModelBuilder(model, symbolProvider, this)
             nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
@@ -190,7 +191,7 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.withModule(ModelsModule) {
             EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
@@ -209,7 +210,7 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.withModule(ModelsModule) {
             EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {

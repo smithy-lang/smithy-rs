@@ -7,13 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ErrorsModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
@@ -55,12 +55,10 @@ class ServerOperationErrorGeneratorTest {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
             }
-            val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
             ServerOperationErrorGenerator(
                 model,
                 symbolProvider,
-                symbolProvider.toSymbol(model.lookup("error#Greeting")),
-                errors,
+                model.lookup("error#Greeting"),
             ).render(this)
 
             unitTest(
