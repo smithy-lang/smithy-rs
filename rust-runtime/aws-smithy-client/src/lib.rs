@@ -78,7 +78,13 @@ pub mod conns {
 
     #[cfg(feature = "native-tls")]
     pub fn native_tls() -> NativeTls {
-        hyper_tls::HttpsConnector::new()
+        let mut tls = hyper_tls::native_tls::TlsConnector::builder();
+        let tls = tls
+            .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
+            .build()
+            .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
+        let mut http = hyper::client::HttpConnector::new();
+        hyper_tls::HttpsConnector::from((http, tls.into()))
     }
 
     #[cfg(feature = "native-tls")]
