@@ -264,7 +264,7 @@ class FluentClientGenerator(
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(symbolProvider)
-                    val cfgAttribute = "##[cfg(aws_sdk_unstable)]"
+
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
                         """
@@ -287,9 +287,14 @@ class FluentClientGenerator(
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
-                        $cfgAttribute
+                        #{AwsSdkUnstableAttribute}
                         /// This function replaces the parameter with new one.
                         /// It is useful when you want to replace the existing data with de-serialized data.
+                        /// ```rust
+                        /// let fluent_builder = client.${symbolProvider.toSymbol(operation).name}();
+                        /// let deserialized_parameters = serde_json::from_str(parameters_written_in_json).unwrap();
+                        /// fluent_builder.set_fields(&deserialized_parameters).send().await;
+                        /// ```
                         pub fn set_fields(mut self, data: #{InputBuilderType}) -> Self {
                             self.inner = data;
                             self
@@ -312,6 +317,7 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
+                        "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute,
                         "InputBuilderType" to input.builderSymbol(symbolProvider),
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
