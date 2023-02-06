@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
@@ -53,8 +52,8 @@ internal class ClientInstantiatorTest {
         val sut = clientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(symbolProvider)
+        project.moduleFor(shape) {
             EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
@@ -72,8 +71,8 @@ internal class ClientInstantiatorTest {
         val sut = clientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(symbolProvider)
+        project.moduleFor(shape) {
             EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
