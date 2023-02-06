@@ -84,7 +84,8 @@ pub mod conns {
     /// Return a default HTTPS connector backed by the `hyper_tls` crate.
     ///
     /// It requires a minimum TLS version of 1.2.
-    /// It allows you to connect to both `http` and `https` URLs.
+    /// It allows only https connections. 
+    /// To enable http connections, call `https_only(false)` on the retured NativeTls. 
     pub fn native_tls() -> NativeTls {
         let mut tls = hyper_tls::native_tls::TlsConnector::builder();
         let tls = tls
@@ -92,7 +93,9 @@ pub mod conns {
             .build()
             .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
         let http = hyper::client::HttpConnector::new();
-        hyper_tls::HttpsConnector::from((http, tls.into()))
+        let mut https = hyper_tls::HttpsConnector::from((http, tls.into()));
+        https.https_only(true);
+        https
     }
 
     #[cfg(feature = "native-tls")]
