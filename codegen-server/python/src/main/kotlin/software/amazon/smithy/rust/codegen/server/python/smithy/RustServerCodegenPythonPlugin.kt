@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
@@ -28,16 +27,20 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Rust with Python bindings Codegen Plugin.
+ * Rust Server with Python bindings Codegen Plugin.
+ *
  * This is the entrypoint for code generation, triggered by the smithy-build plugin.
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
-class PythonCodegenServerPlugin : SmithyBuildPlugin {
+class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen-python"
 
+    /**
+     * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+     */
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
@@ -62,10 +65,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
 
     companion object {
         /**
-         * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
-         *
-         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
-         * with other symbol providers, documented inline, to handle the full scope of Smithy types.
+         * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
          */
         fun baseSymbolProvider(
             model: Model,
