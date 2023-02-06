@@ -87,6 +87,7 @@ jobs:
       with:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Get or create release branch
       id: branch-push
       shell: bash
