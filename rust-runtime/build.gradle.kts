@@ -53,7 +53,7 @@ tasks.register("fixRuntimeCrateVersions") {
 
 tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the runtime crates"
-    toolPath = rootProject.projectDir.resolve("tools/publisher")
+    toolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
     dependsOn("fixRuntimeCrateVersions")

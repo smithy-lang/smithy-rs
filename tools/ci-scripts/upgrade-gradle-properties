@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+SEMANTIC_VERSION="${1}"
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+ARTIFACTS_DIR="$(pwd)/artifacts/upgrade-gradle-properties"
+mkdir -p "${ARTIFACTS_DIR}"
+
+pushd "${SMITHY_RS_DIR}"
+echo "gradle.properties BEFORE the upgrade"
+cat gradle.properties
+publisher upgrade-runtime-crates-version --version "${SEMANTIC_VERSION}"
+echo "gradle.properties AFTER the upgrade"
+cat gradle.properties
+git status
+popd
+
+pushd "${ARTIFACTS_DIR}"
+mkdir -p smithy-rs
+cp -r "${SMITHY_RS_DIR}" .
+git -C smithy-rs status
+popd

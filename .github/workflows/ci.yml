@@ -20,24 +20,32 @@ on:
           If unspecified, it will default to the git reference or SHA that triggered the execution of this workflow.
         required: false
         type: string
-        default: ""
+        default: ''
+    secrets:
+      # the docker login password for ECR. This is
+      ENCRYPTED_DOCKER_PASSWORD:
+        required: false
+      DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: false
 
 env:
   rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
+  ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
+  DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
 jobs:
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         actions:
         - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
@@ -66,28 +74,42 @@ jobs:
   # code to have already been generated in order to run.
   test-codegen:
     name: Test Codegen
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-sdk-adhoc-tests
+          runner: ubuntu-latest
         - action: check-client-codegen-integration-tests
+          runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
+          runner: ubuntu-latest
         - action: check-core-codegen-unit-tests
+          runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
+          runner: smithy_ubuntu-latest_8-core
         - action: check-sdk-codegen-unit-tests
+          runner: ubuntu-latest
         - action: check-server-codegen-integration-tests
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests-python
+          runner: ubuntu-latest
         - action: check-server-codegen-unit-tests
+          runner: ubuntu-latest
         - action: check-server-codegen-unit-tests-python
+          runner: ubuntu-latest
         - action: check-server-e2e-test
+          runner: ubuntu-latest
         - action: check-server-python-e2e-test
+          runner: ubuntu-latest
         - action: check-style-and-lints
+          runner: ubuntu-latest
         - action: check-tools
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: actions/checkout@v3
       with:
@@ -103,21 +125,28 @@ jobs:
   test-sdk:
     name: Test the SDK
     needs: generate
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
       matrix:
-        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-config
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
+          runner: ubuntu-latest
         - action: check-aws-sdk-cargo-deny
+          runner: ubuntu-latest
         - action: check-only-aws-sdk-services
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-smoketest-unit-tests
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-standalone-integration-tests
+          runner: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:

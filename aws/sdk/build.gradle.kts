@@ -27,9 +27,9 @@ val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val crateHasherToolPath = rootProject.projectDir.resolve("tools/crate-hasher")
-val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
-val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
+val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
+val publisherToolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
+val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
 val sdkOutputDir = outputDir.resolve("sdk")
 val examplesOutputDir = outputDir.resolve("examples")

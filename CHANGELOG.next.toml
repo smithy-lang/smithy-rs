@@ -62,3 +62,73 @@ message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.htm
 references = ["smithy-rs#2232", "smithy-rs#1670"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """
+Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.
+"""
+references = ["smithy-rs#2258"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
+references = ["smithy-rs#2271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+Fix `name` and `absolute` methods on `OperationExtension`.
+
+The older, [now removed](https://github.com/awslabs/smithy-rs/pull/2161), service builder would insert `OperationExtension` into the `http::Response` containing the [absolute shape ID](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-AbsoluteRootShapeId) with the `#` symbol replaced with a `.`. When [reintroduced](https://github.com/awslabs/smithy-rs/pull/2157) into the new service builder machinery the behavior was changed - we now do _not_ perform the replace. This change fixes the documentation and `name`/`absolute` methods of the `OperationExtension` API to match this new behavior.
+
+In the old service builder, `OperationExtension` was initialized, by the framework, and then used as follows:
+
+```rust
+let ext = OperationExtension::new("com.amazonaws.CompleteSnapshot");
+
+// This is expected
+let name = ext.name(); // "CompleteSnapshot"
+let namespace = ext.namespace(); // = "com.amazonaws";
+```
+
+When reintroduced, `OperationExtension` was initialized by the `Plugin` and then used as follows:
+
+```rust
+let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
+
+// This is the bug
+let name = ext.name(); // "amazonaws#CompleteSnapshot"
+let namespace = ext.namespace(); // = "com";
+```
+
+The intended behavior is now restored:
+
+```rust
+let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
+
+// This is expected
+let name = ext.name(); // "CompleteSnapshot"
+let namespace = ext.namespace(); // = "com.amazonaws";
+```
+
+The rationale behind this change is that the previous design was tailored towards a specific internal use case and shouldn't be enforced on all customers.
+"""
+references = ["smithy-rs#2276"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
+author = "hlbarber"
+
+[[aws-sdk-rust]]
+message = """
+Fix request canonicalization for HTTP requests with repeated headers (for example S3's `GetObjectAttributes`). Previously requests with repeated headers would fail with a 403 signature mismatch due to this bug.
+"""
+references = ["smithy-rs#2261", "aws-sdk-rust#720"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "nipunn1313"
