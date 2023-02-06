@@ -32,6 +32,7 @@ pub fn new_socket(address: String, port: i32, backlog: Option<i32>) -> Result<so
     // This indicates that further calls to `bind` may allow reuse of local
     // addresses. For IPv4 sockets this means that a socket may bind even when
     // there's a socket already listening on this port.
+    #[cfg(not(target_os = "windows"))]
     socket.set_reuse_port(true)?;
     socket.set_reuse_address(true)?;
     socket.bind(&address.into())?;
