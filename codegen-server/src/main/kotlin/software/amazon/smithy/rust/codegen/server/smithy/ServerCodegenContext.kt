@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 
 /**
- * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenServerPlugin] plugin
+ * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
  * from the `rust-codegen-server` subproject.
  *
  * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
