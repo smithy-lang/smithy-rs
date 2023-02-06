@@ -28,7 +28,7 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
+class CombinedServerCodegenDecorator(private val decorators: List<ServerCodegenDecorator>) :
     CombinedCoreCodegenDecorator<ServerCodegenContext, ServerCodegenDecorator>(decorators),
     ServerCodegenDecorator {
     override val name: String

@@ -194,8 +194,7 @@ fun generatePluginContext(
         )
     }
 
-    val settings = settingsBuilder.merge(additionalSettings)
-        .build()
+    val settings = settingsBuilder.merge(additionalSettings).build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
     return pluginContext to testPath
 }
