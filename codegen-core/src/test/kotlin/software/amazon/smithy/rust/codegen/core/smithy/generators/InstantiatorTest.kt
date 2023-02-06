@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -278,7 +279,7 @@ class InstantiatorTest {
         )
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.testModule {
             unitTest("blob_inputs_are_binary_data") {
                 withBlock("let blob = ", ";") {
                     sut.render(

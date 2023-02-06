@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -59,7 +58,7 @@ val EndpointTests = RustModule.new(
     documentation = "Generated endpoint tests",
     parent = EndpointsModule,
     inline = true,
-).copy(rustMetadata = RustMetadata.TestModule)
+).cfgTest()
 
 // stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
 val EndpointsStdLib = RustModule.private("endpoint_lib", "Endpoints standard library functions")
