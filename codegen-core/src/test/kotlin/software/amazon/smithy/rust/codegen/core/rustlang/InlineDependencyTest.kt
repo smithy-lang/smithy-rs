@@ -34,12 +34,15 @@ internal class InlineDependencyTest {
     fun `locate dependencies from the inlineable module`() {
         val dep = InlineDependency.idempotencyToken()
         val testProject = TestWorkspace.testProject()
-        testProject.unitTest {
+        testProject.lib {
             rustTemplate(
                 """
-                use #{idempotency}::uuid_v4;
-                let res = uuid_v4(0);
-                assert_eq!(res, "00000000-0000-4000-8000-000000000000");
+                ##[test]
+                fn idempotency_works() {
+                    use #{idempotency}::uuid_v4;
+                    let res = uuid_v4(0);
+                    assert_eq!(res, "00000000-0000-4000-8000-000000000000");
+                }
 
                 """,
                 "idempotency" to dep.toType(),
