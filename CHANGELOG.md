@@ -1,4 +1,49 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 6th, 2023
+==================
+**Breaking Changes:**
+- 🐛⚠ (server, [smithy-rs#2276](https://github.com/awslabs/smithy-rs/issues/2276)) Fix `name` and `absolute` methods on `OperationExtension`.
+
+    The older, [now removed](https://github.com/awslabs/smithy-rs/pull/2161), service builder would insert `OperationExtension` into the `http::Response` containing the [absolute shape ID](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-AbsoluteRootShapeId) with the `#` symbol replaced with a `.`. When [reintroduced](https://github.com/awslabs/smithy-rs/pull/2157) into the new service builder machinery the behavior was changed - we now do _not_ perform the replace. This change fixes the documentation and `name`/`absolute` methods of the `OperationExtension` API to match this new behavior.
+
+    In the old service builder, `OperationExtension` was initialized, by the framework, and then used as follows:
+
+    ```rust
+    let ext = OperationExtension::new("com.amazonaws.CompleteSnapshot");
+
+    // This is expected
+    let name = ext.name(); // "CompleteSnapshot"
+    let namespace = ext.namespace(); // = "com.amazonaws";
+    ```
+
+    When reintroduced, `OperationExtension` was initialized by the `Plugin` and then used as follows:
+
+    ```rust
+    let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
+
+    // This is the bug
+    let name = ext.name(); // "amazonaws#CompleteSnapshot"
+    let namespace = ext.namespace(); // = "com";
+    ```
+
+    The intended behavior is now restored:
+
+    ```rust
+    let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
+
+    // This is expected
+    let name = ext.name(); // "CompleteSnapshot"
+    let namespace = ext.namespace(); // = "com.amazonaws";
+    ```
+
+    The rationale behind this change is that the previous design was tailored towards a specific internal use case and shouldn't be enforced on all customers.
+
+**New this release:**
+- 🎉 (server, [smithy-rs#2232](https://github.com/awslabs/smithy-rs/issues/2232), [smithy-rs#1670](https://github.com/awslabs/smithy-rs/issues/1670)) The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs.
+- (client, [smithy-rs#2312](https://github.com/awslabs/smithy-rs/issues/2312)) Raise the minimum TLS version from 1.0 to 1.2 when using the `native-tls` feature in `aws-smithy-client`.
+- 🐛 (client, [smithy-rs#2271](https://github.com/awslabs/smithy-rs/issues/2271)) Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`.
+
+
 January 25th, 2023
 ==================
 **New this release:**
