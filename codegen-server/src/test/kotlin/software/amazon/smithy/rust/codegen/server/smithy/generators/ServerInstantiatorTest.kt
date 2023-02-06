@@ -154,6 +154,7 @@ class ServerInstantiatorTest {
                         """
                         use std::collections::HashMap;
                         use aws_smithy_types::{DateTime, Document};
+                        use super::*;
 
                         let expected = MyStructRequired {
                             str: "".to_owned(),
