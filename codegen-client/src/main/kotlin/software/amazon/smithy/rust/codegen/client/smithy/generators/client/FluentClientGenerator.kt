@@ -317,7 +317,7 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute,
+                        "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.toString(),
                         "InputBuilderType" to input.builderSymbol(symbolProvider),
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
