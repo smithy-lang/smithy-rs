@@ -91,7 +91,7 @@ pub mod conns {
             .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
             .build()
             .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
-        let mut http = hyper::client::HttpConnector::new();
+        let http = hyper::client::HttpConnector::new();
         hyper_tls::HttpsConnector::from((http, tls.into()))
     }
 
