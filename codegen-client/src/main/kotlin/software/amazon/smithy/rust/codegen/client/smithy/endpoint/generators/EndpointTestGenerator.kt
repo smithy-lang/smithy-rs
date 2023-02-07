@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustom
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -48,8 +47,7 @@ internal class EndpointTestGenerator(
         "Error" to types.resolveEndpointError,
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
-        "capture_request" to CargoDependency.smithyClient(runtimeConfig)
-            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+        "capture_request" to RuntimeType.captureRequest(runtimeConfig),
     )
 
     private val instantiator = clientInstantiator(codegenContext)
