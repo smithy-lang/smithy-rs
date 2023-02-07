@@ -292,16 +292,18 @@ private fun renderCustomizableOperationSendMethod(
     generics: FluentClientGenerics,
     writer: RustWriter,
 ) {
-    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val operationGenerics = RustGenerics(GenericTypeArg("H"), GenericTypeArg("R"))
     val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
-        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+        "Error" to RuntimeType.StdError,
         "ParseHttpResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
     )
 
     writer.rustTemplate(
@@ -311,11 +313,12 @@ private fun renderCustomizableOperationSendMethod(
             #{handle_generics_bounds:W}
         {
             /// Sends this operation's request
-            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+            pub async fn send<T, E>(self) -> Result<T, #{SdkError}<E>>
             where
-                E: std::error::Error + Send + Sync + 'static,
-                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+                H: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
+                R: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + 'static,
+                T: 'static,
+                E: #{Error} + Send + Sync + 'static,
             {
                 self.handle.client.call(self.operation).await
             }
