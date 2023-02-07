@@ -187,8 +187,9 @@ jobs:
           pushd "${runtime_path}" &>/dev/null
           # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
           # which is not really yet fully supported on the platform.
-          cargo test --all-features --workspace --exclude aws-smithy-http-server-python
-          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python
+          # aws-smithy-http-server-typescript cannot be compiled right now on Windows.
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           popd &>/dev/null
         done
 
