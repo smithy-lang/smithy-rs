@@ -875,12 +875,7 @@ class ServerProtocolTestGenerator(
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
             FailingTest(AwsJson11, "parses_httpdate_timestamps", TestType.Response),
             FailingTest(AwsJson11, "parses_iso8601_timestamps", TestType.Response),
-            FailingTest(
-                "aws.protocoltests.json#JsonProtocol",
-                "parses_the_request_id_from_the_response",
-                TestType.Response,
-            ),
-
+            FailingTest(AwsJson11, "parses_the_request_id_from_the_response", TestType.Response),
         )
         private val RunOnly: Set<String>? = null
 
