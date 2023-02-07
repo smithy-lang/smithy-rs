@@ -138,3 +138,9 @@ Fix request canonicalization for HTTP requests with repeated headers (for exampl
 references = ["smithy-rs#2261", "aws-sdk-rust#720"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "nipunn1313"
+
+[[smithy-rs]]
+message = "Remove `TimeoutServiceFuture` and use a boxed generic future instead"
+references = ["smithy-rs#2320"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"
