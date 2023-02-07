@@ -184,6 +184,7 @@ jobs:
             github,
             isDryRun: ${{ inputs.dry_run }},
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseCommitish: ${{ needs.upgrade-gradle-properties.outputs.release_branch }},
           });
     - name: Publish to crates.io
       shell: bash
