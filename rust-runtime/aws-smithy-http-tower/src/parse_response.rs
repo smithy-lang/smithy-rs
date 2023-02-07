@@ -21,19 +21,27 @@ use tracing::{debug_span, Instrument};
 /// `ParseResponseService` is intended to wrap a `DispatchService` which will handle the interface between
 /// services that operate on [`operation::Request`](operation::Request) and services that operate
 /// on [`http::Request`](http::Request).
-#[derive(Clone)]
-pub struct ParseResponseService<S, O, R> {
+pub struct ParseResponseService<S, H, R> {
     inner: S,
-    _output_type: PhantomData<(O, R)>,
+    _output_type: PhantomData<(H, R)>,
+}
+
+impl<S: Clone, H, R> Clone for ParseResponseService<S, H, R> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _output_type: PhantomData,
+        }
+    }
 }
 
 #[derive(Default)]
-pub struct ParseResponseLayer<O, R> {
-    _output_type: PhantomData<(O, R)>,
+pub struct ParseResponseLayer<H, R> {
+    _output_type: PhantomData<(H, R)>,
 }
 
 /// `ParseResponseLayer` dispatches [`Operation`](aws_smithy_http::operation::Operation)s and parses them.
-impl<O, R> ParseResponseLayer<O, R> {
+impl<H, R> ParseResponseLayer<H, R> {
     pub fn new() -> Self {
         ParseResponseLayer {
             _output_type: Default::default(),
@@ -41,11 +49,8 @@ impl<O, R> ParseResponseLayer<O, R> {
     }
 }
 
-impl<S, O, R> Layer<S> for ParseResponseLayer<O, R>
-where
-    S: Service<operation::Request, Response = operation::Response>,
-{
-    type Service = ParseResponseService<S, O, R>;
+impl<S, H, R> Layer<S> for ParseResponseLayer<H, R> {
+    type Service = ParseResponseService<S, H, R>;
 
     fn layer(&self, inner: S) -> Self::Service {
         ParseResponseService {
@@ -61,32 +66,26 @@ type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>
 ///
 /// Generic Parameter Listing:
 /// `S`: The inner service
-/// `O`: The type of the response parser whose output type is `Result<T, E>`
+/// `H`: The type of the response parser whose output type is `Result<T, E>`
 /// `T`: The happy path return of the response parser
 /// `E`: The error path return of the response parser
 /// `R`: The type of the retry policy
-impl<InnerService, ResponseHandler, SuccessResponse, FailureResponse, RetryPolicy>
-    Service<Operation<ResponseHandler, RetryPolicy>>
-    for ParseResponseService<InnerService, ResponseHandler, RetryPolicy>
+impl<S, H, T, E, R> Service<Operation<H, R>> for ParseResponseService<S, H, R>
 where
-    InnerService:
-        Service<operation::Request, Response = operation::Response, Error = SendOperationError>,
-    InnerService::Future: Send + 'static,
-    ResponseHandler: ParseHttpResponse<Output = Result<SuccessResponse, FailureResponse>>
-        + Send
-        + Sync
-        + 'static,
-    FailureResponse: std::error::Error + 'static,
+    S: Service<operation::Request, Response = operation::Response, Error = SendOperationError>,
+    S::Future: Send + 'static,
+    H: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + 'static,
+    E: std::error::Error + 'static,
 {
-    type Response = SdkSuccess<SuccessResponse>;
-    type Error = SdkError<FailureResponse>;
+    type Response = SdkSuccess<T>;
+    type Error = SdkError<E>;
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(|err| err.into())
     }
 
-    fn call(&mut self, req: Operation<ResponseHandler, RetryPolicy>) -> Self::Future {
+    fn call(&mut self, req: Operation<H, R>) -> Self::Future {
         let (req, parts) = req.into_request_response();
         let handler = parts.response_handler;
         let resp = self.inner.call(req);

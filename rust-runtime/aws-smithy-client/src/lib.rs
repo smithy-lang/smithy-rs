@@ -114,7 +114,6 @@ use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ProvideErrorKind;
 use aws_smithy_types::timeout::OperationTimeoutConfig;
-use std::error::Error;
 use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
@@ -129,8 +128,8 @@ use tracing::{debug_span, field, field::display, Instrument};
 /// for filling in any request parameters that aren't specified by the Smithy protocol definition,
 /// such as those used for routing (like the URL), authentication, and authorization.
 ///
-/// The middleware takes the form of a [`tower::Layer`] that wraps the actual connection for each
-/// request. The [`tower::Service`] that the middleware produces must accept requests of the type
+/// The middleware takes the form of a [`tower::Layer`][Layer] that wraps the actual connection for each
+/// request. The [`tower::Service`][Service] that the middleware produces must accept requests of the type
 /// [`aws_smithy_http::operation::Request`] and return responses of the type
 /// [`http::Response<SdkBody>`], most likely by modifying the provided request in place, passing it
 /// to the inner service, and then ultimately returning the inner service's response.
@@ -164,8 +163,9 @@ impl<C, M> Client<C, M>
 where
     M: Default,
 {
-    /// Create a Smithy client from the given `connector`, a middleware default, the [standard
-    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`](aws_smithy_async::rt::sleep::default_async_sleep)
+    /// Create a Smithy client from the given `connector`, a middleware default,
+    /// the [standard retry policy](retry::Standard),
+    /// and the [`default_async_sleep`](aws_smithy_async::rt::sleep::default_async_sleep)
     /// sleep implementation.
     pub fn new(connector: C) -> Self {
         Builder::new()
@@ -189,14 +189,15 @@ where
     ///
     /// For ergonomics, this does not include the raw response for successful responses. To
     /// access the raw response use `call_raw`.
-    pub async fn call<O, T, E, Retry>(&self, op: Operation<O, Retry>) -> Result<T, SdkError<E>>
+    pub async fn call<H, Retry, T, E>(&self, op: Operation<H, Retry>) -> Result<T, SdkError<E>>
     where
-        O: Send + Sync,
+        H: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + 'static,
+        Retry: Send + Sync + 'static,
+        T: 'static,
         E: std::error::Error + Send + Sync + 'static,
-        Retry: Send + Sync,
-        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
-        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
-            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
+        R::Policy: bounds::SmithyRetryPolicy<H, T, E, Retry> + 'static,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, H, Retry>:
+            Service<Operation<H, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>>,
     {
         self.call_raw(op).await.map(|res| res.parsed)
     }
@@ -205,23 +206,24 @@ where
     ///
     /// The returned result contains the raw HTTP response which can be useful for debugging or
     /// implementing unsupported features.
-    pub async fn call_raw<O, T, E, Retry>(
+    pub async fn call_raw<H, Retry, T, E>(
         &self,
-        op: Operation<O, Retry>,
+        op: Operation<H, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
-        O: Send + Sync,
+        H: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + 'static,
+        Retry: Send + Sync + 'static,
+        T: 'static,
         E: std::error::Error + Send + Sync + 'static,
-        Retry: Send + Sync,
-        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        R::Policy: bounds::SmithyRetryPolicy<H, T, E, Retry> + 'static,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
         // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
         // and will produce (as expected) Response = SdkSuccess<T>, Error = SdkError<E>. But Rust
         // doesn't know that -- there _could_ theoretically be other implementations of Service for
         // Parsed that don't return those same types. So, we must give the bound.
-        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
-            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, H, Retry>:
+            Service<Operation<H, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>>,
     {
         let connector = self.connector.clone();
 
@@ -235,7 +237,7 @@ where
                     .new_request_policy(self.sleep_impl.clone()),
             )
             .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
-            .layer(ParseResponseLayer::<O, Retry>::new())
+            .layer(ParseResponseLayer::<H, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
@@ -297,7 +299,8 @@ where
                 static_tests::ValidTestOperation,
                 SdkSuccess<()>,
                 SdkError<static_tests::TestOperationError>,
-            > + Clone,
+            > + Clone
+            + 'static,
     {
         let _ = |o: static_tests::ValidTestOperation| {
             let _ = self.call_raw(o);

@@ -143,7 +143,7 @@ pub trait SmithyRetryPolicy<O, T, E, Retry>:
     /// Forwarding type to `E` for bound inference.
     ///
     /// See module-level docs for details.
-    type E: Error;
+    type E: std::error::Error;
 
     /// Forwarding type to `Retry` for bound inference.
     ///
@@ -155,7 +155,7 @@ impl<R, O, T, E, Retry> SmithyRetryPolicy<O, T, E, Retry> for R
 where
     R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
     O: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-    E: Error,
+    E: std::error::Error,
     Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
 {
     type O = O;
