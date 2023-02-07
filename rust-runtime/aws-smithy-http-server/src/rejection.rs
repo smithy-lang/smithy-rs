@@ -9,13 +9,11 @@
 //! handle requests and responses that return `Result<T, E>` throughout the framework. These
 //! include functions to deserialize incoming requests and serialize outgoing responses.
 //!
-//! All types end with `Rejection`. There are three types:
+//! All types end with `Rejection`. There are two types:
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
-//! 1. [`RequestExtensionNotFoundRejection`]s are used when the framework fails to deserialize from
-//!    the request's extensions a particular [`crate::Extension`] that was expected to be found.
-//! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
+//! 2. [`ResponseRejection`]s are used when the framework fails to serialize the operation
 //!    output into a response.
 //!
 //! They are called _rejection_ types and not _error_ types to signal that the input was _rejected_
@@ -41,34 +39,9 @@
 //! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
 //! error chain.
 
-// For some reason `deprecated(deprecated)` warns of its own deprecation. Putting `allow(deprecated)` at the module
-// level remedies it.
-#![allow(deprecated)]
-
 use strum_macros::Display;
 
 use crate::response::IntoResponse;
-
-/// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
-/// extensions]. Contains one variant for each way the extractor can fail.
-///
-/// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
-#[deprecated(
-    since = "0.52.0",
-    note = "This was used for extraction under the older service builder. The `MissingExtension` struct returned by `FromParts::from_parts` is now used."
-)]
-#[derive(Debug, Display)]
-pub enum RequestExtensionNotFoundRejection {
-    /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
-    /// did not find it.
-    /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
-    /// registers the particular extension in their service to incoming requests.
-    MissingExtension(String),
-    // Used when the request extensions have already been taken by another extractor.
-    ExtensionsAlreadyExtracted,
-}
-
-impl std::error::Error for RequestExtensionNotFoundRejection {}
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
@@ -104,8 +77,7 @@ convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationE
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
-/// that is passed as the first argument to operation handlers. To deserialize into the service's
-/// registered state, a different rejection type is used, [`RequestExtensionNotFoundRejection`].
+/// that is passed as the first argument to operation handlers.
 ///
 /// This type allows us to easily keep track of all the possible errors that can occur in the
 /// lifecycle of an incoming HTTP request.
@@ -131,10 +103,6 @@ convert_to_response_rejection!(http::Error, Http);
 // The variants are _roughly_ sorted in the order in which the HTTP request is processed.
 #[derive(Debug, Display)]
 pub enum RequestRejection {
-    /// Used when attempting to take the request's body, and it has already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    BodyAlreadyExtracted,
-
     /// Used when failing to convert non-streaming requests into a byte slab with
     /// `hyper::body::to_bytes`.
     HttpBody(crate::Error),
@@ -148,10 +116,6 @@ pub enum RequestRejection {
     /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
     /// input it should represent.
     XmlDeserialize(crate::Error),
-
-    /// Used when attempting to take the request's headers, and they have already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    HeadersAlreadyExtracted,
 
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.

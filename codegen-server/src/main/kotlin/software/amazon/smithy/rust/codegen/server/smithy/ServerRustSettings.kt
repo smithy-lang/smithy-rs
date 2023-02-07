@@ -25,7 +25,7 @@ import java.util.Optional
  */
 
 /**
- * Settings used by [RustCodegenServerPlugin].
+ * Settings used by [RustServerCodegenPlugin].
  */
 data class ServerRustSettings(
     override val service: ShapeId,

@@ -39,4 +39,6 @@
 - [RFC-0027: Endpoints 2.0](./rfc0027_endpoints_20.md)
 - [RFC-0028: SDK Credential Cache Type Safety](./rfc0028_sdk_credential_cache_type_safety.md)
 - [RFC-0029: Finding New Home for Credential Types](./rfc0029_new_home_for_cred_types.md)
-- [RFC-0031: Better Constraint Violations](./rfc0031_better_constraint_violations.md)
+- [RFC-0030: Serialization And Deserialization](./rfc0030_serialization_and_deserialization.md)
+- [RFC-0031: Providing Fallback Credentials on Timeout](./rfc0031_providing_fallback_credentials_on_timeout.md)
+- [RFC-0032: Better Constraint Violations](./rfc0031_better_constraint_violations.md)

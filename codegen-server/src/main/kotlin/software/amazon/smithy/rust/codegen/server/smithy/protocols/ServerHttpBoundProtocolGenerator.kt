@@ -136,6 +136,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "RuntimeError" to ServerRuntimeType.runtimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.responseRejection(runtimeConfig),
+        "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
     )
 
@@ -161,13 +162,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(req, ${contentType.dq()}) {
+                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
                         return Err(#{RuntimeError}::NotAcceptable)
                     }
                     """,
@@ -187,7 +186,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             ?.let { "Some(${it.dq()})" } ?: "None"
                         rustTemplate(
                             """
-                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(req, $expectedRequestContentType).is_err() {
+                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType).is_err() {
                                 return Err(#{RuntimeError}::UnsupportedMediaType)
                             }
                             """,
@@ -198,24 +197,24 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         // Implement `from_request` trait for input types.
+        val inputFuture = "${inputSymbol.name}Future"
         rustTemplate(
             """
-            ##[derive(Debug)]
-            pub(crate) struct $inputName(#{I});
-            impl $inputName
-            {
-                pub async fn from_request<B>(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, #{RuntimeError}>
-                where
-                    B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
-                    B::Data: Send,
-                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
-                {
-                    #{verifyAcceptHeader:W}
-                    #{verifyRequestContentTypeHeader:W}
-                    #{parse_request}(req)
-                        .await
-                        .map($inputName)
-                        .map_err(Into::into)
+            // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+            #{PinProjectLite}::pin_project! {
+                /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                pub struct $inputFuture {
+                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                }
+            }
+
+            impl std::future::Future for $inputFuture {
+                type Output = Result<#{I}, #{RuntimeError}>;
+
+                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                    let this = self.project();
+                    this.inner.as_mut().poll(cx)
                 }
             }
 
@@ -228,14 +227,19 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
-                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send>>;
+                type Future = $inputFuture;
 
                 fn from_request(request: #{http}::Request<B>) -> Self::Future {
                     let fut = async move {
-                        let mut request_parts = #{SmithyHttpServer}::request::RequestParts::new(request);
-                        $inputName::from_request(&mut request_parts).await.map(|x| x.0)
+                        #{verifyAcceptHeader:W}
+                        #{verifyRequestContentTypeHeader:W}
+                        #{parse_request}(request)
+                            .await
+                            .map_err(Into::into)
                     };
-                    Box::pin(fut)
+                    $inputFuture {
+                        inner: Box::pin(fut)
+                    }
                 }
             }
 
@@ -249,143 +253,46 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         )
 
         // Implement `into_response` for output types.
-
-        val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
+        rustTemplate(
+            """
+            impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                    match #{serialize_response}(self) {
+                        Ok(response) => response,
+                        Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                    }
+                }
+            }
+            """.trimIndent(),
+            *codegenScope,
+            "O" to outputSymbol,
+            "Marker" to protocol.markerStruct(),
+            "serialize_response" to serverSerializeResponse(operationShape),
+        )
+
         if (operationShape.operationErrors(model).isNotEmpty()) {
-            // The output of fallible operations is a `Result` which we convert into an
-            // isomorphic `enum` type we control that can in turn be converted into a response.
-            val intoResponseImpl =
+            rustTemplate(
                 """
-                match self {
-                    Self::Output(o) => {
-                        match #{serialize_response}(o) {
-                            Ok(response) => response,
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
-                        }
-                    },
-                    Self::Error(err) => {
-                        match #{serialize_error}(&err) {
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        match #{serialize_error}(&self) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(err.name()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                                 response
                             },
                             Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
                     }
                 }
-                """
-
-            rustTemplate(
-                """
-                pub(crate) enum $outputName {
-                    Output(#{O}),
-                    Error(#{E})
-                }
-
-                impl $outputName {
-                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        $intoResponseImpl
-                    }
-                }
-
-                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        $outputName::Output(self).into_response()
-                    }
-                }
-
-                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        $outputName::Error(self).into_response()
-                    }
-                }
                 """.trimIndent(),
                 *codegenScope,
-                "O" to outputSymbol,
                 "E" to errorSymbol,
                 "Marker" to protocol.markerStruct(),
-                "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
-        } else {
-            // The output of non-fallible operations is a model type which we convert into
-            // a "wrapper" unit `struct` type we control that can in turn be converted into a response.
-            val intoResponseImpl =
-                """
-                match #{serialize_response}(self.0) {
-                    Ok(response) => response,
-                    Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
-                }
-                """.trimIndent()
-
-            rustTemplate(
-                """
-                pub(crate) struct $outputName(#{O});
-
-                impl $outputName {
-                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        $intoResponseImpl
-                    }
-                }
-
-                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        $outputName(self).into_response()
-                    }
-                }
-                """.trimIndent(),
-                *codegenScope,
-                "O" to outputSymbol,
-                "Marker" to protocol.markerStruct(),
-                "serialize_response" to serverSerializeResponse(operationShape),
-            )
         }
-
-        // Implement conversion function to "wrap" from the model operation output types.
-        if (operationShape.operationErrors(model).isNotEmpty()) {
-            rustTemplate(
-                """
-                impl #{From}<Result<#{O}, #{E}>> for $outputName {
-                    fn from(res: Result<#{O}, #{E}>) -> Self {
-                        match res {
-                            Ok(v) => Self::Output(v),
-                            Err(e) => Self::Error(e),
-                        }
-                    }
-                }
-                """.trimIndent(),
-                "O" to outputSymbol,
-                "E" to errorSymbol,
-                "From" to RuntimeType.From,
-            )
-        } else {
-            rustTemplate(
-                """
-                impl #{From}<#{O}> for $outputName {
-                    fn from(o: #{O}) -> Self {
-                        Self(o)
-                    }
-                }
-                """.trimIndent(),
-                "O" to outputSymbol,
-                "From" to RuntimeType.From,
-            )
-        }
-
-        // Implement conversion function to "unwrap" into the model operation input types.
-        rustTemplate(
-            """
-            impl #{From}<$inputName> for #{I} {
-                fn from(i: $inputName) -> Self {
-                    i.0
-                }
-            }
-            """.trimIndent(),
-            "I" to inputSymbol,
-            "From" to RuntimeType.From,
-        )
     }
 
     private fun serverParseRequest(operationShape: OperationShape): RuntimeType {
@@ -399,7 +306,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    ##[allow(unused_variables)] request: &mut #{SmithyHttpServer}::request::RequestParts<B>
+                    ##[allow(unused_variables)] request: #{http}::Request<B>
                 ) -> std::result::Result<
                     #{I},
                     #{RequestRejection}
@@ -712,12 +619,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "let mut input = #T::default();",
             inputShape.serverBuilderSymbol(codegenContext),
         )
+        Attribute.AllowUnusedVariables.render(this)
+        rust("let (parts, body) = request.into_parts();")
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
         if (parser != null) {
             rustTemplate(
                 """
-                let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
                     input = #{parser}(bytes.as_ref(), input)?;
@@ -755,7 +663,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_empty_body_no_modeled_input(request)?;
+                    #{SmithyHttpServer}::protocols::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
                     """,
                     *codegenScope,
                 )
@@ -797,7 +705,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             {
-                                let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
                                 Some(#{Deserializer}(&mut body.into().into_inner())?)
                             }
                             """,
@@ -808,7 +715,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             {
-                                let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
                                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                                 #{Deserializer}(&bytes)?
                             }
@@ -878,7 +784,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 },
             )
         with(writer) {
-            rustTemplate("let input_string = request.uri().path();")
+            rustTemplate("let input_string = parts.uri.path();")
             if (greedyLabelIndex >= 0 && greedyLabelIndex + 1 < httpTrait.uri.segments.size) {
                 rustTemplate(
                     """
@@ -963,7 +869,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                let query_string = request.uri().query().unwrap_or("");
+                let query_string = parts.uri.query().unwrap_or("");
                 let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
                 *codegenScope,
@@ -1129,7 +1035,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers().ok_or(#{RequestRejection}::HeadersAlreadyExtracted)?)?
+            #{deserializer}(&parts.headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,
@@ -1143,7 +1049,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers().ok_or(#{RequestRejection}::HeadersAlreadyExtracted)?)?
+            #{deserializer}(&parts.headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,

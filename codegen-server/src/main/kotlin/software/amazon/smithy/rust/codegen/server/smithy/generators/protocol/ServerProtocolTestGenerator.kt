@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -56,11 +55,8 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
-
-private const val PROTOCOL_TEST_HELPER_MODULE_NAME = "protocol_test_helper"
 
 /**
  * Generate protocol tests for an operation
@@ -141,94 +137,9 @@ class ServerProtocolTestGenerator(
     }
 
     fun render(writer: RustWriter) {
-        renderTestHelper(writer)
-
         for (operation in operations) {
             protocolGenerator.renderOperation(writer, operation)
             renderOperationTestCases(operation, writer)
-        }
-    }
-
-    /**
-     * Render a test helper module to:
-     *
-     * - generate a dynamic builder for each handler, and
-     * - construct a Tower service to exercise each test case.
-     */
-    private fun renderTestHelper(writer: RustWriter) {
-        val operationNames = operations.map { it.toName() }
-        val operationRegistryName = "OperationRegistry"
-        val operationRegistryBuilderName = "${operationRegistryName}Builder"
-
-        fun renderRegistryBuilderTypeParams() = writable {
-            operations.forEach {
-                val (inputT, outputT) = operationInputOutputTypes[it]!!
-                writeInline("Fun<$inputT, $outputT>, (), ")
-            }
-        }
-
-        fun renderRegistryBuilderMethods() = writable {
-            operations.withIndex().forEach {
-                val (inputT, outputT) = operationInputOutputTypes[it.value]!!
-                val operationName = operationNames[it.index]
-                rust(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
-            }
-        }
-
-        val module = RustModule.LeafModule(
-            PROTOCOL_TEST_HELPER_MODULE_NAME,
-            RustMetadata(
-                additionalAttributes = listOf(
-                    Attribute.CfgTest,
-                    Attribute.AllowDeadCode,
-                ),
-                visibility = Visibility.PUBCRATE,
-            ),
-            inline = true,
-        )
-
-        writer.withInlineModule(module) {
-            rustTemplate(
-                """
-                use #{Tower}::Service as _;
-
-                pub(crate) type Fun<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
-
-                type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, #{RegistryBuilderTypeParams:W}>;
-
-                fn create_operation_registry_builder() -> RegistryBuilder {
-                    crate::operation_registry::$operationRegistryBuilderName::default()
-                        #{RegistryBuilderMethods:W}
-                }
-
-                pub(crate) async fn build_router_and_make_request(
-                    http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
-                    f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
-                ) -> #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody> {
-                    let mut router: #{Router} = f(create_operation_registry_builder())
-                        .build()
-                        .expect("unable to build operation registry")
-                        .into();
-                    let http_response = router
-                        .call(http_request)
-                        .await
-                        .expect("unable to make an HTTP request");
-
-                    http_response
-                }
-
-                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
-                pub(crate) fn check_operation_extension_was_set(http_response: #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody>, operation_full_name: &str) {
-                    let operation_extension = http_response.extensions()
-                        .get::<#{SmithyHttpServer}::extension::OperationExtension>()
-                        .expect("extension `OperationExtension` not found");
-                    #{AssertEq}(operation_extension.absolute(), operation_full_name);
-                }
-                """,
-                "RegistryBuilderTypeParams" to renderRegistryBuilderTypeParams(),
-                "RegistryBuilderMethods" to renderRegistryBuilderMethods(),
-                *codegenScope,
-            )
         }
     }
 
@@ -395,22 +306,12 @@ class ServerProtocolTestGenerator(
             return
         }
 
-        // Test against original `OperationRegistryBuilder`.
         with(httpRequestTestCase) {
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            makeRequest(operationShape, this, checkRequestHandler(operationShape, httpRequestTestCase))
-            checkHandlerWasEntered(operationShape, operationSymbol, this)
-        }
-
-        // Test against new service builder.
-        with(httpRequestTestCase) {
-            renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
-        }
-        if (protocolSupport.requestBodyDeserialization) {
-            makeRequest2(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
-            checkHandlerWasEntered2(this)
+            makeRequest(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
+            checkHandlerWasEntered(this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -440,8 +341,6 @@ class ServerProtocolTestGenerator(
         operationShape: OperationShape,
         operationSymbol: Symbol,
     ) {
-        val operationImplementationName =
-            "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
@@ -454,19 +353,13 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
         rust(";")
-        val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
-            if (shape.hasTrait<ErrorTrait>()) {
-                val variant = symbolProvider.toSymbol(shape).name
-                "$operationImplementationName::Error($operationErrorName::$variant(output))"
-            } else {
-                "$operationImplementationName::Output(output)"
-            }
-        } else {
-            "$operationImplementationName(output)"
+        if (operationShape.allErrors(model).isNotEmpty() && shape.hasTrait<ErrorTrait>()) {
+            val variant = symbolProvider.toSymbol(shape).name
+            rust("let output = $operationErrorName::$variant(output);")
         }
         rustTemplate(
             """
-            let output = super::$operationImpl;
+            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = output.into_response();
             """,
             *codegenScope,
@@ -488,23 +381,13 @@ class ServerProtocolTestGenerator(
 
         val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
 
-        rust("// Use the `OperationRegistryBuilder`")
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
-            makeRequest(operationShape, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
-            checkResponse(this, testCase.response)
-        }
 
-        rust("// Use new service builder")
-        rustBlock("") {
-            with(testCase.request) {
-                // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
-            }
-            makeRequest2(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
+            makeRequest(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
             checkResponse(this, testCase.response)
         }
     }
@@ -586,44 +469,8 @@ class ServerProtocolTestGenerator(
             }
         }
 
-    /** Checks the request using the `OperationRegistryBuilder`. */
+    /** Checks the request. */
     private fun makeRequest(
-        operationShape: OperationShape,
-        rustWriter: RustWriter,
-        operationBody: Writable,
-    ) {
-        val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
-
-        rustWriter.withBlockTemplate(
-            """
-            let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
-                http_request,
-                &|builder| {
-                    builder.${operationShape.toName()}((|input| Box::pin(async move {
-            """,
-
-            "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
-            *codegenScope,
-        ) {
-            operationBody()
-        }
-    }
-
-    private fun checkHandlerWasEntered(
-        operationShape: OperationShape,
-        operationSymbol: Symbol,
-        rustWriter: RustWriter,
-    ) {
-        val operationFullName = "${operationShape.id.namespace}.${operationSymbol.name}"
-        rustWriter.rust(
-            """
-            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::check_operation_extension_was_set(http_response, "$operationFullName");
-            """,
-        )
-    }
-
-    /** Checks the request using the new service builder. */
-    private fun makeRequest2(
         operationShape: OperationShape,
         operationSymbol: Symbol,
         rustWriter: RustWriter,
@@ -654,7 +501,7 @@ class ServerProtocolTestGenerator(
         )
     }
 
-    private fun checkHandlerWasEntered2(rustWriter: RustWriter) {
+    private fun checkHandlerWasEntered(rustWriter: RustWriter) {
         rustWriter.rust(
             """
             assert!(receiver.recv().await.is_some());
@@ -926,20 +773,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
-
-            // Deprioritized, sets don't exist in Smithy 2.0.
-            // They have the exact same semantics as list shapes with `@uniqueItems`,
-            // so we could implement them as such once we've added support for constraint traits.
-            //
-            // See https://github.com/awslabs/smithy/issues/1266#issuecomment-1169543051.
-            // See https://awslabs.github.io/smithy/2.0/guides/migrating-idl-1-to-2.html#convert-set-shapes-to-list-shapes.
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
-
-            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
 
             // Tests involving constraint traits, which are not yet fully implemented.
             // See https://github.com/awslabs/smithy-rs/issues/1401.

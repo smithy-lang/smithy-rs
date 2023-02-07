@@ -38,15 +38,22 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
+    needs:
+    - get-pr-info
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        # The ref used needs to match the HEAD revision of the PR being diffed, or else
+        # the `docker-build` action won't find the built Docker image. This has the unfortunate
+        # side effect that the codegen diff tool used is the one in the PR rather than in
+        # the branch this workflow was launched from.
+        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).head_revision }}
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:

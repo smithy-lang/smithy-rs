@@ -17,13 +17,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesG
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -113,7 +114,8 @@ fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Bool
  * Doing this in AWS codegen allows us to actually integration test generated clients.
  */
 
-class OperationInputTestGenerator(private val ctx: ClientCodegenContext, private val test: EndpointTestCase) {
+class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: EndpointTestCase) {
+    private val ctx = _ctx.copy(symbolProvider = PublicImportSymbolProvider(_ctx.symbolProvider, _ctx.moduleUseName()))
     private val runtimeConfig = ctx.runtimeConfig
     private val moduleName = ctx.moduleUseName()
     private val endpointCustomizations = ctx.rootDecorator.endpointCustomizations(ctx)
@@ -144,8 +146,7 @@ class OperationInputTestGenerator(private val ctx: ClientCodegenContext, private
                 let _result = dbg!(#{invoke_operation});
                 #{assertion}
                 """,
-                "capture_request" to CargoDependency.smithyClient(runtimeConfig)
-                    .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                 "conf" to config(testOperationInput),
                 "invoke_operation" to operationInvocation(testOperationInput),
                 "assertion" to writable {

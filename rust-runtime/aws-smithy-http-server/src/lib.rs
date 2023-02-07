@@ -28,15 +28,10 @@ pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
 
-#[doc(hidden)]
-pub mod routers;
-
 #[doc(inline)]
 pub(crate) use self::error::Error;
-pub use self::request::extension::Extension;
 #[doc(inline)]
-#[allow(deprecated)]
-pub use self::routing::Router;
+pub use self::request::extension::Extension;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
