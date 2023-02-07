@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -66,7 +66,7 @@ class ConstrainedStringGenerator(
     private val constraintsInfo: List<TraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
-            .map { StringTraitInfo.fromTrait(symbol, it, isSensitive = shape.getTrait<SensitiveTrait>() != null) }
+            .map { StringTraitInfo.fromTrait(symbol, it, isSensitive = shape.hasTrait<SensitiveTrait>()) }
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
