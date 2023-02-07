@@ -871,10 +871,10 @@ class ServerProtocolTestGenerator(
             FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTrait", TestType.Request),
 
             // AwsJson1.1 failing tests.
-            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTrait", TestType.Request),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_httpdate_timestamps", TestType.Response),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_iso8601_timestamps", TestType.Response),
+            FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
+            FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
+            FailingTest(AwsJson11, "parses_httpdate_timestamps", TestType.Response),
+            FailingTest(AwsJson11, "parses_iso8601_timestamps", TestType.Response),
             FailingTest(
                 "aws.protocoltests.json#JsonProtocol",
                 "parses_the_request_id_from_the_response",
