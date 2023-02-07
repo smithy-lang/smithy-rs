@@ -80,10 +80,11 @@ data class RuntimeConfig(
          */
         fun fromNode(maybeNode: Optional<ObjectNode>): RuntimeConfig {
             val node = maybeNode.orElse(Node.objectNode())
-            val crateVersionMap = node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
-                val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
-                CrateVersionMap(map)
-            }
+            val crateVersionMap =
+                node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
+                    val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
+                    CrateVersionMap(map)
+                }
             val path = node.getStringMember("relativePath").orNull()?.value
             val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
             return RuntimeConfig(
@@ -95,7 +96,11 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
-    fun smithyRuntimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
+    fun smithyRuntimeCrate(
+        runtimeCrateName: String,
+        optional: Boolean = false,
+        scope: DependencyScope = DependencyScope.Compile,
+    ): CargoDependency {
         val crateName = "$cratePrefix-$runtimeCrateName"
         return CargoDependency(
             crateName,
@@ -210,6 +215,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Phantom = std.resolve("marker::PhantomData")
         val StdError = std.resolve("error::Error")
         val String = std.resolve("string::String")
+        val Bool = std.resolve("primitive::bool")
         val TryFrom = stdConvert.resolve("TryFrom")
         val Vec = std.resolve("vec::Vec")
 
@@ -249,31 +255,48 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyQuery(runtimeConfig: RuntimeConfig) = CargoDependency.smithyQuery(runtimeConfig).toType()
         fun smithyTypes(runtimeConfig: RuntimeConfig) = CargoDependency.smithyTypes(runtimeConfig).toType()
         fun smithyXml(runtimeConfig: RuntimeConfig) = CargoDependency.smithyXml(runtimeConfig).toType()
-        private fun smithyProtocolTest(runtimeConfig: RuntimeConfig) = CargoDependency.smithyProtocolTestHelpers(runtimeConfig).toType()
+        private fun smithyProtocolTest(runtimeConfig: RuntimeConfig) =
+            CargoDependency.smithyProtocolTestHelpers(runtimeConfig).toType()
 
         // smithy runtime type members
-        fun base64Decode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("base64::decode")
-        fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("base64::encode")
+        fun base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyTypes(runtimeConfig).resolve("base64::decode")
+
+        fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyTypes(runtimeConfig).resolve("base64::encode")
+
         fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Blob")
         fun byteStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("byte_stream::ByteStream")
         fun classifyRetry(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("retry::ClassifyRetry")
         fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("DateTime")
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
         fun errorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
-        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
+
         fun genericError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Error")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
         fun labelFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("label::$func")
         fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
         fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
-        fun parseHttpResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse")
-        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("response::ParseStrictResponse")
-        fun protocolTest(runtimeConfig: RuntimeConfig, func: String): RuntimeType = smithyProtocolTest(runtimeConfig).resolve(func)
-        fun provideErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ProvideErrorKind")
+        fun parseHttpResponse(runtimeConfig: RuntimeConfig) =
+            smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse")
+
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) =
+            smithyHttp(runtimeConfig).resolve("response::ParseStrictResponse")
+
+        fun protocolTest(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
+            smithyProtocolTest(runtimeConfig).resolve(func)
+
+        fun provideErrorKind(runtimeConfig: RuntimeConfig) =
+            smithyTypes(runtimeConfig).resolve("retry::ProvideErrorKind")
+
         fun queryFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("query::$func")
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("body::SdkBody")
         fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("result::SdkError")
-        fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
+        fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
+
         fun timestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
                 TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
@@ -285,7 +308,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
         }
 
-        fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
+        fun captureRequest(runtimeConfig: RuntimeConfig) =
+            CargoDependency.smithyClientTestUtil(runtimeConfig).toType().resolve("test_connection::capture_request")
+
+        fun forInlineDependency(inlineDependency: InlineDependency) =
+            RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             "${module.fullyQualifiedPath()}::$name",
@@ -295,10 +322,13 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         // inlinable types
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.ec2QueryErrors(runtimeConfig))
+
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
+
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
+
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
     }
 }

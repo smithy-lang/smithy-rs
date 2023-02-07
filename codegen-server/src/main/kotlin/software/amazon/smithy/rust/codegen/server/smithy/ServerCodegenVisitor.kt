@@ -129,7 +129,7 @@ open class ServerCodegenVisitor(
             service,
             symbolVisitorConfig,
             settings.codegenConfig.publicConstrainedTypes,
-            RustCodegenServerPlugin::baseSymbolProvider,
+            RustServerCodegenPlugin::baseSymbolProvider,
         )
 
         codegenContext = ServerCodegenContext(
@@ -319,7 +319,7 @@ open class ServerCodegenVisitor(
             }
         }
 
-        val constraintsInfo = CollectionTraitInfo.fromShape(shape)
+        val constraintsInfo = CollectionTraitInfo.fromShape(shape, codegenContext.constrainedShapeSymbolProvider)
         if (isDirectlyConstrained) {
             rustCrate.withModule(ModelsModule) {
                 ConstrainedCollectionGenerator(
@@ -487,13 +487,15 @@ open class ServerCodegenVisitor(
         }
 
         if (shape.isEventStream()) {
-            rustCrate.withModule(RustModule.Error) {
-                val symbol = codegenContext.symbolProvider.toSymbol(shape)
-                val errors = shape.eventStreamErrors()
-                    .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
-                val errorSymbol = shape.eventStreamErrorSymbol(codegenContext.symbolProvider)
-                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
-                    .renderErrors(this, errorSymbol, symbol)
+            val errors = shape.eventStreamErrors()
+                .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
+            if (errors.isNotEmpty()) {
+                rustCrate.withModule(RustModule.Error) {
+                    val symbol = codegenContext.symbolProvider.toSymbol(shape)
+                    val errorSymbol = shape.eventStreamErrorSymbol(codegenContext.symbolProvider)
+                    ServerOperationErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
+                        .renderErrors(this, errorSymbol, symbol)
+                }
             }
         }
     }

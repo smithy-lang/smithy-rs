@@ -66,10 +66,10 @@ class RustClientCodegenPlugin : DecoratableBuildPlugin() {
     }
 
     companion object {
-        /** SymbolProvider
+        /**
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
-         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
+         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
@@ -80,7 +80,7 @@ class RustClientCodegenPlugin : DecoratableBuildPlugin() {
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(NonExhaustive)) }
-                // Streaming shapes need different derives (e.g. they cannot derive Eq)
+                // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input

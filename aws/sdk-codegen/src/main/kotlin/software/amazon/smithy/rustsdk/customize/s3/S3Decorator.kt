@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -15,6 +16,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -32,6 +35,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import software.amazon.smithy.rustsdk.endpoints.stripEndpointTrait
+import software.amazon.smithy.rustsdk.getBuiltIn
+import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
 
 /**
@@ -68,7 +74,7 @@ class S3Decorator : ClientCodegenDecorator {
                     logger.info("Adding AllowInvalidXmlRoot trait to $it")
                     (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
-            }.let(StripBucketFromHttpPath()::transform)
+            }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
         }
     }
 
@@ -77,6 +83,24 @@ class S3Decorator : ClientCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
         it + S3PubUse()
+    }
+
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        return listOf(object : EndpointCustomization {
+            override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                if (!name.startsWith("AWS::S3")) {
+                    return null
+                }
+                val builtIn = codegenContext.getBuiltIn(name) ?: return null
+                return writable {
+                    rustTemplate(
+                        "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
+                        "value" to value.toWritable(),
+                    )
+                }
+            }
+        },
+        )
     }
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {

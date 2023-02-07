@@ -60,10 +60,16 @@ object AwsRuntimeType {
     ).resolve("DefaultMiddleware")
 
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsCredentialTypes(runtimeConfig).toType()
+
+    fun awsCredentialTypesTestUtil(runtimeConfig: RuntimeConfig) =
+        AwsCargoDependency.awsCredentialTypes(runtimeConfig).toDevDependency().withFeature("test-util").toType()
+
     fun awsEndpoint(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsEndpoint(runtimeConfig).toType()
     fun awsHttp(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsHttp(runtimeConfig).toType()
     fun awsSigAuth(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuth(runtimeConfig).toType()
-    fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuthEventStream(runtimeConfig).toType()
+    fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) =
+        AwsCargoDependency.awsSigAuthEventStream(runtimeConfig).toType()
+
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
     fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()
 }

@@ -5,20 +5,11 @@
 
 //! Protocol helpers.
 use crate::rejection::MissingContentTypeReason;
-#[allow(deprecated)]
-use crate::request::RequestParts;
 use http::HeaderMap;
 
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
-#[allow(deprecated)]
-pub fn content_type_header_empty_body_no_modeled_input<B>(
-    req: &RequestParts<B>,
-) -> Result<(), MissingContentTypeReason> {
-    if req.headers().is_none() {
-        return Ok(());
-    }
-    let headers = req.headers().unwrap();
+pub fn content_type_header_empty_body_no_modeled_input(headers: &HeaderMap) -> Result<(), MissingContentTypeReason> {
     if headers.contains_key(http::header::CONTENT_TYPE) {
         let found_mime = parse_content_type(headers)?;
         Err(MissingContentTypeReason::UnexpectedMimeType {
@@ -42,15 +33,10 @@ fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentT
 
 /// Checks that the content-type in request headers is valid
 #[allow(deprecated)]
-pub fn content_type_header_classifier<B>(
-    req: &RequestParts<B>,
+pub fn content_type_header_classifier(
+    headers: &HeaderMap,
     expected_content_type: Option<&'static str>,
 ) -> Result<(), MissingContentTypeReason> {
-    // Allow no CONTENT-TYPE header
-    if req.headers().is_none() {
-        return Ok(());
-    }
-    let headers = req.headers().unwrap(); // Headers are present, `unwrap` will not panic.
     if !headers.contains_key(http::header::CONTENT_TYPE) {
         return Ok(());
     }
@@ -79,12 +65,7 @@ pub fn content_type_header_classifier<B>(
 }
 
 #[allow(deprecated)]
-pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static str) -> bool {
-    // Allow no ACCEPT header
-    if req.headers().is_none() {
-        return true;
-    }
-    let headers = req.headers().unwrap();
+pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str) -> bool {
     if !headers.contains_key(http::header::ACCEPT) {
         return true;
     }
@@ -126,28 +107,25 @@ pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http::Request;
+    use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
-    fn req_content_type(content_type: &str) -> RequestParts<&str> {
-        let request = Request::builder()
-            .header("content-type", content_type)
-            .body("")
-            .unwrap();
-        RequestParts::new(request)
+    fn req_content_type(content_type: &'static str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap());
+        headers
     }
 
-    fn req_accept(content_type: &str) -> RequestParts<&str> {
-        let request = Request::builder().header("accept", content_type).body("").unwrap();
-        RequestParts::new(request)
+    fn req_accept(accept: &'static str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT, HeaderValue::from_static(accept));
+        headers
     }
 
     const EXPECTED_MIME_APPLICATION_JSON: Option<&'static str> = Some("application/json");
 
     #[test]
     fn check_content_type_header_empty_body_no_modeled_input() {
-        let request = Request::builder().body("").unwrap();
-        let request = RequestParts::new(request);
-        assert!(content_type_header_empty_body_no_modeled_input(&request).is_ok());
+        assert!(content_type_header_empty_body_no_modeled_input(&HeaderMap::new()).is_ok());
     }
 
     #[test]
@@ -193,8 +171,7 @@ mod tests {
 
     #[test]
     fn check_missing_content_type_is_allowed() {
-        let request = RequestParts::new(Request::builder().body("").unwrap());
-        let result = content_type_header_classifier(&request, EXPECTED_MIME_APPLICATION_JSON);
+        let result = content_type_header_classifier(&HeaderMap::new(), EXPECTED_MIME_APPLICATION_JSON);
         assert!(result.is_ok());
     }
 
@@ -241,9 +218,7 @@ mod tests {
 
     #[test]
     fn valid_empty_accept_header_classifier() {
-        let valid_request = Request::builder().body("").unwrap();
-        let valid_request = RequestParts::new(valid_request);
-        assert!(accept_header_classifier(&valid_request, "application/json"));
+        assert!(accept_header_classifier(&HeaderMap::new(), "application/json"));
     }
 
     #[test]

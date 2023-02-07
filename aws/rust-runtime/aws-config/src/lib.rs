@@ -150,6 +150,7 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
 mod loader {
     use std::sync::Arc;
 
+    use aws_credential_types::cache::CredentialsCache;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
@@ -177,6 +178,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        credentials_cache: Option<CredentialsCache>,
         credentials_provider: Option<SharedCredentialsProvider>,
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
         endpoint_url: Option<String>,
@@ -295,6 +297,25 @@ mod loader {
         /// ```
         pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
             self.http_connector = Some(http_connector.into());
+            self
+        }
+
+        /// Override the credentials cache used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
+        /// # Examples
+        ///
+        /// Override the credentials cache but load the default value for region:
+        /// ```no_run
+        /// # use aws_credential_types::cache::CredentialsCache;
+        /// # async fn create_config() {
+        /// let config = aws_config::from_env()
+        ///     .credentials_cache(CredentialsCache::lazy())
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn credentials_cache(mut self, credentials_cache: CredentialsCache) -> Self {
+            self.credentials_cache = Some(credentials_cache);
             self
         }
 
@@ -524,7 +545,9 @@ mod loader {
                     .await
             };
 
-            let sleep_impl = if self.sleep.is_none() {
+            let sleep_impl = if self.sleep.is_some() {
+                self.sleep
+            } else {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
                         "An implementation of AsyncSleep was requested by calling default_async_sleep \
@@ -535,8 +558,6 @@ mod loader {
                     );
                 }
                 default_async_sleep()
-            } else {
-                self.sleep
             };
 
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
@@ -548,14 +569,18 @@ mod loader {
                     .await
             };
 
-            let http_connector = if let Some(http_connector) = self.http_connector {
-                http_connector
-            } else {
+            let http_connector = self.http_connector.unwrap_or_else(|| {
                 HttpConnector::Prebuilt(default_connector(
                     &ConnectorSettings::from_timeout_config(&timeout_config),
                     sleep_impl.clone(),
                 ))
-            };
+            });
+
+            let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
+                let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+                builder.set_sleep(conf.sleep());
+                builder.into_credentials_cache()
+            });
 
             let use_fips = if let Some(use_fips) = self.use_fips {
                 Some(use_fips)
@@ -583,6 +608,7 @@ mod loader {
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
+                .credentials_cache(credentials_cache)
                 .credentials_provider(credentials_provider)
                 .http_connector(http_connector);
 

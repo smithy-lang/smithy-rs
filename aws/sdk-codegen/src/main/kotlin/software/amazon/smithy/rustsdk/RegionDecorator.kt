@@ -12,7 +12,6 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -21,10 +20,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -109,17 +108,15 @@ class RegionDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return usesRegion(codegenContext).thenSingletonListOf {
-            SdkConfigSection.create { section ->
-                {
-                    rust(
-                        """
-                        ${section.serviceConfigBuilder} =
-                             ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
-                        """,
-                    )
-                }
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder} =
+                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                    """,
+                )
             }
         }
     }
@@ -130,14 +127,14 @@ class RegionDecorator : ClientCodegenDecorator {
         }
         return listOf(
             object : EndpointCustomization {
-                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
+                override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
                     }
                 }
 
-                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != Builtins.REGION.builtIn.get()) {
                         return null
                     }
@@ -148,9 +145,6 @@ class RegionDecorator : ClientCodegenDecorator {
                         )
                     }
                 }
-
-                override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> =
-                    listOf()
             },
         )
     }

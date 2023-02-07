@@ -221,7 +221,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
     private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) = writable {
         endpointRuleSet.parameters.toList().forEach {
-            Attribute.AllowUnused.render(this)
+            Attribute.AllowUnusedVariables.render(this)
             rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
         }
         generateRulesList(endpointRuleSet.rules)(this)
@@ -291,7 +291,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                     fn.type() is Type.Option ||
                         // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
                         (fn as Function).name == "substring" -> {
-                        Attribute.AllowUnused.render(this)
+                        Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",
                             "target" to target,

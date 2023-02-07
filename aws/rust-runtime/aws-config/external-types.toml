@@ -3,6 +3,7 @@
 # require manual version bumping every time an automated version bump
 # to the exposed SDK crates happens.
 allowed_external_types = [
+   "aws_credential_types::cache::CredentialsCache",
    "aws_credential_types::provider::ProvideCredentials",
    "aws_credential_types::provider::Result",
    "aws_credential_types::provider::SharedCredentialsProvider",
