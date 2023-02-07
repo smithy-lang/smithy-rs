@@ -112,6 +112,9 @@ def generate_and_commit_generated_code(revision_sha):
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
+    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
+        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
+        f"xargs rm -f", shell=True)
     run(f"find {OUTPUT_PATH}/codegen-server-test-typescript | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
