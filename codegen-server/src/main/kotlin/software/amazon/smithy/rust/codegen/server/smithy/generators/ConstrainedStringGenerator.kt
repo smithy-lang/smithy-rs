@@ -236,9 +236,42 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
 private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) :
     StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
+        return TraitInfo(
+            tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
+            constraintViolationVariant = {
+                docs("Error when a string doesn't satisfy its `@pattern`.")
+                docs("Contains the String that failed the pattern.")
+                rust("Pattern(String)")
+            },
+            asValidationExceptionField = {
+                rustTemplate(
+                    """
+                    Self::Pattern(_string) => crate::model::ValidationExceptionField {
+                        message: #{ErrorMessage:W},
+                        path
+                    },
+                    """,
+                    "ErrorMessage" to errorMessage(),
+                )
+            },
+            this::renderValidationFunction,
+            testCases = listOf {
+                unitTest("regex_compiles") {
+                    rustTemplate(
+                        """
+                        #{T}::compile_regex();
+                        """,
+                        "T" to symbol,
+                    )
+                }
+            },
+        )
+    }
+
+    private fun errorMessage(): Writable {
         val pattern = patternTrait.pattern
 
-        val errorMessage = if (isSensitive) {
+        return if (isSensitive) {
             writable {
                 rust(
                     """
@@ -255,37 +288,6 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, v
                 )
             }
         }
-
-        return TraitInfo(
-            tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
-            constraintViolationVariant = {
-                docs("Error when a string doesn't satisfy its `@pattern`.")
-                docs("Contains the String that failed the pattern.")
-                rust("Pattern(String)")
-            },
-            asValidationExceptionField = {
-                rustTemplate(
-                    """
-                    Self::Pattern(_string) => crate::model::ValidationExceptionField {
-                        message: #{ErrorMessage:W},
-                        path
-                    },
-                    """,
-                    "ErrorMessage" to errorMessage,
-                )
-            },
-            this::renderValidationFunction,
-            testCases = listOf {
-                unitTest("regex_compiles") {
-                    rustTemplate(
-                        """
-                        #{T}::compile_regex();
-                        """,
-                        "T" to symbol,
-                    )
-                }
-            },
-        )
     }
 
     /**
