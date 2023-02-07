@@ -24,7 +24,7 @@ pub fn start_hyper_worker(
     .expect("Unable to create hyper server from shared socket")
     .serve(IntoMakeService::new(app));
 
-    // TODO(fill-me-with-an-issue) albepose@ Fix this with Daniele
+    // TODO(https://github.com/awslabs/smithy-rs/issues/2317) albepose@ Fix this with Daniele
     let handle = Handle::current();
     handle.spawn(async move {
         // Process each socket concurrently.

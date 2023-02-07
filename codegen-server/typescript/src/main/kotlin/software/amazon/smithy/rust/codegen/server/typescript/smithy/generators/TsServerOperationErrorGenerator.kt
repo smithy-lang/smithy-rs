@@ -40,7 +40,7 @@ class TsServerOperationErrorGenerator(
             """
             impl #{From}<#{napi}::Error> for #{Error} {
                 fn from(variant: #{napi}::Error) -> #{Error} {
-                    // TODO(fill-me-with-an-issue): match the Ts error type and return the right one.
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/2317): match the Ts error type and return the right one.
                     crate::error::InternalServerError { message: variant.to_string() }.into()
                 }
             }
