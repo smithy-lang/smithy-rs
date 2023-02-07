@@ -41,3 +41,4 @@
 - [RFC-0029: Finding New Home for Credential Types](./rfc0029_new_home_for_cred_types.md)
 - [RFC-0030: Serialization And Deserialization](./rfc0030_serialization_and_deserialization.md)
 - [RFC-0031: Providing Fallback Credentials on Timeout](./rfc0031_providing_fallback_credentials_on_timeout.md)
+- [RFC-0032: Better Constraint Violations](./rfc0031_better_constraint_violations.md)
