@@ -197,7 +197,7 @@ fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
     // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
-        hashes.push_str(&sha256::digest_file(import).context("hash model")?);
+        hashes.push_str(&sha256::digest(import.as_str()));
         hashes.push('\n');
     }
     Ok(sha256::digest(hashes))
