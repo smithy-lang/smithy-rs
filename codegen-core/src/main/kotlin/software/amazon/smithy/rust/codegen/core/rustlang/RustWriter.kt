@@ -421,7 +421,7 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
-
+                fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }

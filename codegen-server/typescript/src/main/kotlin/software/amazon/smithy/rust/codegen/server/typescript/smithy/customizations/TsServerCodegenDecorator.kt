@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.typescript.smithy.customizati
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -53,14 +54,66 @@ class NapiBuildRsDecorator : ServerCodegenDecorator {
     }
 }
 
+class NapiPackageJsonDecorator : ServerCodegenDecorator {
+    override val name: String = "NapiPackageJsonDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val name = codegenContext.settings.moduleName.toSnakeCase()
+        val version = codegenContext.settings.moduleVersion
+
+        // TODO: we should probabaly use a real JSON writer, but I did not want to add
+        // other external libraries at this stage.
+        rustCrate.withFile("package.json") {
+            val content = """{
+                "name": "@amzn/$name",
+                "version": "$version",
+                "main": "index.js",
+                "types": "$name.d.ts",
+                "napi": {
+                    "name": "$name",
+                    "triple": {}
+                },
+                "devDependencies": {
+                    "@napi-rs/cli": ">=2",
+                    "@types": ">=18",
+                    "ava": ">=5"
+                },
+                "ava": {
+                    "timeout": "3m"
+                },
+                "engines": {
+                    "node": ">=10"
+                },
+                "scripts": {
+                    "artifacts": "napi artifacts",
+                    "build": "napi build --platform --release",
+                    "build:debug": "napi build --platform",
+                    "prepublishOnly": "napi prepublish -t npm",
+                    "test": "ava",
+                    "universal": "napi universal",
+                    "version": "napi version"
+                },
+                "packageManager": "yarn",
+                "dependencies": {
+                    "yarn": ">=1"
+                }
+}"""
+            this.write(content)
+        }
+    }
+}
+
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
-     * This is done because the Python interpreter can raise exceptions during execution.
+     * This is done because the Python interpreter can raise eceptions during execution.
      */
     AddInternalServerErrorToAllOperationsDecorator(),
     // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
     CdylibManifestDecorator(),
     //
     NapiBuildRsDecorator(),
+    //
+    NapiPackageJsonDecorator(),
 )

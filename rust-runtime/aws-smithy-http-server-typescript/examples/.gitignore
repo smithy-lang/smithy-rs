@@ -88,3 +88,5 @@ typings/
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
+index.d.ts
+pokemon-service-server-sdk.*.node

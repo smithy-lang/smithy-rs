@@ -5,8 +5,8 @@
 
 //! Socket implementation that can be shared between multiple Nodejs processes.
 //!
-//! Nodejs cannot handle true multi-threaded applications due to the [GIL],
-//! often resulting in reduced performance and only one core used by the application.
+//! Nodejs cannot handle true multi-threaded applications often resulting in reduced
+//! performance and only one core used by the application.
 //! To work around this, Nodejs web applications can create a socket with
 //! SO_REUSEADDR and SO_REUSEPORT enabled that can be shared between multiple
 //! Nodejs processes, allowing you to maximize performance and use all available
@@ -14,13 +14,13 @@
 use aws_smithy_http_server::socket::new_socket;
 use napi_derive::napi;
 
-#[napi]
+#[napi(js_name = "Socket")]
 #[derive(Debug)]
 pub struct TsSocket(socket2::Socket);
 
 #[napi]
 impl TsSocket {
-    /// Create a new UNIX `SharedSocket` from an address, port and backlog.
+    /// Create a new UNIX `Socket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
     #[napi(constructor)]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> napi::Result<Self> {

@@ -15,16 +15,20 @@ codegen:
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
 
 build:
-	npm run build:debug
+	cd pokemon-service-server-sdk && npm run build:debug
+	ln -sf pokemon-service-server-sdk/pokemon-service-server-sdk.*.node .
+	ln -sf pokemon-service-server-sdk/index.d.ts
 
 release:
-	npm run build
+	cd pokemon-service-server-sdk && npm run build
+	ln -sf pokemon-service-server-sdk/pokemon-service-server-sdk.*.node .
+	ln -sf pokemon-service-server-sdk/index.d.ts
 
 run: build
-	ts-node app.ts
+	ts-node pokemon-service.ts
 
 run-release: release
-	ts-node app.ts
+	ts-node pokemon-service.ts
 
 doc-open: codegen
 	cargo doc --no-deps --open
@@ -33,6 +37,6 @@ clean:
 	cargo clean || echo "Unable to run cargo clean"
 
 distclean: clean
-	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(CUR_DIR)/Cargo.lock
+	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(CUR_DIR)/Cargo.lock pokemon-service-server-sdk.*.node index.d.ts
 
 .PHONY: all

@@ -120,13 +120,14 @@ class TsApplicationGenerator(
                 )
             }
         }
-        Attribute("napi(object)").render(writer)
+        writer.rust("pub use aws_smithy_http_server_typescript::socket::TsSocket;")
+        Attribute("""napi(object, js_name = "Handlers")""").render(writer)
         writer.rustBlock("pub struct TsHandlers") {
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
-                val input = "crate::input::${operationName}Input"
-                val output = "crate::output::${operationName}Output"
-                val error = "crate::error::${operationName}Error"
+                val input = "${operationName}Input"
+                val output = "${operationName}Output"
+                val error = "${operationName}Error"
                 val fnName = operationName.toSnakeCase()
                 rustTemplate(
                     """
