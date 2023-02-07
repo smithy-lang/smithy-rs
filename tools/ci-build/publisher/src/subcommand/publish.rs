@@ -52,7 +52,7 @@ pub async fn subcommand_publish(
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats, *skip_confirmation)?;
 
-    for batch in batches {
+    for batch in &batches {
         let mut any_published = false;
         for package in batch {
             // Only publish if it hasn't been published yet.
@@ -65,19 +65,24 @@ pub async fn subcommand_publish(
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then
                 // the next package publish can fail if it depends on this package.
-                wait_for_eventual_consistency(&package).await?;
-                info!("Successfully published `{}`", package.handle);
+                wait_for_eventual_consistency(package).await?;
+                info!("Successfully published `{}`", &package.handle);
                 any_published = true;
             } else {
-                info!("`{}` was already published", package.handle);
+                info!("`{}` was already published", &package.handle);
             }
-            correct_owner(&package.handle, &package.category).await?;
         }
         if any_published {
             info!("Sleeping 30 seconds after completion of the batch");
             tokio::time::sleep(Duration::from_secs(30)).await;
         } else {
             info!("No packages in the batch needed publishing. Proceeding with the next batch immediately.")
+        }
+    }
+
+    for batch in &batches {
+        for package in batch {
+            correct_owner(&package.handle, &package.category).await?;
         }
     }
 
