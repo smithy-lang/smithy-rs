@@ -62,7 +62,7 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
         val name = codegenContext.settings.moduleName.toSnakeCase()
         val version = codegenContext.settings.moduleVersion
 
-        // TODO: we should probabaly use a real JSON writer, but I did not want to add
+        // TODO(fill-me-with-an-issue): we should probabaly use a real JSON writer, but I did not want to add
         // other external libraries at this stage.
         rustCrate.withFile("package.json") {
             val content = """{

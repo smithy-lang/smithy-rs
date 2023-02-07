@@ -40,7 +40,7 @@ class TsServerOperationErrorGenerator(
             """
             impl #{From}<#{napi}::Error> for #{Error} {
                 fn from(variant: #{napi}::Error) -> #{Error} {
-                    // TODO: match the Ts error type and return the right one.
+                    // TODO(fill-me-with-an-issue): match the Ts error type and return the right one.
                     crate::error::InternalServerError { message: variant.to_string() }.into()
                 }
             }
