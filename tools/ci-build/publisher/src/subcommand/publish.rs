@@ -185,7 +185,7 @@ pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -
                     cargo::RemoveOwner::new(&handle.name, crate_owner)
                         .spawn()
                         .await
-                        .context(format!("remove incorrect owner `{}` from crate `{}`", crate_owner, handle))?;
+                        .with_context(|| format!("remove incorrect owner `{}` from crate `{}`", crate_owner, handle))?;
                     info!(
                         "Removed incorrect owner `{}` from crate `{}`",
                         crate_owner, handle
