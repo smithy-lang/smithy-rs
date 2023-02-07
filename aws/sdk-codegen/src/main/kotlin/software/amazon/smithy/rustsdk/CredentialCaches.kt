@@ -15,10 +15,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
 class CredentialsCacheDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsCache"
@@ -38,12 +38,10 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
         return baseCustomizations + CredentialsCacheFeature(codegenContext.runtimeConfig)
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
-            SdkConfigSection.create { section ->
-                writable {
-                    rust("${section.serviceConfigBuilder}.set_credentials_cache(${section.sdkConfig}.credentials_cache().cloned());")
-                }
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust("${section.serviceConfigBuilder}.set_credentials_cache(${section.sdkConfig}.credentials_cache().cloned());")
             },
         )
 }

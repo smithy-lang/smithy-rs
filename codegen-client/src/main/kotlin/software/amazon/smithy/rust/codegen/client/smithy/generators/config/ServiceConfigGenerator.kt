@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * Usage:
  * ```kotlin
- * class AddRegion : NamedSectionGenerator<ServiceConfig>() {
+ * class AddRegion : NamedCustomization<ServiceConfig>() {
  *  override fun section(section: ServiceConfig): Writable {
  *    return when (section) {
  *      is ServiceConfig.ConfigStruct -> writeable {
@@ -156,7 +156,7 @@ fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
         .any { it.hasTrait<IdempotencyTokenTrait>() }
 }
 
-typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
+typealias ConfigCustomization = NamedCustomization<ServiceConfig>
 
 /**
  * Generate a `Config` struct, implementation & builder for a given service, approximately:

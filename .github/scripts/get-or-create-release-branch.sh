@@ -3,7 +3,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-set -e
+set -eux
 
 # Compute the name of the release branch starting from the version that needs to be released ($SEMANTIC_VERSION).
 # If it's the beginning of a new release series, the branch is created and pushed to the remote (chosen according to
@@ -54,12 +54,12 @@ fi
 echo "release_branch=${branch_name}" >"${output_file}"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-    git push --force origin "HEAD:${branch_name}"
+    git push --force origin "HEAD:refs/heads/${branch_name}"
 else
     commit_sha=$(git rev-parse --short HEAD)
     if git ls-remote --exit-code --heads origin "${branch_name}"; then
         # The release branch already exists, we need to make sure that our commit is its current tip
-        branch_head_sha=$(git rev-parse --verify --short "refs/heads/${branch_name}")
+        branch_head_sha=$(git rev-parse --verify --short "refs/remotes/origin/${branch_name}")
         if [[ "${branch_head_sha}" != "${commit_sha}" ]]; then
             echo "The release branch - ${branch_name} - already exists. ${commit_sha}, the commit you chose when "
             echo "launching this release, is not its current HEAD (${branch_head_sha}). This is not allowed: you "
