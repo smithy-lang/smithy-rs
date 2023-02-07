@@ -9,10 +9,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
@@ -21,7 +19,7 @@ import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCarg
 
 /**
  * Generates a unified error enum for [operation]. It depends on [ServerOperationErrorGenerator]
- * to generate the errors from the model and adds the Rust implementation `From<pyo3::PyErr>`.
+ * to generate the errors from the model and adds the Rust implementation for `napi` error.
  */
 class TsServerOperationErrorGenerator(
     private val model: Model,
@@ -34,14 +32,15 @@ class TsServerOperationErrorGenerator(
 
     override fun render(writer: RustWriter) {
         super.render(writer)
-        renderFromPyErr(writer)
+        renderFromTsErr(writer)
     }
 
-    private fun renderFromPyErr(writer: RustWriter) {
+    private fun renderFromTsErr(writer: RustWriter) {
         writer.rustTemplate(
             """
             impl #{From}<#{napi}::Error> for #{Error} {
                 fn from(variant: #{napi}::Error) -> #{Error} {
+                    // TODO: match the Ts error type and return the right one.
                     crate::error::InternalServerError { message: variant.to_string() }.into()
                 }
             }
@@ -50,23 +49,6 @@ class TsServerOperationErrorGenerator(
             "napi" to TsServerCargoDependency.Napi.toType(),
             "Error" to operation.errorSymbol(symbolProvider),
             "From" to RuntimeType.From,
-            "CastPyErrToRustError" to castPyErrToRustError(),
         )
     }
-
-    private fun castPyErrToRustError(): Writable =
-        writable {
-            errors.forEach { error ->
-                val errorSymbol = symbolProvider.toSymbol(error)
-                if (errorSymbol.toString() != "crate::error::InternalServerError") {
-                    rust(
-                        """
-                        if let Ok(error) = error.extract::<$errorSymbol>() {
-                            return error.into()
-                        }
-                        """,
-                    )
-                }
-            }
-        }
 }

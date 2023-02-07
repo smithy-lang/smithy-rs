@@ -14,9 +14,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGe
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCargoDependency
 
 /**
- * To share enums defined in Rust with Python, `pyo3` provides the `PyClass` trait.
- * This class generates enums definitions, implements the `PyClass` trait and adds
- * some utility functions like `__str__()` and `__repr__()`.
+ * To share enums defined in Rust with Typescript, `napi-rs` provides the `napi` trait.
+ * This class generates enums definitions and implements the `napi` trait.
  */
 class TsServerEnumGenerator(
     codegenContext: ServerCodegenContext,
@@ -25,15 +24,10 @@ class TsServerEnumGenerator(
 ) : ServerEnumGenerator(codegenContext, writer, shape) {
 
     private val napi_derive = TsServerCargoDependency.NapiDerive.toType()
-    // override val meta = RustMedata
 
     override fun render() {
         writer.rust("use napi::bindgen_prelude::ToNapiValue;")
-        renderNapi()
-        super.render()
-    }
-
-    private fun renderNapi() {
         Attribute(napi_derive.resolve("napi")).render(writer)
+        super.render()
     }
 }

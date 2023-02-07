@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
- * PythonServerServiceGenerator
+ * TsServerServiceGenerator
  *
  * Service generator is the main code generation entry point for Smithy services. Individual structures and unions are
  * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).

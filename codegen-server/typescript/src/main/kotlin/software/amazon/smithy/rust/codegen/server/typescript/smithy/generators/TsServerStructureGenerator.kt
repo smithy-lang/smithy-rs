@@ -20,9 +20,9 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCargoDependency
 
 /**
- * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.
+ * To share structures defined in Rust with Typescript, `napi-rs` provides the `napi` trait.
  * This class generates input / output / error structures definitions and implements the
- * `PyClass` trait.
+ * `napi` trait.
  */
 class TsServerStructureGenerator(
     model: Model,

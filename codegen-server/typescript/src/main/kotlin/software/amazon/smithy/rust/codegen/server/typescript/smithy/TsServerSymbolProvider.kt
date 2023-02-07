@@ -38,11 +38,11 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
  *
  * Input / output / error structures can refer to complex types like the ones implemented inside
  * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
- * `aws_smithy_http_server_python::types` wraps those types that do not implement directly the
- * `pyo3::PyClass` trait and cannot be shared safely with Python, providing an idiomatic Python / Rust API.
+ * `aws_smithy_http_server_typescript::types` wraps those types that do not implement directly the
+ * `napi` trait and cannot be shared safely with Typescript, providing an idiomatic Typescript / Rust API.
  *
  * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
- * `aws_smithy_http_server_python::types`.
+ * `aws_smithy_http_server_typescript::types`.
  */
 class TsServerSymbolVisitor(
     private val model: Model,

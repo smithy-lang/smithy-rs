@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import cluster from "cluster";
 import { cpus } from "os";
 
@@ -17,12 +22,15 @@ import {
 } from ".";
 
 class HandlerImpl implements Handlers {
+    // TODO: implement
     async doNothing(input: DoNothingInput): Promise<DoNothingOutput> {
         return {};
     }
+    // TODO: implement
     async checkHealth(input: CheckHealthInput): Promise<CheckHealthOutput> {
         return {};
     }
+    // TODO: implement
     async getServerStatistics(
         input: GetServerStatisticsInput
     ): Promise<GetServerStatisticsOutput> {
@@ -59,13 +67,16 @@ class HandlerImpl implements Handlers {
     }
 }
 
-// Pass the handlers to the SURF
+// Pass the handlers to the App.
 const app = new App(new HandlerImpl());
 // Start the app 🤘
 const numCPUs = cpus().length / 2;
 const socket = new Socket("127.0.0.1", 9090);
 app.start(socket);
 
+// TODO: This part should be abstracted out and done directly in Rust.
+// We could take an optional number of workers and the socket as input
+// of the App.start() method.
 if (cluster.isPrimary) {
     // Fork workers.
     for (let i = 0; i < numCPUs; i++) {

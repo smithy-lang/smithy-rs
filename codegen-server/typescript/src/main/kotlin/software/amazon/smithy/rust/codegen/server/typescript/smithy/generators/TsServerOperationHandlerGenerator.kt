@@ -13,18 +13,11 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCargoDependency
 
 /**
- * The Rust code responsible to run the Python business logic on the Python interpreter
- * is implemented in this class, which inherits from [ServerOperationHandlerGenerator].
+ * The Rust code responsible to run the Typescript business logic is implemented in this class,
+ * which inherits from [ServerOperationHandlerGenerator].
  *
  * We codegenerate all operations handlers (steps usually left to the developer in a pure
- * Rust application), which are built into a `Router` by [PythonApplicationGenerator].
- *
- * To call a Python function from Rust, anything dealing with Python runs inside an async
- * block that allows to catch stack traces. The handler function is extracted from `PyHandler`
- * and called with the necessary arguments inside a blocking Tokio task.
- * At the end the block is awaited and errors are collected and reported.
- *
- * To call a Python coroutine, the same happens, but scheduled in a `tokio::Future`.
+ * Rust application), which are built into a `Router` by [TsServerApplicationGenerator].
  */
 class TsServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
@@ -52,7 +45,7 @@ class TsServerOperationHandlerGenerator(
 
         writer.rustTemplate(
             """
-            /// Python handler for operation `$operationName`.
+            /// Typescript handler for operation `$operationName`.
             pub(crate) async fn $fnName(
                 input: $input,
                 handlers: #{SmithyServer}::Extension<crate::js_server_application::Handlers>,

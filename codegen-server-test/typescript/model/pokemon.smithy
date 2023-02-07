@@ -1,9 +1,9 @@
 /// TODO(https://github.com/awslabs/smithy-rs/issues/1508)
-/// $econcile this model with the main one living inside codegen-server-test/model/pokemon.smithy
-/// once the Js implementation supports Streaming and Union shapes.
+/// reconcile this model with the main one living inside codegen-server-test/model/pokemon.smithy
+/// once the Typescript implementation supports Streaming and Union shapes.
 $version: "1.0"
 
-namespace com.aws.example.js
+namespace com.aws.example.ts
 
 use aws.protocols#restJson1
 use com.aws.example#PokemonSpecies

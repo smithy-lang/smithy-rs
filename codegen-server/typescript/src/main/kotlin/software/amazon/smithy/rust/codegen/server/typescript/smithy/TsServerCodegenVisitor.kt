@@ -33,11 +33,11 @@ import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.T
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerStructureGenerator
 
 /**
- * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
+ * Entrypoint for Typescript server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  *
  * This class inherits from [ServerCodegenVisitor] since it uses most of the functionalities of the super class
- * and have to override the symbol provider with [PythonServerSymbolProvider].
+ * and have to override the symbol provider with [TsServerSymbolProvider].
  */
 class TsServerCodegenVisitor(
     context: PluginContext,
@@ -65,7 +65,7 @@ class TsServerCodegenVisitor(
 
         model = codegenDecorator.transformModel(service, baseModel)
 
-        // `publicConstrainedTypes` must always be `false` for the Python server, since Python generates its own
+        // `publicConstrainedTypes` must always be `false` for the Typescript server, since Typescript generates its own
         // wrapper newtypes.
         settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
@@ -74,7 +74,7 @@ class TsServerCodegenVisitor(
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
             publicConstrainedTypes: Boolean,
-        ) = TsCodegenServerPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
+        ) = RustServerCodegenTsPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             model,
@@ -109,7 +109,6 @@ class TsServerCodegenVisitor(
      *
      * For each structure shape, generate:
      * - A Rust structure for the shape ([StructureGenerator]).
-     * - `pyo3::PyClass` trait implementation.
      * - A builder for the shape.
      *
      * This function _does not_ generate any serializers.
@@ -117,8 +116,8 @@ class TsServerCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         logger.info("[js-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) {
-            // Use Python specific structure generator that adds the #[pyclass] attribute
-            // and #[pymethods] implementation.
+            // Use Typescript specific structure generator that adds the #[napi] attribute
+            // and implementation.
             TsServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
 
             renderStructureShapeBuilder(shape, this)
@@ -144,7 +143,7 @@ class TsServerCodegenVisitor(
      * Note: this does not generate serializers
      */
     override fun unionShape(shape: UnionShape) {
-        throw CodegenException("Union shapes are not supported in Python yet")
+        throw CodegenException("Union shapes are not supported in Typescript yet")
     }
 
     /**
@@ -154,7 +153,7 @@ class TsServerCodegenVisitor(
      * - Trait implementations
      * - Protocol tests
      * - Operation structures
-     * - Python operation handlers
+     * - Typescript operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[js-server-codegen] Generating a service $shape")

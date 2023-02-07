@@ -107,13 +107,13 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
-     * This is done because the Python interpreter can raise eceptions during execution.
+     * This is done because the Typescript interpreter can raise eceptions during execution.
      */
     AddInternalServerErrorToAllOperationsDecorator(),
     // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
     CdylibManifestDecorator(),
-    //
+    // Add the build.rs file needed to generate Typescript code.
     NapiBuildRsDecorator(),
-    //
+    // Add the napi package.json.
     NapiPackageJsonDecorator(),
 )

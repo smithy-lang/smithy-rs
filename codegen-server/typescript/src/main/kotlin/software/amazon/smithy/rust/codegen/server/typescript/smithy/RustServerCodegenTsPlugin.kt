@@ -26,12 +26,12 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Rust with Python bindings Codegen Plugin.
+ * Rust with Typescript bindings Codegen Plugin.
  * This is the entrypoint for code generation, triggered by the smithy-build plugin.
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
-class TsCodegenServerPlugin : SmithyBuildPlugin {
+class RustServerCodegenTsPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen-typescript"
@@ -50,7 +50,7 @@ class TsCodegenServerPlugin : SmithyBuildPlugin {
                 CombinedServerCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
             )
 
-        // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
+        // TsServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate Rust/Node bindings for the server SSDK for projection ${context.projectionName}")
         TsServerCodegenVisitor(context, codegenDecorator).execute()
     }
@@ -68,11 +68,9 @@ class TsCodegenServerPlugin : SmithyBuildPlugin {
             symbolVisitorConfig: SymbolVisitorConfig,
             constrainedTypes: Boolean = true,
         ) =
-            // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
-            // `aws_smithy_http_server_python::types`.
             TsServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate public constrained types for directly constrained shapes.
-                // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
+                // In the Typescript server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
                 .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
