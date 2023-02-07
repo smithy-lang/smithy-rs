@@ -153,10 +153,10 @@ class CustomizableOperationGenerator(
                 pub async fn send<T, E>(self) -> Result<T, #{SdkError}<E>>
                 where
                     H: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                    R: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + 'static,
+                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + 'static,
                     T: 'static,
                     E: #{Error} + Send + Sync + 'static,
-                    <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + Clone,
+                    <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<H, T, E, Retry> + Clone + 'static,
                 {
                     self.handle.client.call(self.operation).await
                 }
