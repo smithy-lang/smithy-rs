@@ -19,6 +19,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 
+class ServerUnmarshallerGeneratorBehaviour(private val codegenContext: ServerCodegenContext) : EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour {
+    override fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
+}
+
 class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
@@ -39,13 +43,12 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     project: TestEventStreamProject,
                     protocol: Protocol,
                 ): RuntimeType {
-                    fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
                     return EventStreamUnmarshallerGenerator(
                         protocol,
                         codegenContext,
                         project.operationShape,
                         project.streamShape,
-                        ::builderSymbol,
+                        ServerUnmarshallerGeneratorBehaviour(codegenContext),
                     ).render()
                 }
             },
