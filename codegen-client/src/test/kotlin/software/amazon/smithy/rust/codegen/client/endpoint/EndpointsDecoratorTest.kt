@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
@@ -123,8 +124,8 @@ class EndpointsDecoratorTest {
     fun `set an endpoint in the property bag`() {
         val testDir = clientIntegrationTest(
             model,
-            // just run integration tests
-            command = { "cargo test --test *".runWithWarnings(it) },
+            // Just run integration tests.
+            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()

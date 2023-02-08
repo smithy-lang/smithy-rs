@@ -134,7 +134,7 @@ class PyO3ExtensionModuleDecorator : ServerCodegenDecorator {
     }
 }
 
-val DECORATORS = listOf(
+val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
      * This is done because the Python interpreter can raise exceptions during execution.
