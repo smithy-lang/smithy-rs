@@ -241,7 +241,7 @@ open class EnumGenerator(
                 pub fn as_str(&self) -> &str {
                     #{asStrImpl:W}
                 }
-                /// Returns all the `&str` values of the enum members.
+                /// Returns all the `&str` representations of the enum members.
                 pub const fn $Values() -> &'static [&'static str] {
                     &[#{Values:W}]
                 }
