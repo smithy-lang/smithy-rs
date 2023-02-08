@@ -99,14 +99,15 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                 writable {
                     when (it) {
                         is Pattern -> {
-                            rust(
+                            rustTemplate(
                                 """
                                 Self::Pattern(string) => crate::model::ValidationExceptionField {
-                                    message: format!("${it.patternTrait.validationErrorMessage()}", &string, &path, r##"${it.patternTrait.pattern}"##),
+                                    message: #{MessageWritable:W},
                                     name: path,
                                     reason: crate::model::ValidationExceptionFieldReason::PatternNotValid,
                                 },
                                 """,
+                                "MessageWritable" to it.errorMessage(),
                             )
                         }
                         is Length -> {

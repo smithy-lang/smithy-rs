@@ -240,9 +240,10 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 rust("Pattern(String)")
             },
             asValidationExceptionField = {
+                Attribute.AllowUnusedVariables.render(this)
                 rustTemplate(
                     """
-                    Self::Pattern(_string) => crate::model::ValidationExceptionField {
+                    Self::Pattern(string) => crate::model::ValidationExceptionField {
                         message: #{ErrorMessage:W},
                         path
                     },
@@ -264,7 +265,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         )
     }
 
-    private fun errorMessage(): Writable {
+    fun errorMessage(): Writable {
         val pattern = patternTrait.pattern
 
         return if (isSensitive) {
@@ -279,7 +280,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
             writable {
                 rust(
                     """
-                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &_string, &path, r##"$pattern"##)
+                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &string, &path, r##"$pattern"##)
                     """,
                 )
             }
