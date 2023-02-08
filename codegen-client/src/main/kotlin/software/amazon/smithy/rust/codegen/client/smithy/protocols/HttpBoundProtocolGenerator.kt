@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
@@ -24,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -49,7 +49,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
     protocol: Protocol,
 ) : ClientProtocolGenerator(
     codegenContext,
@@ -65,7 +65,7 @@ class HttpBoundProtocolGenerator(
 )
 
 class HttpBoundProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
     private val symbolProvider = codegenContext.symbolProvider
