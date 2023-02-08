@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
@@ -115,8 +114,7 @@ class HttpBindingGenerator(
     private val codegenContext: CodegenContext,
     private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
+    private val behaviour: EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour,
     private val customizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -256,7 +254,7 @@ class HttpBindingGenerator(
             codegenContext,
             operationShape,
             targetShape,
-            builderSymbol,
+            behaviour,
         ).render()
         rustTemplate(
             """

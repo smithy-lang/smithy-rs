@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
-import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -54,6 +53,8 @@ class EventStreamUnmarshallerGenerator(
     interface UnmarshallerGeneratorBehaviour {
         /** Function that maps a StructureShape into its builder symbol */
         fun builderSymbol(shape: StructureShape): Symbol
+
+        fun setterName(member: MemberShape): String
     }
 
     private val model = codegenContext.model
@@ -231,7 +232,7 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallEventHeader(member: MemberShape) {
-        withBlock("builder = builder.${member.setterName()}(", ");") {
+        withBlock("builder = builder.${behaviour.setterName(member)}(", ");") {
             conditionalBlock("Some(", ")", member.isOptional) {
                 when (val target = model.expectShape(member.target)) {
                     is BooleanShape -> rustTemplate("#{expect_fns}::expect_bool(header)?", *codegenScope)
@@ -266,7 +267,7 @@ class EventStreamUnmarshallerGenerator(
                 *codegenScope,
             )
         }
-        withBlock("builder = builder.${member.setterName()}(", ");") {
+        withBlock("builder = builder.${behaviour.setterName(member)}(", ");") {
             conditionalBlock("Some(", ")", member.isOptional) {
                 when (target) {
                     is BlobShape -> {

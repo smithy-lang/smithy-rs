@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -17,11 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
-
-class ServerUnmarshallerGeneratorBehaviour(private val codegenContext: ServerCodegenContext) : EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour {
-    override fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
-}
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerUnmarshallerGeneratorBehaviour
 
 class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
