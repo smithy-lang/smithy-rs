@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -94,9 +96,18 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.toString())
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(codegenContext.symbolProvider)
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol)
+        return JsonParserGenerator(
+            codegenContext, httpBindingResolver, ::restJsonFieldName,
+            behaviour = object :
+                // Is this basically `ClientUnmarshallerGeneratorBehaviour`?
+                    EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour {
+                override fun builderSymbol(shape: StructureShape): Symbol =
+                    shape.builderSymbol(codegenContext.symbolProvider)
+
+                override fun setterName(member: MemberShape): String =
+                    member.setterName()
+            },
+        )
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
