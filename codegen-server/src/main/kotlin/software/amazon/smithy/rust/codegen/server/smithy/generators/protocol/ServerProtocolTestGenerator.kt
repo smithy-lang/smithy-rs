@@ -772,8 +772,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
-            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-
             // Tests involving constraint traits, which are not yet fully implemented.
             // See https://github.com/awslabs/smithy-rs/issues/1401.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
