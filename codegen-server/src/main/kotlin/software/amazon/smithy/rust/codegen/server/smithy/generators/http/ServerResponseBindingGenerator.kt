@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
@@ -23,25 +24,30 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
+
+class ServerUnmarshallerGeneratorBehaviour(private val codegenContext: ServerCodegenContext) : EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour {
+    override fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
+
+    override fun setterName(member: MemberShape): String = codegenContext.symbolProvider.toMemberName(member)
+}
 
 class ServerResponseBindingGenerator(
     protocol: Protocol,
     private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
-    private fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
-
     private val httpBindingGenerator =
         HttpBindingGenerator(
             protocol,
             codegenContext,
             codegenContext.symbolProvider,
             operationShape,
-            ::builderSymbol,
+            ServerUnmarshallerGeneratorBehaviour(codegenContext),
             listOf(
                 ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(
                     codegenContext,

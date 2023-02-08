@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -48,7 +49,7 @@ enum class EventStreamTestVariety {
     Unmarshall
 }
 
-interface EventStreamTestRequirements<C : CodegenContext> {
+interface EventStreamTestRequirements<C : CodegenContext, B : BuilderGenerator> {
     /** Create a codegen context for the tests */
     fun createCodegenContext(
         model: Model,
@@ -57,19 +58,15 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         codegenTarget: CodegenTarget,
     ): C
 
+    /** Create a builder generator for the tests */
+    fun createBuilderGenerator(codegenContext: C, structureShape: StructureShape): B
+
     /** Render the event stream marshall/unmarshall code generator */
     fun renderGenerator(
         codegenContext: C,
         project: TestEventStreamProject,
         protocol: Protocol,
     ): RuntimeType
-
-    /** Render a builder for the given shape */
-    fun renderBuilderForShape(
-        writer: RustWriter,
-        codegenContext: C,
-        shape: StructureShape,
-    )
 
     /** Render an operation error for the given operation and error shapes */
     fun renderOperationError(
@@ -82,9 +79,9 @@ interface EventStreamTestRequirements<C : CodegenContext> {
 }
 
 object EventStreamTestTools {
-    fun <C : CodegenContext> runTestCase(
+    fun <C : CodegenContext, B : BuilderGenerator> runTestCase(
         testCase: EventStreamTestModels.TestCase,
-        requirements: EventStreamTestRequirements<C>,
+        requirements: EventStreamTestRequirements<C, B>,
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
     ) {
@@ -109,8 +106,23 @@ object EventStreamTestTools {
         test.project.compileAndTest()
     }
 
-    private fun <C : CodegenContext> generateTestProject(
-        requirements: EventStreamTestRequirements<C>,
+    private fun <C : CodegenContext, B : BuilderGenerator> renderBuilderForShape(
+        requirements: EventStreamTestRequirements<C, B>,
+        writer: RustWriter,
+        codegenContext: C, structureShape: StructureShape,
+    ) {
+        val builderGenerator = requirements.createBuilderGenerator(codegenContext, structureShape)
+
+        builderGenerator.apply {
+            render(writer)
+            writer.implBlock(structureShape, codegenContext.symbolProvider) {
+                renderConvenienceMethod(writer)
+            }
+        }
+    }
+
+    private fun <C : CodegenContext, B : BuilderGenerator> generateTestProject(
+        requirements: EventStreamTestRequirements<C, B>,
         codegenContext: C,
         codegenTarget: CodegenTarget,
     ): TestEventStreamProject {
@@ -127,15 +139,17 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
             for (shape in errors) {
                 StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
-                requirements.renderBuilderForShape(this, codegenContext, shape)
+                renderBuilderForShape(requirements, this, codegenContext, shape)
             }
         }
         project.withModule(ModelsModule) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, this, codegenTarget)
+            recursivelyGenerateModels(requirements, codegenContext, inputOutput, this, codegenTarget)
         }
         project.withModule(RustModule.Output) {
-            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+            val outputShape = operationShape.outputShape(model)
+            val builderGenerator = requirements.createBuilderGenerator(codegenContext, outputShape)
+            outputShape.renderWithModelBuilder(model, symbolProvider, this, builderGenerator)
         }
         return TestEventStreamProject(
             model,
@@ -147,20 +161,25 @@ object EventStreamTestTools {
         )
     }
 
-    private fun recursivelyGenerateModels(
-        model: Model,
-        symbolProvider: RustSymbolProvider,
+    private fun <C : CodegenContext, B : BuilderGenerator> recursivelyGenerateModels(
+        requirements: EventStreamTestRequirements<C, B>,
+        codegenContext: C,
         shape: Shape,
         writer: RustWriter,
         mode: CodegenTarget,
     ) {
+        val model = codegenContext.model
+        val symbolProvider = codegenContext.symbolProvider
         for (member in shape.members()) {
             if (member.target.namespace == "smithy.api") {
                 continue
             }
             val target = model.expectShape(member.target)
             when (target) {
-                is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
+                is StructureShape -> {
+                    val builderGenerator = requirements.createBuilderGenerator(codegenContext, target)
+                    target.renderWithModelBuilder(model, symbolProvider, writer, builderGenerator)
+                }
                 is UnionShape -> UnionGenerator(
                     model,
                     symbolProvider,
@@ -170,7 +189,7 @@ object EventStreamTestTools {
                 ).render()
                 else -> TODO("EventStreamTestTools doesn't support rendering $target")
             }
-            recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
+            recursivelyGenerateModels(requirements, codegenContext, target, writer, mode)
         }
     }
 }

@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerUnmarshallerGeneratorBehaviour
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
@@ -87,19 +88,18 @@ class ServerAwsJsonProtocol(
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.serverBuilderSymbol(serverCodegenContext)
         fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
             if (shape.canReachConstrainedShape(codegenContext.model, serverCodegenContext.symbolProvider)) {
                 ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
             } else {
                 ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
             }
+
         return JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            ::builderSymbol,
+            ServerUnmarshallerGeneratorBehaviour(serverCodegenContext),
             ::returnSymbolToParse,
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(serverCodegenContext),
@@ -168,7 +168,7 @@ class ServerRestJsonProtocol(
             codegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            ::builderSymbol,
+            ServerUnmarshallerGeneratorBehaviour(serverCodegenContext),
             ::returnSymbolToParse,
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(

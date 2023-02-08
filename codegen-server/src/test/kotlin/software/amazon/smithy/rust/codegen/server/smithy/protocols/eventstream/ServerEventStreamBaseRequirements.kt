@@ -16,7 +16,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -46,7 +45,7 @@ class TestCasesProvider : ArgumentsProvider {
             }.map { Arguments.of(it) }.stream()
 }
 
-abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext> {
+abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext, ServerBuilderGenerator> {
     abstract val publicConstrainedTypes: Boolean
 
     override fun createCodegenContext(
@@ -62,27 +61,15 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         protocolShapeId,
     )
 
-    override fun renderBuilderForShape(
-        writer: RustWriter,
+    override fun createBuilderGenerator(
         codegenContext: ServerCodegenContext,
-        shape: StructureShape,
-    ) {
+        structureShape: StructureShape,
+    ): ServerBuilderGenerator =
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-            ServerBuilderGenerator(codegenContext, shape).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
-                    renderConvenienceMethod(writer)
-                }
-            }
+            ServerBuilderGenerator(codegenContext, structureShape)
         } else {
-            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
-                    renderConvenienceMethod(writer)
-                }
-            }
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, structureShape)
         }
-    }
 
     override fun renderOperationError(
         writer: RustWriter,

@@ -15,14 +15,13 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import java.util.stream.Stream
@@ -32,7 +31,7 @@ class TestCasesProvider : ArgumentsProvider {
         EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
 }
 
-abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
+abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext, ClientBuilderGenerator> {
     override fun createCodegenContext(
         model: Model,
         serviceShape: ServiceShape,
@@ -47,18 +46,8 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         CombinedClientCodegenDecorator(emptyList()),
     )
 
-    override fun renderBuilderForShape(
-        writer: RustWriter,
-        codegenContext: ClientCodegenContext,
-        shape: StructureShape,
-    ) {
-        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
-            render(writer)
-            writer.implBlock(shape, codegenContext.symbolProvider) {
-                renderConvenienceMethod(writer)
-            }
-        }
-    }
+    override fun createBuilderGenerator(codegenContext: ClientCodegenContext, structureShape: StructureShape): ClientBuilderGenerator =
+        ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, structureShape)
 
     override fun renderOperationError(
         writer: RustWriter,

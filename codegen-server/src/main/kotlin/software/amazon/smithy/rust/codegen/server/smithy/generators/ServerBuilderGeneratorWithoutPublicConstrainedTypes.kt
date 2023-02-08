@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
-) {
+) : ServerBuilderGenerator(codegenContext, shape) {
     companion object {
         /**
          * Returns whether a structure shape, whose builder has been generated with
@@ -89,7 +89,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(writer: RustWriter) {
+    override fun render(writer: RustWriter) {
         check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
         }
@@ -193,7 +193,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         }
     }
 
-    fun renderConvenienceMethod(implBlock: RustWriter) {
+    override fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)

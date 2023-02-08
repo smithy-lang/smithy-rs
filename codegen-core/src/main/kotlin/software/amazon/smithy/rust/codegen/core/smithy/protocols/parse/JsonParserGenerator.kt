@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
-import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -44,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
-import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
@@ -77,8 +75,7 @@ class JsonParserGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
+    private val behaviour: EventStreamUnmarshallerGenerator.UnmarshallerGeneratorBehaviour,
     /**
      * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
      * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
@@ -191,7 +188,7 @@ class JsonParserGenerator(
         }
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(outputShape), httpDocumentMembers)
+        return structureParser(fnName, behaviour.builderSymbol(outputShape), httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
@@ -199,7 +196,7 @@ class JsonParserGenerator(
             return null
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
-        return structureParser(fnName, builderSymbol(errorShape), errorShape.members().toList())
+        return structureParser(fnName, behaviour.builderSymbol(errorShape), errorShape.members().toList())
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
@@ -223,7 +220,7 @@ class JsonParserGenerator(
         }
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(inputShape), includedMembers)
+        return structureParser(fnName, behaviour.builderSymbol(inputShape), includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {
@@ -242,13 +239,13 @@ class JsonParserGenerator(
                     rustBlock("${jsonName(member).dq()} =>") {
                         when (codegenTarget) {
                             CodegenTarget.CLIENT -> {
-                                withBlock("builder = builder.${member.setterName()}(", ");") {
+                                withBlock("builder = builder.${behaviour.setterName(member)}(", ");") {
                                     deserializeMember(member)
                                 }
                             }
                             CodegenTarget.SERVER -> {
                                 if (symbolProvider.toSymbol(member).isOptional()) {
-                                    withBlock("builder = builder.${member.setterName()}(", ");") {
+                                    withBlock("builder = builder.${behaviour.setterName(member)}(", ");") {
                                         deserializeMember(member)
                                     }
                                 } else {
@@ -257,7 +254,7 @@ class JsonParserGenerator(
                                     rust(
                                         """
                                         {
-                                            builder = builder.${member.setterName()}(v);
+                                            builder = builder.${behaviour.setterName(member)}(v);
                                         }
                                         """,
                                     )
@@ -276,7 +273,7 @@ class JsonParserGenerator(
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
-            is BlobShape -> deserializeBlob(target)
+            is BlobShape -> deserializeBlob()
             is TimestampShape -> deserializeTimestamp(target, memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
@@ -294,7 +291,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeBlob(target: BlobShape) {
+    private fun RustWriter.deserializeBlob() {
         rustTemplate(
             "#{expect_blob_or_null}(tokens.next())?",
             *codegenScope,
@@ -493,7 +490,7 @@ class JsonParserGenerator(
             ) {
                 startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
-                    rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to builderSymbol(shape))
+                    rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to behaviour.builderSymbol(shape))
                     deserializeStructInner(shape.members())
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
                     if (returnSymbolToParse.isUnconstrained) {

@@ -3,30 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize
 
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
-class AwsQuerySerializerGeneratorTest {
+class JsonSerializerGeneratorTest {
     private val baseModel = """
         namespace test
         use aws.protocols#restJson1
@@ -35,12 +38,14 @@ class AwsQuerySerializerGeneratorTest {
             blob: Blob,
             boolean: Boolean,
             date: Timestamp,
+            document: Document,
             enum: FooEnum,
             int: Integer,
-            @xmlFlattened
             list: SomeList,
+            listSparse: SomeSparseList,
             long: Long,
             map: MyMap,
+            mapSparse: MySparseMap,
             number: Double,
             s: String,
             top: Top,
@@ -55,7 +60,18 @@ class AwsQuerySerializerGeneratorTest {
             value: Choice,
         }
 
+        @sparse
+        map MySparseMap {
+            key: String,
+            value: Choice,
+        }
+
         list SomeList {
+            member: Choice
+        }
+
+        @sparse
+        list SomeSparseList {
             member: Choice
         }
 
@@ -63,21 +79,19 @@ class AwsQuerySerializerGeneratorTest {
             choice: Choice,
             field: String,
             extra: Long,
-            @xmlName("rec")
+            @jsonName("rec")
             recursive: TopList
         }
 
         list TopList {
-            @xmlName("item")
             member: Top
         }
 
         structure OpInput {
-            @xmlName("some_bool")
-            boolean: Boolean,
-            list: SomeList,
-            map: MyMap,
-            top: Top,
+            @httpHeader("x-test")
+            someHeader: String,
+
+            top: Top
         }
 
         @http(uri: "/top", method: "POST")
@@ -86,56 +100,52 @@ class AwsQuerySerializerGeneratorTest {
         }
     """.asSmithyModel()
 
-    @ParameterizedTest
-    @CsvSource("true", "false")
-    fun `generates valid serializers`(generateUnknownVariant: Boolean) {
-        val codegenTarget = when (generateUnknownVariant) {
-            true -> CodegenTarget.CLIENT
-            false -> CodegenTarget.SERVER
-        }
+    @Test
+    fun `generates valid serializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
+        val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = codegenTarget))
-        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
+        val parserSerializer = JsonSerializerGenerator(
+            codegenContext,
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+            ::restJsonFieldName,
+        )
+        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
+        val documentGenerator = parserSerializer.documentSerializer()
 
-        val project = TestWorkspace.testProject(symbolProvider)
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib {
             unitTest(
-                "query_serializer",
+                "json_serializers",
                 """
-                use model::Top;
+                use model::{Top, Choice};
 
-                let input = crate::input::OpInput::builder()
-                    .top(
-                        Top::builder()
-                            .field("hello!")
-                            .extra(45)
-                            .recursive(Top::builder().extra(55).build())
-                            .build()
-                    )
-                    .boolean(true)
-                    .build()
-                    .unwrap();
+                // Generate the document serializer even though it's not tested directly
+                // ${format(documentGenerator)}
+
+                let input = crate::input::OpInput::builder().top(
+                    Top::builder()
+                        .field("hello!")
+                        .extra(45)
+                        .recursive(Top::builder().extra(55).build())
+                        .build()
+                ).build().unwrap();
                 let serialized = ${format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(
-                    output,
-                    "\
-                    Action=Op\
-                    &Version=test\
-                    &some_bool=true\
-                    &top.field=hello%21\
-                    &top.extra=45\
-                    &top.rec.item.1.extra=55\
-                    "
-                );
+                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+
+                let input = crate::input::OpInput::builder().top(
+                    Top::builder()
+                        .choice(Choice::Unknown)
+                        .build()
+                ).build().unwrap();
+                let serialized = ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
                 """,
             )
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
         }

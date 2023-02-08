@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators
+package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
@@ -12,12 +12,8 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -27,75 +23,36 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.testutil.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.OperationBuildError
+import software.amazon.smithy.rust.codegen.core.testutil.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
-//  Move this entire file, and its tests, to `codegen-client`.
-
-fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
-    structureShape.builderSymbol(symbolProvider)
-}
-
-fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
-    val structureSymbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
-    val module = RustModule.new(builderNamespace, visibility = Visibility.PUBLIC, parent = structureSymbol.module(), inline = true)
-    val rustType = RustType.Opaque("Builder", module.fullyQualifiedPath())
-    return Symbol.builder()
-        .rustType(rustType)
-        .name(rustType.name)
-        .locatedIn(module)
-        .build()
-}
-
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
-
-class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
-    fun missingField(field: String, details: String) = writable {
-        rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
-    }
-    fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
-    fun invalidField(field: String, details: Writable) = writable {
-        rustTemplate(
-            "#{error}::invalid_field(${field.dq()}, #{details:W})",
-            "error" to runtimeConfig.operationBuildError(),
-            "details" to details,
-        )
-    }
-}
-
-// Setter names will never hit a reserved word and therefore never need escaping.
-fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
-
-class BuilderGenerator(
+class ClientBuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
-) {
+) : BuilderGenerator {
     companion object {
         /**
-         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
+         * Returns whether a structure shape, whose builder has been generated with [ClientBuilderGenerator], requires a
          * fallible builder to be constructed.
          */
         fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
@@ -120,7 +77,7 @@ class BuilderGenerator(
     private val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
     private val builderName = "Builder"
 
-    fun render(writer: RustWriter) {
+    override fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
@@ -153,7 +110,7 @@ class BuilderGenerator(
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
-    fun renderConvenienceMethod(implBlock: RustWriter) {
+    override fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)
