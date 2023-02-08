@@ -10,15 +10,11 @@ import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -30,13 +26,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
-import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
@@ -118,18 +111,14 @@ object TestWorkspace {
         }
     }
 
-    @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
-        val error = "The test project's default symbol provider is unusable. If your test requires " +
-            "a symbol provider, please pass one in."
+    fun testProject(debugMode: Boolean = false): TestWriterDelegator =
+        testProject(ModelAssembler().assemble().unwrap(), debugMode)
+
+    fun testProject(model: Model, debugMode: Boolean = false): TestWriterDelegator =
+        testProject(testSymbolProvider(model), debugMode)
+
+    fun testProject(symbolProvider: RustSymbolProvider, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()
-        val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
-            override fun config(): SymbolVisitorConfig = PANIC(error)
-            override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = PANIC(error)
-            override fun toSymbol(shape: Shape?): Symbol = PANIC(error)
-            override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC(error)
-            override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC(error)
-        }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,

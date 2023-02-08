@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -109,8 +108,7 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "stringVariant": "ok!" }""")
 
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
+        val project = TestWorkspace.testProject(model)
         project.moduleFor(union) {
             UnionGenerator(model, symbolProvider, this, union).render()
             unitTest("generate_unions") {
@@ -130,8 +128,7 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
+        val project = TestWorkspace.testProject(model)
         project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_struct_builders") {
@@ -165,8 +162,7 @@ class InstantiatorTest {
             """,
         )
 
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
+        val project = TestWorkspace.testProject(model)
         project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_builders_for_boxed_structs") {
@@ -217,7 +213,7 @@ class InstantiatorTest {
             ::enumFromStringFn,
         )
 
-        val project = TestWorkspace.testProject()
+        val project = TestWorkspace.testProject(model)
         project.lib {
             unitTest("generate_sparse_lists") {
                 withBlock("let result = ", ";") {
@@ -249,8 +245,7 @@ class InstantiatorTest {
         )
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
+        val project = TestWorkspace.testProject(model)
         project.moduleFor(inner) {
             inner.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_maps_of_maps") {
@@ -282,7 +277,7 @@ class InstantiatorTest {
             ::enumFromStringFn,
         )
 
-        val project = TestWorkspace.testProject()
+        val project = TestWorkspace.testProject(model)
         project.testModule {
             unitTest("blob_inputs_are_binary_data") {
                 withBlock("let blob = ", ";") {
