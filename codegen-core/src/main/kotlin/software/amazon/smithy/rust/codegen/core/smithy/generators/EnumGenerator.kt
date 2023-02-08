@@ -41,6 +41,35 @@ data class EnumGeneratorContext(
     val sortedMembers: List<EnumMemberModel>,
 )
 
+/**
+ * Type of enum to generate
+ *
+ * In codegen-core, there are only `Infallible` enums. Server adds additional enum types, which
+ * is why this class is abstract rather than sealed.
+ */
+abstract class EnumType {
+    /** Returns a writable that implements `From<&str>` and/or `TryFrom<&str>` for the enum */
+    abstract fun implFromForStr(context: EnumGeneratorContext): Writable
+
+    /** Returns a writable that implements `FromStr` for the enum */
+    abstract fun implFromStr(context: EnumGeneratorContext): Writable
+
+    /** Optionally adds additional documentation to the `enum` docs */
+    open fun additionalDocs(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally adds additional enum members */
+    open fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally adds match arms to the `as_str` match implementation for named enums */
+    open fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally add more attributes to the enum */
+    open fun additionalEnumAttributes(context: EnumGeneratorContext): List<Attribute> = emptyList()
+
+    /** Optionally add more impls to the enum */
+    open fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {}
+}
+
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
 class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
     // Because enum variants always start with an upper case letter, they will never

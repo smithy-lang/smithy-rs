@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
@@ -150,12 +150,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(
-                model,
-                symbolProvider,
-                enum,
-                EnumType.Infallible(RustModule.Model),
-            ).render(this)
+            EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
         }
 
         project.withModule(RustModule.public("input")) {

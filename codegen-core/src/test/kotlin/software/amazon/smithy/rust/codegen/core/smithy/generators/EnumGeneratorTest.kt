@@ -93,12 +93,11 @@ class EnumGeneratorTest {
 
     @Nested
     inner class EnumGeneratorTests {
-        val testEnumType = EnumType.Infallible(RustModule.Model)
         fun RustWriter.renderEnum(
             model: Model,
             provider: RustSymbolProvider,
             shape: StringShape,
-            enumType: EnumType = testEnumType,
+            enumType: EnumType = TestEnumType,
         ) {
             EnumGenerator(model, provider, shape, enumType).render(this)
         }
@@ -138,9 +137,6 @@ class EnumGeneratorTest {
                     let instance = InstanceType::T2Micro;
                     assert_eq!(instance.as_str(), "t2.micro");
                     assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
-                    assert_eq!(InstanceType::from("other"), InstanceType::Unknown(crate::types::UnknownVariantValue("other".to_owned())));
-                    // round trip unknown variants:
-                    assert_eq!(InstanceType::from("other").as_str(), "other");
                     """,
                 )
                 val output = toString()
@@ -263,35 +259,6 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `it escapes the Unknown variant if the enum has an unknown value in the model`() {
-            val model = """
-                namespace test
-                @enum([
-                    { name: "Known", value: "Known" },
-                    { name: "Unknown", value: "Unknown" },
-                    { name: "UnknownValue", value: "UnknownValue" },
-                ])
-                string SomeEnum
-            """.asSmithyModel()
-
-            val shape = model.lookup<StringShape>("test#SomeEnum")
-            val provider = testSymbolProvider(model)
-            val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                renderEnum(model, provider, shape)
-                unitTest(
-                    "it_escapes_the_unknown_variant_if_the_enum_has_an_unknown_value_in_the_model",
-                    """
-                    assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
-                    assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
-                    assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
-                    """.trimIndent(),
-                )
-            }
-            project.compileAndTest()
-        }
-
-        @Test
         fun `it should generate documentation for enums`() {
             val model = """
                 namespace test
@@ -365,62 +332,10 @@ class EnumGeneratorTest {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "it_handles_variants_that_clash_with_rust_reserved_words",
-                    """
-                    assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
-                    assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
-                    """.trimIndent(),
+                    """assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);""",
                 )
             }
             project.compileAndTest()
-        }
-
-        @Test
-        fun `matching on enum should be forward-compatible`() {
-            fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
-                val shape = model.lookup<StringShape>(shapeId)
-                val provider = testSymbolProvider(model)
-                val project = TestWorkspace.testProject(provider)
-                project.withModule(RustModule.Model) {
-                    renderEnum(model, provider, shape)
-                    unitTest(
-                        "matching_on_enum_should_be_forward_compatible",
-                        """
-                        match $enumToMatchOn {
-                            SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
-                            SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
-                            other @ _ if other.as_str() == "Variant3" => assert!(true),
-                            _ => assert!(false, "expected `Variant3` but got `_`"),
-                        }
-                        """.trimIndent(),
-                    )
-                }
-                project.compileAndTest()
-            }
-
-            val modelV1 = """
-                namespace test
-
-                @enum([
-                    { name: "Variant1", value: "Variant1" },
-                    { name: "Variant2", value: "Variant2" },
-                ])
-                string SomeEnum
-            """.asSmithyModel()
-            val variant3AsUnknown = """SomeEnum::from("Variant3")"""
-            expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
-
-            val modelV2 = """
-                namespace test
-
-                @enum([
-                    { name: "Variant1", value: "Variant1" },
-                    { name: "Variant2", value: "Variant2" },
-                    { name: "Variant3", value: "Variant3" },
-                ])
-                string SomeEnum
-            """.asSmithyModel()
-            val variant3AsVariant3 = "SomeEnum::Variant3"
-            expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
         }
 
         @Test
@@ -444,10 +359,6 @@ class EnumGeneratorTest {
                     """
                     assert_eq!(format!("{:?}", SomeEnum::Foo), "Foo");
                     assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
-                    assert_eq!(
-                        format!("{:?}", SomeEnum::from("Baz")),
-                        "Unknown(UnknownVariantValue(\"Baz\"))"
-                    );
                     """,
                 )
             }
@@ -547,7 +458,7 @@ class EnumGeneratorTest {
 
         @Test
         fun `it supports other enum types`() {
-            class TestEnumType : EnumType() {
+            class CustomizingEnumType : EnumType() {
                 override fun implFromForStr(context: EnumGeneratorContext): Writable = writable {
                     // intentional no-op
                 }
@@ -581,7 +492,7 @@ class EnumGeneratorTest {
 
             val provider = testSymbolProvider(model)
             val output = RustWriter.root().apply {
-                renderEnum(model, provider, shape, TestEnumType())
+                renderEnum(model, provider, shape, CustomizingEnumType())
             }.toString()
 
             // Since we didn't use the Infallible EnumType, there should be no Unknown variant
@@ -595,7 +506,7 @@ class EnumGeneratorTest {
 
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                renderEnum(model, provider, shape, TestEnumType())
+                renderEnum(model, provider, shape, CustomizingEnumType())
             }
             project.compileAndTest()
         }
