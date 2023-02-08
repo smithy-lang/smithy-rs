@@ -762,11 +762,7 @@ class ServerProtocolTestGenerator(
             // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
 
-            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
-            FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
-
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
-            FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
 
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
