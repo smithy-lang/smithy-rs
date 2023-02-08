@@ -340,16 +340,14 @@ open class Instantiator(
 
         if (data.isEmpty) {
             shape.allMembers.entries
-                .filter {
-                    model.expectShape(it.value.id).hasTrait(HttpHeaderTrait::class.java) && headers.containsKey(
-                        model.expectShape(it.value.id).getTrait<HttpHeaderTrait>()?.value,
-                    )
-                }
                 .forEach { (_, value) ->
-                    run {
-                        val header = headers[model.expectShape(value.id).getTrait<HttpHeaderTrait>()!!.value]
-                        renderMemberHelper(value, Node.from(header))
-                    }
+                    value.getTrait<HttpHeaderTrait>()
+                        ?.let {
+                            if (headers.containsKey(it.value)) {
+                                val header = headers[it.value]
+                                renderMemberHelper(value, Node.from(header))
+                            }
+                        }
                 }
         }
 
