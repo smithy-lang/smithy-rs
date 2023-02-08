@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
@@ -14,7 +15,10 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -89,6 +93,16 @@ class EnumGeneratorTest {
 
     @Nested
     inner class EnumGeneratorTests {
+        val testEnumType = EnumType.Infallible(RustModule.Model)
+        fun RustWriter.renderEnum(
+            model: Model,
+            provider: RustSymbolProvider,
+            shape: StringShape,
+            enumType: EnumType = testEnumType,
+        ) {
+            EnumGenerator(model, provider, shape, enumType).render(this)
+        }
+
         @Test
         fun `it generates named enums`() {
             val model = """
@@ -113,13 +127,11 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#InstanceType")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
                 rust("##![allow(deprecated)]")
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
                     "it_generates_named_enums",
                     """
@@ -158,12 +170,10 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
                     "named_enums_implement_eq_and_hash",
                     """
@@ -193,13 +203,11 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
                 rust("##![allow(deprecated)]")
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
                     "unnamed_enums_implement_eq_and_hash",
                     """
@@ -238,13 +246,11 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
                 rust("##![allow(deprecated)]")
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
                     "it_generates_unnamed_enums",
                     """
@@ -269,12 +275,10 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
                     "it_escapes_the_unknown_variant_if_the_enum_has_an_unknown_value_in_the_model",
                     """
@@ -301,12 +305,10 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 val rendered = toString()
                 rendered shouldContain
                     """
@@ -332,12 +334,10 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
-            val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 val rendered = toString()
                 rendered shouldContain
                     """
@@ -346,215 +346,258 @@ class EnumGeneratorTest {
             }
             project.compileAndTest()
         }
-    }
 
-    @Test
-    fun `it handles variants that clash with Rust reserved words`() {
-        val model = """
-            namespace test
-            @enum([
-                { name: "Known", value: "Known" },
-                { name: "Self", value: "other" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
+        @Test
+        fun `it handles variants that clash with Rust reserved words`() {
+            val model = """
+                namespace test
+                @enum([
+                    { name: "Known", value: "Known" },
+                    { name: "Self", value: "other" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
 
-        val shape = model.lookup<StringShape>("test#SomeEnum")
-        val trait = shape.expectTrait<EnumTrait>()
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
-            unitTest(
-                "it_handles_variants_that_clash_with_rust_reserved_words",
-                """
-                assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
-                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
-                """.trimIndent(),
-            )
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `matching on enum should be forward-compatible`() {
-        fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
-            val shape = model.lookup<StringShape>(shapeId)
-            val trait = shape.expectTrait<EnumTrait>()
+            val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.withModule(RustModule.Model) {
-                val generator = EnumGenerator(model, provider, this, shape, trait)
-                generator.render()
+                renderEnum(model, provider, shape)
                 unitTest(
-                    "matching_on_enum_should_be_forward_compatible",
+                    "it_handles_variants_that_clash_with_rust_reserved_words",
                     """
-                    match $enumToMatchOn {
-                        SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
-                        SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
-                        other @ _ if other.as_str() == "Variant3" => assert!(true),
-                        _ => assert!(false, "expected `Variant3` but got `_`"),
-                    }
+                    assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
+                    assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
                     """.trimIndent(),
                 )
             }
             project.compileAndTest()
         }
 
-        val modelV1 = """
-            namespace test
-
-            @enum([
-                { name: "Variant1", value: "Variant1" },
-                { name: "Variant2", value: "Variant2" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
-        val variant3AsUnknown = """SomeEnum::from("Variant3")"""
-        expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
-
-        val modelV2 = """
-            namespace test
-
-            @enum([
-                { name: "Variant1", value: "Variant1" },
-                { name: "Variant2", value: "Variant2" },
-                { name: "Variant3", value: "Variant3" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
-        val variant3AsVariant3 = "SomeEnum::Variant3"
-        expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
-    }
-
-    @Test
-    fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
-        val model = """
-            namespace test
-            @enum([
-                { name: "Foo", value: "Foo" },
-                { name: "Bar", value: "Bar" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
-
-        val shape = model.lookup<StringShape>("test#SomeEnum")
-        val trait = shape.expectTrait<EnumTrait>()
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
-            unitTest(
-                "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
-                """
-                assert_eq!(format!("{:?}", SomeEnum::Foo), "Foo");
-                assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
-                assert_eq!(
-                    format!("{:?}", SomeEnum::from("Baz")),
-                    "Unknown(UnknownVariantValue(\"Baz\"))"
-                );
-                """,
-            )
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `impl debug for sensitive enum should redact text`() {
-        val model = """
-            namespace test
-            @sensitive
-            @enum([
-                { name: "Foo", value: "Foo" },
-                { name: "Bar", value: "Bar" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
-
-        val shape = model.lookup<StringShape>("test#SomeEnum")
-        val trait = shape.expectTrait<EnumTrait>()
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
-            unitTest(
-                "impl_debug_for_sensitive_enum_should_redact_text",
-                """
-                assert_eq!(format!("{:?}", SomeEnum::Foo), $REDACTION);
-                assert_eq!(format!("{:?}", SomeEnum::Bar), $REDACTION);
-                """,
-            )
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `impl debug for non-sensitive unnamed enum should implement the derived debug trait`() {
-        val model = """
-            namespace test
-            @enum([
-                { value: "Foo" },
-                { value: "Bar" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
-
-        val shape = model.lookup<StringShape>("test#SomeEnum")
-        val trait = shape.expectTrait<EnumTrait>()
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
-            unitTest(
-                "impl_debug_for_non_sensitive_unnamed_enum_should_implement_the_derived_debug_trait",
-                """
-                for variant in SomeEnum::values() {
-                    assert_eq!(
-                        format!("{:?}", SomeEnum(variant.to_string())),
-                        format!("SomeEnum(\"{}\")", variant.to_owned())
-                    );
+        @Test
+        fun `matching on enum should be forward-compatible`() {
+            fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
+                val shape = model.lookup<StringShape>(shapeId)
+                val provider = testSymbolProvider(model)
+                val project = TestWorkspace.testProject(provider)
+                project.withModule(RustModule.Model) {
+                    renderEnum(model, provider, shape)
+                    unitTest(
+                        "matching_on_enum_should_be_forward_compatible",
+                        """
+                        match $enumToMatchOn {
+                            SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
+                            SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
+                            other @ _ if other.as_str() == "Variant3" => assert!(true),
+                            _ => assert!(false, "expected `Variant3` but got `_`"),
+                        }
+                        """.trimIndent(),
+                    )
                 }
-                """,
-            )
+                project.compileAndTest()
+            }
+
+            val modelV1 = """
+                namespace test
+
+                @enum([
+                    { name: "Variant1", value: "Variant1" },
+                    { name: "Variant2", value: "Variant2" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+            val variant3AsUnknown = """SomeEnum::from("Variant3")"""
+            expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
+
+            val modelV2 = """
+                namespace test
+
+                @enum([
+                    { name: "Variant1", value: "Variant1" },
+                    { name: "Variant2", value: "Variant2" },
+                    { name: "Variant3", value: "Variant3" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+            val variant3AsVariant3 = "SomeEnum::Variant3"
+            expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
         }
-        project.compileAndTest()
-    }
 
-    @Test
-    fun `impl debug for sensitive unnamed enum should redact text`() {
-        val model = """
-            namespace test
-            @sensitive
-            @enum([
-                { value: "Foo" },
-                { value: "Bar" },
-            ])
-            string SomeEnum
-        """.asSmithyModel()
+        @Test
+        fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
+            val model = """
+                namespace test
+                @enum([
+                    { name: "Foo", value: "Foo" },
+                    { name: "Bar", value: "Bar" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
 
-        val shape = model.lookup<StringShape>("test#SomeEnum")
-        val trait = shape.expectTrait<EnumTrait>()
-        val provider = testSymbolProvider(model)
-        val project = TestWorkspace.testProject(provider)
-        project.withModule(RustModule.Model) {
-            val generator = EnumGenerator(model, provider, this, shape, trait)
-            generator.render()
-            unitTest(
-                "impl_debug_for_sensitive_unnamed_enum_should_redact_text",
-                """
-                for variant in SomeEnum::values() {
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.withModule(RustModule.Model) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
+                    """
+                    assert_eq!(format!("{:?}", SomeEnum::Foo), "Foo");
+                    assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
                     assert_eq!(
-                        format!("{:?}", SomeEnum(variant.to_string())),
-                        $REDACTION
+                        format!("{:?}", SomeEnum::from("Baz")),
+                        "Unknown(UnknownVariantValue(\"Baz\"))"
                     );
-                }
-                """,
-            )
+                    """,
+                )
+            }
+            project.compileAndTest()
         }
-        project.compileAndTest()
+
+        @Test
+        fun `impl debug for sensitive enum should redact text`() {
+            val model = """
+                namespace test
+                @sensitive
+                @enum([
+                    { name: "Foo", value: "Foo" },
+                    { name: "Bar", value: "Bar" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.withModule(RustModule.Model) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "impl_debug_for_sensitive_enum_should_redact_text",
+                    """
+                    assert_eq!(format!("{:?}", SomeEnum::Foo), $REDACTION);
+                    assert_eq!(format!("{:?}", SomeEnum::Bar), $REDACTION);
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
+
+        @Test
+        fun `impl debug for non-sensitive unnamed enum should implement the derived debug trait`() {
+            val model = """
+                namespace test
+                @enum([
+                    { value: "Foo" },
+                    { value: "Bar" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.withModule(RustModule.Model) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "impl_debug_for_non_sensitive_unnamed_enum_should_implement_the_derived_debug_trait",
+                    """
+                    for variant in SomeEnum::values() {
+                        assert_eq!(
+                            format!("{:?}", SomeEnum(variant.to_string())),
+                            format!("SomeEnum(\"{}\")", variant.to_owned())
+                        );
+                    }
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
+
+        @Test
+        fun `impl debug for sensitive unnamed enum should redact text`() {
+            val model = """
+                namespace test
+                @sensitive
+                @enum([
+                    { value: "Foo" },
+                    { value: "Bar" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.withModule(RustModule.Model) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "impl_debug_for_sensitive_unnamed_enum_should_redact_text",
+                    """
+                    for variant in SomeEnum::values() {
+                        assert_eq!(
+                            format!("{:?}", SomeEnum(variant.to_string())),
+                            $REDACTION
+                        );
+                    }
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
+
+        @Test
+        fun `it supports other enum types`() {
+            class TestEnumType : EnumType() {
+                override fun implFromForStr(context: EnumGeneratorContext): Writable = writable {
+                    // intentional no-op
+                }
+
+                override fun implFromStr(context: EnumGeneratorContext): Writable = writable {
+                    // intentional no-op
+                }
+
+                override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
+                    rust("// additional enum members")
+                }
+
+                override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable = writable {
+                    rust("// additional as_str match arm")
+                }
+
+                override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
+                    rust("// additional docs")
+                }
+            }
+
+            val model = """
+                namespace test
+                @enum([
+                    { name: "Known", value: "Known" },
+                    { name: "Self", value: "other" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+
+            val provider = testSymbolProvider(model)
+            val output = RustWriter.root().apply {
+                renderEnum(model, provider, shape, TestEnumType())
+            }.toString()
+
+            // Since we didn't use the Infallible EnumType, there should be no Unknown variant
+            output shouldNotContain "Unknown"
+            output shouldNotContain "unknown"
+            output shouldNotContain "impl From"
+            output shouldNotContain "impl FromStr"
+            output shouldContain "// additional enum members"
+            output shouldContain "// additional as_str match arm"
+            output shouldContain "// additional docs"
+
+            val project = TestWorkspace.testProject(provider)
+            project.withModule(RustModule.Model) {
+                renderEnum(model, provider, shape, TestEnumType())
+            }
+            project.compileAndTest()
+        }
     }
 }

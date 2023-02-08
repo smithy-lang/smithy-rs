@@ -43,10 +43,9 @@ class ServerEnumGeneratorTest {
     fun `it generates TryFrom, FromStr and errors for enums`() {
         ServerEnumGenerator(
             codegenContext,
-            writer,
             shape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        ).render(writer)
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -61,10 +60,9 @@ class ServerEnumGeneratorTest {
     fun `it generates enums without the unknown variant`() {
         ServerEnumGenerator(
             codegenContext,
-            writer,
             shape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        ).render(writer)
         writer.compileAndTest(
             """
             // Check no `Unknown` variant.
@@ -81,10 +79,9 @@ class ServerEnumGeneratorTest {
     fun `it generates enums without non_exhaustive`() {
         ServerEnumGenerator(
             codegenContext,
-            writer,
             shape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        ).render(writer)
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }
