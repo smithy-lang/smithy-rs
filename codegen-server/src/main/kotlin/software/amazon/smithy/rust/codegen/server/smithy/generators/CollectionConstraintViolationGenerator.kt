@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -22,7 +21,8 @@ class CollectionConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
     private val modelsModuleWriter: RustWriter,
     private val shape: CollectionShape,
-    private val constraintsInfo: List<TraitInfo>,
+    private val collectionConstraintsInfo: List<CollectionTraitInfo>,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -35,6 +35,7 @@ class CollectionConstraintViolationGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val constraintsInfo: List<TraitInfo> = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         val memberShape = model.expectShape(shape.member.target)
@@ -75,30 +76,13 @@ class CollectionConstraintViolationGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                val validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }.toMutableList()
-                if (isMemberConstrained) {
-                    validationExceptionFields += {
-                        rust(
-                            """
-                            Self::Member(index, member_constraint_violation) =>
-                                member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())
-                            """,
-                        )
-                    }
-                }
-
                 rustTemplate(
                     """
                     impl $constraintViolationName {
-                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                            match self {
-                                #{AsValidationExceptionFields:W}
-                            }
-                        }
+                        #{CollectionShapeConstraintViolationImplBlock}
                     }
                     """,
-                    "String" to RuntimeType.String,
-                    "AsValidationExceptionFields" to validationExceptionFields.join("\n"),
+                    "CollectionShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.collectionShapeConstraintViolationImplBlock(collectionConstraintsInfo, isMemberConstrained),
                 )
             }
         }
