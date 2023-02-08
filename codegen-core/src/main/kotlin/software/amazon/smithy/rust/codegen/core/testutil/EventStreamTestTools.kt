@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -118,11 +119,15 @@ object EventStreamTestTools {
         val symbolProvider = codegenContext.symbolProvider
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape
+        val walker = DirectedWalker(model)
 
         val project = TestWorkspace.testProject(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
         project.withModule(ErrorsModule) {
-            val errors = model.structureShapes.filter { shape -> shape.hasTrait<ErrorTrait>() }
+            val errors = model.serviceShapes
+                .flatMap { walker.walkShapes(it) }
+                .filterIsInstance<StructureShape>()
+                .filter { shape -> shape.hasTrait<ErrorTrait>() }
             requirements.renderOperationError(this, model, symbolProvider, operationSymbol, errors)
             requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
             for (shape in errors) {

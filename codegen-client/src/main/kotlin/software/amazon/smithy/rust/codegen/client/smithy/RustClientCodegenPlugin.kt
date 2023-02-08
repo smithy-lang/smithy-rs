@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStre
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.DecoratableBuildPlugin
+import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
@@ -36,7 +36,7 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustClientCodegenPlugin : DecoratableBuildPlugin() {
+class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
     override fun getName(): String = "rust-client-codegen"
 
     override fun executeWithDecorator(

@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
@@ -284,6 +285,12 @@ class ConstrainedCollectionGeneratorTest {
     ) {
         val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape, codegenContext.symbolProvider)
         ConstrainedCollectionGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
-        CollectionConstraintViolationGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
+        CollectionConstraintViolationGenerator(
+            codegenContext,
+            writer,
+            constrainedCollectionShape,
+            constraintsInfo,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
     }
 }
