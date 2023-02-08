@@ -29,7 +29,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
@@ -480,7 +479,7 @@ open class ServerCodegenVisitor(
         }
 
         if (shape.isEventStream()) {
-            rustCrate.withModule(RustModule.Error) {
+            rustCrate.withModule(ServerRustModule.ErrorsModule) {
                 ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
             }
         }
@@ -511,7 +510,7 @@ open class ServerCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(RustModule.Error) {
+        rustCrate.withModule(ServerRustModule.ErrorsModule) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
     }

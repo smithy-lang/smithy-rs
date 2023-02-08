@@ -248,7 +248,7 @@ open class ServerServiceGenerator(
 
         for (operation in operations) {
             if (operation.errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) {
+                rustCrate.withModule(ErrorsModule) {
                     renderCombinedErrors(this, operation)
                 }
             }

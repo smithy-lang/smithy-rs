@@ -22,6 +22,7 @@ object ServerRustModule {
     val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
     val InputsModule = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
     val OutputsModule = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
+    val Types = RustModule.public("types", documentation = "Data primitives referenced by other data types.")
 
     val UnconstrainedModule =
         software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule

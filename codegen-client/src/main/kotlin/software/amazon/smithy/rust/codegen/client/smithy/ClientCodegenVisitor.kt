@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -221,7 +220,7 @@ class ClientCodegenVisitor(
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
-            rustCrate.withModule(RustModule.Error) {
+            rustCrate.withModule(ClientRustModule.ErrorsModule) {
                 OperationErrorGenerator(model, symbolProvider, shape).render(this)
             }
         }
@@ -231,7 +230,7 @@ class ClientCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(RustModule.Error) {
+        rustCrate.withModule(ClientRustModule.ErrorsModule) {
             OperationErrorGenerator(model, symbolProvider, shape).render(this)
         }
     }

@@ -99,8 +99,10 @@ sealed class RustModule {
             parent = parent,
         ).cfgTest()
 
-        // TODO: Figure out how to completely eliminate these hardcoded modules from `codegen-core`
+        // TODO(https://github.com/awslabs/smithy-rs/pull/2129): Remove once #2129 merges
         val Error = public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
+
+        // TODO(https://github.com/awslabs/smithy-rs/pull/2334): Remove once #2334 merges
         val Types = public("types", documentation = "Data primitives referenced by other data types.")
 
         /**

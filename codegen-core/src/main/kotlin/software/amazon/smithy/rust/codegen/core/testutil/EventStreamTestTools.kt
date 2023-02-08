@@ -117,7 +117,10 @@ object EventStreamTestTools {
         val walker = DirectedWalker(model)
 
         val project = TestWorkspace.testProject(symbolProvider)
-        val errors = model.structureShapes.filter { shape -> shape.hasTrait<ErrorTrait>() }
+        val errors = model.serviceShapes
+            .flatMap { walker.walkShapes(it) }
+            .filterIsInstance<StructureShape>()
+            .filter { shape -> shape.hasTrait<ErrorTrait>() }
         check(errors.isNotEmpty()) { "must have at least one error modeled" }
         project.withModule(codegenContext.symbolProvider.moduleForShape(errors[0])) {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
