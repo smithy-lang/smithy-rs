@@ -16,8 +16,8 @@ publish = true
 aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda", "shared-socket"] }
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http2", "tcp"]}
-napi = "2.10"
-napi-derive = "2.10"
+napi = "=2.10.0"
+napi-derive = "=2.10.0"
 socket2 = "0.4"
 tokio = { version = "1.25" }
 tower = { version  = "0.4"}

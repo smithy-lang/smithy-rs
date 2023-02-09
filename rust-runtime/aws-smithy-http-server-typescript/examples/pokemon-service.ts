@@ -14,7 +14,7 @@ import {
     Language,
     DoNothingInput,
     DoNothingOutput,
-    Socket,
+    TsSocket,
     CheckHealthOutput,
     CheckHealthInput,
     GetServerStatisticsInput,
@@ -37,7 +37,7 @@ class HandlerImpl implements Handlers {
         return { callsCount: 0 };
     }
     async getPokemonSpecies(
-        input: GetPokemonSpeciesInput
+        input: GetPokemonSpeciesInput,
     ): Promise<GetPokemonSpeciesOutput> {
         return {
             name: input.name,
@@ -71,7 +71,7 @@ class HandlerImpl implements Handlers {
 const app = new App(new HandlerImpl());
 // Start the app 🤘
 const numCPUs = cpus().length / 2;
-const socket = new Socket("127.0.0.1", 9090);
+const socket = new TsSocket("127.0.0.1", 9090);
 app.start(socket);
 
 // TODO: This part should be abstracted out and done directly in Rust.
@@ -83,3 +83,12 @@ if (cluster.isPrimary) {
         cluster.fork();
     }
 }
+
+process.on("unhandledRejection", err => {
+    console.error("Unahandled")
+    console.error(err)
+})
+process.on("uncaughtException", err => {
+    console.error("Uncaught")
+    console.error(err)
+})

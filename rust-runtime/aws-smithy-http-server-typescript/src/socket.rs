@@ -14,7 +14,7 @@
 use aws_smithy_http_server::socket::new_socket;
 use napi_derive::napi;
 
-#[napi(js_name = "Socket")]
+#[napi]
 #[derive(Debug)]
 pub struct TsSocket(socket2::Socket);
 

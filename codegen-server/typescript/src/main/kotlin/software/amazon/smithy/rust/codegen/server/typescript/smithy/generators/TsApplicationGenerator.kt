@@ -69,7 +69,7 @@ class TsApplicationGenerator(
                     """
                     pub(crate) $fnName: #{napi}::threadsafe_function::ThreadsafeFunction<
                         $input,
-                        #{napi}::threadsafe_function::ErrorStrategy::CalleeHandled
+                        #{napi}::threadsafe_function::ErrorStrategy::Fatal
                     >,
                     """,
                     *codegenScope,
@@ -86,7 +86,7 @@ class TsApplicationGenerator(
                 val fnName = operationName.toSnakeCase()
                 rustTemplate(
                     """
-                    ##[napi(ts_type = "(input: $input) => Promise<$output|$error>")]
+                    ##[napi(ts_type = "(input: $input) => Promise<$output>")]
                     pub $fnName: #{napi}::JsFunction,
                     """,
                     *codegenScope,
@@ -124,7 +124,7 @@ class TsApplicationGenerator(
                 rustTemplate(
                     """
                     let $fnName: #{napi}::threadsafe_function::ThreadsafeFunction<
-                        $input, #{napi}::threadsafe_function::ErrorStrategy::CalleeHandled
+                        $input, #{napi}::threadsafe_function::ErrorStrategy::Fatal
                     > = js_handlers.$fnName.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
                     """,
                     *codegenScope,
