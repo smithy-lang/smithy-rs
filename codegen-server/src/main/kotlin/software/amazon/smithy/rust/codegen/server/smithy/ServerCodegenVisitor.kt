@@ -203,10 +203,12 @@ open class ServerCodegenVisitor(
 
         val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
-            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
-                model,
-                service,
-                validationExceptionShapeId,
+            codegenDecorator.postprocessValidationExceptionNotAttachedErrorMessage(
+                validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                    model,
+                    service,
+                    validationExceptionShapeId,
+                ),
             ),
             validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
         )) {
@@ -215,7 +217,7 @@ open class ServerCodegenVisitor(
                 logger.log(logMessage.level, logMessage.message)
             }
             if (validationResult.shouldAbort) {
-                throw CodegenException("Unsupported constraints feature used; see error messages above for resolution")
+                throw CodegenException("Unsupported constraints feature used; see error messages above for resolution", validationResult)
             }
         }
 
