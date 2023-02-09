@@ -21,8 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -45,6 +43,7 @@ class ConstrainedNumberGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: NumberShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -74,7 +73,8 @@ class ConstrainedNumberGenerator(
         val name = symbol.name
         val unconstrainedTypeName = unconstrainedType.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-        val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
+        val rangeInfo = Range(rangeTrait)
+        val constraintsInfo = listOf(rangeInfo.toTraitInfo())
 
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
@@ -143,35 +143,23 @@ class ConstrainedNumberGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                rustBlock("impl ${constraintViolation.name}") {
-                    rustBlockTemplate(
-                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
-                        "String" to RuntimeType.String,
-                    ) {
-                        rustBlock("match self") {
-                            rust(
-                                """
-                                Self::Range(value) => crate::model::ValidationExceptionField {
-                                    message: format!("${rangeTrait.validationErrorMessage()}", value, &path),
-                                    path,
-                                },
-                                """,
-                            )
-                        }
+                rustTemplate(
+                    """
+                    impl ${constraintViolation.name} {
+                        #{NumberShapeConstraintViolationImplBlock}
                     }
-                }
+                    """,
+                    "NumberShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.numberShapeConstraintViolationImplBlock(rangeInfo),
+                )
             }
         }
     }
 }
 
-private data class Range(val rangeTrait: RangeTrait) {
-    fun toTraitInfo(unconstrainedTypeName: String): TraitInfo = TraitInfo(
+data class Range(val rangeTrait: RangeTrait) {
+    fun toTraitInfo(): TraitInfo = TraitInfo(
         { rust("Self::check_range(value)?;") },
-        {
-            docs("Error when a number doesn't satisfy its `@range` requirements.")
-            rust("Range($unconstrainedTypeName)")
-        },
+        { docs("Error when a number doesn't satisfy its `@range` requirements.") },
         {
             rust(
                 """

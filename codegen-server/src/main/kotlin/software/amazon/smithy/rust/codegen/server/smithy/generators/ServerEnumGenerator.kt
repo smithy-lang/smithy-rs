@@ -23,6 +23,7 @@ open class ServerEnumGenerator(
     val codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     shape: StringShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) : EnumGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape, shape.expectTrait()) {
     override var target: CodegenTarget = CodegenTarget.SERVER
 
@@ -52,21 +53,13 @@ open class ServerEnumGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-                val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
-
                 rustTemplate(
                     """
                     impl $constraintViolationName {
-                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                            crate::model::ValidationExceptionField {
-                                message: format!(r##"$message"##, &self.0, &path),
-                                path,
-                            }
-                        }
+                        #{EnumShapeConstraintViolationImplBlock:W}
                     }
                     """,
-                    *codegenScope,
+                    "EnumShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.enumShapeConstraintViolationImplBlock(enumTrait),
                 )
             }
         }

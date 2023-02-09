@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
@@ -74,6 +75,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStruct
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
@@ -101,6 +103,7 @@ open class ServerCodegenVisitor(
     protected var codegenContext: ServerCodegenContext
     protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
     protected var protocolGenerator: ServerProtocolGenerator
+    protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
     init {
         val symbolVisitorConfig =
@@ -143,6 +146,9 @@ open class ServerCodegenVisitor(
             serverSymbolProviders.constraintViolationSymbolProvider,
             serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
         )
+
+        // We can use a not-null assertion because [CombinedServerCodegenDecorator] returns a not null value.
+        validationExceptionConversionGenerator = codegenDecorator.validationExceptionConversion(codegenContext)!!
 
         rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -195,10 +201,12 @@ open class ServerCodegenVisitor(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
 
+        val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
             validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
                 model,
                 service,
+                validationExceptionShapeId,
             ),
             validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
         )) {
@@ -260,7 +268,7 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
-            val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape)
+            val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator)
             serverBuilderGenerator.render(writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
@@ -281,7 +289,7 @@ open class ServerCodegenVisitor(
 
         if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             val serverBuilderGeneratorWithoutPublicConstrainedTypes =
-                ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape)
+                ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator)
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(writer)
 
             writer.implBlock(shape, codegenContext.symbolProvider) {
@@ -334,7 +342,13 @@ open class ServerCodegenVisitor(
 
         if (isDirectlyConstrained || renderUnconstrainedList) {
             rustCrate.withModule(ModelsModule) {
-                CollectionConstraintViolationGenerator(codegenContext, this, shape, constraintsInfo).render()
+                CollectionConstraintViolationGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                    constraintsInfo,
+                    validationExceptionConversionGenerator,
+                ).render()
             }
         }
     }
@@ -374,7 +388,12 @@ open class ServerCodegenVisitor(
 
         if (isDirectlyConstrained || renderUnconstrainedMap) {
             rustCrate.withModule(ModelsModule) {
-                MapConstraintViolationGenerator(codegenContext, this, shape).render()
+                MapConstraintViolationGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                    validationExceptionConversionGenerator,
+                ).render()
             }
         }
     }
@@ -386,42 +405,19 @@ open class ServerCodegenVisitor(
      */
     override fun stringShape(shape: StringShape) {
         fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            ServerEnumGenerator(codegenContext, writer, shape)
+            ServerEnumGenerator(codegenContext, writer, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::serverEnumGeneratorFactory)
     }
 
-    override fun integerShape(shape: IntegerShape) {
+    override fun integerShape(shape: IntegerShape) = integralShape(shape)
+    override fun shortShape(shape: ShortShape) = integralShape(shape)
+    override fun longShape(shape: LongShape) = integralShape(shape)
+    override fun byteShape(shape: ByteShape) = integralShape(shape)
+    private fun integralShape(shape: NumberShape) {
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            logger.info("[rust-server-codegen] Generating a constrained integer $shape")
+            logger.info("[rust-server-codegen] Generating a constrained integral $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedNumberGenerator(codegenContext, this, shape).render()
-            }
-        }
-    }
-
-    override fun shortShape(shape: ShortShape) {
-        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            logger.info("[rust-server-codegen] Generating a constrained short $shape")
-            rustCrate.withModule(ModelsModule) {
-                ConstrainedNumberGenerator(codegenContext, this, shape).render()
-            }
-        }
-    }
-
-    override fun longShape(shape: LongShape) {
-        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            logger.info("[rust-server-codegen] Generating a constrained long $shape")
-            rustCrate.withModule(ModelsModule) {
-                ConstrainedNumberGenerator(codegenContext, this, shape).render()
-            }
-        }
-    }
-
-    override fun byteShape(shape: ByteShape) {
-        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            logger.info("[rust-server-codegen] Generating a constrained byte $shape")
-            rustCrate.withModule(ModelsModule) {
-                ConstrainedNumberGenerator(codegenContext, this, shape).render()
+                ConstrainedNumberGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
     }
@@ -450,7 +446,7 @@ open class ServerCodegenVisitor(
         } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedStringGenerator(codegenContext, this, shape).render()
+                ConstrainedStringGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
     }
@@ -544,7 +540,7 @@ open class ServerCodegenVisitor(
 
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             rustCrate.withModule(ModelsModule) {
-                ConstrainedBlobGenerator(codegenContext, this, shape).render()
+                ConstrainedBlobGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
     }
