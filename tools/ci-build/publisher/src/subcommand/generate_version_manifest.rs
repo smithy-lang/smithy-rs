@@ -197,7 +197,7 @@ fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
     // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
-        hashes.push_str(&sha256::digest(import.as_str()));
+        hashes.push_str(&sha256::try_digest(import.as_path())?);
         hashes.push('\n');
     }
     Ok(sha256::digest(hashes))
@@ -217,7 +217,7 @@ impl SmithyBuildRoot {
 
 #[derive(Debug, Deserialize)]
 struct SmithyBuildProjection {
-    imports: Vec<String>,
+    imports: Vec<PathBuf>,
 }
 
 #[cfg(test)]
@@ -348,10 +348,7 @@ mod tests {
         fs::write(&model1b, "bar").unwrap();
 
         let hash = hash_models(&SmithyBuildProjection {
-            imports: vec![
-                model1a.to_str().unwrap().to_string(),
-                model1b.to_str().unwrap().to_string(),
-            ],
+            imports: vec![model1a, model1b],
         })
         .unwrap();
 
