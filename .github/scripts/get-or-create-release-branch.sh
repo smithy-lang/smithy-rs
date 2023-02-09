@@ -59,7 +59,7 @@ else
     commit_sha=$(git rev-parse --short HEAD)
     if git ls-remote --exit-code --heads origin "${branch_name}"; then
         # The release branch already exists, we need to make sure that our commit is its current tip
-        branch_head_sha=$(git rev-parse --verify --short "refs/heads/${branch_name}")
+        branch_head_sha=$(git rev-parse --verify --short "refs/remotes/origin/${branch_name}")
         if [[ "${branch_head_sha}" != "${commit_sha}" ]]; then
             echo "The release branch - ${branch_name} - already exists. ${commit_sha}, the commit you chose when "
             echo "launching this release, is not its current HEAD (${branch_head_sha}). This is not allowed: you "

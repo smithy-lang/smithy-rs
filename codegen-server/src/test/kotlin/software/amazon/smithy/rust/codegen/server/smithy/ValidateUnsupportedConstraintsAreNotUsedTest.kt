@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import java.util.logging.Level
 
 internal class ValidateUnsupportedConstraintsAreNotUsedTest {
@@ -53,7 +54,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
         val service = model.lookup<ServiceShape>("test#TestService")
-        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model, service)
+        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+            model,
+            service,
+            SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+        )
 
         validationResult.messages shouldHaveSize 1
 

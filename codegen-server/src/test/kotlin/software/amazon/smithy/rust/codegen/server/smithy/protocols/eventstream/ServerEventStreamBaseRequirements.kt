@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirem
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
@@ -58,7 +59,8 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): ServerCodegenContext = serverTestCodegenContext(
-        model, serviceShape,
+        model,
+        serviceShape,
         serverTestRustSettings(
             codegenConfig = ServerCodegenConfig(publicConstrainedTypes = publicConstrainedTypes),
         ),
@@ -70,15 +72,16 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
     ) {
+        val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-            ServerBuilderGenerator(codegenContext, shape).apply {
+            ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
                 writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
-            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
                 writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)

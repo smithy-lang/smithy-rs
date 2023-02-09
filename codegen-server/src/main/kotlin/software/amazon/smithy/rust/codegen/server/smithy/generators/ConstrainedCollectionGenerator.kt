@@ -48,7 +48,7 @@ class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: CollectionShape,
-    private val constraintsInfo: List<TraitInfo>,
+    collectionConstraintsInfo: List<CollectionTraitInfo>,
     private val unconstrainedSymbol: Symbol? = null,
 ) {
     private val model = codegenContext.model
@@ -63,6 +63,7 @@ class ConstrainedCollectionGenerator(
             }
         }
     private val symbolProvider = codegenContext.symbolProvider
+    private val constraintsInfo = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         check(constraintsInfo.isNotEmpty()) {
@@ -178,7 +179,7 @@ class ConstrainedCollectionGenerator(
     }
 }
 
-internal sealed class CollectionTraitInfo {
+sealed class CollectionTraitInfo {
     data class UniqueItems(val uniqueItemsTrait: UniqueItemsTrait, val memberSymbol: Symbol) : CollectionTraitInfo() {
         override fun toTraitInfo(): TraitInfo =
             TraitInfo(
@@ -365,11 +366,10 @@ internal sealed class CollectionTraitInfo {
             }
         }
 
-        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<TraitInfo> =
+        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<CollectionTraitInfo> =
             supportedCollectionConstraintTraits
                 .mapNotNull { shape.getTrait(it).orNull() }
                 .map { trait -> fromTrait(trait, shape, symbolProvider) }
-                .map(CollectionTraitInfo::toTraitInfo)
     }
 
     abstract fun toTraitInfo(): TraitInfo

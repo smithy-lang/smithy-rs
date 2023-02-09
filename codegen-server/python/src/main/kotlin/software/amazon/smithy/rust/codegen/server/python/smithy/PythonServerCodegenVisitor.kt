@@ -77,7 +77,7 @@ class PythonServerCodegenVisitor(
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
             publicConstrainedTypes: Boolean,
-        ) = PythonCodegenServerPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             model,
@@ -146,7 +146,7 @@ class PythonServerCodegenVisitor(
      */
     override fun stringShape(shape: StringShape) {
         fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            PythonServerEnumGenerator(codegenContext, writer, shape)
+            PythonServerEnumGenerator(codegenContext, writer, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 
