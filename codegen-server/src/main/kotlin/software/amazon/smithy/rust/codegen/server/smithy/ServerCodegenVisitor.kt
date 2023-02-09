@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
@@ -424,8 +425,8 @@ open class ServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            ServerEnumGenerator(codegenContext, writer, shape, validationExceptionConversionGenerator)
+        fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
+            ServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::serverEnumGeneratorFactory)
     }
 
@@ -444,12 +445,12 @@ open class ServerCodegenVisitor(
 
     protected fun stringShape(
         shape: StringShape,
-        enumShapeGeneratorFactory: (codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) -> ServerEnumGenerator,
+        enumShapeGeneratorFactory: (codegenContext: ServerCodegenContext, shape: StringShape) -> EnumGenerator,
     ) {
         if (shape.hasTrait<EnumTrait>()) {
             logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) {
-                enumShapeGeneratorFactory(codegenContext, this, shape).render()
+                enumShapeGeneratorFactory(codegenContext, shape).render(this)
                 ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, this, shape).render()
             }
         }

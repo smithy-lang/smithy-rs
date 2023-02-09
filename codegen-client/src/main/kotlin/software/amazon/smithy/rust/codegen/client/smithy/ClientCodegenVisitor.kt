@@ -19,6 +19,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
@@ -34,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -234,9 +234,9 @@ class ClientCodegenVisitor(
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
+        if (shape.hasTrait<EnumTrait>()) {
             rustCrate.useShapeWriter(shape) {
-                EnumGenerator(model, symbolProvider, this, shape, enum).render()
+                ClientEnumGenerator(codegenContext, shape).render(this)
             }
         }
     }
