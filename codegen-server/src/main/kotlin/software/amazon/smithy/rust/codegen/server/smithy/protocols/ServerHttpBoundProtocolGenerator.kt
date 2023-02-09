@@ -52,6 +52,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -627,7 +628,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    input = #{parser}(bytes.as_ref(), input)?;
+                """,
+                *codegenScope,
+            )
+            if (protocol is RestJson) {
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    """,
+                    *codegenScope,
+                )
+            }
+            rustTemplate(
+                """
+                input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
                 *codegenScope,

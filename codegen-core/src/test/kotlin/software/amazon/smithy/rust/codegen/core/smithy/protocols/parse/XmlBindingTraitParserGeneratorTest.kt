@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -25,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -209,7 +209,7 @@ internal class XmlBindingTraitParserGeneratorTest {
 
                 UnionGenerator(model, symbolProvider, this, choiceShape).render()
                 model.lookup<StringShape>("test#FooEnum").also { enum ->
-                    EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
+                    EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
                 }
             }
         }

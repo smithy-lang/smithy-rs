@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -20,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -130,7 +130,7 @@ class Ec2QuerySerializerGeneratorTest {
                 top.renderWithModelBuilder(model, symbolProvider, this)
                 UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
-                EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
             }
         }
 
