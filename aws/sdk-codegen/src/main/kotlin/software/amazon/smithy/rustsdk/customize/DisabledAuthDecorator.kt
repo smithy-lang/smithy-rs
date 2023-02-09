@@ -8,10 +8,10 @@ package software.amazon.smithy.rustsdk.customize
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.util.shapeId
 
 // / STS (and possibly other services) need to have auth manually set to []
 class DisabledAuthDecorator : ClientCodegenDecorator {
@@ -44,5 +44,3 @@ class DisabledAuthDecorator : ClientCodegenDecorator {
         }
     }
 }
-
-private fun String.shapeId() = ShapeId.from(this)
