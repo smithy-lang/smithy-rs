@@ -1,0 +1,16 @@
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch update/pretty_assertions
+# Changes to be committed:
+#	modified:   aws/rust-runtime/aws-sigv4/Cargo.toml
+#	modified:   rust-runtime/aws-smithy-checksums/Cargo.toml
+#	modified:   rust-runtime/aws-smithy-http/Cargo.toml
+#	modified:   rust-runtime/aws-smithy-protocol-test/Cargo.toml
+#	modified:   tools/ci-build/changelogger/Cargo.toml
+#	modified:   tools/ci-build/crate-hasher/Cargo.toml
+#	modified:   tools/ci-build/publisher/Cargo.toml
+#	modified:   tools/ci-build/sdk-versioner/Cargo.toml
+#	modified:   tools/ci-cdk/canary-runner/Cargo.toml
+#

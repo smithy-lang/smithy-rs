@@ -1,0 +1,11 @@
+[package]
+name = "aws-smithy-interceptor"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-smithy-http = { path = "../aws-smithy-http" }
+http = "0.2.8"
+http-body = "0.4.5"
