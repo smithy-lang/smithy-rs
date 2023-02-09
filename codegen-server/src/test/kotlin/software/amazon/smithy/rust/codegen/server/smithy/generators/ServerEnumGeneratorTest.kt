@@ -40,7 +40,10 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+        ).render(writer)
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -53,7 +56,10 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+        ).render(writer)
         writer.compileAndTest(
             """
             // check no unknown
@@ -68,7 +74,10 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+        ).render(writer)
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }
