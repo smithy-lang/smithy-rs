@@ -220,7 +220,7 @@ class ClientCodegenVisitor(
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
-            rustCrate.withModule(ClientRustModule.ErrorsModule) {
+            rustCrate.withModule(ClientRustModule.Error) {
                 OperationErrorGenerator(model, symbolProvider, shape).render(this)
             }
         }
@@ -230,7 +230,7 @@ class ClientCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(ClientRustModule.ErrorsModule) {
+        rustCrate.withModule(ClientRustModule.Error) {
             OperationErrorGenerator(model, symbolProvider, shape).render(this)
         }
     }

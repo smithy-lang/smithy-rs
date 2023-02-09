@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ErrorsModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
@@ -51,7 +51,7 @@ class ServerOperationErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ErrorsModule) {
+        project.withModule(ServerRustModule.Error) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
             }

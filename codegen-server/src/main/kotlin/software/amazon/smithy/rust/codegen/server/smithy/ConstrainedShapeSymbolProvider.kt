@@ -63,7 +63,7 @@ class ConstrainedShapeSymbolProvider(
         check(shape is MapShape || shape is CollectionShape)
 
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.ModelsModule).build()
+        return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
     }
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -106,7 +106,7 @@ class ConstrainedShapeSymbolProvider(
             is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    symbolBuilder(shape, rustType).locatedIn(ServerRustModule.ModelsModule).build()
+                    symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
                 } else {
                     base.toSymbol(shape)
                 }

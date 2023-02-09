@@ -20,10 +20,10 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ErrorsModule
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.InputsModule
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.OutputsModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
  * Generates a Python compatible application and server that can be configured from Python.
@@ -338,12 +338,12 @@ class PythonApplicationGenerator(
         )
         writer.rust(
             """
-            /// from $libName import ${InputsModule.name}
-            /// from $libName import ${OutputsModule.name}
+            /// from $libName import ${InputModule.name}
+            /// from $libName import ${OutputModule.name}
             """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
-            writer.rust("""/// from $libName import ${ErrorsModule.name}""".trimIndent())
+            writer.rust("""/// from $libName import ${ErrorModule.name}""".trimIndent())
         }
         writer.rust(
             """
@@ -397,8 +397,8 @@ class PythonApplicationGenerator(
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val inputT = "${InputsModule.name}::${inputSymbol.name}"
-        val outputT = "${OutputsModule.name}::${outputSymbol.name}"
+        val inputT = "${InputModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputModule.name}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }

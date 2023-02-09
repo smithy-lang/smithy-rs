@@ -22,8 +22,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ModelsModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -67,7 +67,7 @@ class ConstrainedBlobGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
+        project.withModule(ServerRustModule.Model) {
             addDependency(RuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
             ConstrainedBlobGenerator(
                 codegenContext,
@@ -125,7 +125,7 @@ class ConstrainedBlobGeneratorTest {
 
         val codegenContext = serverTestCodegenContext(model)
 
-        val writer = RustWriter.forModule(ModelsModule.name)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
         ConstrainedBlobGenerator(
             codegenContext,

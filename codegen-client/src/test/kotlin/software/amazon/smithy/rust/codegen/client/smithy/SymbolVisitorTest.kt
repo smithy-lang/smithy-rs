@@ -54,7 +54,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "MyStruct"
-        sym.definitionFile shouldContain ClientRustModule.ModelsModule.definitionFile()
+        sym.definitionFile shouldContain ClientRustModule.Model.definitionFile()
         sym.namespace shouldBe "crate::model"
     }
 
@@ -74,7 +74,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "TerribleError"
-        sym.definitionFile shouldContain ClientRustModule.ErrorsModule.definitionFile()
+        sym.definitionFile shouldContain ClientRustModule.Error.definitionFile()
     }
 
     @Test
@@ -98,7 +98,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
         sym.rustType().render(false) shouldBe "StandardUnit"
-        sym.definitionFile shouldContain ClientRustModule.ModelsModule.definitionFile()
+        sym.definitionFile shouldContain ClientRustModule.Model.definitionFile()
         sym.namespace shouldBe "crate::model"
     }
 
@@ -257,7 +257,7 @@ class SymbolVisitorTest {
             }
         """.asSmithyModel()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
-        symbol.definitionFile shouldBe ClientRustModule.OperationsModule.definitionFile()
+        symbol.definitionFile shouldBe ClientRustModule.Operation.definitionFile()
         symbol.name shouldBe "PutObject"
     }
 }

@@ -14,9 +14,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.ErrorsModule
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.InputsModule
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.OutputsModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
  * Generates a handler implementation stub for use within documentation.
@@ -39,15 +39,15 @@ class DocHandlerGenerator(
      */
     fun docSignature(): Writable {
         val outputT = if (operation.errors.isEmpty()) {
-            "${OutputsModule.name}::${outputSymbol.name}"
+            "${OutputModule.name}::${outputSymbol.name}"
         } else {
-            "Result<${OutputsModule.name}::${outputSymbol.name}, ${ErrorsModule.name}::${errorSymbol.name}>"
+            "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
         }
 
         return writable {
             rust(
                 """
-                $commentToken async fn $handlerName(input: ${InputsModule.name}::${inputSymbol.name}) -> $outputT {
+                $commentToken async fn $handlerName(input: ${InputModule.name}::${inputSymbol.name}) -> $outputT {
                 $commentToken     todo!()
                 $commentToken }
                 """.trimIndent(),

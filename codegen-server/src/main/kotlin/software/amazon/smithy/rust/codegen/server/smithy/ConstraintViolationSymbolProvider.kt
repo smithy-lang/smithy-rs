@@ -87,7 +87,7 @@ class ConstraintViolationSymbolProvider(
             // Need to use the context name so we get the correct name for maps.
             name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
             visibility = visibility,
-            parent = ServerRustModule.ModelsModule,
+            parent = ServerRustModule.Model,
             inline = true,
             documentation = documentation,
         )
