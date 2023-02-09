@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
@@ -29,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
@@ -43,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -206,9 +205,9 @@ class ClientCodegenVisitor(
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
+        if (shape.hasTrait<EnumTrait>()) {
             rustCrate.useShapeWriter(shape) {
-                EnumGenerator(model, symbolProvider, this, shape, enum).render()
+                ClientEnumGenerator(codegenContext, shape).render(this)
             }
         }
     }
