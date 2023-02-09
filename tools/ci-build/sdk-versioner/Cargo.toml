@@ -19,5 +19,5 @@ toml = { version = "0.5.8", features = ["preserve_order"] }
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 
 [dev-dependencies]
-pretty_assertions = "1.3.0"
+pretty_assertions = "1.3"
 tempfile = "3"
