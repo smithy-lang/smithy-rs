@@ -132,7 +132,7 @@ class PythonServerCodegenVisitor(
      */
     override fun stringShape(shape: StringShape) {
         fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            PythonServerEnumGenerator(codegenContext, writer, shape)
+            PythonServerEnumGenerator(codegenContext, writer, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 

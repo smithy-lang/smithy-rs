@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 
 /**
  * To share enums defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -27,7 +28,8 @@ class PythonServerEnumGenerator(
     codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     shape: StringShape,
-) : ServerEnumGenerator(codegenContext, writer, shape) {
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+) : ServerEnumGenerator(codegenContext, writer, shape, validationExceptionConversionGenerator) {
 
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
 

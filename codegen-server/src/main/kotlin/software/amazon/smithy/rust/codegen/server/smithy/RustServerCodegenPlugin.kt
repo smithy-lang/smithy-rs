@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -18,8 +17,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataPro
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerDecoratableBuildPlugin
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -30,7 +33,7 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustServerCodegenPlugin : SmithyBuildPlugin {
+class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen"
@@ -38,14 +41,18 @@ class RustServerCodegenPlugin : SmithyBuildPlugin {
     /**
      * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
      */
-    override fun execute(
+    override fun executeWithDecorator(
         context: PluginContext,
+        vararg decorator: ServerCodegenDecorator,
     ) {
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
         val codegenDecorator =
             CombinedServerCodegenDecorator.fromClasspath(
                 context,
                 ServerRequiredCustomizations(),
+                SmithyValidationExceptionDecorator(),
+                CustomValidationExceptionWithReasonDecorator(),
+                *decorator,
             )
         logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
