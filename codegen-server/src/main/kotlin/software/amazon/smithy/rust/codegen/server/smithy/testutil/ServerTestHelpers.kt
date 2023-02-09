@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
@@ -122,7 +123,7 @@ fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: Ru
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
-    val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
+    val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this, SmithyValidationExceptionConversionGenerator(serverCodegenContext))
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)

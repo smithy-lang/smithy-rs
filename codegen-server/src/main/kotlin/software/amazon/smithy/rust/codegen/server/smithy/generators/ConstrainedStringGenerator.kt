@@ -50,6 +50,7 @@ class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: StringShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -63,10 +64,12 @@ class ConstrainedStringGenerator(
             }
         }
     private val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-    private val constraintsInfo: List<TraitInfo> =
+    private val stringConstraintsInfo: List<StringTraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
             .map { StringTraitInfo.fromTrait(symbol, it, isSensitive = shape.hasTrait<SensitiveTrait>()) }
+    private val constraintsInfo: List<TraitInfo> =
+        stringConstraintsInfo
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
@@ -158,15 +161,10 @@ class ConstrainedStringGenerator(
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
-                    pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                        match self {
-                            #{ValidationExceptionFields:W}
-                        }
-                    }
+                    #{StringShapeConstraintViolationImplBlock:W}
                 }
                 """,
-                "String" to RuntimeType.String,
-                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+                "StringShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.stringShapeConstraintViolationImplBlock(stringConstraintsInfo),
             )
         }
     }
@@ -187,8 +185,7 @@ class ConstrainedStringGenerator(
         }
     }
 }
-
-private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
+data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo = TraitInfo(
         tryFromCheck = { rust("Self::check_length(&value)?;") },
         constraintViolationVariant = {
@@ -233,8 +230,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     }
 }
 
-private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) :
-    StringTraitInfo() {
+data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         return TraitInfo(
             tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
@@ -244,9 +240,10 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, v
                 rust("Pattern(String)")
             },
             asValidationExceptionField = {
+                Attribute.AllowUnusedVariables.render(this)
                 rustTemplate(
                     """
-                    Self::Pattern(_string) => crate::model::ValidationExceptionField {
+                    Self::Pattern(string) => crate::model::ValidationExceptionField {
                         message: #{ErrorMessage:W},
                         path
                     },
@@ -268,7 +265,7 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, v
         )
     }
 
-    private fun errorMessage(): Writable {
+    fun errorMessage(): Writable {
         val pattern = patternTrait.pattern
 
         return if (isSensitive) {
@@ -283,7 +280,7 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, v
             writable {
                 rust(
                     """
-                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &_string, &path, r##"$pattern"##)
+                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &string, &path, r##"$pattern"##)
                     """,
                 )
             }
@@ -327,7 +324,7 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, v
     }
 }
 
-private sealed class StringTraitInfo {
+sealed class StringTraitInfo {
     companion object {
         fun fromTrait(symbol: Symbol, trait: Trait, isSensitive: Boolean) =
             when (trait) {
