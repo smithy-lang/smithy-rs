@@ -19,11 +19,8 @@ import java.util.function.Predicate
 class DirectedWalker(model: Model) {
     private val inner = Walker(model)
 
-    fun walkShapes(shape: Shape): Set<Shape> {
-        return walkShapes(shape) { _ -> true }
-    }
+    fun walkShapes(shape: Shape): Set<Shape> = walkShapes(shape) { true }
 
-    fun walkShapes(shape: Shape, predicate: Predicate<Relationship>): Set<Shape> {
-        return inner.walkShapes(shape) { rel -> predicate.test(rel) && rel.direction == RelationshipDirection.DIRECTED }
-    }
+    fun walkShapes(shape: Shape, predicate: Predicate<Relationship>): Set<Shape> =
+        inner.walkShapes(shape) { rel -> predicate.test(rel) && rel.direction == RelationshipDirection.DIRECTED }
 }

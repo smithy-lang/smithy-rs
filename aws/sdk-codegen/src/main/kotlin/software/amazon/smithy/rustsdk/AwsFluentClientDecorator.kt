@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
@@ -228,7 +227,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
     private val serviceShape = codegenContext.serviceShape
     private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).copy(scope = DependencyScope.Dev).toType())
+        arrayOf("aws_config" to AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.

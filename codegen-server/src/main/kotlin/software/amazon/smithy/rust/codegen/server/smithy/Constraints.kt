@@ -59,8 +59,7 @@ val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrai
  */
 val supportedCollectionConstraintTraits = setOf(
     LengthTrait::class.java,
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1670): Not yet supported.
-    // UniqueItemsTrait::class.java
+    UniqueItemsTrait::class.java,
 )
 
 /**

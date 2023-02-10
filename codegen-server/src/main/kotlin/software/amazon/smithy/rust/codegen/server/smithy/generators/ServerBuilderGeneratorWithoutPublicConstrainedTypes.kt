@@ -46,6 +46,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -79,7 +80,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
+        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),

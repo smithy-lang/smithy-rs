@@ -53,6 +53,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -136,6 +137,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "RuntimeError" to ServerRuntimeType.runtimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.responseRejection(runtimeConfig),
+        "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
     )
 
@@ -196,8 +198,27 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         // Implement `from_request` trait for input types.
+        val inputFuture = "${inputSymbol.name}Future"
         rustTemplate(
             """
+            // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+            #{PinProjectLite}::pin_project! {
+                /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                pub struct $inputFuture {
+                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                }
+            }
+
+            impl std::future::Future for $inputFuture {
+                type Output = Result<#{I}, #{RuntimeError}>;
+
+                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                    let this = self.project();
+                    this.inner.as_mut().poll(cx)
+                }
+            }
+
             impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
             where
                 B: #{SmithyHttpServer}::body::HttpBody + Send,
@@ -207,7 +228,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
-                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send>>;
+                type Future = $inputFuture;
 
                 fn from_request(request: #{http}::Request<B>) -> Self::Future {
                     let fut = async move {
@@ -217,7 +238,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             .await
                             .map_err(Into::into)
                     };
-                    Box::pin(fut)
+                    $inputFuture {
+                        inner: Box::pin(fut)
+                    }
                 }
             }
 
@@ -606,7 +629,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    input = #{parser}(bytes.as_ref(), input)?;
+                """,
+                *codegenScope,
+            )
+            if (protocol is RestJson) {
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    """,
+                    *codegenScope,
+                )
+            }
+            rustTemplate(
+                """
+                input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
                 *codegenScope,

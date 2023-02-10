@@ -22,10 +22,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -91,14 +89,10 @@ class ProtocolTestGenerator(
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
-            val moduleMeta = RustMetadata(
-                visibility = Visibility.PRIVATE,
-                additionalAttributes = listOf(
-                    Attribute.CfgTest,
-                    Attribute(allow("unreachable_code", "unused_variables")),
-                ),
+            val additionalAttributes = listOf(
+                Attribute(allow("unreachable_code", "unused_variables")),
             )
-            writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true)) {
+            writer.withInlineModule(RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)) {
                 renderAllTestCases(allTests)
             }
         }

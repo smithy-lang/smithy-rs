@@ -49,6 +49,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.head_revision }}
     - name: Generate diff
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -121,7 +122,7 @@ jobs:
 
         cargo doc --no-deps --all-features
         popd
-        ./tools/generate-doc-preview-index.sh ${{ inputs.base_revision }}
+        ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
         echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
     - uses: aws-actions/configure-aws-credentials@v1-node16

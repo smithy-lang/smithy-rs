@@ -20,10 +20,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -108,17 +108,15 @@ class RegionDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return usesRegion(codegenContext).thenSingletonListOf {
-            SdkConfigSection.create { section ->
-                {
-                    rust(
-                        """
-                        ${section.serviceConfigBuilder} =
-                             ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
-                        """,
-                    )
-                }
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder} =
+                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                    """,
+                )
             }
         }
     }

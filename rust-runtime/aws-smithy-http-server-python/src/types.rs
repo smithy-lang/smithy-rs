@@ -6,7 +6,9 @@
 //! Python wrapped types from aws-smithy-types and aws-smithy-http.
 
 use std::{
+    collections::HashMap,
     future::Future,
+    ops::Deref,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -14,7 +16,7 @@ use std::{
 
 use bytes::Bytes;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration},
+    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
     iter::IterNextOutput,
     prelude::*,
     pyclass::IterANextOutput,
@@ -431,6 +433,85 @@ impl ByteStream {
     }
 }
 
+/// Python Wrapper for [aws_smithy_types::Document].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Document(aws_smithy_types::Document);
+
+impl IntoPy<PyObject> for Document {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        use aws_smithy_types::{Document as D, Number};
+
+        match self.0 {
+            D::Object(obj) => obj
+                .into_iter()
+                .map(|(k, v)| (k, Document(v).into_py(py)))
+                .collect::<HashMap<_, _>>()
+                .into_py(py),
+            D::Array(vec) => vec
+                .into_iter()
+                .map(|d| Document(d).into_py(py))
+                .collect::<Vec<_>>()
+                .into_py(py),
+            D::Number(Number::Float(f)) => f.into_py(py),
+            D::Number(Number::PosInt(pi)) => pi.into_py(py),
+            D::Number(Number::NegInt(ni)) => ni.into_py(py),
+            D::String(str) => str.into_py(py),
+            D::Bool(bool) => bool.into_py(py),
+            D::Null => py.None(),
+        }
+    }
+}
+
+impl FromPyObject<'_> for Document {
+    fn extract(obj: &PyAny) -> PyResult<Self> {
+        use aws_smithy_types::{Document as D, Number};
+
+        if let Ok(obj) = obj.extract::<HashMap<String, Document>>() {
+            Ok(Self(D::Object(
+                obj.into_iter().map(|(k, v)| (k, v.0)).collect(),
+            )))
+        } else if let Ok(vec) = obj.extract::<Vec<Self>>() {
+            Ok(Self(D::Array(vec.into_iter().map(|d| d.0).collect())))
+        } else if let Ok(b) = obj.extract::<bool>() {
+            // This check must happen before any number checks because they cast
+            // `true`, `false` to `1`, `0` respectively.
+            Ok(Self(D::Bool(b)))
+        } else if let Ok(pi) = obj.extract::<u64>() {
+            Ok(Self(D::Number(Number::PosInt(pi))))
+        } else if let Ok(ni) = obj.extract::<i64>() {
+            Ok(Self(D::Number(Number::NegInt(ni))))
+        } else if let Ok(f) = obj.extract::<f64>() {
+            Ok(Self(D::Number(Number::Float(f))))
+        } else if let Ok(s) = obj.extract::<String>() {
+            Ok(Self(D::String(s)))
+        } else if obj.is_none() {
+            Ok(Self(D::Null))
+        } else {
+            Err(PyTypeError::new_err(format!(
+                "'{obj}' cannot be converted to 'Document'",
+            )))
+        }
+    }
+}
+
+// TODO(PythonSerialization): Get rid of this hack.
+// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
+// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
+// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
+impl Deref for Document {
+    type Target = aws_smithy_types::Document;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<aws_smithy_types::Document> for Document {
+    fn from(other: aws_smithy_types::Document) -> Document {
+        Document(other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pyo3::py_run;
@@ -520,5 +601,92 @@ mod tests {
             )
         });
         Ok(())
+    }
+
+    #[test]
+    fn document_type() {
+        use aws_smithy_types::{Document as D, Number};
+
+        crate::tests::initialize();
+
+        let cases = [
+            (D::Null, "None"),
+            (D::Bool(true), "True"),
+            (D::Bool(false), "False"),
+            (D::String("foobar".to_string()), "'foobar'"),
+            (D::Number(Number::Float(42.0)), "42.0"),
+            (D::Number(Number::PosInt(142)), "142"),
+            (D::Number(Number::NegInt(-152)), "-152"),
+            (
+                D::Array(vec![
+                    D::Bool(false),
+                    D::String("qux".to_string()),
+                    D::Number(Number::Float(1.0)),
+                    D::Array(vec![D::String("inner".to_string()), D::Bool(true)]),
+                ]),
+                "[False, 'qux', 1.0, ['inner', True]]",
+            ),
+            (
+                D::Object(
+                    [
+                        ("t".to_string(), D::Bool(true)),
+                        ("foo".to_string(), D::String("foo".to_string())),
+                        ("f42".to_string(), D::Number(Number::Float(42.0))),
+                        ("i42".to_string(), D::Number(Number::PosInt(42))),
+                        ("f".to_string(), D::Bool(false)),
+                        (
+                            "vec".to_string(),
+                            D::Array(vec![
+                                D::String("inner".to_string()),
+                                D::Object(
+                                    [
+                                        (
+                                            "nested".to_string(),
+                                            D::String("nested_value".to_string()),
+                                        ),
+                                        ("nested_num".to_string(), D::Number(Number::NegInt(-42))),
+                                    ]
+                                    .into(),
+                                ),
+                            ]),
+                        ),
+                    ]
+                    .into(),
+                ),
+                "{
+                    't': True, 
+                    'foo': 'foo', 
+                    'f42': 42.0, 
+                    'i42': 42, 
+                    'f': False,
+                    'vec': [
+                        'inner',
+                        {'nested': 'nested_value', 'nested_num': -42}
+                    ]
+                }",
+            ),
+        ];
+
+        for (rust_ty, python_repr) in cases {
+            // Rust -> Python
+            Python::with_gil(|py| {
+                let value = Document(rust_ty.clone()).into_py(py);
+                py_run!(py, value, &format!("assert value == {python_repr}"));
+            });
+
+            // Python -> Rust
+            Python::with_gil(|py| {
+                let py_value = py.eval(python_repr, None, None).unwrap();
+                let doc = py_value.extract::<Document>().unwrap();
+                assert_eq!(doc, Document(rust_ty.clone()));
+            });
+
+            // Rust -> Python -> Rust
+            Python::with_gil(|py| {
+                let doc = Document(rust_ty);
+                let doc2 = doc.clone().into_py(py).extract(py).unwrap();
+                assert_eq!(doc, doc2);
+            });
+        }
     }
 }

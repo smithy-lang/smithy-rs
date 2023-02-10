@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -90,7 +90,7 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
 }
 
-typealias HttpBindingCustomization = NamedSectionGenerator<HttpBindingSection>
+typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
 
 /**
  * This class generates Rust functions that (de)serialize data from/to an HTTP message.
