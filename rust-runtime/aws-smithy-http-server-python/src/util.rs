@@ -43,7 +43,6 @@ fn is_coroutine(py: Python, func: &PyObject) -> PyResult<bool> {
 }
 
 // Checks whether given Python type is `Optional[T]`.
-#[allow(unused)]
 pub fn is_optional_of<T: PyTypeInfo>(py: Python, ty: &PyAny) -> PyResult<bool> {
     // for reference: https://stackoverflow.com/a/56833826
 
