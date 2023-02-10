@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
@@ -55,7 +56,8 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): ServerCodegenContext = serverTestCodegenContext(
-        model, serviceShape,
+        model,
+        serviceShape,
         serverTestRustSettings(
             codegenConfig = ServerCodegenConfig(publicConstrainedTypes = publicConstrainedTypes),
         ),
@@ -67,15 +69,16 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
     ) {
+        val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-            ServerBuilderGenerator(codegenContext, shape).apply {
+            ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
                 writer.implBlock(shape, codegenContext.symbolProvider) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
-            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
                 writer.implBlock(shape, codegenContext.symbolProvider) {
                     renderConvenienceMethod(writer)
@@ -88,9 +91,8 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         writer: RustWriter,
         model: Model,
         symbolProvider: RustSymbolProvider,
-        operationSymbol: Symbol,
-        errors: List<StructureShape>,
+        operationOrEventStream: Shape,
     ) {
-        ServerOperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
+        ServerOperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
     }
 }

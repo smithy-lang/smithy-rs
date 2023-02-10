@@ -8,16 +8,14 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -83,19 +81,16 @@ internal class ServiceErrorGeneratorTest {
         rustCrate.lib {
             Attribute.AllowDeprecated.render(this, AttributeKind.Inner)
         }
-        rustCrate.withModule(RustModule.Error) {
-            for (operation in model.operationShapes) {
-                if (operation.id.namespace == "com.example") {
-                    OperationErrorGenerator(
-                        model,
-                        symbolProvider,
-                        symbolProvider.toSymbol(operation),
-                        operation.operationErrors(model).map { it as StructureShape },
-                    ).render(this)
+        for (operation in model.operationShapes) {
+            if (operation.id.namespace == "com.example") {
+                rustCrate.withModule(symbolProvider.symbolForOperationError(operation).module()) {
+                    OperationErrorGenerator(model, symbolProvider, operation).render(this)
                 }
             }
-            for (shape in model.structureShapes) {
-                if (shape.id.namespace == "com.example") {
+        }
+        for (shape in model.structureShapes) {
+            if (shape.id.namespace == "com.example") {
+                rustCrate.moduleFor(shape) {
                     StructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.CLIENT)
                 }
             }

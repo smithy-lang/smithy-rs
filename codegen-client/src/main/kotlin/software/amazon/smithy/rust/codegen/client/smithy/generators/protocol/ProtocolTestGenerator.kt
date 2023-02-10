@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -211,9 +210,9 @@ class ProtocolTestGenerator(
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
-        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -290,7 +289,7 @@ class ProtocolTestGenerator(
             "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
+            val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {

@@ -10,6 +10,7 @@
 //! This is _NOT_ intended to be an actual crate. It is a cargo project to solely to aid
 //! with local development of the SDK.
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,

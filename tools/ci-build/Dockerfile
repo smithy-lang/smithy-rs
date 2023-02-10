@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.62.1
+ARG rust_stable_version=1.63.0
 ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
@@ -154,6 +154,7 @@ ENV PATH=/opt/cargo/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

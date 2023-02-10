@@ -89,27 +89,24 @@ def main():
 def generate_and_commit_generated_code(revision_sha):
     # Clean the build artifacts before continuing
     run("rm -rf aws/sdk/build")
+    run("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
     run("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
     run("./gradlew --rerun-tasks :aws:sdk:assemble")
     run("./gradlew --rerun-tasks :codegen-server-test:assemble")
-    run("./gradlew --rerun-tasks :codegen-server-test:python:assemble")
+    run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True)
 
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
     run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
     run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
-    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}/")
+    run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/")
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
-    run(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 

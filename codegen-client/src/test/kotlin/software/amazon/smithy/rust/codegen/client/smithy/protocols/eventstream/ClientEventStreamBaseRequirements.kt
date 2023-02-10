@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -64,9 +64,8 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         writer: RustWriter,
         model: Model,
         symbolProvider: RustSymbolProvider,
-        operationSymbol: Symbol,
-        errors: List<StructureShape>,
+        operationOrEventStream: Shape,
     ) {
-        OperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
+        OperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
     }
 }

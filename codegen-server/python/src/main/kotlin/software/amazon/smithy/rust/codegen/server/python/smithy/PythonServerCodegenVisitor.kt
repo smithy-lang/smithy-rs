@@ -17,7 +17,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -27,6 +26,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -50,6 +50,7 @@ class PythonServerCodegenVisitor(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -131,8 +132,8 @@ class PythonServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            PythonServerEnumGenerator(codegenContext, writer, shape)
+        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
+            PythonServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 
