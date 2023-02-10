@@ -178,6 +178,7 @@ open class RustCrate(
     }
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/2341): Remove unconstrained/constrained from codegen-core
 val UnconstrainedModule =
     RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
 val ConstrainedModule =

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -202,7 +203,7 @@ class EnumGeneratorTest {
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.moduleFor(shape) {
-                rust("##![allow(deprecated)]")
+                AllowDeprecated.render(this)
                 renderEnum(model, provider, shape)
                 unitTest(
                     "unnamed_enums_implement_eq_and_hash",
@@ -245,7 +246,7 @@ class EnumGeneratorTest {
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
             project.moduleFor(shape) {
-                rust("##![allow(deprecated)]")
+                AllowDeprecated.render(this)
                 renderEnum(model, provider, shape)
                 unitTest(
                     "it_generates_unnamed_enums",

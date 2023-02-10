@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -85,7 +86,7 @@ internal class BuilderGeneratorTest {
             }
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(StructureGeneratorTest.struct) {
-            rust("##![allow(deprecated)]")
+            AllowDeprecated.render(this)
             StructureGenerator(model, provider, this, inner).render()
             StructureGenerator(model, provider, this, struct).render()
             BuilderGenerator(model, provider, struct).also { builderGenerator ->
