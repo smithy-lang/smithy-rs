@@ -1,7 +1,7 @@
 RFC: Improving access to request IDs in SDK clients
 ===================================================
 
-> Status: RFC
+> Status: Implemented in [#2129](https://github.com/awslabs/smithy-rs/pull/2129)
 >
 > Applies to: AWS SDK clients
 
@@ -207,21 +207,22 @@ match client.some_operation().send().await {
 Changes Checklist
 -----------------
 
-- [ ] Create the `RequestId` trait in `aws-http`
-- [ ] Implement for errors
-  - [ ] Implement `RequestId` for `SdkError` in `aws-http`
-  - [ ] Remove `request_id` from `aws_smithy_types::error::Error`, and store request IDs in its `extras` instead
-  - [ ] Implement `RequestId` for `aws_smithy_types::error::Error` in `aws-http`
-  - [ ] Remove generation of `request_id` accessors from `CombinedErrorGenerator` in `codegen-core`
-- [ ] Implement for outputs
-  - [ ] Add customization hooks to `StructureGenerator`
-  - [ ] Add customization hook to `ParseResponse`
-  - [ ] Customize output structure code gen in `sdk-codegen` to add either a request ID or a response field
-  - [ ] Customize `ParseResponse` in `sdk-codegen` to populate the outputs
-- [ ] Implement `RequestId` for `Operation` and `operation::Response`
-- [ ] Implement `RequestId` for `Result<O, E>` where `O` and `E` both implement `RequestId`
-- [ ] Re-export `RequestId` in generated crates
-- [ ] Add integration tests for each request ID access point
+- [x] Create the `RequestId` trait in `aws-http`
+- [x] Implement for errors
+  - [x] Implement `RequestId` for `SdkError` in `aws-http`
+  - [x] Remove `request_id` from `aws_smithy_types::error::Error`, and store request IDs in its `extras` instead
+  - [x] Implement `RequestId` for `aws_smithy_types::error::Error` in `aws-http`
+  - [x] Remove generation of `request_id` accessors from `CombinedErrorGenerator` in `codegen-core`
+- [x] Implement for outputs
+  - [x] Add customization hooks to `StructureGenerator`
+  - [x] Add customization hook to `ParseResponse`
+  - [x] Add customization hook to `HttpBoundProtocolGenerator`
+  - [x] Customize output structure code gen in `sdk-codegen` to add either a request ID or a response field
+  - [x] Customize `ParseResponse` in `sdk-codegen` to populate the outputs
+- [x] Implement `RequestId` for `Operation` and `operation::Response`
+- [x] Implement `RequestId` for `Result<O, E>` where `O` and `E` both implement `RequestId`
+- [x] Re-export `RequestId` in generated crates
+- [x] Add integration tests for each request ID access point
 
 Appendix A: Alternate solution for access on successful responses
 -----------------------------------------------------------------
