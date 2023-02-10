@@ -249,7 +249,7 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp
+    import aiohttp # type: ignore
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
