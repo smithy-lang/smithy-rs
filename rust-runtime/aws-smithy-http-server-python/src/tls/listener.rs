@@ -214,7 +214,7 @@ mod tests {
 
     fn client_config_with_cert(cert: &rcgen::Certificate) -> ClientConfig {
         let mut roots = RootCertStore::empty();
-        roots.add_parsable_certificates(&vec![cert.serialize_der().unwrap()]);
+        roots.add_parsable_certificates(&[cert.serialize_der().unwrap()]);
         ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(roots)
@@ -223,7 +223,7 @@ mod tests {
 
     fn cert_with_invalid_date() -> rcgen::Certificate {
         let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
-        params.not_after = rcgen::date_time_ymd(1970, 01, 01);
+        params.not_after = rcgen::date_time_ymd(1970, 1, 1);
         rcgen::Certificate::from_params(params).unwrap()
     }
 
