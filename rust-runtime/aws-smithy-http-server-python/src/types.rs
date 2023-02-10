@@ -6,7 +6,9 @@
 //! Python wrapped types from aws-smithy-types and aws-smithy-http.
 
 use std::{
+    collections::HashMap,
     future::Future,
+    ops::Deref,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -14,7 +16,7 @@ use std::{
 
 use bytes::Bytes;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration},
+    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
     iter::IterNextOutput,
     prelude::*,
     pyclass::IterANextOutput,
@@ -25,8 +27,11 @@ use tokio_stream::StreamExt;
 use crate::PyError;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Blob(aws_smithy_types::Blob);
 
 impl Blob {
@@ -56,6 +61,8 @@ impl Blob {
     }
 
     /// Python getter for the `Blob` byte array.
+    ///
+    /// :type bytes:
     #[getter(data)]
     pub fn get_data(&self) -> &[u8] {
         self.as_ref()
@@ -88,7 +95,7 @@ impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
 
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);
 
 #[pyclass]
@@ -132,6 +139,9 @@ impl DateTime {
 #[pymethods]
 impl DateTime {
     /// Creates a `DateTime` from a number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs(epoch_seconds: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -140,6 +150,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of milliseconds since the Unix epoch.
+    ///
+    /// :param epoch_millis int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_millis(epoch_millis: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -148,6 +161,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of nanoseconds since the Unix epoch.
+    ///
+    /// :param epoch_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_nanos(epoch_nanos: i128) -> PyResult<Self> {
         Ok(Self(
@@ -157,6 +173,12 @@ impl DateTime {
     }
 
     /// Read 1 date of `format` from `s`, expecting either `delim` or EOF.
+    ///
+    /// TODO(PythonTyping): How do we represent `char` in Python?
+    ///
+    /// :param format Format:
+    /// :param delim str:
+    /// :rtype typing.Tuple[DateTime, str]:
     #[staticmethod]
     pub fn read(s: &str, format: Format, delim: char) -> PyResult<(Self, &str)> {
         let (self_, next) = aws_smithy_types::date_time::DateTime::read(s, format.into(), delim)
@@ -165,6 +187,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :param fraction float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_fractional_secs(epoch_seconds: i64, fraction: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_fractional_secs(
@@ -174,6 +200,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
+    ///
+    /// :param seconds int:
+    /// :param subsecond_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_and_nanos(
@@ -183,6 +213,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_f64(epoch_seconds: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_f64(
@@ -191,6 +224,10 @@ impl DateTime {
     }
 
     /// Parses a `DateTime` from a string using the given `format`.
+    ///
+    /// :param s str:
+    /// :param format Format:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_str(s: &str, format: Format) -> PyResult<Self> {
         Ok(Self(
@@ -200,31 +237,43 @@ impl DateTime {
     }
 
     /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
+    ///
+    /// :rtype int:
     pub fn as_nanos(&self) -> i128 {
         self.0.as_nanos()
     }
 
     /// Returns the `DateTime` value as an `f64` representing the seconds since the Unix epoch.
+    ///
+    /// :rtype float:
     pub fn as_secs_f64(&self) -> f64 {
         self.0.as_secs_f64()
     }
 
     /// Returns true if sub-second nanos is greater than zero.
+    ///
+    /// :rtype bool:
     pub fn has_subsec_nanos(&self) -> bool {
         self.0.has_subsec_nanos()
     }
 
     /// Returns the epoch seconds component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn secs(&self) -> i64 {
         self.0.secs()
     }
 
     /// Returns the sub-second nanos component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn subsec_nanos(&self) -> u32 {
         self.0.subsec_nanos()
     }
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
+    ///
+    /// :rtype int:
     pub fn to_millis(&self) -> PyResult<i64> {
         Ok(self.0.to_millis().map_err(PyError::DateTimeConversion)?)
     }
@@ -281,6 +330,9 @@ impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
 ///
 /// The original Rust [ByteStream](aws_smithy_http::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
 /// [Clone] (required by PyO3) and to allow internal mutability, required to fetch the next chunk of data.
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
@@ -322,6 +374,12 @@ impl ByteStream {
     }
 }
 
+impl Default for ByteStream {
+    fn default() -> Self {
+        Self::new(aws_smithy_http::body::SdkBody::from(""))
+    }
+}
+
 /// ByteStream Abstractions.
 #[pymethods]
 impl ByteStream {
@@ -339,6 +397,9 @@ impl ByteStream {
     /// requiring Python to await this method.
     ///
     /// **NOTE:** This method will block the Rust event loop when it is running.
+    ///
+    /// :param path str:
+    /// :rtype ByteStream:
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
         let byte_stream = futures::executor::block_on(async {
@@ -352,6 +413,9 @@ impl ByteStream {
 
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, forcing
     /// Python to await this coroutine.
+    ///
+    /// :param path str:
+    /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -422,6 +486,85 @@ impl ByteStream {
                 }
             }
         }
+    }
+}
+
+/// Python Wrapper for [aws_smithy_types::Document].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Document(aws_smithy_types::Document);
+
+impl IntoPy<PyObject> for Document {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        use aws_smithy_types::{Document as D, Number};
+
+        match self.0 {
+            D::Object(obj) => obj
+                .into_iter()
+                .map(|(k, v)| (k, Document(v).into_py(py)))
+                .collect::<HashMap<_, _>>()
+                .into_py(py),
+            D::Array(vec) => vec
+                .into_iter()
+                .map(|d| Document(d).into_py(py))
+                .collect::<Vec<_>>()
+                .into_py(py),
+            D::Number(Number::Float(f)) => f.into_py(py),
+            D::Number(Number::PosInt(pi)) => pi.into_py(py),
+            D::Number(Number::NegInt(ni)) => ni.into_py(py),
+            D::String(str) => str.into_py(py),
+            D::Bool(bool) => bool.into_py(py),
+            D::Null => py.None(),
+        }
+    }
+}
+
+impl FromPyObject<'_> for Document {
+    fn extract(obj: &PyAny) -> PyResult<Self> {
+        use aws_smithy_types::{Document as D, Number};
+
+        if let Ok(obj) = obj.extract::<HashMap<String, Document>>() {
+            Ok(Self(D::Object(
+                obj.into_iter().map(|(k, v)| (k, v.0)).collect(),
+            )))
+        } else if let Ok(vec) = obj.extract::<Vec<Self>>() {
+            Ok(Self(D::Array(vec.into_iter().map(|d| d.0).collect())))
+        } else if let Ok(b) = obj.extract::<bool>() {
+            // This check must happen before any number checks because they cast
+            // `true`, `false` to `1`, `0` respectively.
+            Ok(Self(D::Bool(b)))
+        } else if let Ok(pi) = obj.extract::<u64>() {
+            Ok(Self(D::Number(Number::PosInt(pi))))
+        } else if let Ok(ni) = obj.extract::<i64>() {
+            Ok(Self(D::Number(Number::NegInt(ni))))
+        } else if let Ok(f) = obj.extract::<f64>() {
+            Ok(Self(D::Number(Number::Float(f))))
+        } else if let Ok(s) = obj.extract::<String>() {
+            Ok(Self(D::String(s)))
+        } else if obj.is_none() {
+            Ok(Self(D::Null))
+        } else {
+            Err(PyTypeError::new_err(format!(
+                "'{obj}' cannot be converted to 'Document'",
+            )))
+        }
+    }
+}
+
+// TODO(PythonSerialization): Get rid of this hack.
+// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
+// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
+// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
+impl Deref for Document {
+    type Target = aws_smithy_types::Document;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<aws_smithy_types::Document> for Document {
+    fn from(other: aws_smithy_types::Document) -> Document {
+        Document(other)
     }
 }
 
@@ -514,5 +657,92 @@ mod tests {
             )
         });
         Ok(())
+    }
+
+    #[test]
+    fn document_type() {
+        use aws_smithy_types::{Document as D, Number};
+
+        crate::tests::initialize();
+
+        let cases = [
+            (D::Null, "None"),
+            (D::Bool(true), "True"),
+            (D::Bool(false), "False"),
+            (D::String("foobar".to_string()), "'foobar'"),
+            (D::Number(Number::Float(42.0)), "42.0"),
+            (D::Number(Number::PosInt(142)), "142"),
+            (D::Number(Number::NegInt(-152)), "-152"),
+            (
+                D::Array(vec![
+                    D::Bool(false),
+                    D::String("qux".to_string()),
+                    D::Number(Number::Float(1.0)),
+                    D::Array(vec![D::String("inner".to_string()), D::Bool(true)]),
+                ]),
+                "[False, 'qux', 1.0, ['inner', True]]",
+            ),
+            (
+                D::Object(
+                    [
+                        ("t".to_string(), D::Bool(true)),
+                        ("foo".to_string(), D::String("foo".to_string())),
+                        ("f42".to_string(), D::Number(Number::Float(42.0))),
+                        ("i42".to_string(), D::Number(Number::PosInt(42))),
+                        ("f".to_string(), D::Bool(false)),
+                        (
+                            "vec".to_string(),
+                            D::Array(vec![
+                                D::String("inner".to_string()),
+                                D::Object(
+                                    [
+                                        (
+                                            "nested".to_string(),
+                                            D::String("nested_value".to_string()),
+                                        ),
+                                        ("nested_num".to_string(), D::Number(Number::NegInt(-42))),
+                                    ]
+                                    .into(),
+                                ),
+                            ]),
+                        ),
+                    ]
+                    .into(),
+                ),
+                "{
+                    't': True, 
+                    'foo': 'foo', 
+                    'f42': 42.0, 
+                    'i42': 42, 
+                    'f': False,
+                    'vec': [
+                        'inner',
+                        {'nested': 'nested_value', 'nested_num': -42}
+                    ]
+                }",
+            ),
+        ];
+
+        for (rust_ty, python_repr) in cases {
+            // Rust -> Python
+            Python::with_gil(|py| {
+                let value = Document(rust_ty.clone()).into_py(py);
+                py_run!(py, value, &format!("assert value == {python_repr}"));
+            });
+
+            // Python -> Rust
+            Python::with_gil(|py| {
+                let py_value = py.eval(python_repr, None, None).unwrap();
+                let doc = py_value.extract::<Document>().unwrap();
+                assert_eq!(doc, Document(rust_ty.clone()));
+            });
+
+            // Rust -> Python -> Rust
+            Python::with_gil(|py| {
+                let doc = Document(rust_ty);
+                let doc2 = doc.clone().into_py(py).extract(py).unwrap();
+                assert_eq!(doc, doc2);
+            });
+        }
     }
 }

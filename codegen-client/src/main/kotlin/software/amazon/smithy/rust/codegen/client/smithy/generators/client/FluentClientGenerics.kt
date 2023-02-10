@@ -90,9 +90,9 @@ data class FlexibleClientGenerics(
     }
 
     override fun toRustGenerics(): RustGenerics = RustGenerics(
-        GenericTypeArg("C", client.member("bounds::SmithyConnector")),
-        GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
-        GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
+        GenericTypeArg("C", client.resolve("bounds::SmithyConnector")),
+        GenericTypeArg("M", client.resolve("bounds::SmithyMiddleware<C>")),
+        GenericTypeArg("R", client.resolve("retry::NewRequestPolicy")),
     )
 
     private fun defaultType(default: RuntimeType?) = writable {

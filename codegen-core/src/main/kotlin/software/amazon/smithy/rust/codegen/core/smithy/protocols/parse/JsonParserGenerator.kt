@@ -25,10 +25,10 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -68,7 +68,7 @@ sealed class JsonParserSection(name: String) : Section(name) {
 /**
  * Customization for the JSON parser.
  */
-typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
+typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
 data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
 
@@ -101,20 +101,20 @@ class JsonParserGenerator(
     private val jsonDeserModule = RustModule.private("json_deser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
-        "Error" to smithyJson.member("deserialize::error::DeserializeError"),
-        "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
-        "expect_bool_or_null" to smithyJson.member("deserialize::token::expect_bool_or_null"),
-        "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-        "expect_number_or_null" to smithyJson.member("deserialize::token::expect_number_or_null"),
-        "expect_start_array" to smithyJson.member("deserialize::token::expect_start_array"),
-        "expect_start_object" to smithyJson.member("deserialize::token::expect_start_object"),
-        "expect_string_or_null" to smithyJson.member("deserialize::token::expect_string_or_null"),
-        "expect_timestamp_or_null" to smithyJson.member("deserialize::token::expect_timestamp_or_null"),
-        "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
-        "Peekable" to RuntimeType.std.member("iter::Peekable"),
-        "skip_value" to smithyJson.member("deserialize::token::skip_value"),
-        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
-        "Token" to smithyJson.member("deserialize::Token"),
+        "Error" to smithyJson.resolve("deserialize::error::DeserializeError"),
+        "expect_blob_or_null" to smithyJson.resolve("deserialize::token::expect_blob_or_null"),
+        "expect_bool_or_null" to smithyJson.resolve("deserialize::token::expect_bool_or_null"),
+        "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+        "expect_number_or_null" to smithyJson.resolve("deserialize::token::expect_number_or_null"),
+        "expect_start_array" to smithyJson.resolve("deserialize::token::expect_start_array"),
+        "expect_start_object" to smithyJson.resolve("deserialize::token::expect_start_object"),
+        "expect_string_or_null" to smithyJson.resolve("deserialize::token::expect_string_or_null"),
+        "expect_timestamp_or_null" to smithyJson.resolve("deserialize::token::expect_timestamp_or_null"),
+        "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+        "Peekable" to RuntimeType.std.resolve("iter::Peekable"),
+        "skip_value" to smithyJson.resolve("deserialize::token::skip_value"),
+        "skip_to_end" to smithyJson.resolve("deserialize::token::skip_to_end"),
+        "Token" to smithyJson.resolve("deserialize::Token"),
         "or_empty" to orEmptyJson(),
     )
 
@@ -296,8 +296,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeBlob(target: BlobShape) {
         rustTemplate(
-            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
+            "#{expect_blob_or_null}(tokens.next())?",
             *codegenScope,
         )
     }
@@ -348,7 +347,7 @@ class JsonParserGenerator(
                 member, HttpLocation.DOCUMENT,
                 TimestampFormatTrait.Format.EPOCH_SECONDS,
             )
-        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+        val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
         rustTemplate(
             "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
             "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
@@ -387,8 +386,22 @@ class JsonParserGenerator(
                                     withBlock("let value =", ";") {
                                         deserializeMember(shape.member)
                                     }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                    rust(
+                                        """
+                                        if let Some(value) = value {
+                                            items.push(value);
+                                        }
+                                        """,
+                                    )
+                                    codegenTarget.ifServer {
+                                        rustTemplate(
+                                            """
+                                            else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
+                                            }
+                                            """,
+                                            *codegenScope,
+                                        )
                                     }
                                 }
                             }
@@ -423,7 +436,7 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
+                    rust("let mut map = #T::new();", RuntimeType.HashMap)
                     objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
@@ -434,8 +447,24 @@ class JsonParserGenerator(
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
-                            rustBlock("if let Some(value) = value") {
-                                rust("map.insert(key, value);")
+                            codegenTarget.ifServer {
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                            }""",
+                                    *codegenScope,
+                                )
+                            }
+                            codegenTarget.ifClient {
+                                rustTemplate(
+                                    """
+                                    if let Some(value) = value {
+                                        map.insert(key, value);
+                                    }
+                                    """,
+                                )
                             }
                         }
                     }
@@ -491,6 +520,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -523,7 +553,7 @@ class JsonParserGenerator(
                                         } else {
                                             withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                                 deserializeMember(member)
-                                                unwrapOrDefaultOrError(member)
+                                                unwrapOrDefaultOrError(member, checkValueSet)
                                             }
                                         }
                                     }
@@ -561,8 +591,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(

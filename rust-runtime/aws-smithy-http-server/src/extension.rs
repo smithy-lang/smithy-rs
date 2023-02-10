@@ -19,27 +19,23 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use std::ops::Deref;
+use std::{fmt, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 
+use futures_util::ready;
+use futures_util::TryFuture;
 use thiserror::Error;
+use tower::{layer::util::Stack, Layer, Service};
 
-#[allow(deprecated)]
-use crate::request::RequestParts;
+use crate::operation::{Operation, OperationShape};
+use crate::plugin::{plugin_from_operation_name_fn, OperationNameFn, Plugin, PluginPipeline, PluginStack};
 
-pub use crate::request::extension::Extension;
-pub use crate::request::extension::MissingExtension;
+pub use crate::request::extension::{Extension, MissingExtension};
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
-/// This extension type is set when it has been correctly determined that the request should be
-/// routed to a particular operation. The operation handler might not even get invoked because the
-/// request fails to deserialize into the modeled operation input.
-///
-/// The format given must be the absolute shape ID with `#` replaced with a `.`.
-#[derive(Debug, Clone)]
-#[deprecated(
-    since = "0.52.0",
-    note = "This is no longer inserted by the new service builder. Layers should be constructed per operation using the plugin system."
-)]
+/// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
+/// that the request should be routed to a particular operation. The operation handler might not even get invoked
+/// because the request fails to deserialize into the modeled operation input.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -51,16 +47,16 @@ pub struct OperationExtension {
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error(". was not found - missing namespace")]
+    #[error("# was not found - missing namespace")]
     MissingNamespace,
 }
 
 #[allow(deprecated)]
 impl OperationExtension {
-    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    /// Creates a new [`OperationExtension`] from the absolute shape ID.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
         let (namespace, name) = absolute_operation_id
-            .rsplit_once('.')
+            .rsplit_once('#')
             .ok_or(ParseError::MissingNamespace)?;
         Ok(Self {
             absolute: absolute_operation_id,
@@ -82,6 +78,117 @@ impl OperationExtension {
     /// Returns the absolute operation shape ID.
     pub fn absolute(&self) -> &'static str {
         self.absolute
+    }
+}
+
+pin_project_lite::pin_project! {
+    /// The [`Service::Future`] of [`OperationExtensionService`] - inserts an [`OperationExtension`] into the
+    /// [`http::Response]`.
+    pub struct OperationExtensionFuture<Fut> {
+        #[pin]
+        inner: Fut,
+        operation_extension: Option<OperationExtension>
+    }
+}
+
+impl<Fut, RespB> Future for OperationExtensionFuture<Fut>
+where
+    Fut: TryFuture<Ok = http::Response<RespB>>,
+{
+    type Output = Result<http::Response<RespB>, Fut::Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        let resp = ready!(this.inner.try_poll(cx));
+        let ext = this
+            .operation_extension
+            .take()
+            .expect("futures cannot be polled after completion");
+        Poll::Ready(resp.map(|mut resp| {
+            resp.extensions_mut().insert(ext);
+            resp
+        }))
+    }
+}
+
+/// Inserts a [`OperationExtension`] into the extensions of the [`http::Response`].
+#[derive(Debug, Clone)]
+pub struct OperationExtensionService<S> {
+    inner: S,
+    operation_extension: OperationExtension,
+}
+
+impl<S, B, RespBody> Service<http::Request<B>> for OperationExtensionService<S>
+where
+    S: Service<http::Request<B>, Response = http::Response<RespBody>>,
+{
+    type Response = http::Response<RespBody>;
+    type Error = S::Error;
+    type Future = OperationExtensionFuture<S::Future>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        OperationExtensionFuture {
+            inner: self.inner.call(req),
+            operation_extension: Some(self.operation_extension.clone()),
+        }
+    }
+}
+
+/// A [`Layer`] applying the [`OperationExtensionService`] to an inner [`Service`].
+#[derive(Debug, Clone)]
+pub struct OperationExtensionLayer(OperationExtension);
+
+impl<S> Layer<S> for OperationExtensionLayer {
+    type Service = OperationExtensionService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        OperationExtensionService {
+            inner,
+            operation_extension: self.0.clone(),
+        }
+    }
+}
+
+/// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
+pub struct OperationExtensionPlugin(OperationNameFn<fn(&'static str) -> OperationExtensionLayer>);
+
+impl fmt::Debug for OperationExtensionPlugin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OperationExtensionPlugin").field(&"...").finish()
+    }
+}
+
+impl<P, Op, S, L> Plugin<P, Op, S, L> for OperationExtensionPlugin
+where
+    Op: OperationShape,
+{
+    type Service = S;
+    type Layer = Stack<L, OperationExtensionLayer>;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        <OperationNameFn<fn(&'static str) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+    }
+}
+
+/// An extension trait on [`PluginPipeline`] allowing the application of [`OperationExtensionPlugin`].
+///
+/// See [`module`](crate::extension) documentation for more info.
+pub trait OperationExtensionExt<P> {
+    /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`http::Response`].
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>>;
+}
+
+impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
+        let plugin = OperationExtensionPlugin(plugin_from_operation_name_fn(|name| {
+            let operation_extension = OperationExtension::new(name).expect("Operation name is malformed, this should never happen. Please file an issue against https://github.com/awslabs/smithy-rs");
+            OperationExtensionLayer(operation_extension)
+        }));
+        self.push(plugin)
     }
 }
 
@@ -125,45 +232,17 @@ impl Deref for RuntimeErrorExtension {
     }
 }
 
-/// Extract an [`Extension`] from a request.
-/// This is essentially the implementation of `FromRequest` for `Extension`, but with a
-/// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
-/// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
-#[deprecated(
-    since = "0.52.0",
-    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
-)]
-#[allow(deprecated)]
-pub async fn extract_extension<T, B>(
-    req: &mut RequestParts<B>,
-) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
-where
-    T: Clone + Send + Sync + 'static,
-    B: Send,
-{
-    let value = req
-        .extensions()
-        .ok_or(crate::rejection::RequestExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
-        .get::<T>()
-        .ok_or_else(|| {
-            crate::rejection::RequestExtensionNotFoundRejection::MissingExtension(format!(
-                "Extension of type `{}` was not found. Perhaps you forgot to add it?",
-                std::any::type_name::<T>()
-            ))
-        })
-        .map(|x| x.clone())?;
-
-    Ok(Extension(value))
-}
-
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
+    use tower::{service_fn, ServiceExt};
+
+    use crate::{operation::OperationShapeExt, proto::rest_json_1::RestJson1};
+
     use super::*;
 
     #[test]
     fn ext_accept() {
-        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let value = "com.amazonaws.ebs#CompleteSnapshot";
         let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
@@ -178,5 +257,34 @@ mod tests {
             OperationExtension::new(value).unwrap_err(),
             ParseError::MissingNamespace
         )
+    }
+
+    #[tokio::test]
+    async fn plugin() {
+        struct DummyOp;
+
+        impl OperationShape for DummyOp {
+            const NAME: &'static str = "com.amazonaws.ebs#CompleteSnapshot";
+
+            type Input = ();
+            type Output = ();
+            type Error = ();
+        }
+
+        // Apply `Plugin`.
+        let operation = DummyOp::from_handler(|_| async { Ok(()) });
+        let plugins = PluginPipeline::new().insert_operation_extension();
+        let op = Plugin::<RestJson1, DummyOp, _, _>::map(&plugins, operation);
+
+        // Apply `Plugin`s `Layer`.
+        let layer = op.layer;
+        let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
+        let svc = layer.layer(svc);
+
+        // Check for `OperationExtension`.
+        let response = svc.oneshot(http::Request::new(())).await.unwrap();
+        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
+        let actual = response.extensions().get::<OperationExtension>().unwrap();
+        assert_eq!(*actual, expected);
     }
 }

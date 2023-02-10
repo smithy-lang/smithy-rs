@@ -8,12 +8,12 @@ use std::iter::repeat_with;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
-use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
-use aws_types::{Credentials, SdkConfig};
+use aws_types::SdkConfig;
 use bytes::BytesMut;
 use futures_util::future;
 use hdrhistogram::sync::SyncHistogram;
@@ -22,34 +22,30 @@ use tokio::sync::Semaphore;
 use tokio::time::{Duration, Instant};
 use tracing::debug;
 
-const TASK_COUNT: usize = 10_000;
+// WARNING:
+// When testing this on your own computer, be sure to run the tests in several different terminals.
+// Depending on the terminal used, you may run into errors related to "Too many open files".
+
+const TASK_COUNT: usize = 1_000;
 // Larger requests take longer to send, which means we'll consume more network resources per
 // request, which means we can't support as many concurrent connections to S3.
-const TASK_PAYLOAD_LENGTH: usize = 10_000;
+const TASK_PAYLOAD_LENGTH: usize = 5_000;
 // At 130 and above, this test will fail with a `ConnectorError` from `hyper`. I've seen:
 // - ConnectorError { kind: Io, source: hyper::Error(Canceled, hyper::Error(Io, Os { code: 54, kind: ConnectionReset, message: "Connection reset by peer" })) }
 // - ConnectorError { kind: Io, source: hyper::Error(BodyWrite, Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }) }
 // These errors don't necessarily occur when actually running against S3 with concurrency levels
 // above 129. You can test it for yourself by running the
 // `test_concurrency_put_object_against_live` test that appears at the bottom of this file.
-const CONCURRENCY_LIMIT: usize = 129;
+const CONCURRENCY_LIMIT: usize = 50;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_concurrency_on_multi_thread_against_dummy_server() {
     let (server, server_addr) = start_agreeable_server().await;
     let _ = tokio::spawn(server);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
 
     test_concurrency(sdk_config).await;
@@ -60,17 +56,9 @@ async fn test_concurrency_on_single_thread_against_dummy_server() {
     let (server, server_addr) = start_agreeable_server().await;
     let _ = tokio::spawn(server);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
 
     test_concurrency(sdk_config).await;

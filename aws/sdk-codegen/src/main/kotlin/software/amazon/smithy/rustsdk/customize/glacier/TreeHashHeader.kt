@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.core.testutil.TokioWithTestMacros
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 
 val TreeHashDependencies = listOf(
@@ -24,7 +23,7 @@ val TreeHashDependencies = listOf(
     CargoDependency.TokioStream,
     CargoDependency.BytesUtils,
     CargoDependency.Bytes,
-    TokioWithTestMacros,
+    CargoDependency.Tokio,
     CargoDependency.Hex,
     CargoDependency.TempFile,
 )
@@ -34,13 +33,16 @@ private val UploadMultipartPart: ShapeId = ShapeId.from("com.amazonaws.glacier#U
 private val Applies = setOf(UploadArchive, UploadMultipartPart)
 
 class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    private val glacierChecksums = RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("glacier_checksums"))
+    private val glacierChecksums = RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "glacier_checksums",
+            additionalDependency = TreeHashDependencies.toTypedArray(),
+        ),
+    )
+
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
-                TreeHashDependencies.forEach { dep ->
-                    addDependency(dep)
-                }
                 rustTemplate(
                     """
                     #{glacier_checksums}::add_checksum_treehash(
@@ -50,6 +52,7 @@ class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustom
                     "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError(),
                 )
             }
+
             else -> emptySection
         }
     }

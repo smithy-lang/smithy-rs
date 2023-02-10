@@ -67,7 +67,7 @@ class UnionGenerator(
 
         renderUnion(unionSymbol)
         renderImplBlock(unionSymbol)
-        if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
+        if (!containerMeta.hasDebugDerive()) {
             if (shape.hasTrait<SensitiveTrait>()) {
                 renderFullyRedactedDebugImpl()
             } else {
@@ -110,7 +110,7 @@ class UnionGenerator(
                 val variantName = symbolProvider.toMemberName(member)
 
                 if (sortedMembers.size == 1) {
-                    Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
+                    Attribute.AllowIrrefutableLetPatterns.render(this)
                 }
                 writer.renderAsVariant(member, variantName, funcNamePart, unionSymbol, memberSymbol)
                 rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)
@@ -137,13 +137,13 @@ class UnionGenerator(
             }
             """,
             "Debug" to RuntimeType.Debug,
-            "StdFmt" to RuntimeType.stdfmt,
+            "StdFmt" to RuntimeType.stdFmt,
         )
     }
 
     private fun renderDebugImpl() {
         writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rustBlock("match self") {
                     sortedMembers.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

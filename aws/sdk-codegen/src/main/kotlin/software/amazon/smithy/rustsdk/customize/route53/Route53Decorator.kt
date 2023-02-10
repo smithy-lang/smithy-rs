@@ -13,12 +13,10 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -30,7 +28,7 @@ import java.util.logging.Logger
 
 val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
 
-class Route53Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class Route53Decorator : ClientCodegenDecorator {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
@@ -61,9 +59,6 @@ class Route53Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCod
         } else baseCustomizations
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
-
     private fun isResourceId(shape: Shape): Boolean {
         return (shape is MemberShape && resourceShapes.contains(shape.target)) && shape.hasTrait<HttpLabelTrait>()
     }
@@ -77,7 +72,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
         RuntimeType.forInlineDependency(
             InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
         )
-            .member("trim_resource_id")
+            .resolve("trim_resource_id")
 
     override fun section(section: OperationSection): Writable {
         return when (section) {

@@ -22,9 +22,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * This exposes [RuntimeType]s for the individual components of endpoints 2.0
  */
 class EndpointTypesGenerator(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val rules: EndpointRuleSet?,
-    private val tests: List<EndpointTestCase>,
+    val tests: List<EndpointTestCase>,
 ) {
     val params: Parameters = rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -33,19 +33,29 @@ class EndpointTypesGenerator(
         .flatMap { it.customRuntimeFunctions(codegenContext) }
 
     companion object {
-        fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator? {
+        fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
             val index = EndpointRulesetIndex.of(codegenContext.model)
             val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
-            return rulesOrNull?.let { rules ->
-                EndpointTypesGenerator(codegenContext, rules, index.endpointTests(codegenContext.serviceShape))
-            }
+            return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape))
         }
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(params).paramsStruct()
-    fun defaultResolver(): RuntimeType? = rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
+    fun defaultResolver(): RuntimeType? =
+        rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
+
     fun testGenerator(): Writable =
-        defaultResolver()?.let { EndpointTestGenerator(tests, paramsStruct(), it, params, runtimeConfig).generate() } ?: {}
+        defaultResolver()?.let {
+            EndpointTestGenerator(
+                tests,
+                paramsStruct(),
+                it,
+                params,
+                codegenContext = codegenContext,
+                endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext),
+            ).generate()
+        }
+            ?: {}
 
     /**
      * Load the builtIn value for [parameter] from the endpoint customizations. If the built-in comes from service config,
@@ -55,7 +65,7 @@ class EndpointTypesGenerator(
      */
     fun builtInFor(parameter: Parameter, config: String): Writable? {
         val defaultProviders = customizations
-            .mapNotNull { it.builtInDefaultValue(parameter, config) }
+            .mapNotNull { it.loadBuiltInFromServiceConfig(parameter, config) }
         if (defaultProviders.size > 1) {
             error("Multiple providers provided a value for the builtin $parameter")
         }

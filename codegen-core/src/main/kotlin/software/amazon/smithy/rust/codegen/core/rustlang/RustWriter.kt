@@ -10,6 +10,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.codegen.core.SymbolWriter
 import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
@@ -22,6 +23,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -147,6 +149,16 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust
+ */
+fun RustWriter.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents, *args)
+}
+
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
@@ -251,27 +263,39 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 }
 
 fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
-    docs: String? = null,
+    docString: String? = null,
     autoSuppressMissingDocs: Boolean = true,
     note: String? = null,
 ): T {
-    when (docs?.isNotBlank()) {
-        // If docs are modeled, then place them on the code generated shape
+    val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
         true -> {
-            this.docs(normalizeHtml(escape(docs)))
-            note?.also {
-                // Add a blank line between the docs and the note to visually differentiate
-                write("///")
-                docs("_Note: ${it}_")
-            }
+            { docs(normalizeHtml(escape(docString))) }
         }
-        // Otherwise, suppress the missing docs lint for this shape since
-        // the lack of documentation is a modeling issue rather than a codegen issue.
-        else -> if (autoSuppressMissingDocs) {
-            rust("##[allow(missing_docs)] // documentation missing in model")
-        }
-    }
 
+        else -> null
+    }
+    return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
+}
+
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docsWritable: (T.() -> Unit)? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    if (docsWritable != null) {
+        // If docs are modeled, then place them on the code generated shape
+
+        docsWritable(this)
+        note?.also {
+            // Add a blank line between the docs and the note to visually differentiate
+            write("///")
+            docs("_Note: ${it}_")
+        }
+    } else if (autoSuppressMissingDocs) {
+        rust("##[allow(missing_docs)] // documentation missing in model")
+    }
+    // Otherwise, suppress the missing docs lint for this shape since
+    // the lack of documentation is a modeling issue rather than a codegen issue.
     return this
 }
 
@@ -324,7 +348,7 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val note = deprecatedTrait.message.orNull()
     val since = deprecatedTrait.since.orNull()
 
-    Attribute.Custom.deprecated(note, since).render(this)
+    Attribute(deprecated(since, note)).render(this)
 
     return this
 }
@@ -374,6 +398,8 @@ class RustWriter private constructor(
     private val printWarning: Boolean = true,
     /** Insert comments indicating where code was generated */
     private val debugMode: Boolean = false,
+    /** When true, automatically change all dependencies to be in the test scope */
+    val devDependenciesOnly: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
     companion object {
@@ -387,8 +413,16 @@ class RustWriter private constructor(
         fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
             when {
                 fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                fileName.endsWith(".py") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
                 fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
+                fileName.startsWith("tests/") -> RustWriter(
+                    fileName,
+                    namespace,
+                    debugMode = debugMode,
+                    devDependenciesOnly = true,
+                )
+
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
@@ -454,6 +488,22 @@ class RustWriter private constructor(
         preamble.add(preWriter)
     }
 
+    private fun addDependencyTestAware(dependencyContainer: SymbolDependencyContainer): RustWriter {
+        if (!devDependenciesOnly) {
+            super.addDependency(dependencyContainer)
+        } else {
+            dependencyContainer.dependencies.forEach { dependency ->
+                super.addDependency(
+                    when (val dep = RustDependency.fromSymbolDependency(dependency)) {
+                        is CargoDependency -> dep.toDevDependency()
+                        else -> dependencyContainer
+                    },
+                )
+            }
+        }
+        return this
+    }
+
     /**
      * Create an inline module. Instead of being in a new file, inline modules are written as a `mod { ... }` block
      * directly into the parent.
@@ -461,7 +511,7 @@ class RustWriter private constructor(
      * Callers must take care to use [this] when writing to ensure code is written to the right place:
      * ```kotlin
      * val writer = RustWriter.forModule("model")
-     * writer.withModule(RustModule.public("nested")) {
+     * writer.withInlineModule(RustModule.public("nested")) {
      *   Generator(...).render(this) // GOOD
      *   Generator(...).render(writer) // WRONG!
      * }
@@ -479,14 +529,19 @@ class RustWriter private constructor(
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
-        val innerWriter = RustWriter(this.filename, "${this.namespace}::${module.name}", printWarning = false)
+        val innerWriter = RustWriter(
+            this.filename,
+            "${this.namespace}::${module.name}",
+            printWarning = false,
+            devDependenciesOnly = devDependenciesOnly || module.tests,
+        )
         moduleWriter(innerWriter)
         module.documentation?.let { docs -> docs(docs) }
         module.rustMetadata.render(this)
         rustBlock("mod ${module.name}") {
             writeWithNoFormatting(innerWriter.toString())
         }
-        innerWriter.dependencies.forEach { addDependency(it) }
+        innerWriter.dependencies.forEach { addDependencyTestAware(it) }
         return this
     }
 
@@ -585,7 +640,7 @@ class RustWriter private constructor(
     override fun toString(): String {
         val contents = super.toString()
         val preheader = if (preamble.isNotEmpty()) {
-            val prewriter = RustWriter(filename, namespace, printWarning = false)
+            val prewriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             preamble.forEach { it(prewriter) }
             prewriter.toString()
         } else null
@@ -603,7 +658,7 @@ class RustWriter private constructor(
     fun format(r: Any) = formatter.apply(r, "")
 
     fun addDepsRecursively(symbol: Symbol) {
-        addDependency(symbol)
+        addDependencyTestAware(symbol)
         symbol.references.forEach { addDepsRecursively(it.symbol) }
     }
 
@@ -627,9 +682,9 @@ class RustWriter private constructor(
             @Suppress("UNCHECKED_CAST")
             val func =
                 t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
-            val innerWriter = RustWriter(filename, namespace, printWarning = false)
+            val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             func(innerWriter)
-            innerWriter.dependencies.forEach { addDependency(it) }
+            innerWriter.dependencies.forEach { addDependencyTestAware(it) }
             return innerWriter.toString().trimEnd()
         }
     }
@@ -638,7 +693,7 @@ class RustWriter private constructor(
         override fun apply(t: Any, u: String): String {
             return when (t) {
                 is RuntimeType -> {
-                    t.dependency?.also { addDependency(it) }
+                    t.dependency?.also { addDependencyTestAware(it) }
                     // for now, use the fully qualified type name
                     t.fullyQualifiedName()
                 }
@@ -656,9 +711,9 @@ class RustWriter private constructor(
                     @Suppress("UNCHECKED_CAST")
                     val func =
                         t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
-                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
                     func(innerWriter)
-                    innerWriter.dependencies.forEach { addDependency(it) }
+                    innerWriter.dependencies.forEach { addDependencyTestAware(it) }
                     return innerWriter.toString().trimEnd()
                 }
 

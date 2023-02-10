@@ -16,7 +16,7 @@ val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val pluginName = "rust-codegen"
+val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
 
 buildscript {
@@ -89,6 +89,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         ),
         CodegenTest("aws.protocoltests.json#TestService", "endpoint-rules"),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
+        CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-awsjson-client", imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy")),
     )
 }
 

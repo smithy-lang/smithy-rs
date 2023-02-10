@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -14,10 +15,11 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -33,12 +35,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import software.amazon.smithy.rustsdk.endpoints.stripEndpointTrait
+import software.amazon.smithy.rustsdk.getBuiltIn
+import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
 
 /**
  * Top level decorator for S3
  */
-class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class S3Decorator : ClientCodegenDecorator {
     override val name: String = "S3"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
@@ -69,7 +74,7 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
                     logger.info("Adding AllowInvalidXmlRoot trait to $it")
                     (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
-            }
+            }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
         }
     }
 
@@ -80,8 +85,23 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         it + S3PubUse()
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        return listOf(object : EndpointCustomization {
+            override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                if (!name.startsWith("AWS::S3")) {
+                    return null
+                }
+                val builtIn = codegenContext.getBuiltIn(name) ?: return null
+                return writable {
+                    rustTemplate(
+                        "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
+                        "value" to value.toWritable(),
+                    )
+                }
+            }
+        },
+        )
+    }
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
@@ -92,10 +112,10 @@ class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "Response" to RuntimeType.http.member("Response"),
-        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).toType().member("decode::XmlDecodeError"),
+        "Error" to RuntimeType.genericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.HttpHeaderMap,
+        "Response" to RuntimeType.HttpResponse,
+        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
         "s3_errors" to AwsRuntimeType.S3Errors,
     )
@@ -134,6 +154,7 @@ class S3PubUse : LibRsCustomization() {
                 AwsRuntimeType.S3Errors,
             )
         }
+
         else -> emptySection
     }
 }

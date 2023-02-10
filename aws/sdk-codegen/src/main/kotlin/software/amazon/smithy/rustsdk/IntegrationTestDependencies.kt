@@ -6,8 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
@@ -28,15 +27,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolute
 
-class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class IntegrationTestDecorator : ClientCodegenDecorator {
     override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
@@ -65,9 +64,6 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
             baseCustomizations
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class IntegrationTestDependencies(
@@ -77,7 +73,7 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
-        is LibRsSection.Body -> writable {
+        is LibRsSection.Body -> testDependenciesOnly {
             if (hasTests) {
                 val smithyClient = CargoDependency.smithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
@@ -86,7 +82,7 @@ class IntegrationTestDependencies(
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
-                addDependency(Tracing)
+                addDependency(Tracing.toDevDependency())
                 addDependency(TracingSubscriber)
             }
             if (hasBenches) {
@@ -96,6 +92,7 @@ class IntegrationTestDependencies(
                 serviceSpecific.section(section)(this)
             }
         }
+
         else -> emptySection
     }
 
@@ -119,8 +116,8 @@ class S3TestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStd)
-            addDependency(BytesUtils)
-            addDependency(FastRand)
+            addDependency(BytesUtils.toDevDependency())
+            addDependency(FastRand.toDevDependency())
             addDependency(HdrHistogram)
             addDependency(Smol)
             addDependency(TempFile)

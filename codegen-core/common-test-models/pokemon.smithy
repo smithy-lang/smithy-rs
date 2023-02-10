@@ -38,13 +38,13 @@ resource Storage {
 operation GetStorage {
     input: GetStorageInput,
     output: GetStorageOutput,
-    errors: [ResourceNotFoundException, NotAuthorized, ValidationException],
+    errors: [ResourceNotFoundException, StorageAccessNotAuthorized, ValidationException],
 }
 
 /// Not authorized to access Pokémon storage.
 @error("client")
 @httpError(401)
-structure NotAuthorized {}
+structure StorageAccessNotAuthorized {}
 
 /// A request to access Pokémon storage.
 @input

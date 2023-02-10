@@ -3,19 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::signer::{
-    OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
-};
-use aws_sigv4::http_request::SignableBody;
-use aws_smithy_http::middleware::MapRequest;
-use aws_smithy_http::operation::Request;
-use aws_smithy_http::property_bag::PropertyBag;
-use aws_types::region::SigningRegion;
-use aws_types::Credentials;
-use aws_types::SigningService;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
+
+use aws_smithy_http::middleware::MapRequest;
+use aws_smithy_http::operation::Request;
+use aws_smithy_http::property_bag::PropertyBag;
+
+use aws_credential_types::Credentials;
+use aws_sigv4::http_request::SignableBody;
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
+
+use crate::signer::{
+    OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
+};
 
 /// Container for the request signature for use in the property bag.
 #[non_exhaustive]
@@ -186,22 +189,23 @@ impl MapRequest for SigV4SigningStage {
 
 #[cfg(test)]
 mod test {
+    use std::convert::Infallible;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::middleware::MapRequest;
+    use aws_smithy_http::operation;
+    use http::header::AUTHORIZATION;
+
+    use aws_credential_types::Credentials;
+    use aws_endpoint::AwsAuthStage;
+    use aws_types::region::{Region, SigningRegion};
+    use aws_types::SigningService;
+
     use crate::middleware::{
         SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
     };
     use crate::signer::{OperationSigningConfig, SigV4Signer};
-    use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-    use aws_endpoint::{AwsAuthStage, Params};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::endpoint::ResolveEndpoint;
-    use aws_smithy_http::middleware::MapRequest;
-    use aws_smithy_http::operation;
-    use aws_types::region::{Region, SigningRegion};
-    use aws_types::Credentials;
-    use aws_types::SigningService;
-    use http::header::AUTHORIZATION;
-    use std::convert::Infallible;
-    use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
     fn places_signature_in_property_bag() {
@@ -216,7 +220,7 @@ mod test {
                 properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
                 properties.insert(SigningService::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
-                properties.insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+                properties.insert(Credentials::for_tests());
                 properties.insert(SigningRegion::from(region));
                 Result::<_, Infallible>::Ok(req)
             })
@@ -233,29 +237,21 @@ mod test {
     // check that the endpoint middleware followed by signing middleware produce the expected result
     #[test]
     fn endpoint_plus_signer() {
-        let provider = aws_endpoint::EndpointShim::from_resolver(
-            aws_endpoint::partition::endpoint::Metadata {
-                uri_template: "kinesis.{region}.amazonaws.com",
-                protocol: Protocol::Https,
-                credential_scope: Default::default(),
-                signature_versions: SignatureVersion::V4,
-            },
-        );
+        use aws_smithy_types::endpoint::Endpoint;
+        let endpoint = Endpoint::builder()
+            .url("https://kinesis.us-east-1.amazonaws.com")
+            .build();
         let req = http::Request::builder()
             .uri("https://kinesis.us-east-1.amazonaws.com")
             .body(SdkBody::from(""))
             .unwrap();
-        let region = Region::new("us-east-1");
+        let region = SigningRegion::from_static("us-east-1");
         let req = operation::Request::new(req)
             .augment(|req, conf| {
                 conf.insert(region.clone());
                 conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
                 conf.insert(SigningService::from_static("kinesis"));
-                conf.insert(
-                    provider
-                        .resolve_endpoint(&Params::new(Some(region.clone())))
-                        .unwrap(),
-                );
+                conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)
             })
             .expect("succeeds");
@@ -274,8 +270,7 @@ mod test {
                 .apply(req.try_clone().expect("can clone"))
                 .expect_err("no cred provider"),
         );
-        req.properties_mut()
-            .insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+        req.properties_mut().insert(Credentials::for_tests());
         let req = signer.apply(req).expect("signing succeeded");
         // make sure we got the correct error types in any order
         assert!(errs.iter().all(|el| matches!(
@@ -296,7 +291,9 @@ mod test {
         let auth_header = req
             .headers()
             .get(AUTHORIZATION)
-            .expect("auth header must be present");
-        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=af71a409f0229dfd6e88409cd1b11f5c2803868d6869888e53bbf9ee12a97ea0");
+            .expect("auth header must be present")
+            .to_str()
+            .unwrap();
+        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=228edaefb06378ac8d050252ea18a219da66117dd72759f4d1d60f02ebc3db64");
     }
 }

@@ -1,0 +1,78 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow claims the names of the unpublished crates in this repository
+# on crates.io (by publishing a dummy empty package)
+
+# Allow only one crate claim workflow to run at a time
+concurrency:
+  group: claim-crates-smithy-rs
+  cancel-in-progress: true
+
+env:
+  rust_version: 1.62.1
+
+name: Claim unpublished crate names on crates.io
+run-name: ${{ github.workflow }}
+on:
+  # It runs daily, but it can also be triggered on demand.
+  workflow_dispatch:
+  schedule:
+  - cron: 0 11 * * *     # run at 11:00 UTC (morning) every day
+
+jobs:
+  main-branch-check:
+    name: Check that workflow is running in main
+    runs-on: ubuntu-latest
+    steps:
+    - name: Main branch check
+      if: ${{ github.ref_name != 'main' }}
+      uses: actions/github-script@v6
+      with:
+        script: |
+          core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
+
+  # This job will be a no-op if an image was already built on main by another workflow.
+  acquire-base-image:
+    name: Acquire Base Image
+    needs:
+    - main-branch-check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        fetch-depth: 0
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  claim:
+    name: Claim crate names
+    needs:
+    - main-branch-check
+    - acquire-base-image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v3
+    - name: Publish to crates.io
+      shell: bash
+      env:
+        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+      run: |
+        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
+        cargo install --path tools/ci-build/publisher
+        # Verify the publisher tool installed successfully
+        publisher --version
+        publisher claim-crate-names -y

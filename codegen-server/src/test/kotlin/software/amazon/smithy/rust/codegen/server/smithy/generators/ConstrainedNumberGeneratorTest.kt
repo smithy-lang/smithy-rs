@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -71,7 +72,12 @@ class ConstrainedNumberGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedNumberGenerator(codegenContext, this, shape).render()
+            ConstrainedNumberGenerator(
+                codegenContext,
+                this,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
 
             unitTest(
                 name = "try_from_success",
@@ -132,7 +138,12 @@ class ConstrainedNumberGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
 
         val writer = RustWriter.forModule(ModelsModule.name)
-        ConstrainedNumberGenerator(codegenContext, writer, constrainedShape).render()
+        ConstrainedNumberGenerator(
+            codegenContext,
+            writer,
+            constrainedShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct $shapeName(pub(crate) $rustType);"

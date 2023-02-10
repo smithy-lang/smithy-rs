@@ -12,6 +12,31 @@ deployed SDK is functioning correctly. Similarly, it can be used to verify
 the previous version of the SDK continues to work after the deployment
 of the new version.
 
+Running the canary locally
+--------------------------
+For testing, it's helpful to be able to run the canary locally. To accomplish this, you first need to generate a
+Cargo.toml:
+
+```bash
+cd ../canary-runner
+# to use a version of the SDK, use `--sdk-version` instead
+cargo run -- build-bundle \
+  --sdk-path ../../../aws/sdk/build/aws-sdk/sdk/ \
+  --canary-path ../canary-lambda \
+  --manifest-only
+```
+
+Next, come back to the `canary-lambda` directory where you can use `cargo run` in `--local` mode to
+invoke the canary:
+
+> Note: if your default configuration does not provide a region, you must provide a region via the `AWS_REGION`
+> environment variable.
+
+```bash
+export CANARY_S3_BUCKET_NAME=<your bucket name>
+# run with `--all-features` so you run all canaries (including canaries that don't work against older versions)
+cargo run --all-features -- --local
+```
 
 Building locally for Lambda from Amazon Linux 2
 -----------------------------------------------

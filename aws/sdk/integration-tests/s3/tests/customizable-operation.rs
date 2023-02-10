@@ -4,10 +4,10 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
-use aws_types::credentials::SharedCredentialsProvider;
 
 use std::convert::Infallible;
 use std::time::{Duration, UNIX_EPOCH};
@@ -16,13 +16,7 @@ use std::time::{Duration, UNIX_EPOCH};
 async fn test_s3_ops_are_customizable() {
     let (conn, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();

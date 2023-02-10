@@ -1,11 +1,16 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
 name = "transcribestreaming"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [dev-dependencies]
 async-stream = "0.3.0"
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }

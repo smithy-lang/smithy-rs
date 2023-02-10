@@ -9,6 +9,7 @@ import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -16,8 +17,11 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
@@ -33,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 import java.nio.file.Files.createTempDirectory
@@ -57,13 +62,13 @@ private fun tempDir(directory: File? = null): File {
  */
 object TestWorkspace {
     private val baseDir by lazy {
-        val homeDir = System.getProperty("APPDATA")
+        val appDataDir = System.getProperty("APPDATA")
             ?: System.getenv("XDG_DATA_HOME")
             ?: System.getProperty("user.home")
-                ?.let { Path.of(it, "Library/Application Support").absolutePathString() }
-                ?.takeIf { File(it).exists() }
-        if (homeDir != null) {
-            File(Path.of(homeDir, "smithy-test-workspace").absolutePathString())
+                ?.let { Path.of(it, ".local", "share").absolutePathString() }
+                ?.also { File(it).mkdirs() }
+        if (appDataDir != null) {
+            File(Path.of(appDataDir, "smithy-test-workspace").absolutePathString())
         } else {
             System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
         }
@@ -189,8 +194,7 @@ fun generatePluginContext(
         )
     }
 
-    val settings = settingsBuilder.merge(additionalSettings)
-        .build()
+    val settings = settingsBuilder.merge(additionalSettings).build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
     return pluginContext to testPath
 }
@@ -212,10 +216,57 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
+    attribute: Attribute = Attribute.Test,
+    async: Boolean = false,
     block: Writable,
 ): RustWriter {
-    raw("#[test]")
-    return rustBlock("fn $name()", *args, block = block)
+    attribute.render(this)
+    if (async) {
+        rust("async")
+    }
+    return testDependenciesOnly { rustBlock("fn $name()", *args, block = block) }
+}
+
+fun RustWriter.cargoDependencies() = dependencies.map { RustDependency.fromSymbolDependency(it) }
+    .filterIsInstance<CargoDependency>().distinct()
+
+fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (CargoDependency) -> String?): RustWriter {
+    val startingDependencies = cargoDependencies().toSet()
+    block(this)
+    val endingDependencies = cargoDependencies().toSet()
+    val newDeps = (endingDependencies - startingDependencies)
+    val invalidDeps =
+        newDeps.mapNotNull { dep -> dependencyFilter(dep)?.let { message -> message to dep } }.orNullIfEmpty()
+    if (invalidDeps != null) {
+        val badDeps = invalidDeps.map { it.second.rustName }
+        val writtenOut = this.toString()
+        val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
+        throw CodegenException(
+            "found invalid dependencies. ${invalidDeps.map { it.first }}\nHint: the following lines may be the problem.\n${
+            badLines.joinToString(
+                separator = "\n",
+                prefix = "   ",
+            )
+            }",
+        )
+    }
+    return this
+}
+
+fun RustWriter.testDependenciesOnly(block: Writable) = assertNoNewDependencies(block) { dep ->
+    if (dep.scope != DependencyScope.Dev) {
+        "Cannot add $dep — this writer should only add test dependencies."
+    } else {
+        null
+    }
+}
+
+fun testDependenciesOnly(block: Writable): Writable = {
+    testDependenciesOnly(block)
+}
+
+fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
+    unitTest(name, attribute = Attribute.TokioTest, async = true, block = block, args = args)
 }
 
 /**
@@ -241,6 +292,13 @@ class TestWriterDelegator(
 
     fun generatedFiles() = fileManifest.files.map { baseDir.relativize(it) }
 }
+
+/**
+ * Generate a newtest module
+ *
+ * This should only be used in test code—the generated module name will be something like `tests_123`
+ */
+fun RustCrate.testModule(block: Writable) = lib { withInlineModule(RustModule.inlineTests(safeName("tests")), block) }
 
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path ->
@@ -414,8 +472,11 @@ fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile(
 
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {
-        unitTest(safeName("test")) {
-            test(this)
+        val name = safeName("test")
+        withInlineModule(RustModule.inlineTests(name)) {
+            unitTest(name) {
+                test(this)
+            }
         }
     }
     return this

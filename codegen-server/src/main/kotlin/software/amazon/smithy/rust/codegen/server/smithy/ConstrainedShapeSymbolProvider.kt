@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -78,7 +79,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
+                    check(shape.hasTrait<LengthTrait>()) {
+                        "Only the `length` constraint trait can be applied to map shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val keySymbol = this.toSymbol(shape.key)
@@ -91,7 +94,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
+                    check(constrainedCollectionCheck(shape)) {
+                        "Only the `length` and `uniqueItems` constraint traits can be applied to list shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
@@ -99,7 +104,7 @@ class ConstrainedShapeSymbolProvider(
                 }
             }
 
-            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
+            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                     symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()

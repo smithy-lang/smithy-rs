@@ -10,6 +10,8 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -66,8 +68,8 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
         .build()
 }
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("error::SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     fun missingField(field: String, details: String) = writable {
@@ -113,7 +115,9 @@ class BuilderGenerator(
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.builderSymbol(symbolProvider)
     private val baseDerives = structureSymbol.expectRustMetadata().derives
-    private val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+
+    // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
+    private val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
     private val builderName = "Builder"
 
     fun render(writer: RustWriter) {
@@ -122,7 +126,7 @@ class BuilderGenerator(
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
             // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
             renderBuilder(this)
-            if (!builderDerives.contains(RuntimeType.Debug)) {
+            if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
                 renderDebugImpl(this)
             }
         }
@@ -203,7 +207,7 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
-        baseDerives.copy(derives = builderDerives).render(writer)
+        Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
@@ -236,7 +240,7 @@ class BuilderGenerator(
 
     private fun renderDebugImpl(writer: RustWriter) {
         writer.rustBlock("impl #T for $builderName", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)

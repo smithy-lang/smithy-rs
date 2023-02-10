@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -78,7 +78,7 @@ internal class ServiceConfigGeneratorTest {
 
     @Test
     fun `generate customizations as specified`() {
-        class ServiceCustomizer : NamedSectionGenerator<ServiceConfig>() {
+        class ServiceCustomizer : NamedCustomization<ServiceConfig>() {
             override fun section(section: ServiceConfig): Writable {
                 return when (section) {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection

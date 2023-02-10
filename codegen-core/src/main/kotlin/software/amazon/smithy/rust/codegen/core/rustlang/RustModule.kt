@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+
 /**
  * RustModule system.
  *
@@ -30,7 +32,10 @@ sealed class RustModule {
         val documentation: String? = null,
         val parent: RustModule = LibRs,
         val inline: Boolean = false,
+        /* module is a cfg(test) module */
+        val tests: Boolean = false,
     ) : RustModule() {
+
         init {
             check(!name.contains("::")) {
                 "Module names CANNOT contain `::`—modules must be nested with parent (name was: `$name`)"
@@ -43,6 +48,12 @@ sealed class RustModule {
                 "Module `$name` cannot be a module name—it is a reserved word."
             }
         }
+
+        /** Convert a module into a module gated with `#[cfg(test)]` */
+        fun cfgTest(): LeafModule = this.copy(
+            rustMetadata = rustMetadata.copy(additionalAttributes = rustMetadata.additionalAttributes + Attribute.CfgTest),
+            tests = true,
+        )
     }
 
     companion object {
@@ -54,10 +65,11 @@ sealed class RustModule {
             documentation: String? = null,
             inline: Boolean = false,
             parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
         ): LeafModule {
             return LeafModule(
                 RustReservedWords.escapeIfNeeded(name),
-                RustMetadata(visibility = visibility),
+                RustMetadata(visibility = visibility, additionalAttributes = additionalAttributes),
                 documentation,
                 inline = inline,
                 parent = parent,
@@ -75,12 +87,36 @@ sealed class RustModule {
         fun pubCrate(name: String, documentation: String? = null, parent: RustModule): LeafModule =
             new(name, visibility = Visibility.PUBCRATE, documentation = documentation, inline = false, parent = parent)
 
+        fun inlineTests(
+            name: String = "test",
+            parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
+        ) = new(
+            name,
+            Visibility.PRIVATE,
+            inline = true,
+            additionalAttributes = additionalAttributes,
+            parent = parent,
+        ).cfgTest()
+
         /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")
-        val Error = public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
-        val Model = public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
-        val Input = public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
-        val Output = public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
+        val Error = public(
+            "error",
+            documentation = "All error types that operations can return. Documentation on these types is copied from the model.",
+        )
+        val Model = public(
+            "model",
+            documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.",
+        )
+        val Input = public(
+            "input",
+            documentation = "Input structures for operations. Documentation on these types is copied from the model.",
+        )
+        val Output = public(
+            "output",
+            documentation = "Output structures for operations. Documentation on these types is copied from the model.",
+        )
         val Types = public("types", documentation = "Data primitives referenced by other data types.")
 
         /**
@@ -137,4 +173,7 @@ sealed class RustModule {
             else -> {}
         }
     }
+
+    /** Converts this [RustModule] into a [RuntimeType] */
+    fun toType(): RuntimeType = RuntimeType(fullyQualifiedPath())
 }

@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
@@ -69,11 +68,23 @@ class StructureGeneratorTest {
             structure StructWithDoc {
                 doc: Document
             }
+
+            @sensitive
+            structure SecretStructure {
+                secretField: String
+            }
+
+            structure StructWithInnerSecretStructure {
+                public: String,
+                private: SecretStructure,
+            }
             """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val structWithDoc = model.lookup<StructureShape>("com.test#StructWithDoc")
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val credentials = model.lookup<StructureShape>("com.test#Credentials")
+        val secretStructure = model.lookup<StructureShape>("com.test#SecretStructure")
+        val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
         val error = model.lookup<StructureShape>("com.test#MyError")
     }
 
@@ -103,7 +114,7 @@ class StructureGeneratorTest {
         val project = TestWorkspace.testProject()
         val provider = testSymbolProvider(model)
 
-        project.lib { rust("##![allow(deprecated)]") }
+        project.lib { Attribute.AllowDeprecated.render(this) }
         project.withModule(ModelsModule) {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
@@ -115,7 +126,7 @@ class StructureGeneratorTest {
         // By putting the test in another module, it can't access the struct
         // fields if they are private
         project.unitTest {
-            raw("#[test]")
+            Attribute.Test.render(this)
             rustBlock("fn test_public_fields()") {
                 write(
                     """
@@ -143,7 +154,7 @@ class StructureGeneratorTest {
     }
 
     @Test
-    fun `generate a custom debug implementation when the sensitive trait is present`() {
+    fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, credentials)
@@ -160,6 +171,50 @@ class StructureGeneratorTest {
             """,
         )
         writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("lib")
+        val generator = StructureGenerator(model, provider, writer, secretStructure)
+        generator.render()
+        writer.unitTest(
+            "sensitive_structure_redacted",
+            """
+            let secret_structure = SecretStructure {
+                secret_field: Some("secret".to_owned()),
+            };
+            assert_eq!(format!("{:?}", secret_structure), "SecretStructure { secret_field: \"*** Sensitive Data Redacted ***\" }");
+            """,
+        )
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is applied to an inner struct`() {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.useShapeWriter(inner) {
+            val secretGenerator = StructureGenerator(model, provider, this, secretStructure)
+            val generator = StructureGenerator(model, provider, this, structWithInnerSecretStructure)
+            secretGenerator.render()
+            generator.render()
+            unitTest(
+                "sensitive_inner_structure_redacted",
+                """
+                let secret_structure = SecretStructure {
+                    secret_field: Some("secret".to_owned()),
+                };
+                let struct_with_inner_secret_structure = StructWithInnerSecretStructure {
+                    public: Some("Public".to_owned()),
+                    private: Some(secret_structure),
+                };
+                assert_eq!(format!("{:?}", struct_with_inner_secret_structure), "StructWithInnerSecretStructure { public: Some(\"Public\"), private: \"*** Sensitive Data Redacted ***\" }");
+                """,
+            )
+        }
+        project.compileAndTest()
     }
 
     @Test
@@ -182,7 +237,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib {
-            Attribute.Custom("deny(missing_docs)").render(this)
+            Attribute.DenyMissingDocs.render(this)
         }
         project.withModule(ModelsModule) {
             StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()

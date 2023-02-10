@@ -12,13 +12,11 @@ import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class ClientInstantiatorTest {
@@ -55,7 +53,7 @@ internal class ClientInstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            ClientEnumGenerator(codegenContext, shape).render(this)
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
@@ -74,7 +72,7 @@ internal class ClientInstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            ClientEnumGenerator(codegenContext, shape).render(this)
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)

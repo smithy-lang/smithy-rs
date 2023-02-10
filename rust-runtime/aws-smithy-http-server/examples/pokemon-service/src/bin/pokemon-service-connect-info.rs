@@ -5,15 +5,16 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::request::connect_info::ConnectInfo;
-use clap::Parser;
-use pokemon_service::{
-    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, setup_tracing,
+use aws_smithy_http_server::{
+    request::connect_info::ConnectInfo, request::request_id::ServerRequestId,
+    request::request_id::ServerRequestIdProviderLayer,
 };
+use clap::Parser;
+use pokemon_service::{capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing};
 use pokemon_service_server_sdk::{
-    error::{GetStorageError, NotAuthorized},
-    input::GetStorageInput,
-    output::GetStorageOutput,
+    error::{GetStorageError, StorageAccessNotAuthorized},
+    input::{DoNothingInput, GetStorageInput},
+    output::{DoNothingOutput, GetStorageOutput},
     PokemonService,
 };
 
@@ -52,7 +53,17 @@ pub async fn get_storage_with_local_approved(
         });
     }
     tracing::debug!("authentication failed");
-    Err(GetStorageError::NotAuthorized(NotAuthorized {}))
+    Err(GetStorageError::StorageAccessNotAuthorized(
+        StorageAccessNotAuthorized {},
+    ))
+}
+
+pub async fn do_nothing_but_log_request_ids(
+    _input: DoNothingInput,
+    server_request_id: ServerRequestId,
+) -> DoNothingOutput {
+    tracing::debug!("This request has this server ID: {}", server_request_id);
+    DoNothingOutput {}
 }
 
 #[tokio::main]
@@ -64,10 +75,12 @@ async fn main() {
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
-        .do_nothing(do_nothing)
+        .do_nothing(do_nothing_but_log_request_ids)
         .check_health(check_health)
         .build()
         .expect("failed to build an instance of PokemonService");
+
+    let app = app.layer(&ServerRequestIdProviderLayer::new());
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

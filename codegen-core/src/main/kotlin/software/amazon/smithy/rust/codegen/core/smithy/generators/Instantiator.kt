@@ -42,9 +42,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -54,7 +57,19 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
- * Instantiator generates code to instantiate a given Shape given a `Node` representing the value.
+ * Class describing an instantiator section that can be used in a customization.
+ */
+sealed class InstantiatorSection(name: String) : Section(name) {
+    data class AfterInstantiatingValue(val shape: Shape) : InstantiatorSection("AfterInstantiatingValue")
+}
+
+/**
+ * Customization for the instantiator.
+ */
+typealias InstantiatorCustomization = NamedCustomization<InstantiatorSection>
+
+/**
+ * Instantiator generates code to instantiate a given shape given a `Node` representing the value.
  *
  * This is only used during protocol test generation.
  */
@@ -71,6 +86,7 @@ open class Instantiator(
     private val enumFromStringFn: (Symbol, String) -> Writable,
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
+    private val customizations: List<InstantiatorCustomization> = listOf(),
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
@@ -92,6 +108,8 @@ open class Instantiator(
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
 
+    fun generate(shape: Shape, data: Node, ctx: Ctx = Ctx()) = writable { render(this, shape, data, ctx) }
+
     fun render(writer: RustWriter, shape: Shape, data: Node, ctx: Ctx = Ctx()) {
         when (shape) {
             // Compound Shapes
@@ -109,7 +127,7 @@ open class Instantiator(
             // Wrapped Shapes
             is TimestampShape -> writer.rust(
                 "#T::from_secs(${(data as NumberNode).value})",
-                RuntimeType.DateTime(runtimeConfig),
+                RuntimeType.dateTime(runtimeConfig),
             )
 
             /**
@@ -120,12 +138,12 @@ open class Instantiator(
             is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
                 writer.rust(
                     "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.ByteStream(runtimeConfig),
+                    RuntimeType.byteStream(runtimeConfig),
                 )
             } else {
                 writer.rust(
                     "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.Blob(runtimeConfig),
+                    RuntimeType.blob(runtimeConfig),
                 )
             }
 
@@ -138,7 +156,7 @@ open class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Parse"),
+                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                     )
                 }
 
@@ -154,8 +172,8 @@ open class Instantiator(
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
+                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
                 )
             }
 
@@ -218,10 +236,10 @@ open class Instantiator(
      */
     private fun renderMap(writer: RustWriter, shape: MapShape, data: ObjectNode, ctx: Ctx) {
         if (data.members.isEmpty()) {
-            writer.rust("#T::new()", RustType.HashMap.RuntimeType)
+            writer.rust("#T::new()", RuntimeType.HashMap)
         } else {
             writer.rustBlock("") {
-                rust("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
+                rust("let mut ret = #T::new();", RuntimeType.HashMap)
                 for ((key, value) in data.members) {
                     withBlock("ret.insert(", ");") {
                         renderMember(this, shape.key, key, ctx)
@@ -277,6 +295,9 @@ open class Instantiator(
                 renderMember(this, shape.member, v, ctx)
                 rust(",")
             }
+        }
+        for (customization in customizations) {
+            customization.section(InstantiatorSection.AfterInstantiatingValue(shape))(writer)
         }
     }
 

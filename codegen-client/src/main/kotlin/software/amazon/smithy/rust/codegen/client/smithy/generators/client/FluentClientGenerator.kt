@@ -15,8 +15,8 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
-import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -38,7 +38,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -58,13 +57,11 @@ class FluentClientGenerator(
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.smithyClient(codegenContext.runtimeConfig).toType()
-            .member("retry::Standard"),
-        client = CargoDependency.smithyClient(codegenContext.runtimeConfig).toType(),
+        retryDefault = RuntimeType.smithyClient(codegenContext.runtimeConfig).resolve("retry::Standard"),
+        client = RuntimeType.smithyClient(codegenContext.runtimeConfig),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType()
-        .member("retry::DefaultResponseRetryClassifier"),
+    private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -81,7 +78,6 @@ class FluentClientGenerator(
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-    private val clientDep = CargoDependency.smithyClient(codegenContext.runtimeConfig)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
@@ -146,7 +142,7 @@ class FluentClientGenerator(
             """,
             "generics_decl" to generics.decl,
             "smithy_inst" to generics.smithyInst,
-            "client" to clientDep.toType(),
+            "client" to RuntimeType.smithyClient(runtimeConfig),
             "client_docs" to writable
             {
                 customizations.forEach {
@@ -160,7 +156,7 @@ class FluentClientGenerator(
         )
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
-            "client" to clientDep.toType(),
+            "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
             operations.forEach { operation ->
@@ -172,7 +168,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT).toSymbol()
+                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
 
                 val inputFieldsBody =
                     generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
@@ -236,7 +232,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+                // Filter out any derive that isn't Clone. Then add a Debug derive
+                val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -246,7 +243,7 @@ class FluentClientGenerator(
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 deprecatedShape(operation)
-                baseDerives.copy(derives = derives).render(this)
+                Attribute(derive(derives.toSet())).render(this)
                 rustTemplate(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {
@@ -255,18 +252,18 @@ class FluentClientGenerator(
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
-                    "client" to clientDep.toType(),
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,
                 )
 
                 rustBlockTemplate(
                     "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
-                    "client" to clientDep.toType(),
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
+                    val errorType = operation.errorSymbol(symbolProvider)
 
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
@@ -307,11 +304,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
+                        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
-                        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
-                        "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
+                        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
                         "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
@@ -324,7 +321,7 @@ class FluentClientGenerator(
                             """
                             /// Create a paginator for this request
                             ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
                             pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
                                 #{Paginator}::new(self.handle, self.inner)
                             }
@@ -336,7 +333,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT),
+                            operation.errorSymbol(symbolProvider),
                         ),
                     )
                     input.members().forEach { member ->

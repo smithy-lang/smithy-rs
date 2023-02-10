@@ -18,12 +18,12 @@ import java.util.Optional
 /**
  * [ClientRustSettings] and [ClientCodegenConfig] classes.
  *
- * These are specializations of [RustSettings] and [CodegenConfig] for the `rust-codegen` client Smithy plugin. Refer
- * to the documentation of those for the inherited properties.
+ * These are specializations of [CoreRustSettings] and [CodegenConfig] for the `rust-client-codegen`
+ * client Smithy plugin. Refer to the documentation of those for the inherited properties.
  */
 
 /**
- * Settings used by [RustCodegenPlugin].
+ * Settings used by [RustClientCodegenPlugin].
  */
 data class ClientRustSettings(
     override val service: ShapeId,

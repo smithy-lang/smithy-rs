@@ -21,19 +21,18 @@ group = "software.amazon.smithy.rust.codegen.server.smithy"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
-    implementation(project(":codegen-client"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-    testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+
+    // `smithy.framework#ValidationException` is defined here, which is used in `constraints.smithy`, which is used
+    // in `CustomValidationExceptionWithReasonDecoratorTest`.
+    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
 tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
 
 // Reusable license copySpec
 val licenseSpec = copySpec {
@@ -55,15 +54,27 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showExceptions = true
-        showStackTraces = true
-        showStandardStreams = true
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
+
+    dependencies {
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+    }
+
+    tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = TestExceptionFormat.FULL
+            showCauses = true
+            showExceptions = true
+            showStackTraces = true
+            showStandardStreams = true
+        }
     }
 }
 

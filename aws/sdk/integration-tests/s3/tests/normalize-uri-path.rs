@@ -4,11 +4,11 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
-use aws_types::credentials::SharedCredentialsProvider;
 use std::convert::Infallible;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -16,13 +16,7 @@ use std::time::{Duration, UNIX_EPOCH};
 async fn test_operation_should_not_normalize_uri_path() {
     let (conn, rx) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_owned()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();
@@ -44,7 +38,7 @@ async fn test_operation_should_not_normalize_uri_path() {
                 .insert(UNIX_EPOCH + Duration::from_secs(1669257290));
             op.properties_mut().insert(AwsUserAgent::for_tests());
 
-            Result::Ok::<_, Infallible>(op)
+            Ok::<_, Infallible>(op)
         })
         .unwrap()
         .send()
@@ -56,10 +50,10 @@ async fn test_operation_should_not_normalize_uri_path() {
         std::str::from_utf8(request.headers().get("authorization").unwrap().as_bytes()).unwrap();
 
     let actual_uri = request.uri().path();
-    let expected_uri = format!("/{}/a/.././b.txt", bucket_name);
+    let expected_uri = "/a/.././b.txt";
     assert_eq!(actual_uri, expected_uri);
 
-    let expected_sig = "Signature=65001f8822b83876a9f6f8666a417582bb00641af3b91fb13f240b0f36c094f8";
+    let expected_sig = "Signature=4803b8b8c794b5ecc055933befd7c5547f8bf6585bb18e4ae33ff65220d5cdd7";
     assert!(
         actual_auth.contains(expected_sig),
         "authorization header signature did not match expected signature: expected {} but not found in {}",

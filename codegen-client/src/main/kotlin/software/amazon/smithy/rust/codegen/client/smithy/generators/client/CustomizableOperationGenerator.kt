@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
@@ -40,9 +41,9 @@ class CustomizableOperationGenerator(
                 pub use #{ClassifyRetry};
                 pub use #{RetryKind};
                 """,
-                "Operation" to smithyHttp.member("operation::Operation"),
-                "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
-                "RetryKind" to smithyTypes.member("retry::RetryKind"),
+                "Operation" to smithyHttp.resolve("operation::Operation"),
+                "ClassifyRetry" to smithyHttp.resolve("retry::ClassifyRetry"),
+                "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
             renderCustomizableOperationModule(this)
 
@@ -59,9 +60,9 @@ class CustomizableOperationGenerator(
 
         val codegenScope = arrayOf(
             // SDK Types
-            "http_result" to smithyHttp.member("result"),
-            "http_body" to smithyHttp.member("body"),
-            "HttpRequest" to CargoDependency.Http.toType().member("Request"),
+            "http_result" to smithyHttp.resolve("result"),
+            "http_body" to smithyHttp.resolve("body"),
+            "HttpRequest" to RuntimeType.HttpRequest,
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
@@ -146,9 +147,9 @@ class CustomizableOperationGenerator(
         val codegenScope = arrayOf(
             "combined_generics_decl" to combinedGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
-            "ParseHttpResponse" to smithyHttp.member("response::ParseHttpResponse"),
-            "NewRequestPolicy" to smithyClient.member("retry::NewRequestPolicy"),
-            "SmithyRetryPolicy" to smithyClient.member("bounds::SmithyRetryPolicy"),
+            "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
+            "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
+            "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
         )
 
         writer.rustTemplate(
