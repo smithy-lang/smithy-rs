@@ -40,7 +40,6 @@ pub use util::error::{rich_py_err, RichPyErr};
 
 #[cfg(test)]
 mod tests {
-    use parking_lot::Once;
     use std::sync::Once;
 
     use pyo3::{PyErr, Python};
