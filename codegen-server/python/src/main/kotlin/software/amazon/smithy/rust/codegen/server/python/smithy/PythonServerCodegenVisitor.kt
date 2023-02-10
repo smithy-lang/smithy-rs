@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -49,6 +50,7 @@ class PythonServerCodegenVisitor(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)

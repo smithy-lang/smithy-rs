@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -33,15 +32,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
@@ -56,7 +52,6 @@ class ClientCodegenVisitor(
     context: PluginContext,
     private val codegenDecorator: ClientCodegenDecorator,
 ) : ShapeVisitor.Default<Unit>() {
-
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = ClientRustSettings.from(context.model, context.settings)
 
@@ -69,12 +64,12 @@ class ClientCodegenVisitor(
     private val protocolGenerator: ClientProtocolGenerator
 
     init {
-        val symbolVisitorConfig =
-            SymbolVisitorConfig(
-                runtimeConfig = settings.runtimeConfig,
-                renameExceptions = settings.codegenConfig.renameExceptions,
-                nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-            )
+        val symbolVisitorConfig = SymbolVisitorConfig(
+            runtimeConfig = settings.runtimeConfig,
+            renameExceptions = settings.codegenConfig.renameExceptions,
+            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+            moduleProvider = ClientModuleProvider,
+        )
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
@@ -224,13 +219,8 @@ class ClientCodegenVisitor(
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
-            rustCrate.withModule(RustModule.Error) {
-                val symbol = symbolProvider.toSymbol(shape)
-                val errors = shape.eventStreamErrors()
-                    .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
-                val errorSymbol = shape.eventStreamErrorSymbol(symbolProvider)
-                OperationErrorGenerator(model, symbolProvider, symbol, errors)
-                    .renderErrors(this, errorSymbol, symbol)
+            rustCrate.withModule(ClientRustModule.Error) {
+                OperationErrorGenerator(model, symbolProvider, shape).render(this)
             }
         }
     }
@@ -239,14 +229,8 @@ class ClientCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(RustModule.Error) {
-            val operationSymbol = symbolProvider.toSymbol(shape)
-            OperationErrorGenerator(
-                model,
-                symbolProvider,
-                operationSymbol,
-                shape.operationErrors(model).map { it.asStructureShape().get() },
-            ).render(this)
+        rustCrate.withModule(ClientRustModule.Error) {
+            OperationErrorGenerator(model, symbolProvider, shape).render(this)
         }
     }
 }

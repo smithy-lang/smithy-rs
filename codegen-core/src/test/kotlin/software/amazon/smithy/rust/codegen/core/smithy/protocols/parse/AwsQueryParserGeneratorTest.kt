@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -65,20 +64,21 @@ class AwsQueryParserGeneratorTest {
                         </SomeOperationResult>
                     </someOperationResponse>
                     "#;
-                    let output = ${format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::some_operation_output::Builder::default()).unwrap().build();
                     assert_eq!(output.some_attribute, Some(5));
                     assert_eq!(output.some_val, Some("Some value".to_string()));
                 """,
             )
         }
-
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<StructureShape>("test#SomeOutput").also { struct ->
+            project.moduleFor(struct) {
+                struct.renderWithModelBuilder(model, symbolProvider, this)
+            }
         }
-
-        project.withModule(RustModule.public("output")) {
-            model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
-                .renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<OperationShape>("test#SomeOperation").outputShape(model).also { output ->
+            project.moduleFor(output) {
+                output.renderWithModelBuilder(model, symbolProvider, this)
+            }
         }
         project.compileAndTest()
     }

@@ -96,7 +96,7 @@ class RustWriterTest {
         val symbol = testSymbolProvider(model).toSymbol(shape)
         val sut = RustWriter.forModule("lib")
         sut.docs("A link! #D", symbol)
-        sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
+        sut.toString() shouldContain "/// A link! [`Foo`](crate::test_model::Foo)"
     }
 
     @Test

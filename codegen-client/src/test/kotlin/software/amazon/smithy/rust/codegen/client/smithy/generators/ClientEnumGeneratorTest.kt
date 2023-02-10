@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -24,7 +23,7 @@ class ClientEnumGeneratorTest {
             val shape = model.lookup<StringShape>(shapeId)
             val context = testCodegenContext(model)
             val project = TestWorkspace.testProject(context.symbolProvider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 ClientEnumGenerator(context, shape).render(this)
                 unitTest(
                     "matching_on_enum_should_be_forward_compatible",
@@ -81,7 +80,7 @@ class ClientEnumGeneratorTest {
         val shape = model.lookup<StringShape>("test#SomeEnum")
         val context = testCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
-        project.withModule(RustModule.Model) {
+        project.moduleFor(shape) {
             ClientEnumGenerator(context, shape).render(this)
             unitTest(
                 "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
@@ -113,7 +112,7 @@ class ClientEnumGeneratorTest {
         val shape = model.lookup<StringShape>("test#SomeEnum")
         val context = testCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
-        project.withModule(RustModule.Model) {
+        project.moduleFor(shape) {
             ClientEnumGenerator(context, shape).render(this)
             unitTest(
                 "it_escapes_the_unknown_variant_if_the_enum_has_an_unknown_value_in_the_model",
@@ -141,7 +140,7 @@ class ClientEnumGeneratorTest {
         val shape = model.lookup<StringShape>("test#InstanceType")
         val context = testCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
-        project.withModule(RustModule.Model) {
+        project.moduleFor(shape) {
             rust("##![allow(deprecated)]")
             ClientEnumGenerator(context, shape).render(this)
             unitTest(

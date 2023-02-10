@@ -210,7 +210,7 @@ class HttpBindingGenerator(
      */
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorT: RuntimeType,
+        errorSymbol: Symbol,
         // Deserialize a single structure, union or document member marked as a payload
         payloadParser: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
@@ -224,7 +224,7 @@ class HttpBindingGenerator(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
-                    errorT,
+                    errorSymbol,
                 ) {
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
@@ -238,10 +238,10 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
+                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorSymbol) {
                     deserializePayloadBody(
                         binding,
-                        errorT,
+                        errorSymbol,
                         structuredHandler = payloadParser,
                         httpMessageType,
                     )
@@ -286,7 +286,7 @@ class HttpBindingGenerator(
 
     private fun RustWriter.deserializePayloadBody(
         binding: HttpBindingDescriptor,
-        errorSymbol: RuntimeType,
+        errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ) {
