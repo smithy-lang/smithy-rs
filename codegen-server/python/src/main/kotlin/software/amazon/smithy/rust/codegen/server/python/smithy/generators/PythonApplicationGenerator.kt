@@ -19,6 +19,8 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
+import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
@@ -103,6 +105,9 @@ class PythonApplicationGenerator(
             """
             ##[#{pyo3}::pyclass]
             ##[derive(Debug)]
+            /// :generic Ctx:
+            /// :extends typing.Generic\[Ctx\]: 
+            /// :rtype None:
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
                 middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
@@ -239,6 +244,12 @@ class PythonApplicationGenerator(
             """,
             *codegenScope,
         ) {
+            val middlewareRequest = PythonType.Opaque("Request", "crate::middleware")
+            val middlewareResponse = PythonType.Opaque("Response", "crate::middleware")
+            val middlewareNext = PythonType.Callable(listOf(middlewareRequest), PythonType.Awaitable(middlewareResponse))
+            val middlewareFunc = PythonType.Callable(listOf(middlewareRequest, middlewareNext), PythonType.Awaitable(middlewareResponse))
+            val tlsConfig = PythonType.Opaque("TlsConfig", "crate::tls")
+
             rustTemplate(
                 """
                 /// Create a new [App].
@@ -246,12 +257,20 @@ class PythonApplicationGenerator(
                 pub fn new() -> Self {
                     Self::default()
                 }
+
                 /// Register a context object that will be shared between handlers.
+                ///
+                /// :param context Ctx:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
                 ##[pyo3(text_signature = "(${'$'}self, context)")]
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
                 }
+
                 /// Register a Python function to be executed inside a Tower middleware layer.
+                ///
+                /// :param func ${middlewareFunc.renderAsDocstring()}:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
                 pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                     let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
@@ -263,8 +282,16 @@ class PythonApplicationGenerator(
                     self.middlewares.push(handler);
                     Ok(())
                 }
+
                 /// Main entrypoint: start the server on multiple workers.
-                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers, tls)")]
+                ///
+                /// :param address ${PythonType.Optional(PythonType.Str).renderAsDocstring()}: 
+                /// :param port ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
+                /// :param backlog ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
+                /// :param workers ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
+                /// :param tls ${PythonType.Optional(tlsConfig).renderAsDocstring()}:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -277,7 +304,10 @@ class PythonApplicationGenerator(
                     use #{SmithyPython}::PyApp;
                     self.run_server(py, address, port, backlog, workers, tls)
                 }
+
                 /// Lambda entrypoint: start the server on Lambda.
+                ///
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
@@ -286,8 +316,9 @@ class PythonApplicationGenerator(
                     use #{SmithyPython}::PyApp;
                     self.run_lambda_handler(py)
                 }
+
                 /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls)")]
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None)")]
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
@@ -306,10 +337,31 @@ class PythonApplicationGenerator(
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val name = operationName.toSnakeCase()
+
+                val input = PythonType.Opaque("${operationName}Input", "crate::input")
+                val output = PythonType.Opaque("${operationName}Output", "crate::output")
+                val context = PythonType.Opaque("Ctx")
+                val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
+                val handler = PythonType.Union(
+                    listOf(
+                        PythonType.Callable(
+                            listOf(input, context),
+                            returnType,
+                        ),
+                        PythonType.Callable(
+                            listOf(input),
+                            returnType,
+                        ),
+                    ),
+                )
+
                 rustTemplate(
                     """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
+                    ///
+                    /// :param func ${handler.renderAsDocstring()}:
+                    /// :rtype ${PythonType.None.renderAsDocstring()}:
                     ##[pyo3(text_signature = "(${'$'}self, func)")]
                     pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                         use #{SmithyPython}::PyApp;

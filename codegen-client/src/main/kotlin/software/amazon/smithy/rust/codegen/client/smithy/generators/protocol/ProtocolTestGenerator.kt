@@ -210,9 +210,9 @@ class ProtocolTestGenerator(
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
-        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
