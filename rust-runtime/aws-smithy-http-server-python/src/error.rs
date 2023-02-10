@@ -39,12 +39,19 @@ impl From<PyError> for PyErr {
 ///
 /// It allows to specify a message and HTTP status code and implementing protocol specific capabilities
 /// to build a [aws_smithy_http_server::response::Response] from it.
+///
+/// :param message str:
+/// :param status_code typing.Optional\[int\]:
+/// :rtype None:
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
-#[pyo3(text_signature = "(message, status_code)")]
+#[pyo3(text_signature = "($self, message, status_code=None)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
+    /// :type str:
     #[pyo3(get, set)]
     message: String,
+
+    /// :type int:
     #[pyo3(get, set)]
     status_code: u16,
 }
