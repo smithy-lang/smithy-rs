@@ -154,6 +154,7 @@ ENV PATH=/opt/cargo/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test
