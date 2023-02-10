@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -59,7 +60,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
-                renderImplFrom(operationShape.errorSymbol(symbolProvider), operationShape.errors)
+                renderImplFrom(symbolProvider.symbolForOperationError(operationShape), operationShape.errors)
             }
             // event stream errors
             operations.map { it.eventStreamErrors(codegenContext.model) }
@@ -67,7 +68,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
                 .associate { it.key to it.value }
                 .forEach { (unionShape, errors) ->
                     renderImplFrom(
-                        unionShape.eventStreamErrorSymbol(symbolProvider),
+                        symbolProvider.symbolForEventStreamError(unionShape),
                         errors.map { it.id },
                     )
                 }
@@ -89,7 +90,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
         }
     }
 
-    private fun RustWriter.renderImplFrom(errorSymbol: RuntimeType, errors: List<ShapeId>) {
+    private fun RustWriter.renderImplFrom(errorSymbol: Symbol, errors: List<ShapeId>) {
         if (errors.isNotEmpty() || CodegenTarget.CLIENT == codegenContext.target) {
             val operationErrors = errors.map { model.expectShape(it) }
             rustBlock(
@@ -104,7 +105,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
                 ) {
                     rustBlock("match err") {
                         rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
-                        rust("_ => Error::Unhandled(#T::new(err.into())),", unhandledError())
+                        rust("_ => Error::Unhandled(#T::new(err.into())),", unhandledError(symbolProvider))
                     }
                 }
             }
@@ -122,7 +123,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
                         rustTemplate(
                             "#{errorSymbol}Kind::Unhandled(inner) => Error::Unhandled(#{unhandled}::new(inner.into())),",
                             "errorSymbol" to errorSymbol,
-                            "unhandled" to unhandledError(),
+                            "unhandled" to unhandledError(symbolProvider),
                         )
                     }
                 }
@@ -144,7 +145,7 @@ class ServiceErrorGenerator(private val codegenContext: CodegenContext, private 
                 rust("${sym.name}(#T),", sym)
             }
             docs(UNHANDLED_ERROR_DOCS)
-            rust("Unhandled(#T)", unhandledError())
+            rust("Unhandled(#T)", unhandledError(symbolProvider))
         }
     }
 }

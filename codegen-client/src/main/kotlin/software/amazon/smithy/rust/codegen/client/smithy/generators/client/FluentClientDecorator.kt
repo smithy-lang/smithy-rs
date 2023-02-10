@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -65,7 +66,7 @@ sealed class FluentClientSection(name: String) : Section(name) {
     /** Write custom code into an operation fluent builder's impl block */
     data class FluentBuilderImpl(
         val operationShape: OperationShape,
-        val operationErrorType: RuntimeType,
+        val operationErrorType: Symbol,
     ) : FluentClientSection("FluentBuilderImpl")
 
     /** Write custom code into the docs */

@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -97,9 +96,9 @@ class Ec2QuerySerializerGeneratorTest {
             unitTest(
                 "ec2query_serializer",
                 """
-                use model::Top;
+                use test_model::Top;
 
-                let input = crate::input::OpInput::builder()
+                let input = crate::test_input::OpInput::builder()
                     .top(
                         Top::builder()
                             .field("hello!")
@@ -126,15 +125,19 @@ class Ec2QuerySerializerGeneratorTest {
                 """,
             )
         }
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
-            val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+        model.lookup<StructureShape>("test#Top").also { top ->
+            project.moduleFor(top) {
+                top.renderWithModelBuilder(model, symbolProvider, this)
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
         }
 
-        project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            project.moduleFor(input) {
+                input.renderWithModelBuilder(model, symbolProvider, this)
+            }
         }
         project.compileAndTest()
     }

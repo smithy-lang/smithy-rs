@@ -54,11 +54,11 @@ class ServerRequestBindingGenerator(
 
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorT: RuntimeType,
+        errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
         binding,
-        errorT,
+        errorSymbol,
         structuredHandler,
         HttpMessageType.REQUEST,
     )
