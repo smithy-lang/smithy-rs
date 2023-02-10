@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -82,7 +83,12 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+            ConstrainedStringGenerator(
+                codegenContext,
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
 
             unitTest(
                 name = "try_from_success",
@@ -136,7 +142,12 @@ class ConstrainedStringGeneratorTest {
 
         val writer = RustWriter.forModule(ModelsModule.name)
 
-        ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape).render()
+        ConstrainedStringGenerator(
+            codegenContext,
+            writer,
+            constrainedStringShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
@@ -162,8 +173,19 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
-            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape).render()
+            val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
+            ConstrainedStringGenerator(
+                codegenContext,
+                this,
+                constrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
+            ConstrainedStringGenerator(
+                codegenContext,
+                this,
+                sensitiveConstrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
 
             unitTest(
                 name = "non_sensitive_string_display_implementation",
@@ -201,7 +223,12 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+            ConstrainedStringGenerator(
+                codegenContext,
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
         }
 
         assertThrows<CommandFailed> {

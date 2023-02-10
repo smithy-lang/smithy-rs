@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.62.1
+  rust_version: 1.63.0
 
 name: Release smithy-rs
 run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
@@ -18,8 +18,8 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: | 
-          The SHA of the git commit that you want to release.  
+        description: |
+          The SHA of the git commit that you want to release.
           You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
         required: true
         type: string
@@ -75,8 +75,8 @@ jobs:
     # We need `always` here otherwise this job won't run if the previous job has been skipped
     # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
     if: |
-      always() && 
-      needs.acquire-base-image.result == 'success' && 
+      always() &&
+      needs.acquire-base-image.result == 'success' &&
       (needs.release-ci.result == 'success' || needs.release-ci.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
@@ -87,6 +87,7 @@ jobs:
       with:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Get or create release branch
       id: branch-push
       shell: bash
@@ -183,6 +184,7 @@ jobs:
             github,
             isDryRun: ${{ inputs.dry_run }},
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseCommitish: ${{ needs.upgrade-gradle-properties.outputs.release_branch }},
           });
     - name: Publish to crates.io
       shell: bash
@@ -232,7 +234,7 @@ jobs:
       shell: bash
       run: |
         set -eux
-        
+
         # This will fail if other commits have been pushed to `main` after `commit_sha`
         # In particular, this will ALWAYS fail if you are creating a new release series from
         # a commit that is not the current tip of `main`.

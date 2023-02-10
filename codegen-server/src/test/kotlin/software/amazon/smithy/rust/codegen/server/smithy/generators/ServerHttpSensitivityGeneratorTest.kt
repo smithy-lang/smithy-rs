@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -57,7 +58,7 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals(listOf("query_b"), (querySensitivity as QuerySensitivity.NotSensitiveMapValue).queryKeys)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("query_closure") {
                 rustTemplate(
                     """
@@ -70,6 +71,7 @@ class ServerHttpSensitivityGeneratorTest {
                 )
             }
         }
+
         testProject.compileAndTest()
     }
 
@@ -104,7 +106,7 @@ class ServerHttpSensitivityGeneratorTest {
         querySensitivity as QuerySensitivity.SensitiveMapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("query_params_closure") {
                 rustTemplate(
                     """
@@ -152,7 +154,7 @@ class ServerHttpSensitivityGeneratorTest {
         assert((querySensitivity as QuerySensitivity.NotSensitiveMapValue).queryKeys.isEmpty())
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("query_params_special_closure") {
                 rustTemplate(
                     """
@@ -200,7 +202,7 @@ class ServerHttpSensitivityGeneratorTest {
         querySensitivity as QuerySensitivity.SensitiveMapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("query_params_special_closure") {
                 rustTemplate(
                     """
@@ -277,7 +279,7 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals(null, (headerData as HeaderSensitivity.NotSensitiveMapValue).prefixHeader)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("header_closure") {
                 rustTemplate(
                     """
@@ -325,7 +327,7 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals("prefix-", (headerData as HeaderSensitivity.SensitiveMapValue).prefixHeader)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("prefix_headers_closure") {
                 rustTemplate(
                     """
@@ -408,7 +410,7 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals("prefix-", asMapValue.prefixHeader)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("prefix_headers_special_closure") {
                 rustTemplate(
                     """
@@ -462,7 +464,7 @@ class ServerHttpSensitivityGeneratorTest {
         assert(!asSensitiveMapValue.keySensitive)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("prefix_headers_special_closure") {
                 rustTemplate(
                     """
@@ -514,7 +516,7 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals(listOf(1, 2), labelData.labelIndexes)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib {
+        testProject.testModule {
             unitTest("uri_closure") {
                 rustTemplate(
                     """
