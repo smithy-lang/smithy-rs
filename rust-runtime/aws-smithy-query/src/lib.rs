@@ -228,7 +228,6 @@ impl<'a> QueryValueWriter<'a> {
 mod tests {
     use crate::QueryWriter;
     use aws_smithy_types::date_time::Format;
-    use aws_smithy_types::Document::String;
     use aws_smithy_types::{DateTime, Number};
 
     #[test]
