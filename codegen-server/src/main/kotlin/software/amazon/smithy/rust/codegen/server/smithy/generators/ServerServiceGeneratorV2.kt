@@ -18,9 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -29,6 +26,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 class ServerServiceGeneratorV2(
     private val codegenContext: ServerCodegenContext,
@@ -540,8 +540,8 @@ class ServerServiceGeneratorV2(
  */
 fun handlerImports(crateName: String, operations: Collection<OperationShape>, commentToken: String = "///") = writable {
     val hasErrors = operations.any { it.errors.isNotEmpty() }
-    val errorImport = if (hasErrors) ", ${ErrorsModule.name}" else ""
+    val errorImport = if (hasErrors) ", ${ErrorModule.name}" else ""
     if (operations.isNotEmpty()) {
-        rust("$commentToken use $crateName::{${InputsModule.name}, ${OutputsModule.name}$errorImport};")
+        rust("$commentToken use $crateName::{${InputModule.name}, ${OutputModule.name}$errorImport};")
     }
 }

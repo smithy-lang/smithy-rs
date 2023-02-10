@@ -9,7 +9,9 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -21,9 +23,9 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
     class Stub : RustSymbolProvider {
-        override fun config(): SymbolVisitorConfig {
-            PANIC("")
-        }
+        override fun config(): SymbolVisitorConfig = PANIC()
+        override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
+        override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
 
         override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
             return definition.name.orNull()?.let { MaybeRenamed(it.toPascalCase(), null) }

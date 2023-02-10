@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -49,7 +48,7 @@ class EventStreamSymbolProvider(
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
                     RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
                 } else {
-                    unionShape.eventStreamErrorSymbol(this).toSymbol()
+                    symbolForEventStreamError(unionShape)
                 }
                 val errorFmt = error.rustType().render(fullyQualified = true)
                 val innerFmt = initial.rustType().stripOuter<RustType.Option>().render(fullyQualified = true)
