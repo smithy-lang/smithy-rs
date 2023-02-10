@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -53,7 +54,7 @@ open class EventStreamMarshallerGenerator(
     private val payloadContentType: String,
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
+    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope = arrayOf(
         "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
         "Message" to smithyEventStream.resolve("frame::Message"),

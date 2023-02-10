@@ -461,6 +461,7 @@ class Attribute(val inner: Writable) {
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
+        val AllowMissingDocs = Attribute(allow("missing_docs"))
         val CfgTest = Attribute(cfg("test"))
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))

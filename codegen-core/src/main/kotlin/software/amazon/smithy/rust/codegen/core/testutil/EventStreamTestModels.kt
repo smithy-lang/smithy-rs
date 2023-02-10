@@ -67,6 +67,8 @@ private fun fillInBaseModel(
         SomeError: SomeError,
     }
     structure TestStreamInputOutput { @httpPayload @required value: TestStream }
+
+    @http(method: "POST", uri: "/test")
     operation TestStreamOp {
         input: TestStreamInputOutput,
         output: TestStreamInputOutput,
