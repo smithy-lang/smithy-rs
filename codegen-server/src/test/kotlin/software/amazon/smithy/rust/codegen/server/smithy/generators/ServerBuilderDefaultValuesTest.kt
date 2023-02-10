@@ -185,10 +185,9 @@ class ServerBuilderDefaultValuesTest {
 
         ServerEnumGenerator(
             codegenContext,
-            writer,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        ).render(writer)
         StructureGenerator(model, symbolProvider, writer, struct).render()
     }
 
@@ -204,10 +203,9 @@ class ServerBuilderDefaultValuesTest {
 
         ServerEnumGenerator(
             codegenContext,
-            writer,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        ).render(writer)
         StructureGenerator(model, symbolProvider, writer, struct).render()
     }
 

@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -21,8 +20,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -191,7 +190,11 @@ class ServerInstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            ServerEnumGenerator(
+                codegenContext,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render(this)
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
@@ -210,7 +213,11 @@ class ServerInstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            ServerEnumGenerator(
+                codegenContext,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render(this)
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
