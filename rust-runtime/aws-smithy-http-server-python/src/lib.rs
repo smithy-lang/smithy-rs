@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! Rust/Python bindings, runtime and utilities.
@@ -39,6 +40,7 @@ pub use util::error::{rich_py_err, RichPyErr};
 
 #[cfg(test)]
 mod tests {
+    use parking_lot::Once;
     use std::sync::Once;
 
     use pyo3::{PyErr, Python};

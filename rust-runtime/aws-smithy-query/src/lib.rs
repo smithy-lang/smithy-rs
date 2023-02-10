@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(clippy::derive_partial_eq_without_eq)]
+
 //! Abstractions for the Smithy AWS Query protocol
 
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
@@ -226,6 +228,7 @@ impl<'a> QueryValueWriter<'a> {
 mod tests {
     use crate::QueryWriter;
     use aws_smithy_types::date_time::Format;
+    use aws_smithy_types::Document::String;
     use aws_smithy_types::{DateTime, Number};
 
     #[test]

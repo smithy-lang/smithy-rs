@@ -9,7 +9,6 @@ pub mod error;
 use pyo3::{PyAny, PyObject, PyResult, PyTypeInfo, Python};
 
 // Captures some information about a Python function.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, PartialEq)]
 pub struct FuncMetadata {
     pub name: String,

@@ -92,14 +92,6 @@ fun containerDefaultMetadata(
     model: Model,
     additionalAttributes: List<Attribute> = emptyList(),
 ): RustMetadata {
-    // A list of `allow` attributes to ignore linter warnings. Each entry in the list must be
-    // accompanied by a reason.
-    val allowLints = setOf(
-        // Required because service team could add non-Eq types at a later date. This
-        // means we can only ever derive PartialEq.
-        Attribute.AllowClippyDerivePartialEqWithoutEq,
-    )
-
     val derives = mutableSetOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
 
     val isSensitive = shape.hasTrait<SensitiveTrait>() ||
@@ -113,11 +105,7 @@ fun containerDefaultMetadata(
         derives.remove(RuntimeType.Debug)
     }
 
-    return RustMetadata(
-        derives,
-        additionalAttributes + allowLints,
-        Visibility.PUBLIC,
-    )
+    return RustMetadata(derives, additionalAttributes, Visibility.PUBLIC)
 }
 
 /**
