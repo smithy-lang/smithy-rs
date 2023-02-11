@@ -13,18 +13,21 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import java.util.stream.Stream
 
 class TestCasesProvider : ArgumentsProvider {
@@ -52,9 +55,9 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         codegenContext: ClientCodegenContext,
         shape: StructureShape,
     ) {
-        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList()).apply {
             render(writer)
-            writer.implBlock(shape, codegenContext.symbolProvider) {
+            writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                 renderConvenienceMethod(writer)
             }
         }
@@ -66,6 +69,22 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     ) {
-        OperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
+        OperationErrorGenerator(model, symbolProvider, operationOrEventStream, emptyList()).render(writer)
+    }
+
+    override fun renderError(
+        writer: RustWriter,
+        codegenContext: ClientCodegenContext,
+        shape: StructureShape,
+    ) {
+        val errorTrait = shape.expectTrait<ErrorTrait>()
+        ErrorGenerator(
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            writer,
+            shape,
+            errorTrait,
+            emptyList(),
+        ).render()
     }
 }

@@ -14,11 +14,14 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
@@ -73,14 +76,14 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
             ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
@@ -94,5 +97,22 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         operationOrEventStream: Shape,
     ) {
         ServerOperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
+    }
+
+    override fun renderError(
+        writer: RustWriter,
+        codegenContext: ServerCodegenContext,
+        shape: StructureShape,
+    ) {
+        StructureGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape, listOf()).render()
+        ErrorImplGenerator(
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            writer,
+            shape,
+            shape.getTrait()!!,
+            listOf(),
+        ).render(CodegenTarget.SERVER)
+        renderBuilderForShape(writer, codegenContext, shape)
     }
 }

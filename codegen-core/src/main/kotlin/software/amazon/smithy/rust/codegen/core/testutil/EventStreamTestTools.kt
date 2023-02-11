@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -75,6 +74,9 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     )
+
+    /** Render an error struct and builder */
+    fun renderError(writer: RustWriter, codegenContext: C, shape: StructureShape)
 }
 
 object EventStreamTestTools {
@@ -126,8 +128,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
-                requirements.renderBuilderForShape(this, codegenContext, shape)
+                requirements.renderError(this, codegenContext, shape)
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")

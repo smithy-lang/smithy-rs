@@ -67,7 +67,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Types) {
-            pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model)(this)
+            pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
         }
     }
 }

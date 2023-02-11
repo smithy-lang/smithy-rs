@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -38,11 +39,11 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(inner) {
             rust("##![allow(deprecated)]")
-            StructureGenerator(model, provider, this, inner).render()
-            StructureGenerator(model, provider, this, struct).render()
-            BuilderGenerator(model, provider, struct).also { builderGen ->
+            StructureGenerator(model, provider, this, inner, emptyList()).render()
+            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            BuilderGenerator(model, provider, struct, emptyList()).also { builderGen ->
                 builderGen.render(this)
-                implBlock(struct, provider) {
+                implBlock(provider.toSymbol(struct)) {
                     builderGen.renderConvenienceMethod(this)
                 }
             }
@@ -87,11 +88,11 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(StructureGeneratorTest.struct) {
             AllowDeprecated.render(this)
-            StructureGenerator(model, provider, this, inner).render()
-            StructureGenerator(model, provider, this, struct).render()
-            BuilderGenerator(model, provider, struct).also { builderGenerator ->
+            StructureGenerator(model, provider, this, inner, emptyList()).render()
+            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            BuilderGenerator(model, provider, struct, emptyList()).also { builderGenerator ->
                 builderGenerator.render(this)
-                implBlock(struct, provider) {
+                implBlock(provider.toSymbol(struct)) {
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }
@@ -113,10 +114,10 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(credentials) {
-            StructureGenerator(model, provider, this, credentials).render()
-            BuilderGenerator(model, provider, credentials).also { builderGen ->
+            StructureGenerator(model, provider, this, credentials, emptyList()).render()
+            BuilderGenerator(model, provider, credentials, emptyList()).also { builderGen ->
                 builderGen.render(this)
-                implBlock(credentials, provider) {
+                implBlock(provider.toSymbol(credentials)) {
                     builderGen.renderConvenienceMethod(this)
                 }
             }
@@ -140,10 +141,10 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(secretStructure) {
-            StructureGenerator(model, provider, this, secretStructure).render()
-            BuilderGenerator(model, provider, secretStructure).also { builderGen ->
+            StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
+            BuilderGenerator(model, provider, secretStructure, emptyList()).also { builderGen ->
                 builderGen.render(this)
-                implBlock(secretStructure, provider) {
+                implBlock(provider.toSymbol(secretStructure)) {
                     builderGen.renderConvenienceMethod(this)
                 }
             }

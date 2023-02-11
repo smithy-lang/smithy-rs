@@ -305,12 +305,12 @@ class EventStreamUnmarshallerGenerator(
             CodegenTarget.CLIENT -> {
                 rustTemplate(
                     """
-                    let generic = match #{parse_generic_error}(message.payload()) {
-                        Ok(generic) => generic,
+                    let generic = match #{parse_error_metadata}(message.payload()) {
+                        Ok(builder) => builder.build(),
                         Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
                     };
                     """,
-                    "parse_generic_error" to protocol.parseEventStreamGenericError(operationShape),
+                    "parse_error_metadata" to protocol.parseEventStreamErrorMetadata(operationShape),
                     *codegenScope,
                 )
             }
@@ -342,11 +342,9 @@ class EventStreamUnmarshallerGenerator(
                                         .map_err(|err| {
                                             #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
                                         })?;
+                                    builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::new(
-                                            #{OpError}Kind::${member.target.name}(builder.build()),
-                                            generic,
-                                        )
+                                        #{OpError}::${member.target.name}(builder.build())
                                     ))
                                     """,
                                     "parser" to parser,

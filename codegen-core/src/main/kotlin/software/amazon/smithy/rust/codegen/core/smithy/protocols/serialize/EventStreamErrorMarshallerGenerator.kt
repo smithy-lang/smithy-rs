@@ -95,25 +95,15 @@ class EventStreamErrorMarshallerGenerator(
             ) {
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
-                val kind = when (target) {
-                    CodegenTarget.CLIENT -> ".kind"
-                    CodegenTarget.SERVER -> ""
-                }
                 if (errorsShape.errorMembers.isEmpty()) {
                     rust("let payload = Vec::new();")
                 } else {
-                    rustBlock("let payload = match _input$kind") {
-                        val symbol = operationErrorSymbol
-                        val errorName = when (target) {
-                            CodegenTarget.CLIENT -> "${symbol}Kind"
-                            CodegenTarget.SERVER -> "$symbol"
-                        }
-
+                    rustBlock("let payload = match _input") {
                         errorsShape.errorMembers.forEach { error ->
                             val errorSymbol = symbolProvider.toSymbol(error)
                             val errorString = error.memberName
                             val target = model.expectShape(error.target, StructureShape::class.java)
-                            rustBlock("$errorName::${errorSymbol.name}(inner) => ") {
+                            rustBlock("#T::${errorSymbol.name}(inner) => ", operationErrorSymbol) {
                                 addStringHeader(":exception-type", "${errorString.dq()}.into()")
                                 renderMarshallEvent(error, target)
                             }
@@ -121,11 +111,12 @@ class EventStreamErrorMarshallerGenerator(
                         if (target.renderUnknownVariant()) {
                             rustTemplate(
                                 """
-                                $errorName::Unhandled(_inner) => return Err(
+                                #{OperationError}::Unhandled(_inner) => return Err(
                                     #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                                 ),
                                 """,
                                 *codegenScope,
+                                "OperationError" to operationErrorSymbol,
                             )
                         }
                     }

@@ -61,7 +61,8 @@ private class TestProtocolTraitImplGenerator(
                 fn parse(&self, _response: &#{Response}<#{Bytes}>) -> Self::Output {
                     ${operationWriter.escape(correctResponse)}
                 }
-                    }""",
+            }
+            """,
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "Error" to symbolProvider.symbolForOperationError(operationShape),

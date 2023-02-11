@@ -37,7 +37,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
         rustCrate.withModule(ServerRustModule.Types) {
-            pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model)(this)
+            pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
         }
     }
 }

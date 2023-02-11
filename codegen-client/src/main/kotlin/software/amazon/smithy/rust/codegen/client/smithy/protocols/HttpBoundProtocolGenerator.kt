@@ -115,6 +115,7 @@ class HttpBoundProtocolTraitImplGenerator(
             impl #{ParseStrict} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
                 fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
+                     #{BeforeParseResponse}
                      if !response.status().is_success() && response.status().as_u16() != $successCode {
                         #{parse_error}(response)
                      } else {
@@ -125,8 +126,11 @@ class HttpBoundProtocolTraitImplGenerator(
             *codegenScope,
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
-            "parse_error" to parseError(operationShape),
+            "parse_error" to parseError(operationShape, customizations),
             "parse_response" to parseResponse(operationShape, customizations),
+            "BeforeParseResponse" to writable {
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+            },
         )
     }
 
@@ -157,12 +161,12 @@ class HttpBoundProtocolTraitImplGenerator(
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
-            "parse_error" to parseError(operationShape),
+            "parse_error" to parseError(operationShape, customizations),
             *codegenScope,
         )
     }
 
-    private fun parseError(operationShape: OperationShape): RuntimeType {
+    private fun parseError(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -175,11 +179,17 @@ class HttpBoundProtocolTraitImplGenerator(
                 "O" to outputSymbol,
                 "E" to errorSymbol,
             ) {
+                Attribute.AllowUnusedMut.render(this)
                 rust(
-                    "let generic = #T(response).map_err(#T::unhandled)?;",
-                    protocol.parseHttpGenericError(operationShape),
+                    "let mut generic_builder = #T(response).map_err(#T::unhandled)?;",
+                    protocol.parseHttpErrorMetadata(operationShape),
                     errorSymbol,
                 )
+                writeCustomizations(
+                    customizations,
+                    OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "response"),
+                )
+                rust("let generic = generic_builder.build();")
                 if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
                         """
@@ -199,8 +209,8 @@ class HttpBoundProtocolTraitImplGenerator(
                             val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
-                                "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
-                                "})},",
+                                "$errorCode => #1T::$variantName({",
+                                "}),",
                                 errorSymbol,
                             ) {
                                 Attribute.AllowUnusedMut.render(this)
@@ -211,7 +221,14 @@ class HttpBoundProtocolTraitImplGenerator(
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
                                             errorSymbol,
-                                            listOf(),
+                                            listOf(object : OperationCustomization() {
+                                                override fun section(section: OperationSection): Writable = writable {
+                                                    if (section is OperationSection.MutateOutput) {
+                                                        rust("let output = output.meta(generic);")
+                                                    }
+                                                }
+                                            },
+                                            ),
                                         )
                                     }
                                 }

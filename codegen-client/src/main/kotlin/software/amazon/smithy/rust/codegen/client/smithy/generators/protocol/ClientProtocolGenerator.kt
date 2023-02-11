@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -19,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -50,12 +50,12 @@ open class ClientProtocolGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
-        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
+        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model), emptyList())
         builderGenerator.render(inputWriter)
 
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
-        inputWriter.implBlock(inputShape, symbolProvider) {
+        inputWriter.implBlock(symbolProvider.toSymbol(inputShape)) {
             writeCustomizations(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
@@ -82,7 +82,7 @@ open class ClientProtocolGenerator(
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }
-        operationWriter.implBlock(operationShape, symbolProvider) {
+        operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
             builderGenerator.renderConvenienceMethod(this)
 
             rust("/// Creates a new `$operationName` operation.")

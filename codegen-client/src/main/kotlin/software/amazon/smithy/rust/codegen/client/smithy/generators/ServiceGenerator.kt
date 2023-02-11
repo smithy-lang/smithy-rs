@@ -10,11 +10,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServiceErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServiceErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -56,7 +56,11 @@ class ServiceGenerator(
             }
         }
 
-        ServiceErrorGenerator(clientCodegenContext, operations).render(rustCrate)
+        ServiceErrorGenerator(
+            clientCodegenContext,
+            operations,
+            decorator.errorCustomizations(clientCodegenContext, emptyList()),
+        ).render(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Config) {
             ServiceConfigGenerator.withBaseBehavior(

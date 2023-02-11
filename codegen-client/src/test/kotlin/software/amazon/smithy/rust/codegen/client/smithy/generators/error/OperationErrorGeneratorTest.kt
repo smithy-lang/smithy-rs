@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.error
+package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -53,7 +53,7 @@ class OperationErrorGeneratorTest {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this)
             }
-            OperationErrorGenerator(model, symbolProvider, model.lookup("error#Greeting")).render(this)
+            OperationErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"), emptyList()).render(this)
 
             unitTest(
                 name = "generates_combined_error_enums",

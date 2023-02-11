@@ -16,14 +16,18 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -31,14 +35,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -181,14 +184,40 @@ class ClientCodegenVisitor(
      * This function _does not_ generate any serializers
      */
     override fun structureShape(shape: StructureShape) {
-        logger.fine("generating a structure...")
         rustCrate.useShapeWriter(shape) {
-            StructureGenerator(model, symbolProvider, this, shape).render()
-            if (!shape.hasTrait<SyntheticInputTrait>()) {
-                val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-                builderGenerator.render(this)
-                this.implBlock(shape, symbolProvider) {
-                    builderGenerator.renderConvenienceMethod(this)
+            when (val errorTrait = shape.getTrait<ErrorTrait>()) {
+                null -> {
+                    StructureGenerator(
+                        model,
+                        symbolProvider,
+                        this,
+                        shape,
+                        codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                    ).render()
+
+                    if (!shape.hasTrait<SyntheticInputTrait>()) {
+                        val builderGenerator =
+                            BuilderGenerator(
+                                codegenContext.model,
+                                codegenContext.symbolProvider,
+                                shape,
+                                codegenDecorator.builderCustomizations(codegenContext, emptyList()),
+                            )
+                        builderGenerator.render(this)
+                        implBlock(symbolProvider.toSymbol(shape)) {
+                            builderGenerator.renderConvenienceMethod(this)
+                        }
+                    }
+                }
+                else -> {
+                    ErrorGenerator(
+                        model,
+                        symbolProvider,
+                        this,
+                        shape,
+                        errorTrait,
+                        codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                    ).render()
                 }
             }
         }
@@ -220,7 +249,12 @@ class ClientCodegenVisitor(
         }
         if (shape.isEventStream()) {
             rustCrate.withModule(ClientRustModule.Error) {
-                OperationErrorGenerator(model, symbolProvider, shape).render(this)
+                OperationErrorGenerator(
+                    model,
+                    symbolProvider,
+                    shape,
+                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                ).render(this)
             }
         }
     }
@@ -230,7 +264,12 @@ class ClientCodegenVisitor(
      */
     override fun operationShape(shape: OperationShape) {
         rustCrate.withModule(ClientRustModule.Error) {
-            OperationErrorGenerator(model, symbolProvider, shape).render(this)
+            OperationErrorGenerator(
+                model,
+                symbolProvider,
+                shape,
+                codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+            ).render(this)
         }
     }
 }

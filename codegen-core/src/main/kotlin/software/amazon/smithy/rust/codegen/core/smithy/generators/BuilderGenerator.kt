@@ -36,6 +36,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -51,6 +54,27 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
+
+/** BuilderGenerator customization sections */
+sealed class BuilderSection(name: String) : Section(name) {
+    abstract val shape: StructureShape
+
+    /** Hook to add additional fields to the builder */
+    data class AdditionalFields(override val shape: StructureShape) : BuilderSection("AdditionalFields")
+
+    /** Hook to add additional methods to the builder */
+    data class AdditionalMethods(override val shape: StructureShape) : BuilderSection("AdditionalMethods")
+
+    /** Hook to add additional fields to the `build()` method */
+    data class AdditionalFieldsInBuild(override val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
+
+    /** Hook to add additional fields to the `Debug` impl */
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
+        BuilderSection("AdditionalDebugFields")
+}
+
+/** Customizations for BuilderGenerator */
+abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
 fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
     structureShape.builderSymbol(symbolProvider)
@@ -92,6 +116,7 @@ class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
+    private val customizations: List<BuilderCustomization>,
 ) {
     companion object {
         /**
@@ -216,6 +241,7 @@ class BuilderGenerator(
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
                 renderBuilderMember(this, memberName, memberSymbol)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFields(shape))
         }
 
         writer.rustBlock("impl $builderName") {
@@ -235,6 +261,7 @@ class BuilderGenerator(
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalMethods(shape))
             renderBuildFn(this)
         }
     }
@@ -251,6 +278,7 @@ class BuilderGenerator(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
+                writeCustomizations(customizations, BuilderSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
             }
         }
@@ -329,6 +357,7 @@ class BuilderGenerator(
                     }
                 }
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFieldsInBuild(shape))
         }
     }
 }

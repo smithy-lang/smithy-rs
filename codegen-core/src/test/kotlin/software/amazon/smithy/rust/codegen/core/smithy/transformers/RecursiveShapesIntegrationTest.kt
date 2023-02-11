@@ -50,7 +50,7 @@ class RecursiveShapesIntegrationTest {
             val structures = listOf("Expr", "SecondTree").map { input.lookup<StructureShape>("com.example#$it") }
             structures.forEach { struct ->
                 project.moduleFor(struct) {
-                    StructureGenerator(input, symbolProvider, this, struct).render()
+                    StructureGenerator(input, symbolProvider, this, struct, emptyList()).render()
                 }
             }
             input.lookup<UnionShape>("com.example#Atom").also { atom ->
