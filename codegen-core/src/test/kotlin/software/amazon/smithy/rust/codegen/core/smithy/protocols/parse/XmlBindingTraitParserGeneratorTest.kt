@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
@@ -102,12 +103,14 @@ internal class XmlBindingTraitParserGeneratorTest {
             builderSymbolFn(symbolProvider),
         ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
+
+        val choiceShape = model.lookup<UnionShape>("test#Choice")
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib {
-            unitTest(
-                name = "valid_input",
-                test = """
-                    let xml = br#"<Top>
+            unitTest(name = "valid_input") {
+                rustTemplate(
+                    """
+                    let xml = br##"<Top>
                         <choice>
                             <Hi>
                                 <Name>some key</Name>
@@ -118,19 +121,21 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                         <prefix:local>hey</prefix:local>
                     </Top>
-                    "#;
-                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    "##;
+                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
-                    map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
-                    assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
+                    map.insert("some key".to_string(), #{Choice}::S("hello".to_string()));
+                    assert_eq!(output.choice, Some(#{Choice}::FlatMap(map)));
                     assert_eq!(output.renamed_with_prefix.as_deref(), Some("hey"));
-                """,
-            )
+                    """,
+                    "Choice" to symbolProvider.toSymbol(choiceShape),
+                )
+            }
 
-            unitTest(
-                name = "ignore_extras",
-                test = """
-                    let xml = br#"<Top>
+            unitTest(name = "ignore_extras") {
+                rustTemplate(
+                    """
+                    let xml = br##"<Top>
                         <notchoice>
                             <extra/>
                             <stuff/>
@@ -146,13 +151,15 @@ internal class XmlBindingTraitParserGeneratorTest {
                             </Hi>
                         </choice>
                     </Top>
-                    "#;
-                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    "##;
+                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
-                    map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
-                    assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
-                """,
-            )
+                    map.insert("some key".to_string(), #{Choice}::S("hello".to_string()));
+                    assert_eq!(output.choice, Some(#{Choice}::FlatMap(map)));
+                    """,
+                    "Choice" to symbolProvider.toSymbol(choiceShape),
+                )
+            }
 
             unitTest(
                 name = "nopanics_on_invalid",
@@ -174,7 +181,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    ${format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
+                    ${format(operationParser)}(xml, test_output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
                 """,
             )
             unitTest(
@@ -191,20 +198,26 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
                     assert!(output.choice.unwrap().is_unknown());
                 """,
             )
         }
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
-            val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+        model.lookup<StructureShape>("test#Top").also { top ->
+            project.moduleFor(top) {
+                top.renderWithModelBuilder(model, symbolProvider, this)
+
+                UnionGenerator(model, symbolProvider, this, choiceShape).render()
+                model.lookup<StringShape>("test#FooEnum").also { enum ->
+                    EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                }
+            }
         }
 
-        project.withModule(RustModule.public("output")) {
-            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<OperationShape>("test#Op").outputShape(model).also { out ->
+            project.moduleFor(out) {
+                out.renderWithModelBuilder(model, symbolProvider, this)
+            }
         }
         project.compileAndTest()
     }

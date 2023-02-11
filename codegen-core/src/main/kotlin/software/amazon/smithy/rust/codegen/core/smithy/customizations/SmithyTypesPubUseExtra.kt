@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -71,11 +71,9 @@ internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<Run
 }
 
 /** Adds re-export statements in a separate file for the types module */
-fun pubUseSmithyTypes(codegenContext: CodegenContext, model: Model, rustCrate: RustCrate) {
-    rustCrate.withModule(RustModule.Types) {
-        val types = pubUseTypes(codegenContext, model)
-        if (types.isNotEmpty()) {
-            types.forEach { type -> rust("pub use #T;", type) }
-        }
+fun pubUseSmithyTypes(codegenContext: CodegenContext, model: Model): Writable = writable {
+    val types = pubUseTypes(codegenContext, model)
+    if (types.isNotEmpty()) {
+        types.forEach { type -> rust("pub use #T;", type) }
     }
 }

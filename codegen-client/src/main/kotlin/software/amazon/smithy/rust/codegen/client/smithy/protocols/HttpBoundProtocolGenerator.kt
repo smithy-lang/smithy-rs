@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -126,7 +125,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }""",
             *codegenScope,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
+            "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_error" to parseError(operationShape, customizations),
             "parse_response" to parseResponse(operationShape, customizations),
             "BeforeParseResponse" to writable {
@@ -160,7 +159,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }
             """,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
+            "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
             "parse_error" to parseError(operationShape, customizations),
             *codegenScope,
@@ -171,7 +170,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
@@ -258,7 +257,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
@@ -287,7 +286,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
@@ -313,7 +312,7 @@ class HttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         outputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
-        errorSymbol: RuntimeType,
+        errorSymbol: Symbol,
         customizations: List<OperationCustomization>,
     ) {
         val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
@@ -369,7 +368,7 @@ class HttpBoundProtocolTraitImplGenerator(
         httpBindingGenerator: ResponseBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER -> writable {

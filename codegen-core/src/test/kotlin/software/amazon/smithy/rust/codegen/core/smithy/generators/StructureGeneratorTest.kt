@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -111,11 +110,11 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
-        val project = TestWorkspace.testProject()
         val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
 
         project.lib { Attribute.AllowDeprecated.render(this) }
-        project.withModule(ModelsModule) {
+        project.moduleFor(inner) {
             val innerGenerator = StructureGenerator(model, provider, this, inner, emptyList())
             innerGenerator.render()
         }
@@ -225,7 +224,7 @@ class StructureGeneratorTest {
         project.lib {
             Attribute.DenyMissingDocs.render(this)
         }
-        project.withModule(ModelsModule) {
+        project.moduleFor(model.lookup("com.test#Inner")) {
             StructureGenerator(model, provider, this, model.lookup("com.test#Inner"), emptyList()).render()
             StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct"), emptyList()).render()
         }
@@ -269,7 +268,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
-        project.withModule(ModelsModule) {
+        project.moduleFor(model.lookup("test#Foo")) {
             StructureGenerator(model, provider, this, model.lookup("test#Foo"), emptyList()).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar"), emptyList()).render()
             StructureGenerator(model, provider, this, model.lookup("test#Baz"), emptyList()).render()
@@ -302,7 +301,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
-        project.withModule(ModelsModule) {
+        project.moduleFor(model.lookup("test#Nested")) {
             StructureGenerator(model, provider, this, model.lookup("test#Nested"), emptyList()).render()
             StructureGenerator(model, provider, this, model.lookup("test#Foo"), emptyList()).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar"), emptyList()).render()
@@ -355,7 +354,7 @@ class StructureGeneratorTest {
             StructureGenerator(testModel, provider, this, testModel.lookup("test#One"), emptyList()).render()
             StructureGenerator(testModel, provider, this, testModel.lookup("test#Two"), emptyList()).render()
 
-            rustBlock("fn compile_test_one(one: &crate::model::One)") {
+            rustBlock("fn compile_test_one(one: &crate::test_model::One)") {
                 rust(
                     """
                     let _: Option<&str> = one.field_string();
@@ -376,17 +375,17 @@ class StructureGeneratorTest {
                     let _: f32 = one.field_primitive_float();
                     let _: Option<f64> = one.field_double();
                     let _: f64 = one.field_primitive_double();
-                    let _: Option<&crate::model::Two> = one.two();
+                    let _: Option<&crate::test_model::Two> = one.two();
                     let _: Option<i32> = one.build_value();
                     let _: Option<i32> = one.builder_value();
                     let _: Option<i32> = one.default_value();
                     """,
                 )
             }
-            rustBlock("fn compile_test_two(two: &crate::model::Two)") {
+            rustBlock("fn compile_test_two(two: &crate::test_model::Two)") {
                 rust(
                     """
-                    let _: Option<&crate::model::One> = two.one();
+                    let _: Option<&crate::test_model::One> = two.one();
                     """,
                 )
             }

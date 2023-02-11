@@ -30,18 +30,13 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
-import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -50,8 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
@@ -110,12 +103,12 @@ open class ServerCodegenVisitor(
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
     init {
-        val symbolVisitorConfig =
-            SymbolVisitorConfig(
-                runtimeConfig = settings.runtimeConfig,
-                renameExceptions = false,
-                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
-            )
+        val symbolVisitorConfig = SymbolVisitorConfig(
+            runtimeConfig = settings.runtimeConfig,
+            renameExceptions = false,
+            nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+            moduleProvider = ServerModuleProvider,
+        )
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -332,7 +325,7 @@ open class ServerCodegenVisitor(
 
         if (renderUnconstrainedList) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
-            rustCrate.withModule(UnconstrainedModule) {
+            rustCrate.withModule(ServerRustModule.UnconstrainedModule) {
                 UnconstrainedCollectionGenerator(
                     codegenContext,
                     this,
@@ -342,7 +335,7 @@ open class ServerCodegenVisitor(
 
             if (!isDirectlyConstrained) {
                 logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
-                rustCrate.withModule(ConstrainedModule) {
+                rustCrate.withModule(ServerRustModule.ConstrainedModule) {
                     PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
                 }
             }
@@ -350,7 +343,7 @@ open class ServerCodegenVisitor(
 
         val constraintsInfo = CollectionTraitInfo.fromShape(shape, codegenContext.constrainedShapeSymbolProvider)
         if (isDirectlyConstrained) {
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 ConstrainedCollectionGenerator(
                     codegenContext,
                     this,
@@ -362,7 +355,7 @@ open class ServerCodegenVisitor(
         }
 
         if (isDirectlyConstrained || renderUnconstrainedList) {
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 CollectionConstraintViolationGenerator(
                     codegenContext,
                     this,
@@ -384,20 +377,20 @@ open class ServerCodegenVisitor(
 
         if (renderUnconstrainedMap) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
-            rustCrate.withModule(UnconstrainedModule) {
+            rustCrate.withModule(ServerRustModule.UnconstrainedModule) {
                 UnconstrainedMapGenerator(codegenContext, this, shape).render()
             }
 
             if (!isDirectlyConstrained) {
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
-                rustCrate.withModule(ConstrainedModule) {
+                rustCrate.withModule(ServerRustModule.ConstrainedModule) {
                     PubCrateConstrainedMapGenerator(codegenContext, this, shape).render()
                 }
             }
         }
 
         if (isDirectlyConstrained) {
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 ConstrainedMapGenerator(
                     codegenContext,
                     this,
@@ -408,7 +401,7 @@ open class ServerCodegenVisitor(
         }
 
         if (isDirectlyConstrained || renderUnconstrainedMap) {
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 MapConstraintViolationGenerator(
                     codegenContext,
                     this,
@@ -437,7 +430,7 @@ open class ServerCodegenVisitor(
     private fun integralShape(shape: NumberShape) {
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained integral $shape")
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 ConstrainedNumberGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
@@ -466,7 +459,7 @@ open class ServerCodegenVisitor(
             )
         } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 ConstrainedStringGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
@@ -491,8 +484,8 @@ open class ServerCodegenVisitor(
             )
         ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for union shape $shape")
-            rustCrate.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-                rustCrate.withModule(ModelsModule) modelsModuleWriter@{
+            rustCrate.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+                rustCrate.withModule(ServerRustModule.Model) modelsModuleWriter@{
                     UnconstrainedUnionGenerator(
                         codegenContext,
                         this@unconstrainedModuleWriter,
@@ -504,15 +497,8 @@ open class ServerCodegenVisitor(
         }
 
         if (shape.isEventStream()) {
-            val errors = shape.eventStreamErrors()
-                .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
-            if (errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) {
-                    val symbol = codegenContext.symbolProvider.toSymbol(shape)
-                    val errorSymbol = shape.eventStreamErrorSymbol(codegenContext.symbolProvider)
-                    ServerOperationErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
-                        .renderErrors(this, errorSymbol, symbol)
-                }
+            rustCrate.withModule(ServerRustModule.Error) {
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
             }
         }
     }
@@ -542,14 +528,8 @@ open class ServerCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(RustModule.Error) {
-            val symbol = codegenContext.symbolProvider.toSymbol(shape)
-            ServerOperationErrorGenerator(
-                model,
-                codegenContext.symbolProvider,
-                symbol,
-                shape.operationErrors(model).map { it.asStructureShape().get() },
-            ).render(this)
+        rustCrate.withModule(ServerRustModule.Error) {
+            ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
     }
 
@@ -560,7 +540,7 @@ open class ServerCodegenVisitor(
         }
 
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            rustCrate.withModule(ModelsModule) {
+            rustCrate.withModule(ServerRustModule.Model) {
                 ConstrainedBlobGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }

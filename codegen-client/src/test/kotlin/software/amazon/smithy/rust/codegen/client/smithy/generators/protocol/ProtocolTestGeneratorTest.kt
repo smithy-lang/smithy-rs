@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -66,7 +65,7 @@ private class TestProtocolTraitImplGenerator(
             """,
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
-            "Error" to operationShape.errorSymbol(symbolProvider),
+            "Error" to symbolProvider.symbolForOperationError(operationShape),
             "Response" to RuntimeType.HttpResponse,
             "Bytes" to RuntimeType.Bytes,
         )

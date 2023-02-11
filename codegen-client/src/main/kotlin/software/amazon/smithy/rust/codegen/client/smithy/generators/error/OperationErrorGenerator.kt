@@ -10,10 +10,10 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -30,51 +30,44 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unh
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
- * For a given Operation ([this]), return the symbol referring to the operation error. This can be used
- * if you, e.g. want to return an operation error from a function:
- *
- * ```kotlin
- * rustWriter.rustBlock("fn get_error() -> #T", operation.errorSymbol(symbolProvider)) {
- *     write("todo!() // function body")
- * }
- * ```
- */
-fun OperationShape.errorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val operationSymbol = symbolProvider.toSymbol(this)
-    return RustModule.Error.toType().resolve("${operationSymbol.name}Error")
-}
-
-/**
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
  * but we must still combine those variants into an enum covering all possible errors for a given operation.
+ *
+ * This generator also generates errors for event streams.
  */
 class OperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val operationSymbol: Symbol,
-    private val errors: List<StructureShape>,
+    private val operationOrEventStream: Shape,
     private val customizations: List<ErrorCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val symbol = symbolProvider.toSymbol(operationOrEventStream)
     private val errorMetadata = errorMetadata(symbolProvider.config().runtimeConfig)
     private val createUnhandledError =
         RuntimeType.smithyHttp(runtimeConfig).resolve("result::CreateUnhandledError")
 
-    fun render(writer: RustWriter) {
-        val errorSymbol = RuntimeType("crate::error::${operationSymbol.name}Error")
-        renderErrors(writer, errorSymbol, operationSymbol)
-    }
+    private fun operationErrors(): List<StructureShape> =
+        (operationOrEventStream as OperationShape).operationErrors(model).map { it.asStructureShape().get() }
+    private fun eventStreamErrors(): List<StructureShape> =
+        (operationOrEventStream as UnionShape).eventStreamErrors()
+            .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
 
-    fun renderErrors(
-        writer: RustWriter,
-        errorType: RuntimeType,
-        operationSymbol: Symbol,
-    ) {
+    fun render(writer: RustWriter) {
+        val (errorSymbol, errors) = when (operationOrEventStream) {
+            is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
+            is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
+            else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
+        }
+
         val meta = RustMetadata(
             derives = setOf(RuntimeType.Debug),
             additionalAttributes = listOf(Attribute.NonExhaustive),
@@ -93,13 +86,13 @@ class OperationErrorGenerator(
             ///
             /// $kindDeprecationMessage
             ##[deprecated(note = ${kindDeprecationMessage.dq()})]
-            pub type ${errorType.name}Kind = ${errorType.name};
+            pub type ${errorSymbol.name}Kind = ${errorSymbol.name};
             """,
         )
 
-        writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
+        writer.rust("/// Error type for the `${errorSymbol.name}` operation.")
         meta.render(writer)
-        writer.rustBlock("enum ${errorType.name}") {
+        writer.rustBlock("enum ${errorSymbol.name}") {
             errors.forEach { errorVariant ->
                 documentShape(errorVariant, model)
                 deprecatedShape(errorVariant)
@@ -114,7 +107,7 @@ class OperationErrorGenerator(
                 unhandledError(runtimeConfig),
             )
         }
-        writer.rustBlock("impl #T for ${errorType.name}", createUnhandledError) {
+        writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
             rustBlock(
                 """
                 fn create_unhandled_error(
@@ -136,7 +129,7 @@ class OperationErrorGenerator(
                 )
             }
         }
-        writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.Display) {
+        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants(errors) {
                     writable { rust("_inner.fmt(f)") }
@@ -145,7 +138,7 @@ class OperationErrorGenerator(
         }
 
         val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
-        writer.rustBlock("impl #T for ${errorType.name}", errorMetadataTrait) {
+        writer.rustBlock("impl #T for ${errorSymbol.name}", errorMetadataTrait) {
             rustBlock("fn meta(&self) -> &#T", errorMetadata(runtimeConfig)) {
                 delegateToVariants(errors) {
                     writable { rust("#T::meta(_inner)", errorMetadataTrait) }
@@ -153,11 +146,11 @@ class OperationErrorGenerator(
             }
         }
 
-        writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorType, errors))
+        writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorSymbol, errors))
 
         val retryErrorKindT = RuntimeType.retryErrorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock(
-            "impl #T for ${errorType.name}",
+            "impl #T for ${errorSymbol.name}",
             RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig),
         ) {
             rustBlock("fn code(&self) -> Option<&str>") {
@@ -180,15 +173,15 @@ class OperationErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl ${errorType.name}") {
+        writer.rustBlock("impl ${errorSymbol.name}") {
             writer.rustTemplate(
                 """
-                /// Creates the `${errorType.name}::Unhandled` variant from any error type.
+                /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                     Self::Unhandled(#{Unhandled}::builder().source(err).build())
                 }
 
-                /// Creates the `${errorType.name}::Unhandled` variant from a `#{error_metadata}`.
+                /// Creates the `${errorSymbol.name}::Unhandled` variant from a `#{error_metadata}`.
                 pub fn generic(err: #{error_metadata}) -> Self {
                     Self::Unhandled(#{Unhandled}::builder().source(err.clone()).meta(err).build())
                 }
@@ -216,14 +209,14 @@ class OperationErrorGenerator(
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorVariantSymbol.name.toSnakeCase()
-                writer.rust("/// Returns `true` if the error kind is `${errorType.name}::${errorVariantSymbol.name}`.")
+                writer.rust("/// Returns `true` if the error kind is `${errorSymbol.name}::${errorVariantSymbol.name}`.")
                 writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
                     rust("matches!(self, Self::${errorVariantSymbol.name}(_))")
                 }
             }
         }
 
-        writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.StdError) {
+        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants(errors) {
                     writable {

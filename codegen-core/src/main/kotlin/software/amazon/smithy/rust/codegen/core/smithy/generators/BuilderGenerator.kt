@@ -139,10 +139,10 @@ class BuilderGenerator(
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.builderSymbol(symbolProvider)
-    private val baseDerives = structureSymbol.expectRustMetadata().derives
+    private val metadata = structureSymbol.expectRustMetadata()
 
     // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
-    private val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
+    private val builderDerives = metadata.derives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
     private val builderName = "Builder"
 
     fun render(writer: RustWriter) {
@@ -232,6 +232,7 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
+        metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {

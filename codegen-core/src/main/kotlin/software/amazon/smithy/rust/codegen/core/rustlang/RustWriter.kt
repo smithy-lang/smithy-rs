@@ -420,6 +420,7 @@ class RustWriter private constructor(
         fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
             when {
                 fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                fileName.endsWith(".py") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
                 fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
                 fileName.startsWith("tests/") -> RustWriter(

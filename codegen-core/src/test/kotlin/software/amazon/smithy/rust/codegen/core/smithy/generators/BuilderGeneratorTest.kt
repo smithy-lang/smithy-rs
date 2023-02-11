@@ -8,9 +8,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
@@ -18,8 +20,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
@@ -31,29 +36,34 @@ internal class BuilderGeneratorTest {
     @Test
     fun `generate builders`() {
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        writer.rust("##![allow(deprecated)]")
-        val innerGenerator = StructureGenerator(model, provider, writer, inner, emptyList())
-        val generator = StructureGenerator(model, provider, writer, struct, emptyList())
-        val builderGenerator = BuilderGenerator(model, provider, struct, emptyList())
-        generator.render()
-        innerGenerator.render()
-        builderGenerator.render(writer)
-        writer.implBlock(provider.toSymbol(struct)) {
-            builderGenerator.renderConvenienceMethod(this)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(inner) {
+            rust("##![allow(deprecated)]")
+            StructureGenerator(model, provider, this, inner, emptyList()).render()
+            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            BuilderGenerator(model, provider, struct, emptyList()).also { builderGen ->
+                builderGen.render(this)
+                implBlock(provider.toSymbol(struct)) {
+                    builderGen.renderConvenienceMethod(this)
+                }
+            }
+
+            unitTest("generate_builders") {
+                rust(
+                    """
+                    let my_struct = MyStruct::builder().byte_value(4).foo("hello!").build();
+                    assert_eq!(my_struct.foo.unwrap(), "hello!");
+                    assert_eq!(my_struct.bar, 0);
+                    """,
+                )
+            }
         }
-        writer.compileAndTest(
-            """
-            let my_struct = MyStruct::builder().byte_value(4).foo("hello!").build();
-            assert_eq!(my_struct.foo.unwrap(), "hello!");
-            assert_eq!(my_struct.bar, 0);
-            """,
-        )
+        project.compileAndTest()
     }
 
     @Test
     fun `generate fallible builders`() {
-        val baseProvider: RustSymbolProvider = testSymbolProvider(StructureGeneratorTest.model)
+        val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
         val provider =
             object : RustSymbolProvider {
                 override fun config(): SymbolVisitorConfig {
@@ -68,83 +78,86 @@ internal class BuilderGeneratorTest {
                     return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
                 }
 
+                override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
+                override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
+
                 override fun toMemberName(shape: MemberShape?): String {
                     return baseProvider.toMemberName(shape)
                 }
             }
-        val writer = RustWriter.forModule("model")
-        writer.rust("##![allow(deprecated)]")
-        val innerGenerator = StructureGenerator(
-            StructureGeneratorTest.model,
-            provider,
-            writer,
-            StructureGeneratorTest.inner,
-            emptyList(),
-        )
-        val generator = StructureGenerator(
-            StructureGeneratorTest.model,
-            provider,
-            writer,
-            StructureGeneratorTest.struct,
-            emptyList(),
-        )
-        generator.render()
-        innerGenerator.render()
-        val builderGenerator = BuilderGenerator(model, provider, struct, emptyList())
-        builderGenerator.render(writer)
-        writer.implBlock(provider.toSymbol(struct)) {
-            builderGenerator.renderConvenienceMethod(this)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(StructureGeneratorTest.struct) {
+            AllowDeprecated.render(this)
+            StructureGenerator(model, provider, this, inner, emptyList()).render()
+            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            BuilderGenerator(model, provider, struct, emptyList()).also { builderGenerator ->
+                builderGenerator.render(this)
+                implBlock(provider.toSymbol(struct)) {
+                    builderGenerator.renderConvenienceMethod(this)
+                }
+            }
+            unitTest("generate_fallible_builders") {
+                rust(
+                    """
+                    let my_struct = MyStruct::builder().byte_value(4).foo("hello!").bar(0).build().expect("required field was not provided");
+                    assert_eq!(my_struct.foo.unwrap(), "hello!");
+                    assert_eq!(my_struct.bar, 0);
+                    """,
+                )
+            }
         }
-        writer.compileAndTest(
-            """
-            let my_struct = MyStruct::builder().byte_value(4).foo("hello!").bar(0).build().expect("required field was not provided");
-            assert_eq!(my_struct.foo.unwrap(), "hello!");
-            assert_eq!(my_struct.bar, 0);
-            """,
-        )
+        project.compileAndTest()
     }
 
     @Test
     fun `builder for a struct with sensitive fields should implement the debug trait as such`() {
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val credsGenerator = StructureGenerator(model, provider, writer, credentials, emptyList())
-        val builderGenerator = BuilderGenerator(model, provider, credentials, emptyList())
-        credsGenerator.render()
-        builderGenerator.render(writer)
-        writer.implBlock(provider.toSymbol(credentials)) {
-            builderGenerator.renderConvenienceMethod(this)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(credentials) {
+            StructureGenerator(model, provider, this, credentials, emptyList()).render()
+            BuilderGenerator(model, provider, credentials, emptyList()).also { builderGen ->
+                builderGen.render(this)
+                implBlock(provider.toSymbol(credentials)) {
+                    builderGen.renderConvenienceMethod(this)
+                }
+            }
+            unitTest("sensitive_fields") {
+                rust(
+                    """
+                    let builder = Credentials::builder()
+                        .username("admin")
+                        .password("pswd")
+                        .secret_key("12345");
+                         assert_eq!(format!("{:?}", builder), "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+                    """,
+                )
+            }
         }
-        writer.compileAndTest(
-            """
-            use super::*;
-            let builder = Credentials::builder()
-                .username("admin")
-                .password("pswd")
-                .secret_key("12345");
-                 assert_eq!(format!("{:?}", builder), "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-            """,
-        )
+        project.compileAndTest()
     }
 
     @Test
     fun `builder for a sensitive struct should implement the debug trait as such`() {
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val structGenerator = StructureGenerator(model, provider, writer, secretStructure, emptyList())
-        val builderGenerator = BuilderGenerator(model, provider, secretStructure, emptyList())
-        structGenerator.render()
-        builderGenerator.render(writer)
-        writer.implBlock(provider.toSymbol(secretStructure)) {
-            builderGenerator.renderConvenienceMethod(this)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(secretStructure) {
+            StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
+            BuilderGenerator(model, provider, secretStructure, emptyList()).also { builderGen ->
+                builderGen.render(this)
+                implBlock(provider.toSymbol(secretStructure)) {
+                    builderGen.renderConvenienceMethod(this)
+                }
+            }
+            unitTest("sensitive_struct") {
+                rust(
+                    """
+                    let builder = SecretStructure::builder()
+                        .secret_field("secret");
+                    assert_eq!(format!("{:?}", builder), "Builder { secret_field: \"*** Sensitive Data Redacted ***\" }");
+                    """,
+                )
+            }
         }
-        writer.compileAndTest(
-            """
-            use super::*;
-            let builder = SecretStructure::builder()
-                .secret_field("secret");
-            assert_eq!(format!("{:?}", builder), "Builder { secret_field: \"*** Sensitive Data Redacted ***\" }");
-            """,
-        )
+        project.compileAndTest()
     }
 }

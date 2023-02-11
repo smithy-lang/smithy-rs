@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -48,7 +47,7 @@ class EventStreamErrorMarshallerGenerator(
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
     } else {
-        unionShape.eventStreamErrorSymbol(symbolProvider).toSymbol()
+        symbolProvider.symbolForEventStreamError(unionShape)
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()

@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -50,19 +49,11 @@ class OperationErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ErrorsModule) {
+        project.moduleFor(model.lookup<StructureShape>("error#FooException")) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this)
             }
-            val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
-            val generator = OperationErrorGenerator(
-                model,
-                symbolProvider,
-                symbolProvider.toSymbol(model.lookup("error#Greeting")),
-                errors,
-                emptyList(),
-            )
-            generator.render(this)
+            OperationErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"), emptyList()).render(this)
 
             unitTest(
                 name = "generates_combined_error_enums",

@@ -75,7 +75,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun sendBounds(
         operation: Symbol,
         operationOutput: Symbol,
-        operationError: RuntimeType,
+        operationError: Symbol,
         retryClassifier: RuntimeType,
     ): Writable =
         writable { }

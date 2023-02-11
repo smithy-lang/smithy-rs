@@ -114,7 +114,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         }
                         """,
                         "AccessorTrait" to accessorTrait(codegenContext),
-                        "error" to section.errorType,
+                        "error" to section.errorSymbol,
                     )
                 }
 

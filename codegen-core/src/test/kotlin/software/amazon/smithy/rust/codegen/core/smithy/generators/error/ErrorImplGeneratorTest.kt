@@ -9,11 +9,11 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -34,22 +34,24 @@ class ErrorImplGeneratorTest {
     @Test
     fun `generate error structures`() {
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("error")
+        val project = TestWorkspace.testProject(provider)
         val errorShape = model.expectShape(ShapeId.from("com.test#MyError")) as StructureShape
-        val errorTrait = errorShape.getTrait<ErrorTrait>()!!
-        StructureGenerator(model, provider, writer, errorShape, emptyList()).render()
-        BuilderGenerator(model, provider, errorShape, emptyList()).let { builderGen ->
-            writer.implBlock(provider.toSymbol(errorShape)) {
-                builderGen.renderConvenienceMethod(writer)
+        project.moduleFor(errorShape) {
+            val errorTrait = errorShape.getTrait<ErrorTrait>()!!
+            StructureGenerator(model, provider, this, errorShape, emptyList()).render()
+            BuilderGenerator(model, provider, errorShape, emptyList()).let { builderGen ->
+                implBlock(provider.toSymbol(errorShape)) {
+                    builderGen.renderConvenienceMethod(this)
+                }
+                builderGen.render(this)
             }
-            builderGen.render(writer)
+            ErrorImplGenerator(model, provider, this, errorShape, errorTrait, emptyList()).render(CodegenTarget.CLIENT)
+            compileAndTest(
+                """
+                let err = MyError::builder().build();
+                assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
+                """,
+            )
         }
-        ErrorImplGenerator(model, provider, writer, errorShape, errorTrait, emptyList()).render(CodegenTarget.CLIENT)
-        writer.compileAndTest(
-            """
-            let err = MyError::builder().build();
-            assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
-            """,
-        )
     }
 }

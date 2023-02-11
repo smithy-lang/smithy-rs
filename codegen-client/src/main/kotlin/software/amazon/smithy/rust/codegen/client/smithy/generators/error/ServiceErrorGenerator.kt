@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -26,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 
@@ -66,7 +66,7 @@ class ServiceErrorGenerator(
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
-                renderImplFrom(operationShape.errorSymbol(symbolProvider), operationShape.errors)
+                renderImplFrom(symbolProvider.symbolForOperationError(operationShape), operationShape.errors)
             }
             // event stream errors
             operations.map { it.eventStreamErrors(codegenContext.model) }
@@ -74,7 +74,7 @@ class ServiceErrorGenerator(
                 .associate { it.key to it.value }
                 .forEach { (unionShape, errors) ->
                     renderImplFrom(
-                        unionShape.eventStreamErrorSymbol(symbolProvider),
+                        symbolProvider.symbolForEventStreamError(unionShape),
                         errors.map { it.id },
                     )
                 }
@@ -97,7 +97,7 @@ class ServiceErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImplFrom(errorSymbol: RuntimeType, errors: List<ShapeId>) {
+    private fun RustWriter.renderImplFrom(errorSymbol: Symbol, errors: List<ShapeId>) {
         if (errors.isNotEmpty() || CodegenTarget.CLIENT == codegenContext.target) {
             val operationErrors = errors.map { model.expectShape(it) }
             rustBlock(

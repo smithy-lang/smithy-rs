@@ -99,6 +99,7 @@ class PythonServerModuleGenerator(
             let types = #{pyo3}::types::PyModule::new(py, "types")?;
             types.add_class::<#{SmithyPython}::types::Blob>()?;
             types.add_class::<#{SmithyPython}::types::DateTime>()?;
+            types.add_class::<#{SmithyPython}::types::Format>()?;
             types.add_class::<#{SmithyPython}::types::ByteStream>()?;
             #{pyo3}::py_run!(
                 py,
@@ -185,6 +186,10 @@ class PythonServerModuleGenerator(
             """
             let aws_lambda = #{pyo3}::types::PyModule::new(py, "aws_lambda")?;
             aws_lambda.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientApplication>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientContext>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyCognitoIdentity>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyConfig>()?;
             pyo3::py_run!(
                 py,
                 aws_lambda,

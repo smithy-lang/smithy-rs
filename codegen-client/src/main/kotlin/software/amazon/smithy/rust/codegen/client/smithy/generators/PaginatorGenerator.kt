@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -79,7 +78,7 @@ class PaginatorGenerator private constructor(
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
     private val outputType = symbolProvider.toSymbol(outputShape)
-    private val errorType = operation.errorSymbol(symbolProvider)
+    private val errorType = symbolProvider.symbolForOperationError(operation)
 
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,

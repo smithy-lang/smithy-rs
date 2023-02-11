@@ -12,6 +12,24 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Upgrade Rust MSRV to 1.63.0"
+references = ["smithy-rs#2222"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Nugine"
+
+[[smithy-rs]]
+message = "Upgrade Rust MSRV to 1.63.0"
+references = ["smithy-rs#2222"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "Nugine"
+
+[[aws-sdk-rust]]
+message = "Adds jitter to `LazyCredentialsCache`. This allows credentials with the same expiry to expire at slightly different times, thereby preventing thundering herds."
+references = ["smithy-rs#2335"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
 message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
 ```rust
 // Import the trait to get the `request_id` method on outputs
