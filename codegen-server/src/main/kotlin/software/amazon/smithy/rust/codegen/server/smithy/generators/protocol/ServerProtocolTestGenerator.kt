@@ -772,15 +772,12 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
-            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-
-            // Tests involving constraint traits, which are not yet fully implemented.
-            // See https://github.com/awslabs/smithy-rs/issues/1401.
+            // Tests involving `@range` on floats.
+            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy-rs/issues/2007.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternSensitiveString", TestType.MalformedRequest),
 
             // See https://github.com/awslabs/smithy-rs/issues/1969
             FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShortOverride_case0", TestType.MalformedRequest),
@@ -872,16 +869,11 @@ class ServerProtocolTestGenerator(
             FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTrait", TestType.Request),
 
             // AwsJson1.1 failing tests.
-            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTrait", TestType.Request),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_httpdate_timestamps", TestType.Response),
-            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_iso8601_timestamps", TestType.Response),
-            FailingTest(
-                "aws.protocoltests.json#JsonProtocol",
-                "parses_the_request_id_from_the_response",
-                TestType.Response,
-            ),
-
+            FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
+            FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
+            FailingTest(AwsJson11, "parses_httpdate_timestamps", TestType.Response),
+            FailingTest(AwsJson11, "parses_iso8601_timestamps", TestType.Response),
+            FailingTest(AwsJson11, "parses_the_request_id_from_the_response", TestType.Response),
         )
         private val RunOnly: Set<String>? = null
 

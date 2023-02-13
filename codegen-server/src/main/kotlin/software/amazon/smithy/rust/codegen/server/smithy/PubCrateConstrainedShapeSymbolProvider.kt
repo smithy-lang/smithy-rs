@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
@@ -74,7 +73,7 @@ class PubCrateConstrainedShapeSymbolProvider(
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            parent = ConstrainedModule,
+            parent = ServerRustModule.ConstrainedModule,
             inline = true,
         )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())

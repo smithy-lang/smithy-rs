@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -79,7 +78,7 @@ class PaginatorGenerator private constructor(
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
     private val outputType = symbolProvider.toSymbol(outputShape)
-    private val errorType = operation.errorSymbol(symbolProvider)
+    private val errorType = symbolProvider.symbolForOperationError(operation)
 
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,

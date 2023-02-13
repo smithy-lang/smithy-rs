@@ -7,17 +7,24 @@ package software.amazon.smithy.rust.codegen.core.testutil
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -25,17 +32,53 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.io.File
 
 val TestRuntimeConfig =
     RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
+
+/**
+ * IMPORTANT: You shouldn't need to refer to these directly in code or tests. They are private for a reason.
+ *
+ * In general, the RustSymbolProvider's `config()` has a `moduleFor` function that should be used
+ * to find the destination module for a given shape.
+ */
+private object CodegenCoreTestModules {
+    // Use module paths that don't align with either server or client to make sure
+    // the codegen is resilient to differences in module path.
+    val ModelsTestModule = RustModule.public("test_model", documentation = "Test models module")
+    val ErrorsTestModule = RustModule.public("test_error", documentation = "Test error module")
+    val InputsTestModule = RustModule.public("test_input", documentation = "Test input module")
+    val OutputsTestModule = RustModule.public("test_output", documentation = "Test output module")
+    val OperationsTestModule = RustModule.public("test_operation", documentation = "Test operation module")
+
+    object TestModuleProvider : ModuleProvider {
+        override fun moduleForShape(shape: Shape): RustModule.LeafModule = when (shape) {
+            is OperationShape -> OperationsTestModule
+            is StructureShape -> when {
+                shape.hasTrait<ErrorTrait>() -> ErrorsTestModule
+                shape.hasTrait<SyntheticInputTrait>() -> InputsTestModule
+                shape.hasTrait<SyntheticOutputTrait>() -> OutputsTestModule
+                else -> ModelsTestModule
+            }
+            else -> ModelsTestModule
+        }
+
+        override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule = ErrorsTestModule
+        override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule = ErrorsTestModule
+    }
+}
+
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+    moduleProvider = CodegenCoreTestModules.TestModuleProvider,
 )
 
 fun testRustSettings(
@@ -101,12 +144,12 @@ fun StructureShape.renderWithModelBuilder(
     model: Model,
     symbolProvider: RustSymbolProvider,
     writer: RustWriter,
-    forWhom: CodegenTarget = CodegenTarget.CLIENT,
 ) {
-    StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
-    val modelBuilder = BuilderGenerator(model, symbolProvider, this)
-    modelBuilder.render(writer)
-    writer.implBlock(this, symbolProvider) {
-        modelBuilder.renderConvenienceMethod(this)
+    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
+    BuilderGenerator(model, symbolProvider, this, emptyList()).also { builderGen ->
+        builderGen.render(writer)
+        writer.implBlock(symbolProvider.toSymbol(this)) {
+            builderGen.renderConvenienceMethod(this)
+        }
     }
 }

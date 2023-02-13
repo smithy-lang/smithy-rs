@@ -12,115 +12,183 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = """
-Provide a way to retrieve fallback credentials if a call to `provide_credentials` is interrupted. An interrupt can occur when a timeout future is raced against a future for `provide_credentials`, and the former wins the race. A new method, `fallback_on_interrupt` on the `ProvideCredentials` trait, can be used in that case. The following code snippet from `LazyCredentialsCache::provide_cached_credentials` has been updated like so:
+message = "Upgrade Rust MSRV to 1.63.0"
+references = ["smithy-rs#2222"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Nugine"
 
-Before:
-```rust
-let timeout_future = self.sleeper.sleep(self.load_timeout);
-// --snip--
-let future = Timeout::new(provider.provide_credentials(), timeout_future);
-let result = cache
-    .get_or_load(|| {
-        async move {
-            let credentials = future.await.map_err(|_err| {
-                CredentialsError::provider_timed_out(load_timeout)
-            })??;
-            // --snip--
-        }
-    }).await;
-// --snip--
-```
+[[smithy-rs]]
+message = "Upgrade Rust MSRV to 1.63.0"
+references = ["smithy-rs#2222"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "Nugine"
 
-After:
-```rust
-let timeout_future = self.sleeper.sleep(self.load_timeout);
-// --snip--
-let future = Timeout::new(provider.provide_credentials(), timeout_future);
-let result = cache
-    .get_or_load(|| {
-        async move {
-           let credentials = match future.await {
-                Ok(creds) => creds?,
-                Err(_err) => match provider.fallback_on_interrupt() { // can provide fallback credentials
-                    Some(creds) => creds,
-                    None => return Err(CredentialsError::provider_timed_out(load_timeout)),
-                }
-            };
-            // --snip--
-        }
-    }).await;
-// --snip--
-```
-"""
-references = ["smithy-rs#2246"]
+[[aws-sdk-rust]]
+message = "Adds jitter to `LazyCredentialsCache`. This allows credentials with the same expiry to expire at slightly different times, thereby preventing thundering herds."
+references = ["smithy-rs#2335"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
+[[aws-sdk-rust]]
+message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
+```rust
+// Import the trait to get the `request_id` method on outputs
+use aws_sdk_s3::types::RequestId;
+let output = client.list_buckets().send().await?;
+println!("Request ID: {:?}", output.request_id());
+```
+"""
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Retrieving a request ID from errors now requires importing the `RequestId` trait. For example, with S3:
+```rust
+use aws_sdk_s3::types::RequestId;
+println!("Request ID: {:?}", error.request_id());
+```
+"""
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
-message = "The [`@uniqueItems`](https://smithy.io/2.0/spec/constraint-traits.html#uniqueitems-trait) trait on `list` shapes is now supported in server SDKs."
-references = ["smithy-rs#2232", "smithy-rs#1670"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server"}
-author = "david-perez"
+message = "Generic clients no longer expose a `request_id()` function on errors. To get request ID functionality, use the SDK code generator."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `message()` and `code()` methods on errors have been moved into `ProvideErrorMetadata` trait. This trait will need to be imported to continue calling these."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `message()` and `code()` methods on errors have been moved into `ProvideErrorMetadata` trait. This trait will need to be imported to continue calling these."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
 
 [[aws-sdk-rust]]
 message = """
-Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.
+The `*Error` and `*ErrorKind` types have been combined to make error matching simpler.
+<details>
+<summary>Example with S3</summary>
+**Before:**
+```rust
+let result = client
+    .get_object()
+    .bucket(BUCKET_NAME)
+    .key("some-key")
+    .send()
+    .await;
+match result {
+    Ok(_output) => { /* Do something with the output */ }
+    Err(err) => match err.into_service_error() {
+        GetObjectError { kind, .. } => match kind {
+            GetObjectErrorKind::InvalidObjectState(value) => println!("invalid object state: {:?}", value),
+            GetObjectErrorKind::NoSuchKey(_) => println!("object didn't exist"),
+        }
+        err @ GetObjectError { .. } if err.code() == Some("SomeUnmodeledError") => {}
+        err @ _ => return Err(err.into()),
+    },
+}
+```
+**After:**
+```rust
+// Needed to access the `.code()` function on the error type:
+use aws_sdk_s3::types::ProvideErrorMetadata;
+let result = client
+    .get_object()
+    .bucket(BUCKET_NAME)
+    .key("some-key")
+    .send()
+    .await;
+match result {
+    Ok(_output) => { /* Do something with the output */ }
+    Err(err) => match err.into_service_error() {
+        GetObjectError::InvalidObjectState(value) => {
+            println!("invalid object state: {:?}", value);
+        }
+        GetObjectError::NoSuchKey(_) => {
+            println!("object didn't exist");
+        }
+        err if err.code() == Some("SomeUnmodeledError") => {}
+        err @ _ => return Err(err.into()),
+    },
+}
+```
+</details>
 """
-references = ["smithy-rs#2258"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
-references = ["smithy-rs#2271"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
-author = "ysaito1001"
-
-[[aws-sdk-rust]]
-message = "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`."
-references = ["smithy-rs#2271"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
+references = ["smithy-rs#76", "smithy-rs#2129", "smithy-rs#2075"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
 
 [[smithy-rs]]
 message = """
-Fix `name` and `absolute` methods on `OperationExtension`.
-
-The older, [now removed](https://github.com/awslabs/smithy-rs/pull/2161), service builder would insert `OperationExtension` into the `http::Response` containing the [absolute shape ID](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-AbsoluteRootShapeId) with the `#` symbol replaced with a `.`. When [reintroduced](https://github.com/awslabs/smithy-rs/pull/2157) into the new service builder machinery the behavior was changed - we now do _not_ perform the replace. This change fixes the documentation and `name`/`absolute` methods of the `OperationExtension` API to match this new behavior.
-
-In the old service builder, `OperationExtension` was initialized, by the framework, and then used as follows:
-
+The `*Error` and `*ErrorKind` types have been combined to make error matching simpler.
+<details>
+<summary>Example with S3</summary>
+**Before:**
 ```rust
-let ext = OperationExtension::new("com.amazonaws.CompleteSnapshot");
-
-// This is expected
-let name = ext.name(); // "CompleteSnapshot"
-let namespace = ext.namespace(); // = "com.amazonaws";
+let result = client
+    .get_object()
+    .bucket(BUCKET_NAME)
+    .key("some-key")
+    .send()
+    .await;
+match result {
+    Ok(_output) => { /* Do something with the output */ }
+    Err(err) => match err.into_service_error() {
+        GetObjectError { kind, .. } => match kind {
+            GetObjectErrorKind::InvalidObjectState(value) => println!("invalid object state: {:?}", value),
+            GetObjectErrorKind::NoSuchKey(_) => println!("object didn't exist"),
+        }
+        err @ GetObjectError { .. } if err.code() == Some("SomeUnmodeledError") => {}
+        err @ _ => return Err(err.into()),
+    },
+}
 ```
-
-When reintroduced, `OperationExtension` was initialized by the `Plugin` and then used as follows:
-
+**After:**
 ```rust
-let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
-
-// This is the bug
-let name = ext.name(); // "amazonaws#CompleteSnapshot"
-let namespace = ext.namespace(); // = "com";
+// Needed to access the `.code()` function on the error type:
+use aws_sdk_s3::types::ProvideErrorMetadata;
+let result = client
+    .get_object()
+    .bucket(BUCKET_NAME)
+    .key("some-key")
+    .send()
+    .await;
+match result {
+    Ok(_output) => { /* Do something with the output */ }
+    Err(err) => match err.into_service_error() {
+        GetObjectError::InvalidObjectState(value) => {
+            println!("invalid object state: {:?}", value);
+        }
+        GetObjectError::NoSuchKey(_) => {
+            println!("object didn't exist");
+        }
+        err if err.code() == Some("SomeUnmodeledError") => {}
+        err @ _ => return Err(err.into()),
+    },
+}
 ```
-
-The intended behavior is now restored:
-
-```rust
-let ext = OperationExtension::new("com.amazonaws#CompleteSnapshot");
-
-// This is expected
-let name = ext.name(); // "CompleteSnapshot"
-let namespace = ext.namespace(); // = "com.amazonaws";
-```
-
-The rationale behind this change is that the previous design was tailored towards a specific internal use case and shouldn't be enforced on all customers.
+</details>
 """
-references = ["smithy-rs#2276"]
-meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
-author = "hlbarber"
+references = ["smithy-rs#76", "smithy-rs#2129", "smithy-rs#2075"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"

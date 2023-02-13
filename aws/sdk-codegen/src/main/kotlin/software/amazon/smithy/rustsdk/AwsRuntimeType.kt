@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
@@ -42,7 +41,6 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 }
 
 object AwsRuntimeType {
-    val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
     val Presigning by lazy {
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
     }
@@ -63,7 +61,7 @@ object AwsRuntimeType {
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsCredentialTypes(runtimeConfig).toType()
 
     fun awsCredentialTypesTestUtil(runtimeConfig: RuntimeConfig) =
-        AwsCargoDependency.awsCredentialTypes(runtimeConfig).copy(scope = DependencyScope.Dev).withFeature("test-util").toType()
+        AwsCargoDependency.awsCredentialTypes(runtimeConfig).toDevDependency().withFeature("test-util").toType()
 
     fun awsEndpoint(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsEndpoint(runtimeConfig).toType()
     fun awsHttp(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsHttp(runtimeConfig).toType()
