@@ -178,7 +178,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
-        ref: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
+        ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -190,9 +190,18 @@ jobs:
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
+      env:
+        RELEASE_BRANCH_NAME: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
       run: |
-        echo "Pushing release commits..."
-        git push origin
+        if ! git diff-index --quiet HEAD; then
+          echo "Pushing release commits..."
+          # This will fail if we tried to release from a non-HEAD commit on the release branch.
+          # The only scenario where we would try to release a non-HEAD commit from the release branch is
+          # to retry a release action execution that failed due to a transient issue.
+          # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
+          # been processed.
+          git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+        fi
     - name: Tag release
       uses: actions/github-script@v6
       with:
@@ -203,7 +212,6 @@ jobs:
             github,
             isDryRun: ${{ inputs.dry_run }},
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
-            releaseCommitish: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }},
           });
     - name: Publish to crates.io
       shell: bash
