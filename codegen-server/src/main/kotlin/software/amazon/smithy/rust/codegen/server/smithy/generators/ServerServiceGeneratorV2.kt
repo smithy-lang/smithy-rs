@@ -178,18 +178,20 @@ class ServerServiceGeneratorV2(
 
     private fun buildMethod(): Writable = writable {
         val missingOperationsVariableName = "missing_operation_names"
-        val expectMessageVariableName = "unexpected_error_msg"
+        val expectMessage = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues"
 
         val nullabilityChecks = writable {
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val operationZstTypeName = operationStructNames[operationShape]!!
-                rust(
+                rustTemplate(
                     """
                     if self.$fieldName.is_none() {
+                        use #{SmithyHttpServer}::operation::OperationShape;
                         $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
                     }
                     """,
+                    "SmithyHttpServer" to smithyHttpServer,
                 )
             }
         }
@@ -199,7 +201,7 @@ class ServerServiceGeneratorV2(
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
                 rust(
                     """
-                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect("$expectMessage")),
                     """,
                 )
             }
@@ -216,7 +218,7 @@ class ServerServiceGeneratorV2(
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
-                    use #{SmithyHttpServer}::operation::OperationShape;
+                    ##[allow(unused_mut)]
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
                     #{NullabilityChecks:W}
                     if !$missingOperationsVariableName.is_empty() {
@@ -224,7 +226,6 @@ class ServerServiceGeneratorV2(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
-                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
 
                     #{PatternInitializations:W}
 
@@ -319,14 +320,21 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
+        var allBuilderFields = builderFields + "plugin: $builderPluginGenericTypeName"
+
+        // With no operations there is no use of the `Body` type variable
+        if (operations.isEmpty()) {
+            allBuilderFields += "_body: std::marker::PhantomData<$builderBodyGenericTypeName>"
+        }
+
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
+            ##[allow(dead_code)]
             pub struct $builderName<$builderGenerics> {
-                ${builderFields.joinToString(", ")},
-                plugin: $builderPluginGenericTypeName,
+                ${allBuilderFields.joinToString(",")}
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -381,6 +389,13 @@ class ServerServiceGeneratorV2(
     private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
+        var builderFields = notSetFields + writable("plugin")
+        // With no operations there is no use of the `Body` type variable
+        if (operations.isEmpty()) {
+            builderFields += writable("_body: std::marker::PhantomData")
+        }
+        val joinedBuilderFields = builderFields.join(",")
+
         rustTemplate(
             """
             ///
@@ -400,8 +415,7 @@ class ServerServiceGeneratorV2(
                 /// multiple plugins.
                 pub fn builder_with_plugins<Body, Plugin>(plugin: Plugin) -> $builderName<Body, Plugin> {
                     $builderName {
-                        #{NotSetFields:W},
-                        plugin
+                        #{BuilderFields:W}
                     }
                 }
 
@@ -470,7 +484,7 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
-            "NotSetFields" to notSetFields.join(", "),
+            "BuilderFields" to joinedBuilderFields,
             "Router" to protocol.routerType(),
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
