@@ -16,6 +16,7 @@ private fun fillInBaseModel(
 ): String = """
     namespace test
 
+    use smithy.framework#ValidationException
     use aws.protocols#$protocolName
 
     union TestUnion {
@@ -66,14 +67,28 @@ private fun fillInBaseModel(
         MessageWithNoHeaderPayloadTraits: MessageWithNoHeaderPayloadTraits,
         SomeError: SomeError,
     }
-    structure TestStreamInputOutput { @httpPayload @required value: TestStream }
 
-    @http(method: "POST", uri: "/test")
-    operation TestStreamOp {
-        input: TestStreamInputOutput,
-        output: TestStreamInputOutput,
-        errors: [SomeError],
+    structure TestStreamInput {
+        @httpLabel
+        @required
+        id: String,
+
+        @httpPayload
+        value: TestStream,
     }
+
+    structure TestStreamOutput {
+        @httpPayload
+        value: TestStream
+    }
+
+    @http(method: "POST", uri: "/test/{id}")
+    operation TestStreamOp {
+        input: TestStreamInput,
+        output: TestStreamOutput,
+        errors: [SomeError, ValidationException],
+    }
+
     $extraServiceAnnotations
     @$protocolName
     service TestService { version: "123", operations: [TestStreamOp] }

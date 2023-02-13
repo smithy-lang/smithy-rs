@@ -458,6 +458,7 @@ class Attribute(val inner: Writable) {
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
+        val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))

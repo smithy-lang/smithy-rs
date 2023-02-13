@@ -5,8 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.core.testutil
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 
@@ -16,6 +19,7 @@ object EventStreamUnmarshallTestCases {
         codegenTarget: CodegenTarget,
         generator: String,
         codegenContext: CodegenContext,
+        builderInputWrapper: (String) -> String = { it },
     ) {
         val crateName = codegenContext.moduleUseName()
 
@@ -202,23 +206,28 @@ object EventStreamUnmarshallTestCases {
             CodegenTarget.CLIENT -> "TestStreamErrorKind::SomeError" to ".kind"
             CodegenTarget.SERVER -> "TestStreamError::SomeError" to ""
         }
-        unitTest(
-            "some_error",
-            """
-            let message = msg(
-                "exception",
-                "SomeError",
-                "${testCase.responseContentType}",
-                br#"${testCase.validSomeError}"#
-            );
-            let result = $generator::new().unmarshall(&message);
-            assert!(result.is_ok(), "expected ok, got: {:?}", result);
-            match expect_error(result.unwrap())$kindSuffix {
-                $someError(err) => assert_eq!(Some("some error"), err.message()),
-                kind => panic!("expected SomeError, but got {:?}", kind),
-            }
-            """,
-        )
+
+        unitTest("some_error") {
+            rustTemplate(
+                """
+                let message = msg(
+                    "exception",
+                    "SomeError",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validSomeError}"#
+                );
+                let result = $generator::new().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                match expect_error(result.unwrap())$kindSuffix {
+                    $someError(err) => assert_eq!(Some("some error"), err.message()),
+
+                    #{AllowUnreachablePatterns:W}
+                    kind => panic!("expected SomeError, but got {:?}", kind),
+                }
+                """,
+                "AllowUnreachablePatterns" to writable { Attribute.AllowUnreachablePatterns.render(this) },
+            )
+        }
 
         unitTest(
             "bad_content_type",
