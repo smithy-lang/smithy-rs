@@ -12,16 +12,16 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
@@ -32,6 +32,7 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
     nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+    moduleProvider = ServerModuleProvider,
 )
 
 private fun testServiceShapeFor(model: Model) =
@@ -119,13 +120,13 @@ fun serverTestCodegenContext(
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
-    StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
+    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
     val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this, SmithyValidationExceptionConversionGenerator(serverCodegenContext))
     modelBuilder.render(writer)
-    writer.implBlock(this, symbolProvider) {
+    writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
     }
 }

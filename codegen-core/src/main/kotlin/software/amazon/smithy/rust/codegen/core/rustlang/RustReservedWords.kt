@@ -40,6 +40,8 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                 "make_operation" -> "make_operation_value"
                 "presigned" -> "presigned_value"
                 "customize" -> "customize_value"
+                // To avoid conflicts with the error metadata `meta` field
+                "meta" -> "meta_value"
                 else -> baseName
             }
 

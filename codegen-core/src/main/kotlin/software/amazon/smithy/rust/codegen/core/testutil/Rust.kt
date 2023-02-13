@@ -10,13 +10,11 @@ import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -28,13 +26,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
-import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
@@ -105,7 +100,7 @@ object TestWorkspace {
                 // help rust select the right version when we run cargo test
                 // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.62.1\"\n",
+                "[toolchain]\nchannel = \"1.63.0\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
@@ -116,22 +111,14 @@ object TestWorkspace {
         }
     }
 
-    @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
+    fun testProject(debugMode: Boolean = false): TestWriterDelegator =
+        testProject(ModelAssembler().assemble().unwrap(), debugMode)
+
+    fun testProject(model: Model, debugMode: Boolean = false): TestWriterDelegator =
+        testProject(testSymbolProvider(model), debugMode)
+
+    fun testProject(symbolProvider: RustSymbolProvider, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()
-        val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
-            override fun config(): SymbolVisitorConfig {
-                PANIC("")
-            }
-
-            override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-                PANIC("")
-            }
-
-            override fun toSymbol(shape: Shape?): Symbol {
-                PANIC("")
-            }
-        }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
@@ -311,7 +298,10 @@ fun FileManifest.printGeneratedFiles() {
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
  */
-fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
+fun TestWriterDelegator.compileAndTest(
+    runClippy: Boolean = false,
+    expectFailure: Boolean = false,
+): String {
     val stubModel = """
         namespace fake
         service Fake {
@@ -332,10 +322,11 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         // cargo fmt errors are useless, ignore
     }
     val env = mapOf("RUSTFLAGS" to "-A dead_code")
-    "cargo test".runCommand(baseDir, env)
+    val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
         "cargo clippy".runCommand(baseDir, env)
     }
+    return testOutput
 }
 
 fun TestWriterDelegator.rustSettings() =

@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -33,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
@@ -175,7 +175,7 @@ class ConstrainedCollectionGeneratorTest {
                 else -> UNREACHABLE("Shape is either list or set.")
             }
 
-            project.withModule(ModelsModule) {
+            project.withModule(ServerRustModule.Model) {
                 render(codegenContext, this, shape)
 
                 val instantiator = serverInstantiator(codegenContext)
@@ -269,7 +269,7 @@ class ConstrainedCollectionGeneratorTest {
             """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedCollectionShape = model.lookup<CollectionShape>("test#ConstrainedList")
 
-        val writer = RustWriter.forModule(ModelsModule.name)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
         val codegenContext = serverTestCodegenContext(model)
         render(codegenContext, writer, constrainedCollectionShape)

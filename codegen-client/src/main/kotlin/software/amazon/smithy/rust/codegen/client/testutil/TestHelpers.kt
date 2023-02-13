@@ -6,10 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -17,8 +19,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 
 fun clientTestRustSettings(
@@ -47,11 +49,18 @@ fun clientTestRustSettings(
     customizationConfig,
 )
 
+val ClientTestSymbolVisitorConfig = SymbolVisitorConfig(
+    runtimeConfig = TestRuntimeConfig,
+    renameExceptions = true,
+    nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+    moduleProvider = ClientModuleProvider,
+)
+
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
-        TestSymbolVisitorConfig,
+        ClientTestSymbolVisitorConfig,
     )
 
 fun testCodegenContext(

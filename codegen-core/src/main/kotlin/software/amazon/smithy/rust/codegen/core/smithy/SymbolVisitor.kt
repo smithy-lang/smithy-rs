@@ -45,8 +45,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -67,10 +65,25 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     StringShape::class to RustType.String,
 )
 
+/**
+ * Provider for RustModules so that the symbol provider knows where to organize things.
+ */
+interface ModuleProvider {
+    /** Returns the module for a shape */
+    fun moduleForShape(shape: Shape): RustModule.LeafModule
+
+    /** Returns the module for an operation error */
+    fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule
+
+    /** Returns the module for an event stream error */
+    fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule
+}
+
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val nullabilityCheckMode: CheckMode,
+    val moduleProvider: ModuleProvider,
 )
 
 /**
@@ -164,9 +177,21 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 /**
  * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
  */
-interface RustSymbolProvider : SymbolProvider {
+interface RustSymbolProvider : SymbolProvider, ModuleProvider {
     fun config(): SymbolVisitorConfig
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
+
+    override fun moduleForShape(shape: Shape): RustModule.LeafModule = config().moduleProvider.moduleForShape(shape)
+    override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
+        config().moduleProvider.moduleForOperationError(operation)
+    override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
+        config().moduleProvider.moduleForEventStreamError(eventStream)
+
+    /** Returns the symbol for an operation error */
+    fun symbolForOperationError(operation: OperationShape): Symbol
+
+    /** Returns the symbol for an event stream error */
+    fun symbolForEventStreamError(eventStream: UnionShape): Symbol
 }
 
 /**
@@ -210,6 +235,18 @@ open class SymbolVisitor(
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
     }
+
+    override fun symbolForOperationError(operation: OperationShape): Symbol =
+        toSymbol(operation).let { symbol ->
+            val module = moduleForOperationError(operation)
+            module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
+        }
+
+    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
+        toSymbol(eventStream).let { symbol ->
+            val module = moduleForEventStreamError(eventStream)
+            module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
+        }
 
     /**
      * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
@@ -261,7 +298,7 @@ open class SymbolVisitor(
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-            symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
+            symbolBuilder(shape, rustType).locatedIn(moduleForShape(shape)).build()
         } else {
             simpleShape(shape)
         }
@@ -312,7 +349,7 @@ open class SymbolVisitor(
                     .replaceFirstChar { it.uppercase() },
             ),
         )
-            .locatedIn(OperationsModule)
+            .locatedIn(moduleForShape(shape))
             .build()
     }
 
@@ -326,25 +363,15 @@ open class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait<ErrorTrait>()
-        val isInput = shape.hasTrait<SyntheticInputTrait>()
-        val isOutput = shape.hasTrait<SyntheticOutputTrait>()
         val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
             it.replace("Exception", "Error")
         }
-        val builder = symbolBuilder(shape, RustType.Opaque(name))
-        return when {
-            isError -> builder.locatedIn(ErrorsModule)
-            isInput -> builder.locatedIn(InputsModule)
-            isOutput -> builder.locatedIn(OutputsModule)
-            else -> builder.locatedIn(ModelsModule)
-        }.build()
+        return symbolBuilder(shape, RustType.Opaque(name)).locatedIn(moduleForShape(shape)).build()
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
         val name = shape.contextName(serviceShape).toPascalCase()
-        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(ModelsModule)
-
-        return builder.build()
+        return symbolBuilder(shape, RustType.Opaque(name)).locatedIn(moduleForShape(shape)).build()
     }
 
     override fun memberShape(shape: MemberShape): Symbol {

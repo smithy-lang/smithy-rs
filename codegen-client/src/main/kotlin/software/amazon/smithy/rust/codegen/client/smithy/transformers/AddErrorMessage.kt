@@ -19,7 +19,7 @@ import java.util.logging.Logger
  *
  * Not all errors are modeled with an error message field. However, in many cases, the server can still send an error.
  * If an error, specifically, a structure shape with the error trait does not have a member `message` or `Message`,
- * this transformer will add a `message` member targeting a string.
+ * this transformer will add a `Message` member targeting a string.
  *
  * This ensures that we always generate a modeled error message field enabling end users to easily extract the error
  * message when present.
@@ -37,7 +37,7 @@ object AddErrorMessage {
             val addMessageField = shape.hasTrait<ErrorTrait>() && shape is StructureShape && shape.errorMessageMember() == null
             if (addMessageField && shape is StructureShape) {
                 logger.info("Adding message field to ${shape.id}")
-                shape.toBuilder().addMember("message", ShapeId.from("smithy.api#String")).build()
+                shape.toBuilder().addMember("Message", ShapeId.from("smithy.api#String")).build()
             } else {
                 shape
             }

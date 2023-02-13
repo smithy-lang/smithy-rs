@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -235,7 +235,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
     fun extras(rustCrate: RustCrate) {
-        rustCrate.withModule(RustModule.Config) {
+        rustCrate.withModule(ClientRustModule.Config) {
             rustTemplate(
                 """
                 pub use #{sleep}::{AsyncSleep, Sleep};
