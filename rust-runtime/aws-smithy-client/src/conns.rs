@@ -60,7 +60,7 @@ pub fn native_tls() -> NativeTls {
     hyper_tls::HttpsConnector::from((http, tls.into()))
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "native-tls", feature = "rustls")))]
 mod tests {
     use crate::erase::DynConnector;
     use crate::hyper_ext::Adapter;
