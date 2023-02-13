@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -42,7 +43,7 @@ open class ServerServiceGenerator(
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
-    private val serviceName = codegenContext.serviceShape.id.name.toString()
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun documentation(writer: RustWriter) {
         val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
