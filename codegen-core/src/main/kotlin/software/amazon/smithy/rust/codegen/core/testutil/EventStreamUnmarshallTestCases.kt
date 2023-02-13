@@ -7,21 +7,24 @@ package software.amazon.smithy.rust.codegen.core.testutil
 
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
-internal object EventStreamUnmarshallTestCases {
-    internal fun RustWriter.writeUnmarshallTestCases(
+object EventStreamUnmarshallTestCases {
+    fun RustWriter.writeUnmarshallTestCases(
         testCase: EventStreamTestModels.TestCase,
         codegenTarget: CodegenTarget,
-        generator: RuntimeType,
+        generator: String,
+        codegenContext: CodegenContext,
     ) {
+        val crateName = codegenContext.moduleUseName()
+
         rust(
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
             use aws_smithy_types::{Blob, DateTime};
-            use crate::error::*;
-            use crate::model::*;
+            use $crateName::error::*;
+            use $crateName::model::*;
 
             fn msg(
                 message_type: &'static str,
@@ -57,7 +60,7 @@ internal object EventStreamUnmarshallTestCases {
             name = "message_with_blob",
             test = """
                 let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
-                let result = ${format(generator)}().unmarshall(&message);
+                let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithBlob(
@@ -68,26 +71,11 @@ internal object EventStreamUnmarshallTestCases {
             """,
         )
 
-        if (codegenTarget == CodegenTarget.CLIENT) {
-            unitTest(
-                "unknown_message",
-                """
-                let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
-                let result = ${format(generator)}().unmarshall(&message);
-                assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                assert_eq!(
-                    TestStream::Unknown,
-                    expect_event(result.unwrap())
-                );
-                """,
-            )
-        }
-
         unitTest(
             "message_with_string",
             """
             let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithString(MessageWithString::builder().data("hello, world!").build()),
@@ -105,7 +93,7 @@ internal object EventStreamUnmarshallTestCases {
                 "${testCase.responseContentType}",
                 br#"${testCase.validTestStruct}"#
             );
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithStruct(MessageWithStruct::builder().some_struct(
@@ -128,7 +116,7 @@ internal object EventStreamUnmarshallTestCases {
                 "${testCase.responseContentType}",
                 br#"${testCase.validTestUnion}"#
             );
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
@@ -151,7 +139,7 @@ internal object EventStreamUnmarshallTestCases {
                 .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                 .add_header(Header::new("string", HeaderValue::String("test".into())))
                 .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithHeaders(MessageWithHeaders::builder()
@@ -175,7 +163,7 @@ internal object EventStreamUnmarshallTestCases {
             """
             let message = msg("event", "MessageWithHeaderAndPayload", "application/octet-stream", b"payload")
                 .add_header(Header::new("header", HeaderValue::String("header".into())));
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
@@ -197,7 +185,7 @@ internal object EventStreamUnmarshallTestCases {
                 "${testCase.responseContentType}",
                 br#"${testCase.validMessageWithNoHeaderPayloadTraits}"#
             );
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             assert_eq!(
                 TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
@@ -223,7 +211,7 @@ internal object EventStreamUnmarshallTestCases {
                 "${testCase.responseContentType}",
                 br#"${testCase.validSomeError}"#
             );
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             match expect_error(result.unwrap())$kindSuffix {
                 $someError(err) => assert_eq!(Some("some error"), err.message()),
@@ -231,30 +219,6 @@ internal object EventStreamUnmarshallTestCases {
             }
             """,
         )
-
-        if (codegenTarget == CodegenTarget.CLIENT) {
-            unitTest(
-                "generic_error",
-                """
-                let message = msg(
-                    "exception",
-                    "UnmodeledError",
-                    "${testCase.responseContentType}",
-                    br#"${testCase.validUnmodeledError}"#
-                );
-                let result = ${format(generator)}().unmarshall(&message);
-                assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                match expect_error(result.unwrap())$kindSuffix {
-                    TestStreamErrorKind::Unhandled(err) => {
-                        let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
-                        let expected = "message: \"unmodeled error\"";
-                        assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
-                    }
-                    kind => panic!("expected generic error, but got {:?}", kind),
-                }
-                """,
-            )
-        }
 
         unitTest(
             "bad_content_type",
@@ -265,7 +229,7 @@ internal object EventStreamUnmarshallTestCases {
                 "wrong-content-type",
                 br#"${testCase.validTestStruct}"#
             );
-            let result = ${format(generator)}().unmarshall(&message);
+            let result = $generator::new().unmarshall(&message);
             assert!(result.is_err(), "expected error, got: {:?}", result);
             assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
             """,
