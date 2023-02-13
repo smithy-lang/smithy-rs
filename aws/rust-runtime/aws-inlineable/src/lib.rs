@@ -25,8 +25,8 @@ pub mod no_credentials;
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
 
-/// Special logic for handling S3's error responses.
-pub mod s3_errors;
+/// Special logic for extracting request IDs from S3's responses.
+pub mod s3_request_id;
 
 /// Glacier-specific checksumming behavior
 pub mod glacier_checksums;

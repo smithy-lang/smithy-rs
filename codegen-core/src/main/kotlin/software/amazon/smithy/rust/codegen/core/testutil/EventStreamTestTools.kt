@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.testutil
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -14,16 +13,12 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -77,9 +72,11 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         writer: RustWriter,
         model: Model,
         symbolProvider: RustSymbolProvider,
-        operationSymbol: Symbol,
-        errors: List<StructureShape>,
+        operationOrEventStream: Shape,
     )
+
+    /** Render an error struct and builder */
+    fun renderError(writer: RustWriter, codegenContext: C, shape: StructureShape)
 }
 
 object EventStreamTestTools {
@@ -122,25 +119,26 @@ object EventStreamTestTools {
         val walker = DirectedWalker(model)
 
         val project = TestWorkspace.testProject(symbolProvider)
-        val operationSymbol = symbolProvider.toSymbol(operationShape)
-        project.withModule(ErrorsModule) {
-            val errors = model.serviceShapes
-                .flatMap { walker.walkShapes(it) }
-                .filterIsInstance<StructureShape>()
-                .filter { shape -> shape.hasTrait<ErrorTrait>() }
-            requirements.renderOperationError(this, model, symbolProvider, operationSymbol, errors)
-            requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
+        val errors = model.serviceShapes
+            .flatMap { walker.walkShapes(it) }
+            .filterIsInstance<StructureShape>()
+            .filter { shape -> shape.hasTrait<ErrorTrait>() }
+        check(errors.isNotEmpty()) { "must have at least one error modeled" }
+        project.withModule(codegenContext.symbolProvider.moduleForShape(errors[0])) {
+            requirements.renderOperationError(this, model, symbolProvider, operationShape)
+            requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
-                requirements.renderBuilderForShape(this, codegenContext, shape)
+                requirements.renderError(this, codegenContext, shape)
             }
         }
-        project.withModule(ModelsModule) {
-            val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
+        val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
+        project.withModule(codegenContext.symbolProvider.moduleForShape(inputOutput)) {
             recursivelyGenerateModels(model, symbolProvider, inputOutput, this, codegenTarget)
         }
-        project.withModule(RustModule.Output) {
-            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+        operationShape.outputShape(model).also { outputShape ->
+            project.moduleFor(outputShape) {
+                outputShape.renderWithModelBuilder(model, symbolProvider, this)
+            }
         }
         return TestEventStreamProject(
             model,

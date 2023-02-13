@@ -8,7 +8,7 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
-use s3::error::{GetObjectError, GetObjectErrorKind};
+use s3::error::GetObjectError;
 use s3::types::ByteStream;
 use uuid::Uuid;
 
@@ -36,10 +36,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
             );
         }
         Err(err) => match err.into_service_error() {
-            GetObjectError {
-                kind: GetObjectErrorKind::NoSuchKey(..),
-                ..
-            } => {
+            GetObjectError::NoSuchKey(..) => {
                 // good
             }
             err => Err(err).context("unexpected s3::GetObject failure")?,

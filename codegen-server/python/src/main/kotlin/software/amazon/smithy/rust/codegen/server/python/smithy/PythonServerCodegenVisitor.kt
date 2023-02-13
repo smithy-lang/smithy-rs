@@ -16,16 +16,20 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -40,7 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtoco
  */
 class PythonServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: ServerCodegenDecorator,
+    private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
@@ -49,6 +53,7 @@ class PythonServerCodegenVisitor(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -118,7 +123,18 @@ class PythonServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render()
+
+            shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+                ErrorImplGenerator(
+                    model,
+                    codegenContext.symbolProvider,
+                    this,
+                    shape,
+                    errorTrait,
+                    codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                ).render(CodegenTarget.SERVER)
+            }
 
             renderStructureShapeBuilder(shape, this)
         }

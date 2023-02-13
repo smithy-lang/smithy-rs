@@ -12,9 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -26,6 +23,9 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
  * Generates a Python compatible application and server that can be configured from Python.
@@ -390,12 +390,12 @@ class PythonApplicationGenerator(
         )
         writer.rust(
             """
-            /// from $libName import ${InputsModule.name}
-            /// from $libName import ${OutputsModule.name}
+            /// from $libName import ${InputModule.name}
+            /// from $libName import ${OutputModule.name}
             """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
-            writer.rust("""/// from $libName import ${ErrorsModule.name}""".trimIndent())
+            writer.rust("""/// from $libName import ${ErrorModule.name}""".trimIndent())
         }
         writer.rust(
             """
@@ -449,8 +449,8 @@ class PythonApplicationGenerator(
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val inputT = "${InputsModule.name}::${inputSymbol.name}"
-        val outputT = "${OutputsModule.name}::${outputSymbol.name}"
+        val inputT = "${InputModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputModule.name}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }

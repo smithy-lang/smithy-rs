@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -60,7 +59,7 @@ class EventStreamUnmarshallerGenerator(
     private val errorSymbol = if (codegenTarget == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
     } else {
-        unionShape.eventStreamErrorSymbol(symbolProvider).toSymbol()
+        symbolProvider.symbolForEventStreamError(unionShape)
     }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
@@ -306,12 +305,12 @@ class EventStreamUnmarshallerGenerator(
             CodegenTarget.CLIENT -> {
                 rustTemplate(
                     """
-                    let generic = match #{parse_generic_error}(message.payload()) {
-                        Ok(generic) => generic,
+                    let generic = match #{parse_error_metadata}(message.payload()) {
+                        Ok(builder) => builder.build(),
                         Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
                     };
                     """,
-                    "parse_generic_error" to protocol.parseEventStreamGenericError(operationShape),
+                    "parse_error_metadata" to protocol.parseEventStreamErrorMetadata(operationShape),
                     *codegenScope,
                 )
             }
@@ -343,11 +342,9 @@ class EventStreamUnmarshallerGenerator(
                                         .map_err(|err| {
                                             #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
                                         })?;
+                                    builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::new(
-                                            #{OpError}Kind::${member.target.name}(builder.build()),
-                                            generic,
-                                        )
+                                        #{OpError}::${member.target.name}(builder.build())
                                     ))
                                     """,
                                     "parser" to parser,

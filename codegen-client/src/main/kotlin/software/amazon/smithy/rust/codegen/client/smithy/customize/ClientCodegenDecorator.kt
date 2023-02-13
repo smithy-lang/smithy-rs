@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -39,6 +40,14 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations
+
+    /**
+     * Hook to customize generated errors.
+     */
+    fun errorCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = baseCustomizations
 
     fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap = currentProtocols
 
@@ -70,6 +79,13 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
         decorator.operationCustomizations(codegenContext, operation, customizations)
+    }
+
+    override fun errorCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.errorCustomizations(codegenContext, customizations)
     }
 
     override fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap =

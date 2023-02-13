@@ -9,7 +9,6 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -31,7 +30,7 @@ internal class PythonTypeInformationGenerationTest {
         val codegenContext = serverTestCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         val writer = RustWriter.forModule("model")
-        PythonServerStructureGenerator(model, symbolProvider, writer, foo).render(CodegenTarget.SERVER)
+        PythonServerStructureGenerator(model, symbolProvider, writer, foo).render()
 
         val result = writer.toString()
 

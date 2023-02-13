@@ -8,10 +8,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGeneratorTest.Companion.model
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 
-class SmithyTypesPubUseGeneratorTest {
+class SmithyTypesPubUseExtraTest {
     private fun modelWithMember(
         inputMember: String = "",
         outputMember: String = "",
@@ -48,7 +49,7 @@ class SmithyTypesPubUseGeneratorTest {
         outputMember: String = "",
         unionMember: String = "",
         additionalShape: String = "",
-    ) = pubUseTypes(TestRuntimeConfig, modelWithMember(inputMember, outputMember, unionMember, additionalShape))
+    ) = pubUseTypes(testCodegenContext(model), modelWithMember(inputMember, outputMember, unionMember, additionalShape))
 
     private fun assertDoesntHaveTypes(types: List<RuntimeType>, expectedTypes: List<String>) =
         expectedTypes.forEach { assertDoesntHaveType(types, it) }
