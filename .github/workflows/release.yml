@@ -113,6 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+      commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -132,13 +133,37 @@ jobs:
       shell: bash
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+        RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -x
+        
         # For debugging purposes
         git status
-        # The file was actually changed, we need to commit the changes
-        git diff-index --quiet HEAD || { git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin; }
+        
+        if ! git diff-index --quiet HEAD; then
+          branch_head_sha=$(git rev-parse --verify "refs/remotes/origin/${RELEASE_BRANCH_NAME}")
+          # The only scenario where we would try to release a non-HEAD commit from the release branch is
+          # to retry a release action execution that failed due to a transient issue.
+          if [[ "${branch_head_sha}" != "${RELEASE_COMMIT_SHA}" ]]; then
+            echo "You are trying to release a commit (${RELEASE_COMMIT_SHA}) that is not the"
+            echo "HEAD of the relevant release branch (${RELEASE_BRANCH_NAME})."
+            echo "This is only allowed if the commit is releasable as-is, i.e. no changes are needed"
+            echo "to the runtime crate version specified in the 'gradle.properties' file."
+            echo "This is not the case here, therefore we cannot move forward with the release."
+            git diff
+            exit 1
+          fi
+        
+          # The file was actually changed, we need to commit and push the changes
+          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" 
+          git push origin
+        
+          echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
+        else
+          echo "commit_sha=${RELEASE_COMMIT_SHA}" > $GITHUB_OUTPUT
+        fi
 
   release:
     name: Release
