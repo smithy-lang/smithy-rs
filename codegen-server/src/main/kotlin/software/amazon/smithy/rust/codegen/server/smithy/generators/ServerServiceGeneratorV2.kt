@@ -178,7 +178,7 @@ class ServerServiceGeneratorV2(
 
     private fun buildMethod(): Writable = writable {
         val missingOperationsVariableName = "missing_operation_names"
-        val expectMessage = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues"
+        val expectMessageVariableName = "unexpected_error_msg"
 
         val nullabilityChecks = writable {
             for (operationShape in operations) {
@@ -201,10 +201,17 @@ class ServerServiceGeneratorV2(
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
                 rust(
                     """
-                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect("$expectMessage")),
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
                     """,
                 )
             }
+        }
+
+        var missingOperationsUnusedMut = ""
+        var unusedExpected = ""
+        if (operations.isEmpty()) {
+            missingOperationsUnusedMut = "##[allow(unused_mut)]"
+            unusedExpected = "##[allow(unused_variables)]"
         }
 
         rustTemplate(
@@ -218,7 +225,7 @@ class ServerServiceGeneratorV2(
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
-                    ##[allow(unused_mut)]
+                    $missingOperationsUnusedMut
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
                     #{NullabilityChecks:W}
                     if !$missingOperationsVariableName.is_empty() {
@@ -226,6 +233,8 @@ class ServerServiceGeneratorV2(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
+                    $unusedExpected
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
 
                     #{PatternInitializations:W}
 
@@ -321,10 +330,12 @@ class ServerServiceGeneratorV2(
     private fun builder(): Writable = writable {
         val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
         var allBuilderFields = builderFields + "plugin: $builderPluginGenericTypeName"
+        var allowDeadCodePlugin = ""
 
-        // With no operations there is no use of the `Body` type variable
+        // With no operations there is no use of the `Body` type variable and `plugin: Plugin` becomes dead code
         if (operations.isEmpty()) {
             allBuilderFields += "_body: std::marker::PhantomData<$builderBodyGenericTypeName>"
+            allowDeadCodePlugin = "##[allow(dead_code)]"
         }
 
         rustTemplate(
@@ -332,7 +343,7 @@ class ServerServiceGeneratorV2(
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
-            ##[allow(dead_code)]
+            $allowDeadCodePlugin
             pub struct $builderName<$builderGenerics> {
                 ${allBuilderFields.joinToString(",")}
             }
