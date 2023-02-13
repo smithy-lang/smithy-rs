@@ -28,3 +28,9 @@ message = "Adds jitter to `LazyCredentialsCache`. This allows credentials with t
 references = ["smithy-rs#2335"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix inconsistent casing in services re-export."
+references = ["smithy-rs#2349"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "hlbarber"
