@@ -134,7 +134,6 @@ jobs:
       shell: bash
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
-        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
@@ -144,21 +143,14 @@ jobs:
         git status
         
         if ! git diff-index --quiet HEAD; then
-          branch_head_sha=$(git rev-parse --verify "refs/remotes/origin/${RELEASE_BRANCH_NAME}")
+          # gradle.properties was changed, we need to commit and push the diff 
+          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" 
+        
+          # This will fail if we tried to release from a non-HEAD commit on the release branch.
           # The only scenario where we would try to release a non-HEAD commit from the release branch is
           # to retry a release action execution that failed due to a transient issue.
-          if [[ "${branch_head_sha}" != "${RELEASE_COMMIT_SHA}" ]]; then
-            echo "You are trying to release a commit (${RELEASE_COMMIT_SHA}) that is not the"
-            echo "HEAD of the relevant release branch (${RELEASE_BRANCH_NAME})."
-            echo "This is only allowed if the commit is releasable as-is, i.e. no changes are needed"
-            echo "to the runtime crate version specified in the 'gradle.properties' file."
-            echo "This is not the case here, therefore we cannot move forward with the release."
-            git diff
-            exit 1
-          fi
-        
-          # The file was actually changed, we need to commit and push the changes
-          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" 
+          # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
+          # should already be the expected one.
           git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
         
           echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
