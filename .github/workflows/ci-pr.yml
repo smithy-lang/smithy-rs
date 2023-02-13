@@ -23,7 +23,7 @@ jobs:
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     name: Save a docker login token
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != "{}" }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
@@ -53,7 +53,7 @@ jobs:
   acquire-base-image:
     name: Acquire Base Image
     needs: save-docker-login-token
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != "{}" }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     runs-on: ubuntu-latest
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
@@ -88,7 +88,7 @@ jobs:
     needs:
     - save-docker-login-token
     - acquire-base-image
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != "{}" }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
@@ -99,7 +99,7 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != "{}" }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     needs: acquire-base-image
     uses: ./.github/workflows/pull-request-bot.yml
     with:
