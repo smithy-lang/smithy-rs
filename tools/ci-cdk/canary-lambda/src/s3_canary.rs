@@ -8,7 +8,6 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
-use s3::error::GetObjectError;
 use s3::types::ByteStream;
 use uuid::Uuid;
 
