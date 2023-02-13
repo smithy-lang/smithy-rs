@@ -192,3 +192,9 @@ message = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::erro
 references = ["smithy-rs#76", "smithy-rs#2129"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix inconsistent casing in services re-export."
+references = ["smithy-rs#2349"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "hlbarber"
