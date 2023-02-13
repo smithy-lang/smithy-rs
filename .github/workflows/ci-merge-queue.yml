@@ -1,15 +1,16 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow runs CI and the PR Bot on pull requests that are not from forked repositories.
+# This workflow runs CI for the GitHub merge queue.
 
-name: CI
+name: Merge Queue CI
 on:
-  pull_request:
+  merge_group:
+    types: [checks_requested]
 
-# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
+# Allow one instance of this workflow per merge
 concurrency:
-  group: ci-yaml-${{ github.ref }}
+  group: ci-merge-queue-yml-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -21,7 +22,6 @@ jobs:
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     name: Save a docker login token
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
@@ -44,14 +44,12 @@ jobs:
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
 
-
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
     needs: save-docker-login-token
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     runs-on: ubuntu-latest
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
@@ -86,24 +84,10 @@ jobs:
     needs:
     - save-docker-login-token
     - acquire-base-image
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
-
-  # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
-  pr_bot:
-    name: PR Bot
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
-    needs: acquire-base-image
-    uses: ./.github/workflows/pull-request-bot.yml
-    with:
-      issue_number: ${{ github.event.number }}
-      base_revision: ${{ github.event.pull_request.base.sha }}
-      head_revision: ${{ github.event.pull_request.head.sha }}
-    secrets:
-      SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
-      SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
