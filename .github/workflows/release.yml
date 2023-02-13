@@ -135,7 +135,7 @@ jobs:
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
         RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
-        RELEASE_BRANCH_NAME: ${{ outputs.release_branch }}
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -x
