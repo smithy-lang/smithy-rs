@@ -13,6 +13,7 @@ pub fn body_is_error(body: &[u8]) -> Result<bool, XmlDecodeError> {
     Ok(scoped.start_el().matches("ErrorResponse"))
 }
 
+#[allow(dead_code)]
 pub fn parse_generic_error(body: &[u8]) -> Result<aws_smithy_types::Error, XmlDecodeError> {
     let mut doc = Document::try_from(body)?;
     let mut root = doc.root_element()?;
