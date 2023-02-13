@@ -31,7 +31,12 @@ class RefactoredServerEventStreamUnmarshallerGeneratorTest {
             val generator = "$crateName::event_stream_serde::TestStreamUnmarshaller"
 
             rustCrate.integrationTest("unmarshall") {
-                writeUnmarshallTestCases(testCase.eventStreamTestCase, codegenTarget = CodegenTarget.SERVER, generator, codegenContext)
+                writeUnmarshallTestCases(
+                    testCase.eventStreamTestCase,
+                    codegenTarget = CodegenTarget.SERVER,
+                    generator,
+                    codegenContext,
+                )
             }
         }
     }
