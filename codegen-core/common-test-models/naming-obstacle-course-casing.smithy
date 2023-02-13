@@ -3,8 +3,8 @@ namespace casing
 
 use aws.protocols#awsJson1_1
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2340): The commented part of the model breaks the code in a miriad
-// of ways. The solution to the linked issue must solve them.
+// TODO(https://github.com/awslabs/smithy-rs/issues/2340): The commented part of the model breaks the generator in a
+// miriad of ways. Any solution to the linked issue must address this.
 
 /// Confounds model generation machinery with lots of problematic casing
 @awsJson1_1
