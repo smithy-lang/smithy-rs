@@ -200,7 +200,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "hlbarber"
 
 [[smithy-rs]]
-message = "Ensure the server side codegenerator creates valid code for services with no operations."
+message = "Ensure the server side code generator creates valid code for services with no operations."
 references = ["smithy-rs#2351"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
 author = "hlbarber"
