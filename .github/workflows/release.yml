@@ -190,6 +190,7 @@ jobs:
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
+      id: push-changelog
       env:
         RELEASE_BRANCH_NAME: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
       run: |
@@ -202,6 +203,7 @@ jobs:
           # been processed.
           git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
         fi
+        echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
     - name: Tag release
       uses: actions/github-script@v6
       with:
@@ -212,6 +214,7 @@ jobs:
             github,
             isDryRun: ${{ inputs.dry_run }},
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseCommitish: ${{ steps.push-changelog.outputs.commit_sha }}
           });
     - name: Publish to crates.io
       shell: bash
