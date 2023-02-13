@@ -99,7 +99,7 @@ jobs:
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs'
+    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' }}
     needs: acquire-base-image
     uses: ./.github/workflows/pull-request-bot.yml
     with:
