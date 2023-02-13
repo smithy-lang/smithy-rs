@@ -10,7 +10,6 @@ use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::SdkError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, Sleep};
-use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::hyper_ext;
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -78,7 +77,7 @@ async fn building_client_from_sdk_config_allows_to_override_connect_timeout() {
             hyper_ext::Adapter::builder()
                 // // feel free to uncomment this if you want to make sure that the test pass when timeout is correctly set
                 // .connector_settings(
-                //     ConnectorSettings::builder()
+                //     aws_smithy_client::http_connector::ConnectorSettings::builder()
                 //         .connect_timeout(Duration::from_millis(connect_timeout_value))
                 //         .build(),
                 // )
