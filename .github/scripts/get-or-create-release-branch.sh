@@ -8,8 +8,6 @@ set -eux
 # Compute the name of the release branch starting from the version that needs to be released ($SEMANTIC_VERSION).
 # If it's the beginning of a new release series, the branch is created and pushed to the remote (chosen according to
 # the value $DRY_RUN).
-# If it isn't the beginning of a new release series, the script makes sure that the commit that will be tagged is at
-# the tip of the (pre-existing) release branch.
 #
 # The script populates an output file with key-value pairs that are needed in the release CI workflow to carry out
 # the next steps in the release flow: the name of the release branch and a boolean flag that is set to 'true' if this
