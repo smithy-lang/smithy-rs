@@ -42,7 +42,7 @@ open class ServerServiceGenerator(
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
-    private val serviceName = codegenContext.serviceShape.id.name.toString()
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun documentation(writer: RustWriter) {
         val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
