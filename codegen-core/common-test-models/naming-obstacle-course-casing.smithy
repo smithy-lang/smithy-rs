@@ -10,16 +10,19 @@ use aws.protocols#awsJson1_1
 @awsJson1_1
 service ACRONYMInside_Service {
     operations: [
-       ACRONYMInside_Op
+        DoNothing,
+    //    ACRONYMInside_Op
     //    ACRONYM_InsideOp
     ]
 }
 
-operation ACRONYMInside_Op {
-    // input: Input,
-    // output: Output,
-    // errors: [Error],
-}
+operation DoNothing {}
+
+// operation ACRONYMInside_Op {
+//     input: Input,
+//     output: Output,
+//     errors: [Error],
+// }
 
 // operation ACRONYM_InsideOp {
 //     input: Input,
