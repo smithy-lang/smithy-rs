@@ -34,3 +34,15 @@ message = "Fix inconsistent casing in services re-export."
 references = ["smithy-rs#2349"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "hlbarber"
+
+[[aws-sdk-rust]]
+message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
+references = ["aws-sdk-rust#736"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
+references = ["aws-sdk-rust#736"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "Velfi"
