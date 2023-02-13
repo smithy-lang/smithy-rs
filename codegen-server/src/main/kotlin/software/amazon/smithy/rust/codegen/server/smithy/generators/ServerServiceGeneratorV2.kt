@@ -10,6 +10,7 @@ import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -207,11 +208,11 @@ class ServerServiceGeneratorV2(
             }
         }
 
-        var missingOperationsUnusedMut = ""
-        var unusedExpected = ""
+        var missingOperationsUnusedMut = writable("")
+        var unusedExpected = writable("")
         if (operations.isEmpty()) {
-            missingOperationsUnusedMut = "##[allow(unused_mut)]"
-            unusedExpected = "##[allow(unused_variables)]"
+            missingOperationsUnusedMut = writable { Attribute.AllowUnusedMut.render(this) }
+            unusedExpected = writable { Attribute.AllowUnusedVariables.render(this) }
         }
 
         rustTemplate(
@@ -225,7 +226,7 @@ class ServerServiceGeneratorV2(
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
-                    $missingOperationsUnusedMut
+                    #{MissingOperationsUnusedMut:W}
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
                     #{NullabilityChecks:W}
                     if !$missingOperationsVariableName.is_empty() {
@@ -233,7 +234,7 @@ class ServerServiceGeneratorV2(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
-                    $unusedExpected
+                    #{UnusedExpected:W}
                     let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
 
                     #{PatternInitializations:W}
@@ -250,6 +251,8 @@ class ServerServiceGeneratorV2(
             "RoutesArrayElements" to routesArrayElements,
             "SmithyHttpServer" to smithyHttpServer,
             "PatternInitializations" to patternInitializations(),
+            "MissingOperationsUnusedMut" to missingOperationsUnusedMut,
+            "UnusedExpected" to unusedExpected,
         )
     }
 
@@ -330,12 +333,12 @@ class ServerServiceGeneratorV2(
     private fun builder(): Writable = writable {
         val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
         var allBuilderFields = builderFields + "plugin: $builderPluginGenericTypeName"
-        var allowDeadCodePlugin = ""
+        var allowDeadCodePlugin = writable("")
 
         // With no operations there is no use of the `Body` type variable and `plugin: Plugin` becomes dead code
         if (operations.isEmpty()) {
             allBuilderFields += "_body: std::marker::PhantomData<$builderBodyGenericTypeName>"
-            allowDeadCodePlugin = "##[allow(dead_code)]"
+            allowDeadCodePlugin = writable { Attribute.AllowDeadCode.render(this) }
         }
 
         rustTemplate(
@@ -343,7 +346,7 @@ class ServerServiceGeneratorV2(
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
-            $allowDeadCodePlugin
+            #{AllowDeadCodePlugin:W}
             pub struct $builderName<$builderGenerics> {
                 ${allBuilderFields.joinToString(",")}
             }
@@ -361,6 +364,7 @@ class ServerServiceGeneratorV2(
             "Setters" to builderSetters(),
             "BuildMethod" to buildMethod(),
             "BuildUncheckedMethod" to buildUncheckedMethod(),
+            "AllowDeadCodePlugin" to allowDeadCodePlugin,
             *codegenScope,
         )
     }
