@@ -87,6 +87,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             """.trimIndent(),
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
+        CodegenTest(
+            "emptyservice#EmptyService",
+            "empty_service",
+            imports = listOf("$commonModels/empty-service.smithy"),
+        ),
         CodegenTest("aws.protocoltests.json#TestService", "endpoint-rules"),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-awsjson-client", imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy")),

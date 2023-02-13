@@ -102,6 +102,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         ),
         CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
         CodegenTest(
+            "emptyservice#EmptyService",
+            "empty_service",
+            imports = listOf("$commonModels/empty-service.smithy"),
+        ),
+        CodegenTest(
             "com.aws.example.rust#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
