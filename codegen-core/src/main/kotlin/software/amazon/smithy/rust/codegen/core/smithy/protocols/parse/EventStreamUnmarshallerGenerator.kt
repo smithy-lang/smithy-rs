@@ -49,7 +49,7 @@ fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
     RustModule.new(
         "event_stream_serde",
         visibility = Visibility.PUBLIC,
-        documentation = "TODO",
+        documentation = "TODO: Add docs",
         inline = false,
         parent = RustModule.LibRs,
         additionalAttributes = listOf(Attribute.AllowMissingDocs),
