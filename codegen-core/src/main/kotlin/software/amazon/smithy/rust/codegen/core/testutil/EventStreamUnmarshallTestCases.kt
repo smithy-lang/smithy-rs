@@ -95,7 +95,7 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "DataInput" to conditionalBuilderInput("\"hello, world!\".into()", conditional = optionalBuilderInputs),
+                "DataInput" to conditionalBuilderInput("\"hello, world!\"", conditional = optionalBuilderInputs),
             )
         }
 
@@ -123,7 +123,7 @@ object EventStreamUnmarshallTestCases {
                         .build()
                     """,
                     conditional = optionalBuilderInputs,
-                    "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalBuilderInputs),
+                    "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
                     "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
                 ),
 
@@ -185,7 +185,7 @@ object EventStreamUnmarshallTestCases {
                 "IntInput" to conditionalBuilderInput("100_000i32", conditional = optionalBuilderInputs),
                 "LongInput" to conditionalBuilderInput("9_000_000_000i64", conditional = optionalBuilderInputs),
                 "ShortInput" to conditionalBuilderInput("16_000i16", conditional = optionalBuilderInputs),
-                "StringInput" to conditionalBuilderInput("\"test\".into()", conditional = optionalBuilderInputs),
+                "StringInput" to conditionalBuilderInput("\"test\"", conditional = optionalBuilderInputs),
                 "TimestampInput" to conditionalBuilderInput("DateTime::from_secs(5)", conditional = optionalBuilderInputs),
             )
         }
@@ -206,7 +206,7 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "HeaderInput" to conditionalBuilderInput("\"header\".into()", conditional = optionalBuilderInputs),
+                "HeaderInput" to conditionalBuilderInput("\"header\"", conditional = optionalBuilderInputs),
                 "PayloadInput" to conditionalBuilderInput("Blob::new(&b\"payload\"[..])", conditional = optionalBuilderInputs),
             )
         }
@@ -232,7 +232,7 @@ object EventStreamUnmarshallTestCases {
                 );
                 """,
                 "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
-                "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalBuilderInputs),
+                "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
             )
         }
 
@@ -284,7 +284,7 @@ fun conditionalBuilderInput(
     vararg ctx: Pair<String, Any>,
 ): Writable =
     writable {
-        conditionalBlock("Some(", ")", conditional = conditional) {
+        conditionalBlock("Some(", ".into())", conditional = conditional) {
             rustTemplate(contents, *ctx)
         }
     }
