@@ -9,14 +9,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.dq
 
-internal object EventStreamMarshallTestCases {
-    internal fun RustWriter.writeMarshallTestCases(
+object EventStreamMarshallTestCases {
+    fun RustWriter.writeMarshallTestCases(
         testCase: EventStreamTestModels.TestCase,
-        generator: RuntimeType,
+        generator: String,
+        codegenContext: CodegenContext,
     ) {
+        val crateName = codegenContext.moduleUseName()
         val protocolTestHelpers = CargoDependency.smithyProtocolTestHelpers(TestRuntimeConfig)
             .copy(scope = DependencyScope.Compile)
         rustTemplate(
@@ -24,8 +26,7 @@ internal object EventStreamMarshallTestCases {
             use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
             use std::collections::HashMap;
             use aws_smithy_types::{Blob, DateTime};
-            use crate::error::*;
-            use crate::model::*;
+            use $crateName::model::*;
 
             use #{validate_body};
             use #{MediaType};
@@ -52,7 +53,7 @@ internal object EventStreamMarshallTestCases {
             let event = TestStream::MessageWithBlob(
                 MessageWithBlob::builder().data(Blob::new(&b"hello, world!"[..])).build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let message = result.unwrap();
             let headers = headers_to_map(message.headers());
@@ -69,7 +70,7 @@ internal object EventStreamMarshallTestCases {
             let event = TestStream::MessageWithString(
                 MessageWithString::builder().data("hello, world!").build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let message = result.unwrap();
             let headers = headers_to_map(message.headers());
@@ -91,7 +92,7 @@ internal object EventStreamMarshallTestCases {
                         .build()
                 ).build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let message = result.unwrap();
             let headers = headers_to_map(message.headers());
@@ -113,7 +114,7 @@ internal object EventStreamMarshallTestCases {
             let event = TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
                 TestUnion::Foo("hello".into())
             ).build());
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let message = result.unwrap();
             let headers = headers_to_map(message.headers());
@@ -143,7 +144,7 @@ internal object EventStreamMarshallTestCases {
                 .timestamp(DateTime::from_secs(5))
                 .build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let actual_message = result.unwrap();
             let expected_message = Message::new(&b""[..])
@@ -169,7 +170,7 @@ internal object EventStreamMarshallTestCases {
                 .payload(Blob::new(&b"payload"[..]))
                 .build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let actual_message = result.unwrap();
             let expected_message = Message::new(&b"payload"[..])
@@ -189,7 +190,7 @@ internal object EventStreamMarshallTestCases {
                 .some_string("hello")
                 .build()
             );
-            let result = ${format(generator)}().marshall(event);
+            let result = $generator::new().marshall(event);
             assert!(result.is_ok(), "expected ok, got: {:?}", result);
             let message = result.unwrap();
             let headers = headers_to_map(message.headers());

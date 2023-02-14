@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownV
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.core.testutil.EventStreamMarshallTestCases.writeMarshallTestCases
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -99,7 +98,7 @@ object EventStreamTestTools {
 
         test.project.lib {
             when (variety) {
-                EventStreamTestVariety.Marshall -> writeMarshallTestCases(testCase, generator)
+                EventStreamTestVariety.Marshall -> Unit // writeMarshallTestCases(testCase, generator)
                 EventStreamTestVariety.Unmarshall -> Unit // writeUnmarshallTestCases(testCase, codegenTarget, generator)
             }
         }

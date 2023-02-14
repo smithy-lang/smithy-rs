@@ -89,7 +89,7 @@ private fun fillInBaseModel(
     operation TestStreamOp {
         input: TestStreamInput,
         output: TestStreamOutput,
-        errors: [SomeError, ValidationException],
+        errors: [SomeError],
     }
 
     $extraServiceAnnotations
