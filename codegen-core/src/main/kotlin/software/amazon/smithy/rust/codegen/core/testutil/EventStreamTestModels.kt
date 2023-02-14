@@ -72,10 +72,6 @@ private fun fillInBaseModel(
     }
 
     structure TestStreamInput {
-        @httpLabel
-        @required
-        id: String,
-
         @httpPayload
         value: TestStream,
     }
@@ -85,7 +81,7 @@ private fun fillInBaseModel(
         value: TestStream
     }
 
-    @http(method: "POST", uri: "/test/{id}")
+    @http(method: "POST", uri: "/test")
     operation TestStreamOp {
         input: TestStreamInput,
         output: TestStreamOutput,
