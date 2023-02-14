@@ -139,21 +139,21 @@ jobs:
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -x
-        
+
         # For debugging purposes
         git status
-        
+
         if ! git diff-index --quiet HEAD; then
-          # gradle.properties was changed, we need to commit and push the diff 
-          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" 
-        
+          # gradle.properties was changed, we need to commit and push the diff
+          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
+
           # This will fail if we tried to release from a non-HEAD commit on the release branch.
           # The only scenario where we would try to release a non-HEAD commit from the release branch is
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
           # should already be the expected one.
           git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
-        
+
           echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
         else
           echo "commit_sha=${RELEASE_COMMIT_SHA}" > $GITHUB_OUTPUT
@@ -213,7 +213,7 @@ jobs:
           await createReleaseScript({
             github,
             isDryRun: ${{ inputs.dry_run }},
-            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
             releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
           });
     - name: Publish to crates.io
