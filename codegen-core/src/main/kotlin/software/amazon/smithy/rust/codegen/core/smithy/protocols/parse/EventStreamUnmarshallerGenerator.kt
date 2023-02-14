@@ -50,7 +50,7 @@ fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
     RustModule.new(
         "event_stream_serde",
         visibility = Visibility.PUBLIC,
-        documentation = "TODO: Add docs",
+        documentation = "Event streams serialization and deserialization",
         inline = false,
         parent = RustModule.LibRs,
         additionalAttributes = listOf(Attribute.AllowMissingDocs),
