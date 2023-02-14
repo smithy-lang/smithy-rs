@@ -34,7 +34,7 @@ private val allowedClippyLints = listOf(
     "should_implement_trait",
 
     // Protocol tests use silly names like `baz`, don't flag that.
-    // TODO(msrv_upgrade): switch
+    // TODO(msrv_upgrade): switch upon MSRV upgrade to Rust 1.65
     "blacklisted_name",
     // "disallowed_names",
 
@@ -48,11 +48,10 @@ private val allowedClippyLints = listOf(
     "needless_return",
 
     // For backwards compatibility, we often don't derive Eq
-    // TODO(msrv_upgrade): enable
-    // "derive_partial_eq_without_eq",
+    "derive_partial_eq_without_eq",
 
     // Keeping errors small in a backwards compatible way is challenging
-    // TODO(msrv_upgrade): enable
+    // TODO(msrv_upgrade): uncomment upon MSRV upgrade to Rust 1.65
     // "result_large_err",
 )
 

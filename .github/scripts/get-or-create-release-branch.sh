@@ -8,8 +8,6 @@ set -eux
 # Compute the name of the release branch starting from the version that needs to be released ($SEMANTIC_VERSION).
 # If it's the beginning of a new release series, the branch is created and pushed to the remote (chosen according to
 # the value $DRY_RUN).
-# If it isn't the beginning of a new release series, the script makes sure that the commit that will be tagged is at
-# the tip of the (pre-existing) release branch.
 #
 # The script populates an output file with key-value pairs that are needed in the release CI workflow to carry out
 # the next steps in the release flow: the name of the release branch and a boolean flag that is set to 'true' if this
@@ -57,16 +55,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     git push --force origin "HEAD:refs/heads/${branch_name}"
 else
     commit_sha=$(git rev-parse --short HEAD)
-    if git ls-remote --exit-code --heads origin "${branch_name}"; then
-        # The release branch already exists, we need to make sure that our commit is its current tip
-        branch_head_sha=$(git rev-parse --verify --short "refs/remotes/origin/${branch_name}")
-        if [[ "${branch_head_sha}" != "${commit_sha}" ]]; then
-            echo "The release branch - ${branch_name} - already exists. ${commit_sha}, the commit you chose when "
-            echo "launching this release, is not its current HEAD (${branch_head_sha}). This is not allowed: you "
-            echo "MUST release from the HEAD of the release branch if it already exists."
-            exit 1
-        fi
-    else
+    if ! git ls-remote --exit-code --heads origin "${branch_name}"; then
         # The release branch does not exist.
         # We need to make sure that the commit SHA that we are releasing is on `main`.
         git fetch origin main
@@ -75,7 +64,7 @@ else
             git checkout -b "${branch_name}"
             git push origin "${branch_name}"
         else
-            echo "You must choose a commit from main to create a new release series!"
+            echo "You must choose a commit from main to create a new release branch!"
             exit 1
         fi
     fi

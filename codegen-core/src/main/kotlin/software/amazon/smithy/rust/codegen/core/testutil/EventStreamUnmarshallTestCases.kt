@@ -30,7 +30,7 @@ object EventStreamUnmarshallTestCases {
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
             use aws_smithy_types::{Blob, DateTime};
-            use $crateName::error::*;
+            use $crateName::error::TestStreamError;
             use $crateName::model::*;
 
             fn msg(
@@ -238,11 +238,6 @@ object EventStreamUnmarshallTestCases {
             )
         }
 
-        val (someError, kindSuffix) = when (codegenTarget) {
-            CodegenTarget.CLIENT -> "TestStreamErrorKind::SomeError" to ".kind"
-            CodegenTarget.SERVER -> "TestStreamError::SomeError" to ""
-        }
-
         unitTest("some_error") {
             rustTemplate(
                 """
@@ -254,11 +249,14 @@ object EventStreamUnmarshallTestCases {
                 );
                 let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                match expect_error(result.unwrap())$kindSuffix {
-                    $someError(err) => assert_eq!(Some("some error"), err.message()),
-
+                match expect_error(result.unwrap()) {
+                    TestStreamError::Unhandled(err) => {
+                        let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
+                        let expected = "message: \"unmodeled error\"";
+                        assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
+                    }
                     #{AllowUnreachablePatterns:W}
-                    kind => panic!("expected SomeError, but got {:?}", kind),
+                    kind => panic!("expected error metadata, but got {:?}", kind),
                 }
                 """,
                 "AllowUnreachablePatterns" to writable { Attribute.AllowUnreachablePatterns.render(this) },

@@ -380,6 +380,13 @@ private fun Element.changeInto(tagName: String) {
     replaceWith(Element(tagName).also { elem -> elem.appendChildren(childNodesCopy()) })
 }
 
+/** Write an `impl` block for the given symbol */
+fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
+    rustBlock("impl ${symbol.name}") {
+        block()
+    }
+}
+
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
@@ -413,6 +420,7 @@ class RustWriter private constructor(
         fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
             when {
                 fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                fileName.endsWith(".py") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
                 fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
                 fileName.startsWith("tests/") -> RustWriter(

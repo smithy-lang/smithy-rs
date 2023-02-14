@@ -15,13 +15,13 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -178,18 +178,17 @@ class ServerBuilderDefaultValuesTest {
         )
         val builderGenerator = ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, struct, SmithyValidationExceptionConversionGenerator(codegenContext))
 
-        writer.implBlock(struct, symbolProvider) {
+        writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
         }
         builderGenerator.render(writer)
 
         ServerEnumGenerator(
             codegenContext,
-            writer,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
-        StructureGenerator(model, symbolProvider, writer, struct).render()
+        ).render(writer)
+        StructureGenerator(model, symbolProvider, writer, struct, emptyList()).render()
     }
 
     private fun writeServerBuilderGenerator(writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
@@ -197,18 +196,17 @@ class ServerBuilderDefaultValuesTest {
         val codegenContext = serverTestCodegenContext(model)
         val builderGenerator = ServerBuilderGenerator(codegenContext, struct, SmithyValidationExceptionConversionGenerator(codegenContext))
 
-        writer.implBlock(struct, symbolProvider) {
+        writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
         }
         builderGenerator.render(writer)
 
         ServerEnumGenerator(
             codegenContext,
-            writer,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
-        StructureGenerator(model, symbolProvider, writer, struct).render()
+        ).render(writer)
+        StructureGenerator(model, symbolProvider, writer, struct, emptyList()).render()
     }
 
     private fun structSetters(values: Map<String, String?>, optional: Boolean) = writable {
