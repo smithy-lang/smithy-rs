@@ -14,16 +14,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 
 object EventStreamUnmarshallTestCases {
     fun RustWriter.writeUnmarshallTestCases(
         testCase: EventStreamTestModels.TestCase,
-        codegenTarget: CodegenTarget,
         generator: String,
         codegenContext: CodegenContext,
+        optionalBuilderInputs: Boolean = false,
     ) {
-        val optionalInputs = codegenTarget == CodegenTarget.SERVER
         val crateName = codegenContext.moduleUseName()
 
         rust(
@@ -80,7 +78,7 @@ object EventStreamUnmarshallTestCases {
                     """
                     Blob::new(&b"hello, world!"[..])
                     """,
-                    conditional = optionalInputs,
+                    conditional = optionalBuilderInputs,
                 ),
 
             )
@@ -97,7 +95,7 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "DataInput" to conditionalBuilderInput("\"hello, world!\".into()", conditional = optionalInputs),
+                "DataInput" to conditionalBuilderInput("\"hello, world!\".into()", conditional = optionalBuilderInputs),
             )
         }
 
@@ -124,9 +122,9 @@ object EventStreamUnmarshallTestCases {
                         .some_int(#{IntInput})
                         .build()
                     """,
-                    conditional = optionalInputs,
-                    "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalInputs),
-                    "IntInput" to conditionalBuilderInput("5", conditional = optionalInputs),
+                    conditional = optionalBuilderInputs,
+                    "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalBuilderInputs),
+                    "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
                 ),
 
             )
@@ -148,7 +146,7 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "UnionInput" to conditionalBuilderInput("TestUnion::Foo(\"hello\".into())", conditional = optionalInputs),
+                "UnionInput" to conditionalBuilderInput("TestUnion::Foo(\"hello\".into())", conditional = optionalBuilderInputs),
             )
         }
 
@@ -181,14 +179,14 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "BlobInput" to conditionalBuilderInput("Blob::new(&b\"test\"[..])", conditional = optionalInputs),
-                "BoolInput" to conditionalBuilderInput("true", conditional = optionalInputs),
-                "ByteInput" to conditionalBuilderInput("55i8", conditional = optionalInputs),
-                "IntInput" to conditionalBuilderInput("100_000i32", conditional = optionalInputs),
-                "LongInput" to conditionalBuilderInput("9_000_000_000i64", conditional = optionalInputs),
-                "ShortInput" to conditionalBuilderInput("16_000i16", conditional = optionalInputs),
-                "StringInput" to conditionalBuilderInput("\"test\".into()", conditional = optionalInputs),
-                "TimestampInput" to conditionalBuilderInput("DateTime::from_secs(5)", conditional = optionalInputs),
+                "BlobInput" to conditionalBuilderInput("Blob::new(&b\"test\"[..])", conditional = optionalBuilderInputs),
+                "BoolInput" to conditionalBuilderInput("true", conditional = optionalBuilderInputs),
+                "ByteInput" to conditionalBuilderInput("55i8", conditional = optionalBuilderInputs),
+                "IntInput" to conditionalBuilderInput("100_000i32", conditional = optionalBuilderInputs),
+                "LongInput" to conditionalBuilderInput("9_000_000_000i64", conditional = optionalBuilderInputs),
+                "ShortInput" to conditionalBuilderInput("16_000i16", conditional = optionalBuilderInputs),
+                "StringInput" to conditionalBuilderInput("\"test\".into()", conditional = optionalBuilderInputs),
+                "TimestampInput" to conditionalBuilderInput("DateTime::from_secs(5)", conditional = optionalBuilderInputs),
             )
         }
 
@@ -208,8 +206,8 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "HeaderInput" to conditionalBuilderInput("\"header\".into()", conditional = optionalInputs),
-                "PayloadInput" to conditionalBuilderInput("Blob::new(&b\"payload\"[..])", conditional = optionalInputs),
+                "HeaderInput" to conditionalBuilderInput("\"header\".into()", conditional = optionalBuilderInputs),
+                "PayloadInput" to conditionalBuilderInput("Blob::new(&b\"payload\"[..])", conditional = optionalBuilderInputs),
             )
         }
 
@@ -233,8 +231,8 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "IntInput" to conditionalBuilderInput("5", conditional = optionalInputs),
-                "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalInputs),
+                "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
+                "StringInput" to conditionalBuilderInput("\"hello\".into()", conditional = optionalBuilderInputs),
             )
         }
 

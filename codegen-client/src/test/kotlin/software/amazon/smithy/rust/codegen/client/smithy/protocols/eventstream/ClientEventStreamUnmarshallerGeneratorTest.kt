@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTestCases.writeUnmarshallTestCases
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -27,7 +26,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
             val generator = "$crateName::event_stream_serde::TestStreamUnmarshaller"
 
             rustCrate.integrationTest("unmarshall") {
-                writeUnmarshallTestCases(testCase, codegenTarget = CodegenTarget.CLIENT, generator, codegenContext)
+                writeUnmarshallTestCases(testCase, generator, codegenContext)
 
                 unitTest(
                     "unknown_message",
