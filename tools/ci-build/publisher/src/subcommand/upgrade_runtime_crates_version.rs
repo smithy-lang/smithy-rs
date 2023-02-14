@@ -63,10 +63,7 @@ fn update_gradle_properties<'a>(
     {
         bail!("Moving from {current_version} to {upgraded_version} would be a *downgrade*. This command doesn't allow it!");
     }
-    Ok(version_regex.replace(
-        &gradle_properties,
-        format!("${{field}}{}", upgraded_version),
-    ))
+    Ok(version_regex.replace(gradle_properties, format!("${{field}}{}", upgraded_version)))
 }
 
 async fn read_gradle_properties(fs: Fs, path: &Path) -> Result<String, anyhow::Error> {
