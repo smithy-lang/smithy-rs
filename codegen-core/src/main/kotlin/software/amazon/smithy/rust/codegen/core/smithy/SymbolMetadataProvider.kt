@@ -14,12 +14,10 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -29,26 +27,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
- * Default delegator to enable easily decorating another symbol provider.
- */
-open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
-    override fun config(): SymbolVisitorConfig = base.config()
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
-    override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
-    override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
-    override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
-    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
-        base.symbolForEventStreamError(eventStream)
-}
-
-/**
  * Attach `meta` to symbols. `meta` is used by the generators (e.g. StructureGenerator) to configure the generated models.
  *
  * Protocols may inherit from this class and override the `xyzMeta` methods to modify structure generation.
  */
-abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
+abstract class SymbolMetadataProvider(base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
-        val baseSymbol = base.toSymbol(shape)
+        val baseSymbol = super.toSymbol(shape)
         val meta = when (shape) {
             is MemberShape -> memberMeta(shape)
             is StructureShape -> structureMeta(shape)
@@ -109,10 +94,8 @@ fun containerDefaultMetadata(
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
-    private val model: Model,
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
-
     override fun memberMeta(memberShape: MemberShape): RustMetadata =
         when (val container = model.expectShape(memberShape.container)) {
             is StructureShape -> {
@@ -130,6 +113,9 @@ class BaseSymbolMetadataProvider(
             }
 
             is UnionShape, is CollectionShape, is MapShape -> RustMetadata(visibility = Visibility.PUBLIC)
+            // This covers strings with the enum trait for now, and can be removed once we're fully on EnumShape
+            // TODO(EnumShape): Remove this `is StringShape` match arm
+            is StringShape -> RustMetadata(visibility = Visibility.PUBLIC)
             else -> TODO("Unrecognized container type: $container")
         }
 

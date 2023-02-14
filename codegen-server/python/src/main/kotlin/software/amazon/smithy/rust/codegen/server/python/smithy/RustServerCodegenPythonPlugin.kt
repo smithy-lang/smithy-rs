@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleAttachingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
@@ -79,19 +80,21 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // Generate public constrained types for directly constrained shapes.
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
-                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
-                // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
+                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, serviceShape) else it }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
+                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
-                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
+                .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
-                .let { PythonStreamingShapeMetadataProvider(it, model) }
+                .let { PythonStreamingShapeMetadataProvider(it) }
                 // Derive `Eq` and `Hash` if possible.
-                .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
+                .let { DeriveEqAndHashSymbolMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it) }
+                // Attach modules to the generated symbols
+                .let { ModuleAttachingSymbolProvider(it) }
+                // Generate different types for EventStream shapes (e.g. transcribe streaming)
+                .let { EventStreamSymbolProvider(it, symbolVisitorConfig.runtimeConfig, CodegenTarget.SERVER) }
     }
 }

@@ -6,13 +6,10 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
@@ -24,18 +21,13 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 
-fun UnionShape.eventStreamErrorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val unionSymbol = symbolProvider.toSymbol(this)
-    return RustModule.Error.toType().resolve("${unionSymbol.name}Error")
-}
-
 /**
- * Wrapping symbol provider to wrap modeled types with the aws-smithy-http Event Stream send/receive types.
+ * Swaps out the types for event stream member shapes to use the event stream types
+ * from aws-smithy-http (EventStreamSender and Receiver).
  */
 class EventStreamSymbolProvider(
-    private val runtimeConfig: RuntimeConfig,
     base: RustSymbolProvider,
-    private val model: Model,
+    private val runtimeConfig: RuntimeConfig,
     private val target: CodegenTarget,
 ) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {

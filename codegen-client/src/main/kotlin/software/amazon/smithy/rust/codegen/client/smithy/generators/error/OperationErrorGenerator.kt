@@ -49,9 +49,8 @@ class OperationErrorGenerator(
     private val operationOrEventStream: Shape,
     private val customizations: List<ErrorCustomization>,
 ) {
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
-    private val symbol = symbolProvider.toSymbol(operationOrEventStream)
-    private val errorMetadata = errorMetadata(symbolProvider.config().runtimeConfig)
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
+    private val errorMetadata = errorMetadata(symbolProvider.config.runtimeConfig)
     private val createUnhandledError =
         RuntimeType.smithyHttp(runtimeConfig).resolve("result::CreateUnhandledError")
 
@@ -148,10 +147,10 @@ class OperationErrorGenerator(
 
         writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorSymbol, errors))
 
-        val retryErrorKindT = RuntimeType.retryErrorKind(symbolProvider.config().runtimeConfig)
+        val retryErrorKindT = RuntimeType.retryErrorKind(symbolProvider.config.runtimeConfig)
         writer.rustBlock(
             "impl #T for ${errorSymbol.name}",
-            RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig),
+            RuntimeType.provideErrorKind(symbolProvider.config.runtimeConfig),
         ) {
             rustBlock("fn code(&self) -> Option<&str>") {
                 rust("#T::code(self)", RuntimeType.provideErrorMetadataTrait(runtimeConfig))

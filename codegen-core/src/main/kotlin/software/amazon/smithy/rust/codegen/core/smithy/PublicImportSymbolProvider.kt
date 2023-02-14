@@ -14,10 +14,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
  *
  * This enables generating code into `tests` and other public locations.
  */
-class PublicImportSymbolProvider(private val base: RustSymbolProvider, private val publicUseName: String) :
-    WrappingSymbolProvider(base) {
+class PublicImportSymbolProvider(
+    base: RustSymbolProvider,
+    private val publicUseName: String,
+) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
-        val baseSymbol = base.toSymbol(shape)
+        val baseSymbol = super.toSymbol(shape)
 
         val currentRustType = baseSymbol.rustType()
         val currentNamespace = currentRustType.namespace

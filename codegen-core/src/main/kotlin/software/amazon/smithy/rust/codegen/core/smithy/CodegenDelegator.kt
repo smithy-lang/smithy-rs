@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
@@ -55,11 +56,12 @@ open class RustCrate(
      * Write into the module that this shape is [locatedIn]
      */
     fun useShapeWriter(shape: Shape, f: Writable) {
-        val module = symbolProvider.toSymbol(shape).module()
-        check(!module.isInline()) {
-            "Cannot use useShapeWriter with inline modules—use [RustWriter.withInlineModule] instead"
+        symbolProvider.toSymbol(shape).module().also { module ->
+            check(!module.isInline()) {
+                "Cannot use useShapeWriter with inline modules—use [RustWriter.withInlineModule] instead"
+            }
+            withModule(module, f)
         }
-        withModule(symbolProvider.toSymbol(shape).module(), f)
     }
 
     /**
@@ -165,8 +167,16 @@ open class RustCrate(
     /**
      * Returns the module for a given Shape.
      */
-    fun moduleFor(shape: Shape, moduleWriter: Writable): RustCrate =
-        withModule((symbolProvider as RustSymbolProvider).moduleForShape(shape), moduleWriter)
+    fun moduleFor(shape: Shape, moduleWriter: Writable): RustCrate = symbolProvider.toSymbol(shape).let { symbol ->
+        check(symbol.rustType() is RustType.Opaque) {
+            "`moduleFor` should only be called for opaque Rust types. It doesn't make sense " +
+                "to use it for other RustType variants that are mostly std library types."
+        }
+        withModule(
+            (symbolProvider as RustSymbolProvider).config.moduleProvider.moduleForShape(symbol.name, shape),
+            moduleWriter,
+        )
+    }
 
     /**
      * Create a new file directly

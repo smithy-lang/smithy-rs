@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -26,10 +25,9 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 /**
  * Wrapping symbol provider to change `Blob` to `ByteStream` when it targets a streaming member
  */
-class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
-    WrappingSymbolProvider(base) {
+class StreamingShapeSymbolProvider(base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
-        val initial = base.toSymbol(shape)
+        val initial = super.toSymbol(shape)
         // We are only targeting member shapes
         if (shape !is MemberShape) {
             return initial
@@ -44,9 +42,9 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
 
         // We are only targeting streaming blobs
         return if (target is BlobShape && shape.isStreaming(model)) {
-            RuntimeType.byteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
+            RuntimeType.byteStream(config.runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
         } else {
-            base.toSymbol(shape)
+            super.toSymbol(shape)
         }
     }
 }
@@ -59,20 +57,17 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
  *
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
-class StreamingShapeMetadataProvider(
-    private val base: RustSymbolProvider,
-    private val model: Model,
-) : SymbolMetadataProvider(base) {
+class StreamingShapeMetadataProvider(private val base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
-        return if (structureShape.hasStreamingMember(model)) {
+        return if (structureShape.hasStreamingMember(base.model)) {
             baseMetadata.withoutDerives(RuntimeType.Clone, RuntimeType.PartialEq)
         } else baseMetadata
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
         val baseMetadata = base.toSymbol(unionShape).expectRustMetadata()
-        return if (unionShape.hasStreamingMember(model)) {
+        return if (unionShape.hasStreamingMember(base.model)) {
             baseMetadata.withoutDerives(RuntimeType.Clone, RuntimeType.PartialEq)
         } else baseMetadata
     }

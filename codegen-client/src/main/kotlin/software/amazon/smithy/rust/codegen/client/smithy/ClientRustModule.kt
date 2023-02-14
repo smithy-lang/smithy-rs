@@ -40,7 +40,7 @@ object ClientRustModule {
 }
 
 object ClientModuleProvider : ModuleProvider {
-    override fun moduleForShape(shape: Shape): RustModule.LeafModule = when (shape) {
+    override fun moduleForShape(shapeName: String, shape: Shape): RustModule.LeafModule = when (shape) {
         is OperationShape -> ClientRustModule.Operation
         is StructureShape -> when {
             shape.hasTrait<ErrorTrait>() -> ClientRustModule.Error
@@ -51,9 +51,9 @@ object ClientModuleProvider : ModuleProvider {
         else -> ClientRustModule.Model
     }
 
-    override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
+    override fun moduleForOperationError(operationName: String, operation: OperationShape): RustModule.LeafModule =
         ClientRustModule.Error
 
-    override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
+    override fun moduleForEventStreamError(eventStreamName: String, eventStream: UnionShape): RustModule.LeafModule =
         ClientRustModule.Error
 }

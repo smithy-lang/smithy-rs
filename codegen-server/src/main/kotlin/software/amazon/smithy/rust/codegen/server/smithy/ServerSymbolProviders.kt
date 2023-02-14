@@ -46,16 +46,14 @@ class ServerSymbolProviders private constructor(
                         symbolVisitorConfig,
                         false,
                     ),
-                    model, publicConstrainedTypes, service,
+                    publicConstrainedTypes, service,
                 ),
                 pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(
                     baseSymbolProvider,
-                    model,
                     service,
                 ),
                 constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(
                     baseSymbolProvider,
-                    model,
                     publicConstrainedTypes,
                     service,
                 ),

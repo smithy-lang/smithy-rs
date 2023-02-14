@@ -124,7 +124,7 @@ object EventStreamTestTools {
             .filterIsInstance<StructureShape>()
             .filter { shape -> shape.hasTrait<ErrorTrait>() }
         check(errors.isNotEmpty()) { "must have at least one error modeled" }
-        project.withModule(codegenContext.symbolProvider.moduleForShape(errors[0])) {
+        project.moduleFor(errors[0]) {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
@@ -132,7 +132,7 @@ object EventStreamTestTools {
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-        project.withModule(codegenContext.symbolProvider.moduleForShape(inputOutput)) {
+        project.moduleFor(inputOutput) {
             recursivelyGenerateModels(model, symbolProvider, inputOutput, this, codegenTarget)
         }
         operationShape.outputShape(model).also { outputShape ->

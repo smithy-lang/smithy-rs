@@ -45,7 +45,7 @@ internal class PythonServerSymbolProviderTest {
                 value: Timestamp
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+        val provider = PythonServerSymbolVisitor(model, ServerTestSymbolVisitorConfig, null)
 
         // Struct test
         val timestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStruct\$inner"))).rustType()
@@ -95,7 +95,7 @@ internal class PythonServerSymbolProviderTest {
                 value: Blob
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+        val provider = PythonServerSymbolVisitor(model, ServerTestSymbolVisitorConfig, null)
 
         // Struct test
         val blob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStruct\$inner"))).rustType()

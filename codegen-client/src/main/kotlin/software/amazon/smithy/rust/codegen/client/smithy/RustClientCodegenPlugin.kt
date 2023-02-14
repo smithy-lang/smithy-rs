@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleAttachingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
@@ -74,16 +75,18 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
          */
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.CLIENT) }
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it, model) }
+                .let { StreamingShapeSymbolProvider(it) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(NonExhaustive)) }
+                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
                 // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
-                .let { StreamingShapeMetadataProvider(it, model) }
+                .let { StreamingShapeMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it) }
+                // Attach modules to the generated symbols
+                .let { ModuleAttachingSymbolProvider(it) }
+                // Generate different types for EventStream shapes (e.g. transcribe streaming)
+                .let { EventStreamSymbolProvider(it, symbolVisitorConfig.runtimeConfig, CodegenTarget.CLIENT) }
     }
 }

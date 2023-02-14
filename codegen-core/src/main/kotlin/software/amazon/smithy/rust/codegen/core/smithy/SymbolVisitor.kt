@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -35,7 +36,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -63,27 +63,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     IntegerShape::class to RustType.Integer(32),
     LongShape::class to RustType.Integer(64),
     StringShape::class to RustType.String,
-)
-
-/**
- * Provider for RustModules so that the symbol provider knows where to organize things.
- */
-interface ModuleProvider {
-    /** Returns the module for a shape */
-    fun moduleForShape(shape: Shape): RustModule.LeafModule
-
-    /** Returns the module for an operation error */
-    fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule
-
-    /** Returns the module for an event stream error */
-    fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule
-}
-
-data class SymbolVisitorConfig(
-    val runtimeConfig: RuntimeConfig,
-    val renameExceptions: Boolean,
-    val nullabilityCheckMode: CheckMode,
-    val moduleProvider: ModuleProvider,
 )
 
 /**
@@ -154,7 +133,7 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
 fun Symbol.Builder.locatedIn(rustModule: RustModule.LeafModule): Symbol.Builder {
     val currentRustType = this.build().rustType()
     check(currentRustType is RustType.Opaque) {
-        "Only `Opaque` can have their namespace updated"
+        "Only `Opaque` can have their namespace updated. Received $currentRustType."
     }
     val newRustType = currentRustType.copy(namespace = rustModule.fullyQualifiedPath())
     return this.definitionFile(rustModule.definitionFile())
@@ -173,26 +152,6 @@ fun Symbol.Builder.locatedIn(rustModule: RustModule.LeafModule): Symbol.Builder 
  * field will be set.
  */
 data class MaybeRenamed(val name: String, val renamedFrom: String?)
-
-/**
- * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
- */
-interface RustSymbolProvider : SymbolProvider, ModuleProvider {
-    fun config(): SymbolVisitorConfig
-    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
-
-    override fun moduleForShape(shape: Shape): RustModule.LeafModule = config().moduleProvider.moduleForShape(shape)
-    override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
-        config().moduleProvider.moduleForOperationError(operation)
-    override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
-        config().moduleProvider.moduleForEventStreamError(eventStream)
-
-    /** Returns the symbol for an operation error */
-    fun symbolForOperationError(operation: OperationShape): Symbol
-
-    /** Returns the symbol for an event stream error */
-    fun symbolForEventStreamError(eventStream: UnionShape): Symbol
-}
 
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
@@ -224,45 +183,31 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * derives for a given shape.
  */
 open class SymbolVisitor(
-    private val model: Model,
+    override val model: Model,
+    override val config: SymbolVisitorConfig,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig,
-) : RustSymbolProvider,
-    ShapeVisitor<Symbol> {
+) : RustSymbolProvider, ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
-    override fun config(): SymbolVisitorConfig = config
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
     }
 
-    override fun symbolForOperationError(operation: OperationShape): Symbol =
-        toSymbol(operation).let { symbol ->
-            val module = moduleForOperationError(operation)
-            module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
+    override fun toMemberName(shape: MemberShape): String {
+        val container = model.expectShape(shape.container)
+        return when {
+            container is StructureShape -> shape.memberName.toSnakeCase()
+            container is UnionShape || container is EnumShape || container.hasTrait<EnumTrait>() -> shape.memberName.toPascalCase()
+            else -> error("unexpected container shape: $container")
         }
-
-    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
-        toSymbol(eventStream).let { symbol ->
-            val module = moduleForEventStreamError(eventStream)
-            module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
-        }
-
-    /**
-     * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
-     * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
-     *
-     * Because enum variants are not member shape, a separate handler is required.
-     */
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-        val baseName = definition.name.orNull()?.toPascalCase() ?: return null
-        return MaybeRenamed(baseName, null)
     }
 
-    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
-        is StructureShape -> shape.memberName.toSnakeCase()
-        is UnionShape -> shape.memberName.toPascalCase()
-        else -> error("unexpected container shape: $container")
+    override fun symbolForOperationError(operation: OperationShape): Symbol = symbolForError(operation)
+    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = symbolForError(eventStream)
+    private fun symbolForError(ownerShape: Shape): Symbol = toSymbol(ownerShape).let { symbol ->
+        "${symbol.name}Error".let { name ->
+            Symbol.builder().name(name).rustType(RustType.Opaque(name)).build()
+        }
     }
 
     override fun blobShape(shape: BlobShape?): Symbol {
@@ -297,8 +242,7 @@ open class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
-            val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-            symbolBuilder(shape, rustType).locatedIn(moduleForShape(shape)).build()
+            symbolBuilder(shape, RustType.Opaque(shape.contextName(serviceShape).toPascalCase())).build()
         } else {
             simpleShape(shape)
         }
@@ -349,7 +293,6 @@ open class SymbolVisitor(
                     .replaceFirstChar { it.uppercase() },
             ),
         )
-            .locatedIn(moduleForShape(shape))
             .build()
     }
 
@@ -366,12 +309,12 @@ open class SymbolVisitor(
         val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
             it.replace("Exception", "Error")
         }
-        return symbolBuilder(shape, RustType.Opaque(name)).locatedIn(moduleForShape(shape)).build()
+        return symbolBuilder(shape, RustType.Opaque(name)).build()
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
         val name = shape.contextName(serviceShape).toPascalCase()
-        return symbolBuilder(shape, RustType.Opaque(name)).locatedIn(moduleForShape(shape)).build()
+        return symbolBuilder(shape, RustType.Opaque(name)).build()
     }
 
     override fun memberShape(shape: MemberShape): Symbol {
