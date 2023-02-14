@@ -10,13 +10,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
@@ -37,6 +37,7 @@ class ServerBuilderConstraintViolations(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val builderTakesInUnconstrainedTypes: Boolean,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -66,7 +67,7 @@ class ServerBuilderConstraintViolations(
             "Attempted to render constraint violations for the builder for structure shape ${shape.id}, but calculation of the constraint violations resulted in no variants"
         }
 
-        Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
@@ -153,25 +154,6 @@ class ServerBuilderConstraintViolations(
     }
 
     private fun renderAsValidationExceptionFieldList(writer: RustWriter) {
-        val validationExceptionFieldWritable = writable {
-            rustBlock("match self") {
-                all.forEach {
-                    if (it.hasInner()) {
-                        rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
-                    } else {
-                        rust(
-                            """
-                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
-                                path: path + "/${it.forMember.memberName}",
-                            },
-                            """,
-                        )
-                    }
-                }
-            }
-        }
-
         writer.rustTemplate(
             """
             impl ConstraintViolation {
@@ -180,7 +162,7 @@ class ServerBuilderConstraintViolations(
                 }
             }
             """,
-            "ValidationExceptionFieldWritable" to validationExceptionFieldWritable,
+            "ValidationExceptionFieldWritable" to validationExceptionConversionGenerator.builderConstraintViolationImplBlock((all)),
             "String" to RuntimeType.String,
         )
     }

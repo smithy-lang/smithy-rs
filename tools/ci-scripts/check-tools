@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -eux
+cd smithy-rs
+
+# test_tool tool_path rust_version
+function test_tool {
+    local tool_path="$1"
+    local rust_version="$2"
+
+    echo -e "${C_YELLOW}Testing ${tool_path}...${C_RESET}"
+    pushd "${tool_path}" &>/dev/null
+    cargo +"${rust_version}" clippy --all-features
+    cargo +"${rust_version}" test --all-features
+    popd &>/dev/null
+}
+
+test_tool "tools/ci-build/changelogger" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/crate-hasher" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/difftags" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/publisher" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/sdk-lints" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/sdk-versioner" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-build/smithy-rs-tool-common" "${RUST_STABLE_VERSION}"
+test_tool "tools/ci-cdk/canary-runner" "${RUST_STABLE_VERSION}"
+
+echo -e "${C_YELLOW}Running additional per-crate checks...${C_RESET}"
+./tools/ci-scripts/additional-per-crate-checks.sh ./tools/

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
@@ -21,6 +22,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersi
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+
+val TestUtilFeature = Feature("test-util", false, listOf())
 
 /**
  * A set of customizations that are included in all protocols.
@@ -58,9 +61,13 @@ class RequiredCustomizations : ClientCodegenDecorator {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
+        rustCrate.mergeFeature(TestUtilFeature)
+
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
-        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
+        rustCrate.withModule(ClientRustModule.Types) {
+            pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
+        }
     }
 }

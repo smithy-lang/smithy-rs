@@ -9,6 +9,8 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -44,6 +46,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -77,7 +80,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
+        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
@@ -115,8 +118,9 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         // Matching derives to the main structure, - `PartialEq` (to be consistent with [ServerBuilderGenerator]), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = derives).render(writer)
+        // Filter out any derive that isn't Debug or Clone. Then add a Default derive
+        val derives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        Attribute(derive(derives)).render(writer)
         writer.rustBlock("pub struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }

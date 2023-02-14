@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -90,7 +90,7 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
 }
 
-typealias HttpBindingCustomization = NamedSectionGenerator<HttpBindingSection>
+typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
 
 /**
  * This class generates Rust functions that (de)serialize data from/to an HTTP message.
@@ -210,7 +210,7 @@ class HttpBindingGenerator(
      */
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorT: RuntimeType,
+        errorSymbol: Symbol,
         // Deserialize a single structure, union or document member marked as a payload
         payloadParser: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
@@ -224,7 +224,7 @@ class HttpBindingGenerator(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
-                    errorT,
+                    errorSymbol,
                 ) {
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
@@ -238,10 +238,10 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
+                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorSymbol) {
                     deserializePayloadBody(
                         binding,
-                        errorT,
+                        errorSymbol,
                         structuredHandler = payloadParser,
                         httpMessageType,
                     )
@@ -286,7 +286,7 @@ class HttpBindingGenerator(
 
     private fun RustWriter.deserializePayloadBody(
         binding: HttpBindingDescriptor,
-        errorSymbol: RuntimeType,
+        errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ) {
@@ -650,12 +650,13 @@ class HttpBindingGenerator(
                 let $safeName = $formatted;
                 if !$safeName.is_empty() {
                     let header_value = $safeName;
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_field_error:W}
                     })?;
                     builder = builder.header("$headerName", header_value);
                 }
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_field_error" to renderErrorMessage("header_value"),
             )
         }
@@ -698,13 +699,14 @@ class HttpBindingGenerator(
                     isMultiValuedHeader = false,
                 )
                 };
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_header_value:W}
                     })?;
                     builder = builder.header(header_name, header_value);
                 }
 
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_header_name" to OperationBuildError(runtimeConfig).invalidField(memberName) {
                     rust("""format!("`{k}` cannot be used as a header name: {err}")""")
                 },

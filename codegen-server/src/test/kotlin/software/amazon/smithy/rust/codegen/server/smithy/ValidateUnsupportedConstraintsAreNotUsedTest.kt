@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import java.util.logging.Level
 
 internal class ValidateUnsupportedConstraintsAreNotUsedTest {
@@ -53,20 +54,26 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
         val service = model.lookup<ServiceShape>("test#TestService")
-        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model, service)
+        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+            model,
+            service,
+            SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+        )
 
         validationResult.messages shouldHaveSize 1
 
         // Asserts the exact message, to ensure the formatting is appropriate.
-        validationResult.messages[0].message shouldBe """Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
-```smithy
-use smithy.framework#ValidationException
+        validationResult.messages[0].message shouldBe """
+            Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
+            ```smithy
+            use smithy.framework#ValidationException
 
-operation TestOperation {
-    ...
-    errors: [..., ValidationException] // <-- Add this.
-}
-```"""
+            operation TestOperation {
+                ...
+                errors: [..., ValidationException] // <-- Add this.
+            }
+            ```
+        """.trimIndent()
     }
 
     @Test
@@ -187,27 +194,6 @@ operation TestOperation {
         )
 
         validationResult.shouldAbort shouldBe true
-    }
-
-    @Test
-    fun `it should detect when the unique items trait is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                uniqueItemsList: UniqueItemsList
-            }
-
-            @uniqueItems
-            list UniqueItemsList {
-                member: String
-            }
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The list shape `test#UniqueItemsList` has the constraint trait `smithy.api#uniqueItems` attached"
     }
 
     @Test

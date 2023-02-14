@@ -10,6 +10,8 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -34,6 +36,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -49,6 +54,27 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
+
+/** BuilderGenerator customization sections */
+sealed class BuilderSection(name: String) : Section(name) {
+    abstract val shape: StructureShape
+
+    /** Hook to add additional fields to the builder */
+    data class AdditionalFields(override val shape: StructureShape) : BuilderSection("AdditionalFields")
+
+    /** Hook to add additional methods to the builder */
+    data class AdditionalMethods(override val shape: StructureShape) : BuilderSection("AdditionalMethods")
+
+    /** Hook to add additional fields to the `build()` method */
+    data class AdditionalFieldsInBuild(override val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
+
+    /** Hook to add additional fields to the `Debug` impl */
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
+        BuilderSection("AdditionalDebugFields")
+}
+
+/** Customizations for BuilderGenerator */
+abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
 fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
     structureShape.builderSymbol(symbolProvider)
@@ -90,6 +116,7 @@ class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
+    private val customizations: List<BuilderCustomization>,
 ) {
     companion object {
         /**
@@ -112,8 +139,10 @@ class BuilderGenerator(
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.builderSymbol(symbolProvider)
-    private val baseDerives = structureSymbol.expectRustMetadata().derives
-    private val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+    private val metadata = structureSymbol.expectRustMetadata()
+
+    // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
+    private val builderDerives = metadata.derives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
     private val builderName = "Builder"
 
     fun render(writer: RustWriter) {
@@ -122,7 +151,7 @@ class BuilderGenerator(
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
             // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
             renderBuilder(this)
-            if (!builderDerives.contains(RuntimeType.Debug)) {
+            if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
                 renderDebugImpl(this)
             }
         }
@@ -203,7 +232,8 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
-        baseDerives.copy(derives = builderDerives).render(writer)
+        metadata.additionalAttributes.render(writer)
+        Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
@@ -211,6 +241,7 @@ class BuilderGenerator(
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
                 renderBuilderMember(this, memberName, memberSymbol)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFields(shape))
         }
 
         writer.rustBlock("impl $builderName") {
@@ -230,6 +261,7 @@ class BuilderGenerator(
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalMethods(shape))
             renderBuildFn(this)
         }
     }
@@ -246,6 +278,7 @@ class BuilderGenerator(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
+                writeCustomizations(customizations, BuilderSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
             }
         }
@@ -324,6 +357,7 @@ class BuilderGenerator(
                     }
                 }
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFieldsInBuild(shape))
         }
     }
 }

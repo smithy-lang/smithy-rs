@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -87,6 +88,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
 class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
+    private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -140,7 +142,7 @@ class ServerBuilderGenerator(
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
+        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
@@ -185,9 +187,10 @@ class ServerBuilderGenerator(
         // Matching derives to the main structure, - `PartialEq` (see class documentation for why), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = builderDerives).render(writer)
-        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
+        // Filter out any derive that isn't Debug or Clone. Then add a Default derive
+        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        Attribute(derive(builderDerives)).render(writer)
+        writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
 
@@ -204,7 +207,7 @@ class ServerBuilderGenerator(
             renderBuildFn(this)
         }
 
-        if (!builderDerives.contains(RuntimeType.Debug)) {
+        if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
             renderImplDebugForBuilder(writer)
         }
     }
@@ -212,21 +215,9 @@ class ServerBuilderGenerator(
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(constraint_violation: ConstraintViolation) -> Self {
-                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
-                    let validation_exception = crate::error::ValidationException {
-                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
-                        field_list: Some(vec![first_validation_exception_field]),
-                    };
-                    Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
-                            .expect("impossible")
-                    )
-                }
-            }
+            #{Converter:W}
             """,
-            *codegenScope,
+            "Converter" to customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(),
         )
     }
 
@@ -325,7 +316,7 @@ class ServerBuilderGenerator(
             // to the heap. However, that will make the builder take in a value whose type does not exactly match the
             // shape member's type.
             // We don't want to introduce API asymmetry just for this particular case, so we disable the lint.
-            Attribute.Custom("allow(clippy::boxed_local)").render(writer)
+            Attribute.AllowClippyBoxedLocal.render(writer)
         }
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             withBlock("self.$memberName = ", "; self") {

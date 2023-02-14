@@ -6,8 +6,8 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -88,7 +88,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider(#{Credentials}::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.default_auth().send().await;
@@ -96,8 +96,9 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
+                            .withFeature("test-util").toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -110,7 +111,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider(#{Credentials}::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.custom_auth().send().await;
@@ -118,8 +119,9 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("test_connection::capture_request"),
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
+                            .withFeature("test-util").toType().resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }

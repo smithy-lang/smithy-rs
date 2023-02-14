@@ -12,10 +12,7 @@ use crate::helpers::{client, client_http2_only, PokemonService};
 use async_stream::stream;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use pokemon_service_client::{
-    error::{
-        AttemptCapturingPokemonEventError, AttemptCapturingPokemonEventErrorKind, GetStorageError, GetStorageErrorKind,
-        MasterBallUnsuccessful, NotAuthorized,
-    },
+    error::{AttemptCapturingPokemonEventError, GetStorageError, MasterBallUnsuccessful, StorageAccessNotAuthorized},
     model::{AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload},
     types::SdkError,
 };
@@ -77,10 +74,7 @@ async fn simple_integration_test() {
     let has_not_authorized_error = if let Err(SdkError::ServiceError(context)) = storage_err {
         matches!(
             context.err(),
-            GetStorageError {
-                kind: GetStorageErrorKind::NotAuthorized(NotAuthorized { .. }),
-                ..
-            }
+            GetStorageError::StorageAccessNotAuthorized(StorageAccessNotAuthorized { .. }),
         )
     } else {
         false
@@ -137,10 +131,7 @@ async fn event_stream_test() {
                 .build())
             .build()
         ));
-        yield Err(AttemptCapturingPokemonEventError::new(
-            AttemptCapturingPokemonEventErrorKind::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()),
-            Default::default()
-        ));
+        yield Err(AttemptCapturingPokemonEventError::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()));
         // The next event should not happen
         yield Ok(AttemptCapturingPokemonEvent::Event(
             CapturingEvent::builder()

@@ -21,7 +21,6 @@ import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -64,7 +63,7 @@ class ConstrainedShapeSymbolProvider(
         check(shape is MapShape || shape is CollectionShape)
 
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        return symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
+        return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
     }
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -79,7 +78,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
+                    check(shape.hasTrait<LengthTrait>()) {
+                        "Only the `length` constraint trait can be applied to map shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val keySymbol = this.toSymbol(shape.key)
@@ -92,7 +93,9 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    check(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
+                    check(constrainedCollectionCheck(shape)) {
+                        "Only the `length` and `uniqueItems` constraint traits can be applied to list shapes"
+                    }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
@@ -103,7 +106,7 @@ class ConstrainedShapeSymbolProvider(
             is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
+                    symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
                 } else {
                     base.toSymbol(shape)
                 }

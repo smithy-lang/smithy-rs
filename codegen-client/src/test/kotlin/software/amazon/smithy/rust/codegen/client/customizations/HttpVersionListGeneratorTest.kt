@@ -12,13 +12,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
@@ -56,7 +57,7 @@ internal class HttpVersionListGeneratorTest {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("http_version_list") {
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn test_http_version_list_defaults() {
@@ -107,7 +108,7 @@ internal class HttpVersionListGeneratorTest {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_http") {
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn test_http_version_list_defaults() {
@@ -170,12 +171,12 @@ internal class HttpVersionListGeneratorTest {
 
         clientIntegrationTest(
             model,
-            listOf(FakeSigningDecorator()),
-            addModuleToEventStreamAllowList = true,
+            IntegrationTestParams(addModuleToEventStreamAllowList = true),
+            additionalDecorators = listOf(FakeSigningDecorator()),
         ) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_eventstream_http") {
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn test_http_version_list_defaults() {

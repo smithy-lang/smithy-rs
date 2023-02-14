@@ -65,7 +65,14 @@ class ExpressionGenerator(
                 getAttr.path.toList().forEach { part ->
                     when (part) {
                         is GetAttr.Part.Key -> rust(".${part.key().rustName()}()")
-                        is GetAttr.Part.Index -> rust(".get(${part.index()}).cloned()") // we end up with Option<&&T>, we need to get to Option<&T>
+                        is GetAttr.Part.Index -> {
+                            if (part.index() == 0) {
+                                // In this case, `.first()` is more idiomatic and `.get(0)` triggers lint warnings
+                                rust(".first().cloned()")
+                            } else {
+                                rust(".get(${part.index()}).cloned()") // we end up with Option<&&T>, we need to get to Option<&T>
+                            }
+                        }
                     }
                 }
                 if (ownership == Ownership.Owned && getAttr.type() != Type.bool()) {

@@ -19,40 +19,52 @@ env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
 jobs:
-  # Rebuild and upload the Docker build image
-  rebuild-docker-build-image:
-    runs-on: ubuntu-latest
-    name: Rebuild image
+  # Build and upload the Docker build image if necessary
+  acquire-base-image:
+    runs-on: smithy_ubuntu-latest_8-core
+    name: Acquire Base Image
+    outputs:
+      docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
       id-token: write
       contents: read
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - name: Build image
-      run: |
-        IMAGE_TAG="$(./tools/ci-build/tools-hash)"
-        cd tools
-        docker build \
-          -t "${{ env.ecr_repository }}:${IMAGE_TAG}" \
-          -t "${{ env.ecr_repository }}:main" \
-          .
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
-    - name: Upload image
+    - name: Save the docker login password to the output
+      id: set-token
       run: |
-        IMAGE_TAG="$(./tools/ci-build/tools-hash)"
-        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+        ENCRYPTED_PAYLOAD=$(
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+        )
+        echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
+    - name: Acquire base image
+      id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
+        ENCRYPTED_DOCKER_PASSWORD: ${{ steps.set-token.outputs.docker-login-password }}
+        DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      run: ./.github/scripts/acquire-build-image
+    - name: Tag and upload image
+      run: |
+        IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:main"
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
         docker push "${{ env.ecr_repository }}:main"
 
   # Run the shared CI after a Docker build image has been uploaded to ECR
   ci:
-    needs: rebuild-docker-build-image
+    needs: acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true
+    secrets:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.acquire-base-image.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}

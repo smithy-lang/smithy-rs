@@ -7,8 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -19,6 +21,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
@@ -28,28 +33,32 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 open class ServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val operationSymbol: Symbol,
-    private val errors: List<StructureShape>,
+    private val operationOrEventStream: Shape,
 ) {
-    open fun render(writer: RustWriter) {
-        val symbol = RuntimeType("crate::error::${operationSymbol.name}Error")
-        if (errors.isNotEmpty()) {
-            renderErrors(writer, symbol, operationSymbol)
-        }
-    }
+    private val symbol = symbolProvider.toSymbol(operationOrEventStream)
 
-    fun renderErrors(
-        writer: RustWriter,
-        errorSymbol: RuntimeType,
-        operationSymbol: Symbol,
-    ) {
+    private fun operationErrors(): List<StructureShape> =
+        (operationOrEventStream as OperationShape).operationErrors(model).map { it.asStructureShape().get() }
+    private fun eventStreamErrors(): List<StructureShape> =
+        (operationOrEventStream as UnionShape).eventStreamErrors()
+            .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
+
+    fun render(writer: RustWriter) {
+        val (errorSymbol, errors) = when (operationOrEventStream) {
+            is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
+            is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
+            else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
+        }
+        if (errors.isEmpty()) {
+            return
+        }
         val meta = RustMetadata(
-            derives = Attribute.Derives(setOf(RuntimeType.Debug)),
+            derives = setOf(RuntimeType.Debug),
             visibility = Visibility.PUBLIC,
         )
 
-        writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
-        writer.rust("/// Each variant represents an error that can occur for the `${operationSymbol.name}` operation.")
+        writer.rust("/// Error type for the `${symbol.name}` operation.")
+        writer.rust("/// Each variant represents an error that can occur for the `${symbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("enum ${errorSymbol.name}") {
             errors.forEach { errorVariant ->
@@ -121,7 +130,7 @@ open class ServerOperationErrorGenerator(
      */
     private fun RustWriter.delegateToVariants(
         errors: List<StructureShape>,
-        symbol: RuntimeType,
+        symbol: Symbol,
         writable: Writable,
     ) {
         rustBlock("match &self") {

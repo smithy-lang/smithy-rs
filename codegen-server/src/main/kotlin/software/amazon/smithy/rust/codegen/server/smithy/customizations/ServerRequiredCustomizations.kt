@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersi
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
@@ -35,6 +36,8 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
-        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
+        rustCrate.withModule(ServerRustModule.Types) {
+            pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
+        }
     }
 }

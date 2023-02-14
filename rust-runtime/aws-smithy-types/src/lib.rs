@@ -5,6 +5,7 @@
 
 //! Protocol-agnostic types for smithy-rs.
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
@@ -25,12 +26,18 @@ pub mod retry;
 pub mod timeout;
 
 pub use crate::date_time::DateTime;
-pub use error::Error;
+
+// TODO(deprecated): Remove deprecated re-export
+/// Use [error::ErrorMetadata] instead.
+#[deprecated(
+    note = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`"
+)]
+pub use error::ErrorMetadata as Error;
 
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
 }

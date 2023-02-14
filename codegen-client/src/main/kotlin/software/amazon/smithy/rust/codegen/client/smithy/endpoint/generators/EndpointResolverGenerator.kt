@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Expre
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.comment
@@ -202,7 +203,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
         return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
-            allowLintsForResolver.map { Attribute.Custom("allow($it)") }.map { it.render(this) }
+            Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
                 pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
@@ -220,7 +221,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
     private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) = writable {
         endpointRuleSet.parameters.toList().forEach {
-            Attribute.AllowUnused.render(this)
+            Attribute.AllowUnusedVariables.render(this)
             rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
         }
         generateRulesList(endpointRuleSet.rules)(this)
@@ -233,7 +234,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         }
         if (!isExhaustive(rules.last())) {
             // it's hard to figure out if these are always needed or not
-            Attribute.Custom("allow(unreachable_code)").render(this)
+            Attribute.AllowUnreachableCode.render(this)
             rustTemplate(
                 """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
                 *codegenScope,
@@ -290,7 +291,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                     fn.type() is Type.Option ||
                         // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
                         (fn as Function).name == "substring" -> {
-                        Attribute.AllowUnused.render(this)
+                        Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",
                             "target" to target,

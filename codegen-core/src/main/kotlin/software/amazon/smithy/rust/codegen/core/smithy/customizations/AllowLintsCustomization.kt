@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -32,7 +34,7 @@ private val allowedClippyLints = listOf(
     "should_implement_trait",
 
     // Protocol tests use silly names like `baz`, don't flag that.
-    // TODO(msrv_upgrade): switch
+    // TODO(msrv_upgrade): switch upon MSRV upgrade to Rust 1.65
     "blacklisted_name",
     // "disallowed_names",
 
@@ -46,11 +48,10 @@ private val allowedClippyLints = listOf(
     "needless_return",
 
     // For backwards compatibility, we often don't derive Eq
-    // TODO(msrv_upgrade): enable
-    // "derive_partial_eq_without_eq",
+    "derive_partial_eq_without_eq",
 
     // Keeping errors small in a backwards compatible way is challenging
-    // TODO(msrv_upgrade): enable
+    // TODO(msrv_upgrade): uncomment upon MSRV upgrade to Rust 1.65
     // "result_large_err",
 )
 
@@ -68,13 +69,13 @@ class AllowLintsCustomization(
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {
             rustcLints.forEach {
-                Attribute.Custom("allow($it)", container = true).render(this)
+                Attribute(allow(it)).render(this, AttributeKind.Inner)
             }
             clippyLints.forEach {
-                Attribute.Custom("allow(clippy::$it)", container = true).render(this)
+                Attribute(allow("clippy::$it")).render(this, AttributeKind.Inner)
             }
             rustdocLints.forEach {
-                Attribute.Custom("allow(rustdoc::$it)", container = true).render(this)
+                Attribute(allow("rustdoc::$it")).render(this, AttributeKind.Inner)
             }
             // add a newline at the end
             this.write("")

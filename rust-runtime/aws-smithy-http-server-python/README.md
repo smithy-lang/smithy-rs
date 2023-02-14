@@ -69,7 +69,7 @@ ENTRYPOINT [ "/var/lang/bin/python3.8" ]
 CMD [ "/app.py" ]
 ```
 
-See [https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base) 
+See [https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base)
 for more details on building your custom image.
 
 <!-- anchor_start:footer -->

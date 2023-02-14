@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -108,8 +108,8 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "stringVariant": "ok!" }""")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.moduleFor(union) {
             UnionGenerator(model, symbolProvider, this, union).render()
             unitTest("generate_unions") {
                 withBlock("let result = ", ";") {
@@ -128,8 +128,8 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_struct_builders") {
                 withBlock("let result = ", ";") {
@@ -162,8 +162,8 @@ class InstantiatorTest {
             """,
         )
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.moduleFor(structure) {
             structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_builders_for_boxed_structs") {
                 withBlock("let result = ", ";") {
@@ -192,7 +192,7 @@ class InstantiatorTest {
             Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        project.lib {
             unitTest("generate_lists") {
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#MyList"), data)
@@ -213,8 +213,8 @@ class InstantiatorTest {
             ::enumFromStringFn,
         )
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.lib {
             unitTest("generate_sparse_lists") {
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#MySparseList"), data)
@@ -229,12 +229,12 @@ class InstantiatorTest {
     fun `generate maps of maps`() {
         val data = Node.parse(
             """
-        {
-            "k1": { "map": {} },
-            "k2": { "map": { "k3": {} } },
-            "k3": { }
-        }
-        """,
+            {
+                "k1": { "map": {} },
+                "k2": { "map": { "k3": {} } },
+                "k3": { }
+            }
+            """,
         )
         val sut = Instantiator(
             symbolProvider,
@@ -245,8 +245,8 @@ class InstantiatorTest {
         )
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.moduleFor(inner) {
             inner.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_maps_of_maps") {
                 withBlock("let result = ", ";") {
@@ -254,11 +254,11 @@ class InstantiatorTest {
                 }
                 rust(
                     """
-                assert_eq!(result.len(), 3);
-                assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
-                assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
-                assert_eq!(result.get("k3").unwrap().map, None);
-                """,
+                    assert_eq!(result.len(), 3);
+                    assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
+                    assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
+                    assert_eq!(result.get("k3").unwrap().map, None);
+                    """,
                 )
             }
         }
@@ -277,8 +277,8 @@ class InstantiatorTest {
             ::enumFromStringFn,
         )
 
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
+        val project = TestWorkspace.testProject(model)
+        project.testModule {
             unitTest("blob_inputs_are_binary_data") {
                 withBlock("let blob = ", ";") {
                     sut.render(

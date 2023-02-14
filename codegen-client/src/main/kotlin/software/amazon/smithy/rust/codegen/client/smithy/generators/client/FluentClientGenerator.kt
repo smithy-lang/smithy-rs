@@ -15,6 +15,8 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -42,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -166,7 +167,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+                val operationErr = symbolProvider.symbolForOperationError(operation)
 
                 val inputFieldsBody =
                     generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
@@ -230,7 +231,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+                // Filter out any derive that isn't Clone. Then add a Debug derive
+                val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -240,7 +242,7 @@ class FluentClientGenerator(
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 deprecatedShape(operation)
-                baseDerives.copy(derives = derives).render(this)
+                Attribute(derive(derives.toSet())).render(this)
                 rustTemplate(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {
@@ -260,7 +262,7 @@ class FluentClientGenerator(
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(symbolProvider)
+                    val errorType = symbolProvider.symbolForOperationError(operation)
 
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
@@ -318,7 +320,7 @@ class FluentClientGenerator(
                             """
                             /// Create a paginator for this request
                             ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
                             pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
                                 #{Paginator}::new(self.handle, self.inner)
                             }
@@ -330,7 +332,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(symbolProvider),
+                            symbolProvider.symbolForOperationError(operation),
                         ),
                     )
                     input.members().forEach { member ->

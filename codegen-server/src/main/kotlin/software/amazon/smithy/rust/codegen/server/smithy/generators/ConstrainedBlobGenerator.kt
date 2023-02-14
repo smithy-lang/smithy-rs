@@ -8,8 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -18,8 +16,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -33,6 +33,7 @@ class ConstrainedBlobGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: BlobShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -45,9 +46,10 @@ class ConstrainedBlobGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
-    private val constraintsInfo: List<TraitInfo> = listOf(LengthTrait::class.java)
+    private val blobConstraintsInfo: List<BlobLength> = listOf(LengthTrait::class.java)
         .mapNotNull { shape.getTrait(it).orNull() }
-        .map { BlobLength(it).toTraitInfo() }
+        .map { BlobLength(it) }
+    private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
@@ -55,37 +57,31 @@ class ConstrainedBlobGenerator(
         val inner = RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
-            visibility = constrainedTypeVisibility,
-        )
-
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
-        constrainedTypeMetadata.render(writer)
+        val metadata = symbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
-        }
-        writer.rust(
-            """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
-                    &self.0
-                }
-
+        writer.rustBlock("impl $name") {
+            if (metadata.visibility == Visibility.PUBLIC) {
+                writer.rust(
+                    """
+                    /// ${rustDocsInnerMethod(inner)}
+                    pub fn inner(&self) -> &$inner {
+                        &self.0
+                    }
+                    """,
+                )
+            }
+            writer.rust(
+                """
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }""",
-        )
+                """,
+            )
+        }
 
         writer.renderTryFrom(inner, name, constraintViolation, constraintsInfo)
 
@@ -134,21 +130,16 @@ class ConstrainedBlobGenerator(
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
-                    pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                        match self {
-                            #{ValidationExceptionFields:W}
-                        }
-                    }
+                    #{BlobShapeConstraintViolationImplBlock}
                 }
                 """,
-                "String" to RuntimeType.String,
-                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+                "BlobShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.blobShapeConstraintViolationImplBlock(blobConstraintsInfo),
             )
         }
     }
 }
 
-private data class BlobLength(val lengthTrait: LengthTrait) {
+data class BlobLength(val lengthTrait: LengthTrait) {
     fun toTraitInfo(): TraitInfo = TraitInfo(
         { rust("Self::check_length(&value)?;") },
         {

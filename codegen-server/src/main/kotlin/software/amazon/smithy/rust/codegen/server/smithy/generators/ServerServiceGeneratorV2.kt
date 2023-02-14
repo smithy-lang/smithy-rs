@@ -6,7 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -15,18 +18,20 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 class ServerServiceGeneratorV2(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -199,6 +204,7 @@ class ServerServiceGeneratorV2(
                 )
             }
         }
+
         rustTemplate(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
@@ -219,10 +225,13 @@ class ServerServiceGeneratorV2(
                         });
                     }
                     let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+
+                    #{PatternInitializations:W}
+
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
-                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 })
             }
             """,
@@ -230,7 +239,32 @@ class ServerServiceGeneratorV2(
             "NullabilityChecks" to nullabilityChecks,
             "RoutesArrayElements" to routesArrayElements,
             "SmithyHttpServer" to smithyHttpServer,
+            "PatternInitializations" to patternInitializations(),
         )
+    }
+
+    /**
+     * Renders `PatternString::compile_regex()` function calls for every
+     * `@pattern`-constrained string shape in the service closure.
+     */
+    @Suppress("DEPRECATION")
+    private fun patternInitializations(): Writable {
+        val patterns = Walker(model).walkShapes(service)
+            .filter { shape -> shape is StringShape && shape.hasTrait<PatternTrait>() && !shape.hasTrait<software.amazon.smithy.model.traits.EnumTrait>() }
+            .map { shape -> codegenContext.constrainedShapeSymbolProvider.toSymbol(shape) }
+            .map { symbol ->
+                writable {
+                    rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
+                }
+            }
+
+        patterns.letIf(patterns.isNotEmpty()) {
+            val docs = listOf(writable { rust("// Eagerly initialize regexes for `@pattern` strings.") })
+
+            docs + patterns
+        }
+
+        return patterns.join("")
     }
 
     private fun buildUncheckedMethod(): Writable = writable {
@@ -272,7 +306,7 @@ class ServerServiceGeneratorV2(
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
                 $serviceName {
-                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 }
             }
             """,
@@ -353,7 +387,7 @@ class ServerServiceGeneratorV2(
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
-                router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
+                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
             impl $serviceName<()> {
@@ -425,7 +459,7 @@ class ServerServiceGeneratorV2(
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routers::RoutingFuture<S, B>;
+                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
                     self.router.poll_ready(cx)
@@ -506,8 +540,8 @@ class ServerServiceGeneratorV2(
  */
 fun handlerImports(crateName: String, operations: Collection<OperationShape>, commentToken: String = "///") = writable {
     val hasErrors = operations.any { it.errors.isNotEmpty() }
-    val errorImport = if (hasErrors) ", ${ErrorsModule.name}" else ""
+    val errorImport = if (hasErrors) ", ${ErrorModule.name}" else ""
     if (operations.isNotEmpty()) {
-        rust("$commentToken use $crateName::{${InputsModule.name}, ${OutputsModule.name}$errorImport};")
+        rust("$commentToken use $crateName::{${InputModule.name}, ${OutputModule.name}$errorImport};")
     }
 }

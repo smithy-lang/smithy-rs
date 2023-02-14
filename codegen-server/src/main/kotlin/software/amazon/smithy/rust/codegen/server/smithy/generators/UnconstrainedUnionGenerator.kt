@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -134,7 +135,7 @@ class UnconstrainedUnionGenerator(
         modelsModuleWriter.withInlineModule(
             constraintViolationSymbol.module(),
         ) {
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
+            Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
             rustBlock("pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }

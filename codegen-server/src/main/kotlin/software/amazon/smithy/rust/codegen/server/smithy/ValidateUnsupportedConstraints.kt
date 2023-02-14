@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.EnumShape
@@ -25,9 +24,9 @@ import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -39,7 +38,7 @@ private sealed class UnsupportedConstraintMessageKind {
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
         fun buildMessage(intro: String, willSupport: Boolean, trackingIssue: String, canBeIgnored: Boolean = true): String {
             var msg = """
-                    $intro
+                $intro
                     This is not supported in the smithy-rs server SDK."""
             if (willSupport) {
                 msg += """
@@ -48,7 +47,7 @@ private sealed class UnsupportedConstraintMessageKind {
             if (canBeIgnored) {
                 msg += """
                     If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints`
-                    inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`."""
+                    inside the `runtimeConfig.codegen` JSON object in your `smithy-build.json` to `true`."""
             }
             return msg.trimIndent().replace("\n", " ")
         }
@@ -135,15 +134,19 @@ data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMess
 
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
+/**
+ * Validate that all constrained operations have the shape [validationExceptionShapeId] shape attached to their errors.
+ */
 fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     model: Model,
     service: ServiceShape,
+    validationExceptionShapeId: ShapeId,
 ): ValidationResult {
     // Traverse the model and error out if an operation uses constrained input, but it does not have
     // `ValidationException` attached in `errors`. https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
-    val walker = Walker(model)
+    val walker = DirectedWalker(model)
     val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
         .filterIsInstance<OperationShape>()
         .asSequence()
@@ -152,7 +155,7 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
             walker.walkShapes(operationShape.inputShape(model))
                 .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
         }
-        .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }
+        .filter { !it.errors.contains(validationExceptionShapeId) }
         .map { OperationWithConstrainedInputWithoutValidationException(it) }
         .toSet()
 
@@ -161,18 +164,18 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
             LogMessage(
                 Level.SEVERE,
                 """
-                Operation ${it.shape.id} takes in input that is constrained 
-                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a 
+                Operation ${it.shape.id} takes in input that is constrained
+                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
                 validation exception. You must model this behavior in the operation shape in your model file.
-                """.trimIndent().replace("\n", "") +
+                """.trimIndent().replace("\n", " ") +
                     """
 
                     ```smithy
-                    use smithy.framework#ValidationException
+                    use $validationExceptionShapeId
 
                     operation ${it.shape.id.name} {
                         ...
-                        errors: [..., ValidationException] // <-- Add this.
+                        errors: [..., ${validationExceptionShapeId.name}] // <-- Add this.
                     }
                     ```
                     """.trimIndent(),
@@ -188,7 +191,7 @@ fun validateUnsupportedConstraints(
     codegenConfig: ServerCodegenConfig,
 ): ValidationResult {
     // Traverse the model and error out if:
-    val walker = Walker(model)
+    val walker = DirectedWalker(model)
 
     // 1. Constraint traits on member shapes are used. [Constraint trait precedence] has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
@@ -242,26 +245,11 @@ fun validateUnsupportedConstraints(
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
 
-    // 5. UniqueItems trait on any shape is used. It has not been implemented yet.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    val unsupportedUniqueItemsTraitOnShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
-        .map { (shape, uniqueItemsTrait) ->
-            UnsupportedUniqueItemsTraitOnShape(
-                shape,
-                uniqueItemsTrait as UniqueItemsTrait,
-            )
-        }
-        .toSet()
-
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
+            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }

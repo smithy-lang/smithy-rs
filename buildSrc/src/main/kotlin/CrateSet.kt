@@ -21,6 +21,7 @@ object CrateSet {
         "aws-smithy-checksums",
         "aws-smithy-eventstream",
         "aws-smithy-http",
+        "aws-smithy-http-auth",
         "aws-smithy-http-tower",
         "aws-smithy-json",
         "aws-smithy-protocol-test",

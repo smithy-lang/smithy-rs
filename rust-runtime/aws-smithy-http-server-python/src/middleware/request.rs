@@ -17,7 +17,6 @@ use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Request] object.
 #[pyclass(name = "Request")]
-#[pyo3(text_signature = "(request)")]
 #[derive(Debug)]
 pub struct PyRequest {
     parts: Option<Parts>,
@@ -56,6 +55,8 @@ impl PyRequest {
 #[pymethods]
 impl PyRequest {
     /// Return the HTTP method of this request.
+    ///
+    /// :type str:
     #[getter]
     fn method(&self) -> PyResult<String> {
         self.parts
@@ -65,6 +66,8 @@ impl PyRequest {
     }
 
     /// Return the URI of this request.
+    ///
+    /// :type str:
     #[getter]
     fn uri(&self) -> PyResult<String> {
         self.parts
@@ -74,6 +77,8 @@ impl PyRequest {
     }
 
     /// Return the HTTP version of this request.
+    ///
+    /// :type str:
     #[getter]
     fn version(&self) -> PyResult<String> {
         self.parts
@@ -83,6 +88,8 @@ impl PyRequest {
     }
 
     /// Return the HTTP headers of this request.
+    ///
+    /// :type typing.MutableMapping[str, str]:
     #[getter]
     fn headers(&self) -> PyHeaderMap {
         self.headers.clone()
@@ -90,6 +97,8 @@ impl PyRequest {
 
     /// Return the HTTP body of this request.
     /// Note that this is a costly operation because the whole request body is cloned.
+    ///
+    /// :type typing.Awaitable[bytes]:
     #[getter]
     fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let body = self.body.clone();

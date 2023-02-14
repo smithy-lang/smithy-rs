@@ -1,0 +1,45 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow runs CI for pull requests from forks, which can't make use of secrets.
+
+name: CI (from fork)
+on:
+  pull_request:
+
+# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
+concurrency:
+  group: ci-forks-yaml-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # This job detects if the PR made changes to build tools. If it did, then it builds a new
+  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # it uploads the image as a build artifact for other jobs to download and use.
+  acquire-base-image:
+    name: Acquire Base Image
+    if: ${{ github.event.pull_request.head.repo.full_name != 'awslabs/smithy-rs' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+    - name: Acquire base image
+      id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  # Run shared CI after the Docker build image has either been rebuilt or found in ECR
+  ci:
+    needs: acquire-base-image
+    if: ${{ github.event.pull_request.head.repo.full_name != 'awslabs/smithy-rs' }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: true

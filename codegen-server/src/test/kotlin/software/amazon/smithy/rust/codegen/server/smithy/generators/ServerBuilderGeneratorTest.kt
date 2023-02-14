@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerBuilderGeneratorTest {
@@ -37,10 +37,10 @@ class ServerBuilderGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StructureShape>("test#Credentials")
-        StructureGenerator(model, codegenContext.symbolProvider, writer, shape).render(CodegenTarget.SERVER)
-        val builderGenerator = ServerBuilderGenerator(codegenContext, shape)
+        StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()).render()
+        val builderGenerator = ServerBuilderGenerator(codegenContext, shape, SmithyValidationExceptionConversionGenerator(codegenContext))
         builderGenerator.render(writer)
-        writer.implBlock(shape, codegenContext.symbolProvider) {
+        writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
             builderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(

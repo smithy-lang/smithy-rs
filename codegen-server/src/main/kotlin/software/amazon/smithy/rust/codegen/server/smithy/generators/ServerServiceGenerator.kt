@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -17,18 +15,18 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
  * ServerServiceGenerator
@@ -41,11 +39,11 @@ open class ServerServiceGenerator(
     private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     val protocol: ServerProtocol,
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
-    private val serviceName = codegenContext.serviceShape.id.name.toString()
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun documentation(writer: RustWriter) {
         val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
@@ -71,7 +69,7 @@ open class ServerServiceGenerator(
             //!
             //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`](#{Tower}::Service)
             //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](#{SmithyHttpServer}::routing::LambdaHandler).
-            //! The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
+            //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
             //! ###### Running on Hyper
@@ -85,7 +83,7 @@ open class ServerServiceGenerator(
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
-            //! hyper::Server::bind(&bind).serve(server).await.unwrap();
+            //! #{Hyper}::Server::bind(&bind).serve(server).await.unwrap();
             //! ## }
             //! ```
             //!
@@ -118,7 +116,7 @@ open class ServerServiceGenerator(
             //! ```rust
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
-            //! ## use hyper::Body;
+            //! ## use #{Hyper}::Body;
             //! use #{SmithyHttpServer}::plugin::PluginPipeline;
             //! use $crateName::{$serviceName, $builderName};
             //!
@@ -193,7 +191,7 @@ open class ServerServiceGenerator(
             //! ## use std::net::SocketAddr;
             //! use $crateName::$serviceName;
             //!
-            //! ##[tokio::main]
+            //! ##[#{Tokio}::main]
             //! pub async fn main() {
             //!    let app = $serviceName::builder_without_plugins()
             ${builderFieldNames.values.joinToString("\n") { "//!        .$it($it)" }}
@@ -202,7 +200,7 @@ open class ServerServiceGenerator(
             //!
             //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!        .expect("unable to parse the server bind address and port");
-            //!    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+            //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
             //!    ## let server = async { Ok::<_, ()>(()) };
             //!
             //!    // Run your service!
@@ -228,6 +226,8 @@ open class ServerServiceGenerator(
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+            "Hyper" to ServerCargoDependency.HyperDev.toType(),
+            "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
         )
     }
@@ -249,34 +249,10 @@ open class ServerServiceGenerator(
 
         for (operation in operations) {
             if (operation.errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) {
+                rustCrate.withModule(ErrorModule) {
                     renderCombinedErrors(this, operation)
                 }
             }
-        }
-        rustCrate.withModule(RustModule.private("operation_handler", "Operation handlers definition and implementation.")) {
-            renderOperationHandler(this, operations)
-        }
-        rustCrate.withModule(
-            RustModule.LeafModule(
-                "operation_registry",
-                RustMetadata(
-                    visibility = Visibility.PUBLIC,
-                    additionalAttributes = listOf(
-                        Attribute.Deprecated("0.52.0", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
-                    ),
-                ),
-                """
-                Contains the [`operation_registry::OperationRegistry`], a place where
-                you can register your service's operation implementations.
-
-                ## Deprecation
-
-                This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_with_plugins`] or [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_without_plugins`] instead.
-                """,
-            ),
-        ) {
-            renderOperationRegistry(this, operations)
         }
 
         rustCrate.withModule(
@@ -295,6 +271,17 @@ open class ServerServiceGenerator(
         }
 
         renderExtras(operations)
+
+        rustCrate.withModule(
+            RustModule.public(
+                "server",
+                """
+                Contains the types that are re-exported from the `aws-smithy-http-server` create.
+                """,
+            ),
+        ) {
+            renderServerReExports(this)
+        }
     }
 
     // Render any extra section needed by subclasses of `ServerServiceGenerator`.
@@ -305,13 +292,8 @@ open class ServerServiceGenerator(
         /* Subclasses can override */
     }
 
-    // Render operations handler.
-    open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationHandlerGenerator(codegenContext, protocol, operations).render(writer)
-    }
-
-    // Render operations registry.
-    private fun renderOperationRegistry(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationRegistryGenerator(codegenContext, protocol, operations).render(writer)
+    // Render `server` crate, re-exporting types.
+    private fun renderServerReExports(writer: RustWriter) {
+        ServerRuntimeTypesReExportsGenerator(codegenContext).render(writer)
     }
 }

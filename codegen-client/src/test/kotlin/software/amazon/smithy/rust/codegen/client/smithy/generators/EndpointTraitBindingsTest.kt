@@ -11,15 +11,15 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -50,10 +50,10 @@ internal class EndpointTraitBindingsTest {
             }
         """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
-        val sym = testSymbolProvider(model)
+        val symbolProvider = testSymbolProvider(model)
         val endpointBindingGenerator = EndpointTraitBindings(
             model,
-            sym,
+            symbolProvider,
             TestRuntimeConfig,
             operationShape,
             operationShape.expectTrait(EndpointTrait::class.java),
@@ -67,7 +67,7 @@ internal class EndpointTraitBindingsTest {
                 }
                 """,
             )
-            implBlock(model.lookup("test#GetStatusInput"), sym) {
+            implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
                 rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     RuntimeType.smithyHttp(TestRuntimeConfig),
@@ -140,7 +140,7 @@ internal class EndpointTraitBindingsTest {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("test_endpoint_prefix") {
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn test_endpoint_prefix() {
