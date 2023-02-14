@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -100,12 +101,13 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderUnmarshaller(unmarshallerType: RuntimeType, unionSymbol: Symbol) {
         val unmarshallerTypeName = unmarshallerType.name
-        rust(
+        rustTemplate(
             """
             ##[non_exhaustive]
             ##[derive(Debug)]
             pub struct $unmarshallerTypeName;
 
+            #{AllowClippyNewWithoutDefault}
             impl $unmarshallerTypeName {
                 /// Creates a new $unmarshallerTypeName
                 pub fn new() -> Self {
@@ -113,6 +115,7 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             """,
+            "AllowClippyNewWithoutDefault" to writable { Attribute.AllowClippyNewWithoutDefault.render(this) },
         )
 
         rustBlockTemplate(

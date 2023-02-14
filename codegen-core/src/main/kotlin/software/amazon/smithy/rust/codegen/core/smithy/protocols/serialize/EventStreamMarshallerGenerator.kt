@@ -81,8 +81,8 @@ open class EventStreamMarshallerGenerator(
             ##[derive(Debug)]
             pub struct ${marshallerType.name};
 
+            #{AllowClippyNewWithoutDefault:W}
             impl ${marshallerType.name} {
-                #{AllowClippyNewWithoutDefault:W}
                 pub fn new() -> Self {
                     ${marshallerType.name}
                 }
