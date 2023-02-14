@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 14th, 2023
+===================
+**Breaking Changes:**
+- ⚠🎉 (all, [smithy-rs#2222](https://github.com/awslabs/smithy-rs/issues/2222), @Nugine) Upgrade Rust MSRV to 1.63.0
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2349](https://github.com/awslabs/smithy-rs/issues/2349)) Fix inconsistent casing in services re-export.
+- 🐛 (client, [aws-sdk-rust#736](https://github.com/awslabs/aws-sdk-rust/issues/736)) Fix issue where clients using native-tls connector were prevented from making HTTPS requests.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Nugine ([smithy-rs#2222](https://github.com/awslabs/smithy-rs/issues/2222))
+
 February 6th, 2023
 ==================
 **Breaking Changes:**
