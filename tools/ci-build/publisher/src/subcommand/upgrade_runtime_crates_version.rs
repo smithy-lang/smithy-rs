@@ -28,7 +28,7 @@ pub async fn subcommand_upgrade_runtime_crates_version(
     let fs = Fs::Real;
     let gradle_properties = read_gradle_properties(fs, &args.gradle_properties_path).await?;
     let version_regex =
-        Regex::new(r"(?P<field>smithy\.rs\.runtime\.crate\.version=)(?P<version>\d+\.\d+\.\d+-.*)")
+        Regex::new(r"(?P<field>smithy\.rs\.runtime\.crate\.version=)(?P<version>\d+\.\d+\.\d+.*)")
             .unwrap();
     let current_version = version_regex.captures(&gradle_properties).ok_or_else(|| {
         anyhow!(
