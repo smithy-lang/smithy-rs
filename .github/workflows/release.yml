@@ -214,7 +214,7 @@ jobs:
             github,
             isDryRun: ${{ inputs.dry_run }},
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
-            releaseCommitish: ${{ steps.push-changelog.outputs.commit_sha }}
+            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
           });
     - name: Publish to crates.io
       shell: bash
