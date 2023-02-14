@@ -7,8 +7,9 @@ package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
@@ -45,15 +46,15 @@ internal class ApiKeyAuthDecoratorTest {
         val testDir = clientIntegrationTest(
             model,
             // just run integration tests
-            command = { "cargo test --test *".runWithWarnings(it) },
+            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_config_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn api_key_is_set() {
-                        use aws_smithy_types::auth::AuthApiKey;
+                        use aws_smithy_http_auth::api_key::AuthApiKey;
                         let api_key_value = "some-api-key";
                         let conf = $moduleName::Config::builder()
                             .api_key(AuthApiKey::new(api_key_value))

@@ -120,16 +120,16 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                 if (authDefinition.getIn() == HttpApiKeyAuthTrait.Location.QUERY) {
                     rustTemplate(
                         """
-                        let auth_definition = #{http_auth_definition}::new_with_query(
+                        let auth_definition = #{http_auth_definition}::query(
                             "$definitionName".to_owned(),
-                        ).expect("valid definition for api key auth");
+                        );
                         let name = auth_definition.name();
                         let mut query = #{query_writer}::new(${section.request}.http().uri());
                         query.insert(name, api_key);
                         *${section.request}.http_mut().uri_mut() = query.build_uri();
                         """,
                         "http_auth_definition" to
-                            RuntimeType.smithyTypes(runtimeConfig).resolve("auth::HttpAuthDefinition"),
+                            RuntimeType.smithyHttpAuth(runtimeConfig).resolve("definition::HttpAuthDefinition"),
                         "query_writer" to RuntimeType.smithyHttp(runtimeConfig).resolve("query_writer::QueryWriter"),
                     )
                 } else {
@@ -140,10 +140,10 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                         .orElse("None")
                     rustTemplate(
                         """
-                        let auth_definition = #{http_auth_definition}::new_with_header(
+                        let auth_definition = #{http_auth_definition}::header(
                             "$definitionName".to_owned(),
                             $definitionScheme,
-                        ).expect("valid definition for api key auth");
+                        );
                         let name = auth_definition.name();
                         let value = match auth_definition.scheme() {
                             Some(value) => format!("{value} {api_key}"),
@@ -158,7 +158,7 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                             );
                         """,
                         "http_auth_definition" to
-                            RuntimeType.smithyTypes(runtimeConfig).resolve("auth::HttpAuthDefinition"),
+                            RuntimeType.smithyHttpAuth(runtimeConfig).resolve("definition::HttpAuthDefinition"),
                         "http_header" to RuntimeType.Http.resolve("header"),
                     )
                 }
@@ -217,4 +217,4 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
         }
 }
 
-fun apiKey(runtimeConfig: RuntimeConfig) = RuntimeType.smithyTypes(runtimeConfig).resolve("auth::AuthApiKey")
+fun apiKey(runtimeConfig: RuntimeConfig) = RuntimeType.smithyHttpAuth(runtimeConfig).resolve("api_key::AuthApiKey")
