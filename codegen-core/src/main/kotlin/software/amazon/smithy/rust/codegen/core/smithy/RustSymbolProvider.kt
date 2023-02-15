@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
  * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
  */
 interface RustSymbolProvider : SymbolProvider, ModuleProvider {
-    fun config(): SymbolVisitorConfig
+    fun config(): RustSymbolProviderConfig
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 
     override fun moduleForShape(shape: Shape): RustModule.LeafModule = config().moduleProvider.moduleForShape(shape)
@@ -49,7 +49,10 @@ interface ModuleProvider {
     fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule
 }
 
-data class SymbolVisitorConfig(
+/**
+ * Configuration for symbol providers.
+ */
+data class RustSymbolProviderConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val nullabilityCheckMode: NullableIndex.CheckMode,
@@ -60,7 +63,7 @@ data class SymbolVisitorConfig(
  * Default delegator to enable easily decorating another symbol provider.
  */
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
-    override fun config(): SymbolVisitorConfig = base.config()
+    override fun config(): RustSymbolProviderConfig = base.config()
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
     override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
     override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)

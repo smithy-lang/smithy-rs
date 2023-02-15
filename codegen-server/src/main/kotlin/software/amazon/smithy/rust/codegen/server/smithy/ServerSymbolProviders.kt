@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 
 /**
  * Just a handy class to centralize initialization all the symbol providers required by the server code generators, to
@@ -26,24 +26,24 @@ class ServerSymbolProviders private constructor(
         fun from(
             model: Model,
             service: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-            baseSymbolProviderFactory: (model: Model, service: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig, publicConstrainedTypes: Boolean) -> RustSymbolProvider,
+            baseSymbolProviderFactory: (model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean) -> RustSymbolProvider,
         ): ServerSymbolProviders {
-            val baseSymbolProvider = baseSymbolProviderFactory(model, service, symbolVisitorConfig, publicConstrainedTypes)
+            val baseSymbolProvider = baseSymbolProviderFactory(model, service, rustSymbolProviderConfig, publicConstrainedTypes)
             return ServerSymbolProviders(
                 symbolProvider = baseSymbolProvider,
                 constrainedShapeSymbolProvider = baseSymbolProviderFactory(
                     model,
                     service,
-                    symbolVisitorConfig,
+                    rustSymbolProviderConfig,
                     true,
                 ),
                 unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
                     baseSymbolProviderFactory(
                         model,
                         service,
-                        symbolVisitorConfig,
+                        rustSymbolProviderConfig,
                         false,
                     ),
                     model, publicConstrainedTypes, service,

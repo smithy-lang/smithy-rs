@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -103,7 +103,7 @@ open class ServerCodegenVisitor(
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
     init {
-        val symbolVisitorConfig = SymbolVisitorConfig(
+        val rustSymbolProviderConfig = RustSymbolProviderConfig(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = false,
             nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
@@ -127,7 +127,7 @@ open class ServerCodegenVisitor(
         val serverSymbolProviders = ServerSymbolProviders.from(
             model,
             service,
-            symbolVisitorConfig,
+            rustSymbolProviderConfig,
             settings.codegenConfig.publicConstrainedTypes,
             RustServerCodegenPlugin::baseSymbolProvider,
         )

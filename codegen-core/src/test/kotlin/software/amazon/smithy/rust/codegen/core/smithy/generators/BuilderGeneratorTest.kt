@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -66,7 +66,7 @@ internal class BuilderGeneratorTest {
         val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
         val provider =
             object : RustSymbolProvider {
-                override fun config(): SymbolVisitorConfig {
+                override fun config(): RustSymbolProviderConfig {
                     return baseProvider.config()
                 }
 

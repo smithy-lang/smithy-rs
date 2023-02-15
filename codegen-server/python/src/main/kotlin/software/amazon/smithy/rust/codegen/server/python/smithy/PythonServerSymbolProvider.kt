@@ -22,9 +22,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 class PythonServerSymbolVisitor(
     private val model: Model,
     serviceShape: ServiceShape?,
-    config: SymbolVisitorConfig,
+    config: RustSymbolProviderConfig,
 ) : SymbolVisitor(model, serviceShape, config) {
     private val runtimeConfig = config().runtimeConfig
 
