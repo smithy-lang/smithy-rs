@@ -130,7 +130,8 @@ private data class UnsupportedUniqueItemsTraitOnShape(val shape: Shape, val uniq
     UnsupportedConstraintMessageKind()
 
 data class LogMessage(val level: Level, val message: String)
-data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
+data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
+    Throwable(message = messages.joinToString("\n") { it.message })
 
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
