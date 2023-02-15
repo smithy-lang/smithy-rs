@@ -47,13 +47,12 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
-    RustModule.new(
+    new(
         "event_stream_serde",
         visibility = Visibility.PUBLIC,
         documentation = "Event streams serialization and deserialization",
         inline = false,
         parent = RustModule.LibRs,
-        additionalAttributes = listOf(Attribute.AllowMissingDocs),
     )
 
 class EventStreamUnmarshallerGenerator(
