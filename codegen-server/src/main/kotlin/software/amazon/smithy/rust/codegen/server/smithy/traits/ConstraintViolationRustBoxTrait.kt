@@ -11,7 +11,8 @@ import software.amazon.smithy.model.traits.Trait
 
 /**
  * This shape is analogous to [software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait], but for the
- * constraint violation graph.
+ * constraint violation graph. The sets of shapes we tag are different, and they are interpreted by the code generator
+ * differently, so we need a separate tag.
  *
  * This is used to handle recursive constraint violations.
  * See [software.amazon.smithy.rust.codegen.server.smithy.transformers.RecursiveConstraintViolationBoxer].

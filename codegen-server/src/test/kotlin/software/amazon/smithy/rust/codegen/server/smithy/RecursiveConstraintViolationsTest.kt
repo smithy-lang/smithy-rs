@@ -96,7 +96,7 @@ internal class RecursiveConstraintViolationsTest {
                 attributeValue: ${unionPrefix}AttributeValue
             }
 
-            // Named `${unionPrefix}AttributeValue` to have reminiscenses of DynamoDB's famous `AttributeValue`.
+            // Named `${unionPrefix}AttributeValue` in honor of DynamoDB's famous `AttributeValue`.
             // https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/model/enum.AttributeValue.html
             union ${unionPrefix}AttributeValue {
                 set: SetAttribute
