@@ -16,8 +16,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  * For a dependency that is used in the client, or in both the client and the server, use [CargoDependency] directly.
  */
 object TsServerCargoDependency {
-    val Napi: CargoDependency = CargoDependency("napi", CratesIo("2.10"), features = setOf("tokio_rt", "napi4"))
-    val NapiDerive: CargoDependency = CargoDependency("napi-derive", CratesIo("2.10"))
+    val Napi: CargoDependency = CargoDependency("napi", CratesIo("2.11"), features = setOf("tokio_rt", "napi8"))
+    val NapiDerive: CargoDependency = CargoDependency("napi-derive", CratesIo("2.11"))
     val NapiBuild: CargoDependency = CargoDependency("napi-build", CratesIo("2.0"), DependencyScope.Build)
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))

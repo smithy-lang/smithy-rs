@@ -50,7 +50,7 @@ class TsServerOperationHandlerGenerator(
                 input: $input,
                 handlers: #{SmithyServer}::Extension<crate::js_server_application::Handlers>,
             ) -> std::result::Result<$output, $error> {
-                handlers.$fnName.call_async::<#{napi}::bindgen_prelude::Promise<$output>>(Ok(input)).await?.await.map_err(|e| e.into())
+                handlers.$fnName.call_async::<#{napi}::bindgen_prelude::Promise<$output>>(input).await?.await.map_err(|e| e.into())
             }
             """,
             *codegenScope,

@@ -76,7 +76,7 @@ class TsApplicationGenerator(
                 )
             }
         }
-        Attribute("""napi(object, js_name = "Handlers")""").render(writer)
+        Attribute("""napi(object)""").render(writer)
         writer.rustBlock("pub struct TsHandlers") {
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
