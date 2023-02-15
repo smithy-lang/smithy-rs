@@ -20,7 +20,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
@@ -48,8 +48,8 @@ class PythonServerCodegenVisitor(
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
-        val symbolVisitorConfig =
-            SymbolVisitorConfig(
+        val rustSymbolProviderConfig =
+            RustSymbolProviderConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
@@ -76,14 +76,14 @@ class PythonServerCodegenVisitor(
         fun baseSymbolProviderFactory(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             model,
             service,
-            symbolVisitorConfig,
+            rustSymbolProviderConfig,
             settings.codegenConfig.publicConstrainedTypes,
             ::baseSymbolProviderFactory,
         )

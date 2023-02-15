@@ -23,10 +23,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvide
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleAttachingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -73,8 +73,8 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
          * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
-        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig) =
+            SymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
@@ -87,6 +87,6 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 // Attach modules to the generated symbols
                 .let { ModuleAttachingSymbolProvider(it) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(it, symbolVisitorConfig.runtimeConfig, CodegenTarget.CLIENT) }
+                .let { EventStreamSymbolProvider(it, rustSymbolProviderConfig.runtimeConfig, CodegenTarget.CLIENT) }
     }
 }

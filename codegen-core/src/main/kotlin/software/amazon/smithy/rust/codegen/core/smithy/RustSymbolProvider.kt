@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
  */
 interface RustSymbolProvider : SymbolProvider {
     val model: Model
-    val config: SymbolVisitorConfig
+    val config: RustSymbolProviderConfig
 
     /** Returns the symbol for an operation error */
     fun symbolForOperationError(operation: OperationShape): Symbol
@@ -52,7 +52,7 @@ interface ModuleProvider {
     ): RustModule.LeafModule
 }
 
-data class SymbolVisitorConfig(
+data class RustSymbolProviderConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val nullabilityCheckMode: NullableIndex.CheckMode,
@@ -64,7 +64,7 @@ data class SymbolVisitorConfig(
  */
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
     override val model: Model get() = base.model
-    override val config: SymbolVisitorConfig get() = base.config
+    override val config: RustSymbolProviderConfig get() = base.config
 
     override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
 

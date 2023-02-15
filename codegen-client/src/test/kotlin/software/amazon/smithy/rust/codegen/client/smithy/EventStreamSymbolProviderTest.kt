@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.testutil.ClientTestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.testutil.ClientTestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
@@ -49,7 +49,7 @@ class EventStreamSymbolProviderTest {
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val provider = EventStreamSymbolProvider(
             ModuleAttachingSymbolProvider(
-                SymbolVisitor(model, ClientTestSymbolVisitorConfig, service),
+                SymbolVisitor(model, ClientTestRustSymbolProviderConfig, service),
             ),
             TestRuntimeConfig,
             CodegenTarget.CLIENT,
@@ -91,7 +91,7 @@ class EventStreamSymbolProviderTest {
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val provider = EventStreamSymbolProvider(
             ModuleAttachingSymbolProvider(
-                SymbolVisitor(model, ClientTestSymbolVisitorConfig, service),
+                SymbolVisitor(model, ClientTestRustSymbolProviderConfig, service),
             ),
             TestRuntimeConfig,
             CodegenTarget.CLIENT,

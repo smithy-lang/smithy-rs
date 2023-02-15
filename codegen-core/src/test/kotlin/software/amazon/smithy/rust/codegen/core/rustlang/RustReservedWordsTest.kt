@@ -14,12 +14,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 internal class RustReservedWordSymbolProviderTest {
     private class TestSymbolProvider(override val model: Model) :
-        WrappingSymbolProvider(SymbolVisitor(model, TestSymbolVisitorConfig, null))
+        WrappingSymbolProvider(SymbolVisitor(model, TestRustSymbolProviderConfig, null))
 
     @Test
     fun `member names are escaped`() {

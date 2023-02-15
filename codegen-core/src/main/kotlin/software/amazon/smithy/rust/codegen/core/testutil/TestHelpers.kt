@@ -29,8 +29,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -79,7 +79,7 @@ private object CodegenCoreTestModules {
     }
 }
 
-val TestSymbolVisitorConfig = SymbolVisitorConfig(
+val TestRustSymbolProviderConfig = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
@@ -120,7 +120,7 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 // Intentionally only visible to codegen-core since the other modules have their own symbol providers
 internal fun testSymbolProvider(model: Model): RustSymbolProvider = SymbolVisitor(
     model,
-    TestSymbolVisitorConfig,
+    TestRustSymbolProviderConfig,
     ServiceShape.builder().version("test").id("test#Service").build(),
 ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
     .let { RustReservedWordSymbolProvider(it) }

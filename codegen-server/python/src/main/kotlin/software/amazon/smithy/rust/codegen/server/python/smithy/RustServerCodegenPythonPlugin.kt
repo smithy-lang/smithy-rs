@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvide
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleAttachingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
@@ -71,12 +71,12 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
-            PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+            PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
@@ -95,6 +95,6 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // Attach modules to the generated symbols
                 .let { ModuleAttachingSymbolProvider(it) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(it, symbolVisitorConfig.runtimeConfig, CodegenTarget.SERVER) }
+                .let { EventStreamSymbolProvider(it, rustSymbolProviderConfig.runtimeConfig, CodegenTarget.SERVER) }
     }
 }

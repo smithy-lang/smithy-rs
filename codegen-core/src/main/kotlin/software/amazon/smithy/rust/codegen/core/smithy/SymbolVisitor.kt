@@ -184,7 +184,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  */
 open class SymbolVisitor(
     override val model: Model,
-    override val config: SymbolVisitorConfig,
+    override val config: RustSymbolProviderConfig,
     private val serviceShape: ServiceShape?,
 ) : RustSymbolProvider, ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)

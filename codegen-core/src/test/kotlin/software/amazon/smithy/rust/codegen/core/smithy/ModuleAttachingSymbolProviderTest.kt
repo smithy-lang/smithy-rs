@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -74,7 +74,7 @@ class ModuleAttachingSymbolProviderTest {
 
     val symbolProvider = EventStreamSymbolProvider(
         ModuleAttachingSymbolProvider(
-            SymbolVisitor(model, TestSymbolVisitorConfig, null),
+            SymbolVisitor(model, TestRustSymbolProviderConfig, null),
         ),
         TestRuntimeConfig,
         CodegenTarget.CLIENT,
