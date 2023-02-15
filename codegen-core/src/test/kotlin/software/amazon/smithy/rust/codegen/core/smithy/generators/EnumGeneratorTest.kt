@@ -14,6 +14,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -30,6 +31,12 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class EnumGeneratorTest {
+    private val rustReservedWordConfig = RustReservedWordConfig(
+        enumMemberMap = mapOf("Unknown" to "UnknownValue"),
+        structMemberMap = emptyMap(),
+        unionMemberMap = emptyMap(),
+    )
+
     @Nested
     inner class EnumMemberModelTests {
         private val testModel = """
@@ -47,7 +54,7 @@ class EnumGeneratorTest {
             ])
             string EnumWithUnknown
         """.asSmithyModel()
-        private val symbolProvider = testSymbolProvider(testModel)
+        private val symbolProvider = testSymbolProvider(testModel, rustReservedWordConfig = rustReservedWordConfig)
 
         private val enumTrait = testModel.lookup<StringShape>("test#EnumWithUnknown").expectTrait<EnumTrait>()
 
@@ -276,7 +283,7 @@ class EnumGeneratorTest {
             """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
-            val provider = testSymbolProvider(model)
+            val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
             val project = TestWorkspace.testProject(provider)
             project.moduleFor(shape) {
                 renderEnum(model, provider, shape)

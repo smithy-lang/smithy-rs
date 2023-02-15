@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.D
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerReservedWords
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
@@ -92,6 +93,6 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it, model, ServerReservedWords) }
     }
 }

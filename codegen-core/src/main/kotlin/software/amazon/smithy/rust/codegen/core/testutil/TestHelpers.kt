@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
@@ -113,12 +114,21 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 }
 
 // Intentionally only visible to codegen-core since the other modules have their own symbol providers
-internal fun testSymbolProvider(model: Model): RustSymbolProvider = SymbolVisitor(
+internal fun testSymbolProvider(
+    model: Model,
+    rustReservedWordConfig: RustReservedWordConfig? = null,
+): RustSymbolProvider = SymbolVisitor(
     model,
     ServiceShape.builder().version("test").id("test#Service").build(),
     TestSymbolVisitorConfig,
 ).let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(Attribute.NonExhaustive)) }
-    .let { RustReservedWordSymbolProvider(it, model) }
+    .let {
+        RustReservedWordSymbolProvider(
+            it,
+            model,
+            rustReservedWordConfig ?: RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap()),
+        )
+    }
 
 // Intentionally only visible to codegen-core since the other modules have their own contexts
 internal fun testCodegenContext(

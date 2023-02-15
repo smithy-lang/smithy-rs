@@ -17,13 +17,24 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
-    WrappingSymbolProvider(base) {
+data class RustReservedWordConfig(
+    /** Map of struct member names that should get renamed */
+    val structMemberMap: Map<String, String>,
+    /** Map of union member names that should get renamed */
+    val unionMemberMap: Map<String, String>,
+    /** Map of enum member names that should get renamed */
+    val enumMemberMap: Map<String, String>,
+)
+
+class RustReservedWordSymbolProvider(
+    private val base: RustSymbolProvider,
+    private val model: Model,
+    private val config: RustReservedWordConfig,
+) : WrappingSymbolProvider(base) {
     private val internal =
         ReservedWordSymbolProvider.builder().symbolProvider(base)
             .nameReservedWords(RustReservedWords)
@@ -35,34 +46,19 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
         val reservedWordReplacedName = internal.toMemberName(shape)
         val container = model.expectShape(shape.container)
         return when {
-            container is StructureShape -> when (baseName) {
-                "build" -> "build_value"
-                "builder" -> "builder_value"
-                "default" -> "default_value"
-                "send" -> "send_value"
-                // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
-                "make_operation" -> "make_operation_value"
-                "presigned" -> "presigned_value"
-                "customize" -> "customize_value"
-                // To avoid conflicts with the error metadata `meta` field
-                "meta" -> "meta_value"
-                else -> reservedWordReplacedName
+            container is StructureShape -> when (val mapped = config.structMemberMap[baseName]) {
+                null -> reservedWordReplacedName
+                else -> mapped
             }
 
-            container is UnionShape -> when (baseName) {
-                // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
-                // that represent union variants that have been added since this SDK was generated.
-                UnionGenerator.UnknownVariantName -> "${UnionGenerator.UnknownVariantName}Value"
-                "${UnionGenerator.UnknownVariantName}Value" -> "${UnionGenerator.UnknownVariantName}Value_"
-                else -> reservedWordReplacedName
+            container is UnionShape -> when (val mapped = config.unionMemberMap[baseName]) {
+                null -> reservedWordReplacedName
+                else -> mapped
             }
 
-            container is EnumShape || container.hasTrait<EnumTrait>() -> when (baseName) {
-                // Unknown is used as the name of the variant containing unexpected values
-                "Unknown" -> "UnknownValue"
-                // Real models won't end in `_` so it's safe to stop here
-                "UnknownValue" -> "UnknownValue_"
-                else -> reservedWordReplacedName
+            container is EnumShape || container.hasTrait<EnumTrait>() -> when (val mapped = config.enumMemberMap[baseName]) {
+                null -> reservedWordReplacedName
+                else -> mapped
             }
 
             else -> error("unexpected container: $container")

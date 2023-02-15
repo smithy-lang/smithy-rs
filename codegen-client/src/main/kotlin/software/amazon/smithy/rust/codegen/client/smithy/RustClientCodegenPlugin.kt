@@ -84,6 +84,6 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it, model, ClientReservedWords) }
     }
 }
