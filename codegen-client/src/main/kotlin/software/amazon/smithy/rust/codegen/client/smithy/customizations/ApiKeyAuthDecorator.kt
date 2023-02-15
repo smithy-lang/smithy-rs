@@ -171,7 +171,7 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
                         self
                     }
 
-                    /// Sets the api key that will be used by the client.
+                    /// Sets the API key that will be used by the client.
                     pub fn set_api_key(&mut self, api_key: Option<#{ApiKey}>) -> &mut Self {
                         self.api_key = api_key;
                         self
