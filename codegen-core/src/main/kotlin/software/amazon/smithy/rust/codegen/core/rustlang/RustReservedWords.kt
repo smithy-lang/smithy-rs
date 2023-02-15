@@ -23,7 +23,10 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     private val internal =
-        ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
+        ReservedWordSymbolProvider.builder().symbolProvider(base)
+            .nameReservedWords(RustReservedWords)
+            .memberReservedWords(RustReservedWords)
+            .build()
 
     override fun toMemberName(shape: MemberShape): String {
         val baseName = super.toMemberName(shape)
@@ -103,7 +106,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
                     }.build()
             }
 
-            else -> base.toSymbol(shape)
+            else -> renamedSymbol
         }
     }
 }
