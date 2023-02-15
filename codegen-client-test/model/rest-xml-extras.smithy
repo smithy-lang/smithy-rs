@@ -10,8 +10,6 @@ use smithy.test#httpRequestTests
 /// A REST XML service that sends XML requests and responses.
 @service(sdkId: "Rest XML Protocol")
 @restXml
-@httpApiKeyAuth(scheme: "Apikey", name: "Authorization", in: "header")
-@auth([httpApiKeyAuth])
 service RestXmlExtras {
     version: "2019-12-16",
     operations: [
