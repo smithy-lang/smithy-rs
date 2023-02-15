@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -54,7 +55,7 @@ class UnconstrainedUnionGeneratorTest {
         // FZ rebase
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
             project.withModule(ServerRustModule.Model) modelsModuleWriter@{
-                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
+                UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
                 this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",

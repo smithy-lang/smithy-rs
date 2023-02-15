@@ -74,6 +74,7 @@ class ConstrainedBlobGeneratorTest {
             ConstrainedBlobGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
+                this,
                 constrainedBlobShape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
             ).render()
@@ -133,6 +134,7 @@ class ConstrainedBlobGeneratorTest {
         ConstrainedBlobGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),
+            writer,
             constrainedBlobShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render()

@@ -8,10 +8,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.comment
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -105,15 +101,15 @@ class RustCrateInlineModuleComposingWriterTest {
     @Test
     fun `simple inline module works`() {
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        val moduleA = createTestInlineModule(ModelsModule, "a")
-        testProject.withModule(ModelsModule) {
+        val moduleA = createTestInlineModule(ServerRustModule.Model, "a")
+        testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModule(this, moduleA) {
                 helloWorld(this, "a")
             }
         }
 
         testProject.getInlineModuleWriter().render()
-        testProject.withModule(ModelsModule) {
+        testProject.withModule(ServerRustModule.Model) {
             this.unitTest("test_a") {
                 rust("crate::model::a::hello_world();")
             }
@@ -144,13 +140,13 @@ class RustCrateInlineModuleComposingWriterTest {
             "i" to createTestOrphanInlineModule("i"),
         )
 
-        modules["b"] = createTestInlineModule(ModelsModule, "b")
+        modules["b"] = createTestInlineModule(ServerRustModule.Model, "b")
         modules["c"] = createTestInlineModule(modules["b"]!!, "c")
-        modules["f"] = createTestInlineModule(OutputsModule, "f")
+        modules["f"] = createTestInlineModule(ServerRustModule.Output, "f")
         modules["g"] = createTestInlineModule(modules["f"]!!, "g")
-        modules["h"] = createTestInlineModule(OutputsModule, "h")
+        modules["h"] = createTestInlineModule(ServerRustModule.Output, "h")
 
-        testProject.withModule(ModelsModule) {
+        testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModule(this, modules["a"]!!) {
                 helloWorld(this, "a")
             }
@@ -173,13 +169,13 @@ class RustCrateInlineModuleComposingWriterTest {
 
         // Write directly to an inline module without specifying the immediate parent. crate::model::b::c
         // should have a `hello_world` fn in it now.
-        testProject.withModule(ModelsModule) {
+        testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["c"]!!) {
                 helloWorld(this, "c")
             }
         }
         // Write to a different top level module to confirm that works.
-        testProject.withModule(InputsModule) {
+        testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["e"]!!) {
                 helloWorld(this, "e")
             }
@@ -200,12 +196,12 @@ class RustCrateInlineModuleComposingWriterTest {
 
         // It should work even if the inner descendent module was added using `withInlineModuleHierarchy` and then
         // code is added to the intermediate module using `withInlineModuleHierarchyUsingCrate`
-        testProject.withModule(OutputsModule) {
+        testProject.withModule(ServerRustModule.Output) {
             testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["h"]!!) {
                 testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["i"]!!) {
                     helloWorld(this, "i")
                 }
-                testProject.withModule(ModelsModule) {
+                testProject.withModule(ServerRustModule.Model) {
                     // While writing to output::h::i, it should be able to a completely different module
                     testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["b"]!!) {
                         rustBlock("pub fn some_other_writer_wrote_this()") {
@@ -222,7 +218,7 @@ class RustCrateInlineModuleComposingWriterTest {
         // Render all of the code.
         testProject.getInlineModuleWriter().render()
 
-        testProject.withModule(ModelsModule) {
+        testProject.withModule(ServerRustModule.Model) {
             this.unitTest("test_a") {
                 rust("crate::model::a::hello_world();")
                 rust("crate::model::a::bye_world();")

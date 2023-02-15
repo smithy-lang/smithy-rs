@@ -300,7 +300,7 @@ open class ServerCodegenVisitor(
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
             val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator)
-            serverBuilderGenerator.render(writer)
+            serverBuilderGenerator.render(rustCrate, writer)
             // FZ Rebase mine
             // val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape)
             // serverBuilderGenerator.render(rustCrate, writer)
@@ -503,7 +503,8 @@ open class ServerCodegenVisitor(
             rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.Model, shape, codegenContext) {
                 ConstrainedNumberGenerator(codegenContext, 
                     rustCrate.createInlineModuleCreator(),
-                    shape, 
+                    this,
+                    shape,
                     validationExceptionConversionGenerator,
                 ).render()
             }

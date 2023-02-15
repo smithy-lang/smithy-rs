@@ -101,7 +101,7 @@ class ConstraintViolationSymbolProvider(
             Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
         } else {
             // Need to use the context name so we get the correct name for maps.
-            Pair(ModelsModule, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
+            Pair(ServerRustModule.Model, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
         }
 
         return RustModule.new(

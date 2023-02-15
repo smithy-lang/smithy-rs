@@ -32,8 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -212,11 +210,11 @@ fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolPro
             val innerModule = RustModule.new(
                     name = name,
                     visibility = Visibility.PUBCRATE,
-                    parent = ModelsModule,
+                    parent = ServerRustModule.Model,
                     inline = true,
                 )
 
-            Pair(ModelsModule, innerModule)
+            Pair(ServerRustModule.Model, innerModule)
         }
     }
 }

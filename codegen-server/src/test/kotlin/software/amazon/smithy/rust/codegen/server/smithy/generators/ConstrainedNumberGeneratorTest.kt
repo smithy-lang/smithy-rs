@@ -77,6 +77,7 @@ class ConstrainedNumberGeneratorTest {
             ConstrainedNumberGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
+                this,
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
             ).render()
@@ -144,6 +145,7 @@ class ConstrainedNumberGeneratorTest {
         ConstrainedNumberGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),
+            writer,
             constrainedShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render()

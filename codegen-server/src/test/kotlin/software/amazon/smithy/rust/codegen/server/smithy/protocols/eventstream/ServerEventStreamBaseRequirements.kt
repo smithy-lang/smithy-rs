@@ -116,6 +116,8 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
             shape.getTrait()!!,
             listOf(),
         ).render(CodegenTarget.SERVER)
-        renderBuilderForShape(writer, codegenContext, shape)
+        // FZ TODO()
+        //TODO()
+        //renderBuilderForShape(writer, codegenContext, shape)
     }
 }
