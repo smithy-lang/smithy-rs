@@ -63,7 +63,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.Config) {
-            rust("pub use #T;", apiKey(codegenContext.runtimeConfig))
+            rust("##[doc(hidden)] pub use #T;", apiKey(codegenContext.runtimeConfig))
         }
     }
 }
