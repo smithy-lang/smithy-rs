@@ -77,7 +77,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
  * @param codegenContext Codegen context that includes the model and service shape
  * @return if the httpApiKeyAuth trait is used by the service
  */
-fun isSupportedApiKeyAuth(codegenContext: ClientCodegenContext): Boolean {
+private fun isSupportedApiKeyAuth(codegenContext: ClientCodegenContext): Boolean {
     return ServiceIndex.of(codegenContext.model).getAuthSchemes(codegenContext.serviceShape).containsKey(HttpApiKeyAuthTrait.ID)
 }
 
