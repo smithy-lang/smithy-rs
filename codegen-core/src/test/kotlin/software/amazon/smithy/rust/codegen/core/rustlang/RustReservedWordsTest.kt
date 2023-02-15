@@ -30,7 +30,7 @@ internal class RustReservedWordSymbolProviderTest {
         """.asSmithyModel()
         val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
         val symbol = provider.toSymbol(model.lookup("test#Self"))
-        symbol.name shouldBe "r##Self"
+        symbol.name shouldBe "SelfValue"
     }
 
     @Test
