@@ -92,7 +92,7 @@ class AwsQuerySerializerGeneratorTest {
             true -> CodegenTarget.CLIENT
             false -> CodegenTarget.SERVER
         }
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = codegenTarget))

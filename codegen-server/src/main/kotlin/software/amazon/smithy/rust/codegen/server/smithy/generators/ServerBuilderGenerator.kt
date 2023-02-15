@@ -49,6 +49,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
@@ -541,6 +542,8 @@ class ServerBuilderGenerator(
         val hasBox = builderMemberSymbol(member)
             .mapRustType { it.stripOuter<RustType.Option>() }
             .isRustBoxed()
+        val errHasBox = member.hasTrait<ConstraintViolationRustBoxTrait>()
+
         if (hasBox) {
             writer.rustTemplate(
                 """
@@ -548,11 +551,6 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                 })
-                .map(|res|
-                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
-                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
@@ -563,15 +561,22 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                 })
-                .map(|res|
-                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                       .map_err(ConstraintViolation::${constraintViolation.name()})
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
         }
+
+        writer.rustTemplate(
+            """
+            .map(|res|
+                res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
+                   ${if (errHasBox) ".map_err(Box::new)" else "" }
+                   .map_err(ConstraintViolation::${constraintViolation.name()})
+            )
+            .transpose()?
+            """,
+            *codegenScope,
+        )
 
         // Constrained types are not public and this is a member shape that would have generated a
         // public constrained type, were the setting to be enabled.

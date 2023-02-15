@@ -102,14 +102,14 @@ class ClientCodegenVisitor(
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
-            .let(RecursiveShapeBoxer::transform)
+            .let(RecursiveShapeBoxer()::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
             // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
-            // - Normalize event stream operations
+            // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
     /**

@@ -105,7 +105,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
 
     @Test
     fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = XmlBindingTraitSerializerGenerator(
