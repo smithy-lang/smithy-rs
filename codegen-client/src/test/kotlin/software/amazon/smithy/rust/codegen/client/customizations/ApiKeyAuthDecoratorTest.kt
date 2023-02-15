@@ -162,7 +162,7 @@ internal class ApiKeyAuthDecoratorTest {
                             &AuthApiKey::new(api_key_value),
                         );
                         assert_eq!(
-                            op.request().headers().contains_key("authorization"),
+                            operation.request().headers().contains_key("authorization"),
                             true,
                         );
                     }
