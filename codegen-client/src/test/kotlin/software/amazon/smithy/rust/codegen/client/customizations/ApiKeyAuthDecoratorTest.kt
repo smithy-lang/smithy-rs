@@ -94,7 +94,7 @@ internal class ApiKeyAuthDecoratorTest {
                             .await
                             .expect("valid operation");
                         assert_eq!(
-                            op.request().uri().query(),
+                            operation.request().uri().query(),
                             Some("api_key=some-api-key"),
                         );
                     }
