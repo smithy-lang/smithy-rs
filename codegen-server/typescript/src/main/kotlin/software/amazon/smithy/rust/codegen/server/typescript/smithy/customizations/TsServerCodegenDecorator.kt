@@ -76,11 +76,7 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
                 },
                 "devDependencies": {
                     "@napi-rs/cli": ">=2",
-                    "@types": ">=18",
-                    "ava": ">=5"
-                },
-                "ava": {
-                    "timeout": "3m"
+                    "@types/node": ">=18",
                 },
                 "engines": {
                     "node": ">=10"
@@ -90,7 +86,6 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
                     "build": "napi build --platform --release",
                     "build:debug": "napi build --platform",
                     "prepublishOnly": "napi prepublish -t npm",
-                    "test": "ava",
                     "universal": "napi universal",
                     "version": "napi version"
                 },
