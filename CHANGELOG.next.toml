@@ -287,3 +287,28 @@ message = "The modules in generated client crates have been reorganized. See the
 references = ["smithy-rs#2448"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Reconnect on transient errors.
+
+If a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not
+be reused. This is enabled by default for all AWS services. It can be disabled by setting `RetryConfig::with_reconnect_mode`
+
+Although there is no API breakage from this change, it alters the client behavior in a way that may cause breakage for customers.
+"""
+references = ["aws-sdk-rust#160", "smithy-rs#2445"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """Reconnect on transient errors.
+
+Note: **this behavior is disabled by default for generic clients**. It can be enabled with
+`aws_smithy_client::Builder::reconnect_on_transient_errors`
+
+If a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not
+be reused.
+"""
+references = ["aws-sdk-rust#160", "smithy-rs#2445"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
