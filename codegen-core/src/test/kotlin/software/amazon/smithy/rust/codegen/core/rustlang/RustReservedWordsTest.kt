@@ -16,10 +16,22 @@ import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class RustReservedWordSymbolProviderTest {
     private class TestSymbolProvider(model: Model) :
         WrappingSymbolProvider(SymbolVisitor(model, null, TestSymbolVisitorConfig))
+
+    @Test
+    fun `structs are escaped`() {
+        val model = """
+            namespace test
+            structure Self {}
+        """.asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model)
+        val symbol = provider.toSymbol(model.lookup("test#Self"))
+        symbol.name shouldBe "r##Self"
+    }
 
     @Test
     fun `member names are escaped`() {
@@ -28,7 +40,7 @@ internal class RustReservedWordSymbolProviderTest {
             structure container {
                 async: String
             }
-        """.trimMargin().asSmithyModel()
+        """.asSmithyModel()
         val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
