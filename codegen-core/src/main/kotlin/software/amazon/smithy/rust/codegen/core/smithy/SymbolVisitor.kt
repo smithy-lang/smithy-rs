@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -35,7 +36,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -179,7 +179,6 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
  */
 interface RustSymbolProvider : SymbolProvider, ModuleProvider {
     fun config(): SymbolVisitorConfig
-    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 
     override fun moduleForShape(shape: Shape): RustModule.LeafModule = config().moduleProvider.moduleForShape(shape)
     override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
@@ -248,21 +247,13 @@ open class SymbolVisitor(
             module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
         }
 
-    /**
-     * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
-     * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
-     *
-     * Because enum variants are not member shape, a separate handler is required.
-     */
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-        val baseName = definition.name.orNull()?.toPascalCase() ?: return null
-        return MaybeRenamed(baseName, null)
-    }
-
-    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
-        is StructureShape -> shape.memberName.toSnakeCase()
-        is UnionShape -> shape.memberName.toPascalCase()
-        else -> error("unexpected container shape: $container")
+    override fun toMemberName(shape: MemberShape): String {
+        val container = model.expectShape(shape.container)
+        return when {
+            container is StructureShape -> shape.memberName.toSnakeCase()
+            container is UnionShape || container is EnumShape || container.hasTrait<EnumTrait>() -> shape.memberName.toPascalCase()
+            else -> error("unexpected container shape: $container")
+        }
     }
 
     override fun blobShape(shape: BlobShape?): Symbol {

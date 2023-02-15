@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -33,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  */
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
     override fun config(): SymbolVisitorConfig = base.config()
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
     override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
     override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
     override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
@@ -130,6 +128,11 @@ class BaseSymbolMetadataProvider(
             }
 
             is UnionShape, is CollectionShape, is MapShape -> RustMetadata(visibility = Visibility.PUBLIC)
+
+            // This covers strings with the enum trait for now, and can be removed once we're fully on EnumShape
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1700): Remove this `is StringShape` match arm
+            is StringShape -> RustMetadata(visibility = Visibility.PUBLIC)
+
             else -> TODO("Unrecognized container type: $container")
         }
 
