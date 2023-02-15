@@ -82,7 +82,7 @@ class InstantiatorTest {
             @required
             num: Integer
         }
-    """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
+    """.asSmithyModel().let { RecursiveShapeBoxer().transform(it) }
 
     private val codegenContext = testCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider

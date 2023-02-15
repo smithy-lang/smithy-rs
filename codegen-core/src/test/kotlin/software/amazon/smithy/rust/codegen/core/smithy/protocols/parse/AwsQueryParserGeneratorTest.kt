@@ -42,7 +42,7 @@ class AwsQueryParserGeneratorTest {
 
     @Test
     fun `it modifies operation parsing to include Response and Result tags`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = AwsQueryParserGenerator(
