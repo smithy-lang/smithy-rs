@@ -217,4 +217,4 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
         }
 }
 
-fun apiKey(runtimeConfig: RuntimeConfig) = RuntimeType.smithyHttpAuth(runtimeConfig).resolve("api_key::AuthApiKey")
+private fun apiKey(runtimeConfig: RuntimeConfig) = RuntimeType.smithyHttpAuth(runtimeConfig).resolve("api_key::AuthApiKey")
