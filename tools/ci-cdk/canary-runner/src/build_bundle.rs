@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = "0.11.14"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
