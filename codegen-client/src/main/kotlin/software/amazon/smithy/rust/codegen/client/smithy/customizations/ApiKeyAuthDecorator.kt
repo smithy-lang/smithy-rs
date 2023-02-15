@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
@@ -48,15 +50,6 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
-            customizations + ApiKeyPubUse(codegenContext.runtimeConfig)
-        }
-    }
-
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
@@ -68,6 +61,12 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
             return baseCustomizations + ApiKeyOperationCustomization(codegenContext.runtimeConfig, authDefinition)
         }
         return baseCustomizations
+    }
+
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        rustCrate.withModule(ClientRustModule.Config) {
+            rust("pub use #T;", apiKey(codegenContext.runtimeConfig))
+        }
     }
 }
 
@@ -91,19 +90,6 @@ private fun isSupportedApiKeyAuth(codegenContext: ClientCodegenContext): Boolean
 private fun hasApiKeyAuthScheme(codegenContext: ClientCodegenContext, operation: OperationShape): Boolean {
     val auth: Map<ShapeId, Trait> = ServiceIndex.of(codegenContext.model).getEffectiveAuthSchemes(codegenContext.serviceShape.getId(), operation.getId())
     return auth.containsKey(HttpApiKeyAuthTrait.ID) && !operation.hasTrait(OptionalAuthTrait.ID)
-}
-
-private class ApiKeyPubUse(private val runtimeConfig: RuntimeConfig) :
-    LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable = when (section) {
-        is LibRsSection.Body -> writable {
-            rust(
-                "pub use #T;",
-                apiKey(runtimeConfig),
-            )
-        }
-        else -> emptySection
-    }
 }
 
 private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeConfig, private val authDefinition: HttpApiKeyAuthTrait) : OperationCustomization() {
