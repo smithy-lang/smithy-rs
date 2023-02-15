@@ -103,7 +103,7 @@ object EventStreamMarshallTestCases {
             validate_body(
                 message.payload(),
                 ${testCase.validTestStruct.dq()},
-                MediaType::from(${testCase.requestContentType.dq()})
+                MediaType::from(${testCase.mediaType.dq()})
             ).unwrap();
             """,
         )
@@ -125,7 +125,7 @@ object EventStreamMarshallTestCases {
             validate_body(
                 message.payload(),
                 ${testCase.validTestUnion.dq()},
-                MediaType::from(${testCase.requestContentType.dq()})
+                MediaType::from(${testCase.mediaType.dq()})
             ).unwrap();
             """,
         )
@@ -201,7 +201,7 @@ object EventStreamMarshallTestCases {
             validate_body(
                 message.payload(),
                 ${testCase.validMessageWithNoHeaderPayloadTraits.dq()},
-                MediaType::from(${testCase.requestContentType.dq()})
+                MediaType::from(${testCase.mediaType.dq()})
             ).unwrap();
             """,
         )
