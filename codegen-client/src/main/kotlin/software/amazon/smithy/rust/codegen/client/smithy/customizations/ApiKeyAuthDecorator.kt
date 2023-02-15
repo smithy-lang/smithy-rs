@@ -165,7 +165,7 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
             is ServiceConfig.BuilderImpl -> writable {
                 rustTemplate(
                     """
-                    /// Sets the api key that will be used by the client.
+                    /// Sets the API key that will be used by the client.
                     pub fn api_key(mut self, api_key: #{ApiKey}) -> Self {
                         self.set_api_key(Some(api_key));
                         self
