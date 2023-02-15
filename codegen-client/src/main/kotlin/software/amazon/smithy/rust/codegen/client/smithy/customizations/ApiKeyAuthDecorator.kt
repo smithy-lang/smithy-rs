@@ -88,7 +88,7 @@ private fun isSupportedApiKeyAuth(codegenContext: ClientCodegenContext): Boolean
  * @param operation operation shape
  * @return if the service and operation have the httpApiKeyAuthTrait
  */
-fun hasApiKeyAuthScheme(codegenContext: ClientCodegenContext, operation: OperationShape): Boolean {
+private fun hasApiKeyAuthScheme(codegenContext: ClientCodegenContext, operation: OperationShape): Boolean {
     val auth: Map<ShapeId, Trait> = ServiceIndex.of(codegenContext.model).getEffectiveAuthSchemes(codegenContext.serviceShape.getId(), operation.getId())
     return auth.containsKey(HttpApiKeyAuthTrait.ID) && !operation.hasTrait(OptionalAuthTrait.ID)
 }
