@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustCachingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
@@ -86,5 +87,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }
+                // Cache the results from the entire chain
+                .let { RustCachingSymbolProvider(it) }
     }
 }
