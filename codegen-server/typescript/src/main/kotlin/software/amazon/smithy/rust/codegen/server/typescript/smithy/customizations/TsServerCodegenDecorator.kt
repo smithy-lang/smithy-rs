@@ -62,21 +62,21 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
         val name = codegenContext.settings.moduleName.toSnakeCase()
         val version = codegenContext.settings.moduleVersion
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2317): we should probabaly use a real JSON writer, but I did not want to add
-        // other external libraries at this stage.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2317): we should probably use a real JSON writer, but I did not want to add
+        //  other external libraries at this stage.
         rustCrate.withFile("package.json") {
             val content = """{
                 "name": "@amzn/$name",
                 "version": "$version",
                 "main": "index.js",
-                "types": "$name.d.ts",
+                "types": "index.d.ts",
                 "napi": {
                     "name": "$name",
                     "triple": {}
                 },
                 "devDependencies": {
                     "@napi-rs/cli": ">=2",
-                    "@types/node": ">=18",
+                    "@types/node": ">=18"
                 },
                 "engines": {
                     "node": ">=10"
@@ -94,6 +94,42 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
                     "yarn": ">=1"
                 }
 }"""
+            this.write(content)
+        }
+        val operations = codegenContext.serviceShape.operations
+        val model = codegenContext.model
+        val imports =
+            operations.joinToString {
+                listOf(
+                    model.expectShape(it).asOperationShape().get().inputShape.name,
+                    model.expectShape(it).asOperationShape().get().outputShape.name,
+                ).joinToString()
+            }
+        val handlers =
+            operations.joinToString("\n") {
+                "async ${it.name}(_: ${
+                model.expectShape(it).asOperationShape().get().inputShape.name
+                }): Promise<${model.expectShape(it).asOperationShape().get().outputShape.name}> { /* TODO */ }"
+            }
+        rustCrate.withFile("app.ts") {
+            val content = """
+                import {
+                  App,
+                  TsHandlers,
+                  TsSocket,
+                  $imports
+                } from ".";
+
+                let callsCount = 0;
+                class HandlerImpl implements TsHandlers {
+                  $handlers
+
+                // Pass the handlers to the SURF
+                const app = new App(new HandlerImpl());
+
+                // Start the app 🤘
+                app.start(new TsSocket("127.0.0.1", 13734));
+            """
             this.write(content)
         }
     }
