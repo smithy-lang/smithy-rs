@@ -189,7 +189,7 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
             is ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                    /// Returns api key used by the client, if it was provided.
+                    /// Returns API key used by the client, if it was provided.
                     pub fn api_key(&self) -> Option<&#{ApiKey}> {
                         self.api_key.as_ref()
                     }
