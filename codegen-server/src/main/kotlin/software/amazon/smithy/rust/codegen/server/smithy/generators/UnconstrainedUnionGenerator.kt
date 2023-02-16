@@ -139,7 +139,9 @@ class UnconstrainedUnionGenerator(
             constraintViolationSymbol
         ) {
             Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
-            rustBlock("pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName") {
+            rustBlock("""
+                ##[allow(clippy::enum_variant_names)]
+                pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName""") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 

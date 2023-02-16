@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPublicType
 
 /**
  * [ConstrainedMapGenerator] generates a wrapper tuple newtype holding a constrained `std::collections::HashMap`.
@@ -130,6 +132,14 @@ class ConstrainedMapGenerator(
             valueShape !is StructureShape &&
             valueShape !is UnionShape
         ) {
+            val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
+            val keyNeedsConversion = keyShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+            val key = if (keyNeedsConversion) {
+                "k.into()"
+            } else {
+                "k"
+            }
+
             writer.rustTemplate(
                 """
                 impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
@@ -137,7 +147,7 @@ class ConstrainedMapGenerator(
                         value
                             .into_inner()
                             .into_iter()
-                            .map(|(k, v)| (k.into(), v.into()))
+                            .map(|(k, v)| ($key, v.into()))
                             .collect()
                     }
                 }

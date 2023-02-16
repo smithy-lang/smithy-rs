@@ -22,7 +22,6 @@ import java.util.*
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
-import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform.makeNonConstrained
 
 /**
  * Transforms all member shapes that have constraints on them into equivalent non-constrained
@@ -86,10 +85,8 @@ object ConstrainedMemberTransform {
             .flatMap    { it.constrainedMembers() }
             .mapNotNull {
                 val transformation = it.makeNonConstrained(model, additionalNames)
-                if (transformation != null) {
-                    // Keep record of new names that have been generated to ensure none of them regenerated.
-                    additionalNames.add(transformation.newShape.id)
-                }
+                // Keep record of new names that have been generated to ensure none of them regenerated.
+                additionalNames.add(transformation.newShape.id)
 
                 transformation
             }
@@ -169,31 +166,31 @@ object ConstrainedMemberTransform {
     private fun MemberShape.makeNonConstrained(
         model: Model,
         additionalNames: MutableSet<ShapeId>,
-    ): MemberShapeTransformation? {
-        val (constraintTraits, otherTraits) = this.allTraits.values
+    ): MemberShapeTransformation {
+        val (memberConstraintTraits, otherTraits) = this.allTraits.values
             .partition {
                 memberConstraintTraitsToOverride.contains(it.javaClass)
             }
 
-        // No transformation required in case the member shape has no constraints.
-        if (constraintTraits.isEmpty())
-            return null
+        check(memberConstraintTraits.isNotEmpty()) {
+            "There must at least be one member constraint on the shape"
+        }
 
         // Build a new shape similar to the target of the constrained member shape. It should
         // have all of the original constraints that have not been overridden, and the ones
         // that this member shape overrides.
         val targetShape = model.expectShape(this.target)
         if (targetShape !is ToSmithyBuilder<*>)
-            UNREACHABLE("member target shapes will always be buildable")
+            UNREACHABLE("Member target shapes will always be buildable")
 
         return when (val builder = targetShape.toBuilder()) {
             is AbstractShapeBuilder<*, *> -> {
                 // Use the target builder to create a new standalone shape that would
                 // be added to the model later on. Keep all existing traits on the target
                 // but replace the ones that are overridden on the member shape.
-                val nonOverriddenTraitsOnTarget =
+                val nonOverriddenConstraintTraits =
                     builder.allTraits.values.filter { existingTrait ->
-                        constraintTraits.none { it.toShapeId() == existingTrait.toShapeId() }
+                        memberConstraintTraits.none { it.toShapeId() == existingTrait.toShapeId() }
                     }
 
                 // Add a synthetic constraint on all new shapes being defined, that would link
@@ -203,7 +200,7 @@ object ConstrainedMemberTransform {
 
                 // Combine target traits, overridden traits and the synthetic trait
                 val newTraits =
-                    nonOverriddenTraitsOnTarget + constraintTraits + syntheticTrait
+                    nonOverriddenConstraintTraits + memberConstraintTraits + syntheticTrait
 
                 // Create a new unique standalone shape that will be added to the model later on
                 val shapeId = overriddenShapeId(model, additionalNames, this.id)

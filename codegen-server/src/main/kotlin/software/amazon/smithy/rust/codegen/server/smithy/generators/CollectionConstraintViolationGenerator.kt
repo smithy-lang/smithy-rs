@@ -77,6 +77,7 @@ class CollectionConstraintViolationGenerator(
             //  and is for use by the framework.
             rustTemplate(
                 """
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq)]
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}

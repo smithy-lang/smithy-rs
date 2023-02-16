@@ -76,6 +76,7 @@ class MapConstraintViolationGenerator(
             //  and is for use by the framework.
             rustTemplate(
                 """
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq)]
                 pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
