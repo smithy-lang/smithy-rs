@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.io.File
-import kotlin.collections.Map.Entry
 
 class RustCrateInlineModuleComposingWriterTest {
     private val rustCrate: RustCrate
@@ -66,11 +65,11 @@ class RustCrateInlineModuleComposingWriterTest {
         rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
     }
 
-    private fun createTestInlineModule(parentModule: RustModule, moduleName : String) : RustModule.LeafModule =
+    private fun createTestInlineModule(parentModule: RustModule, moduleName : String, documentation : String? = null) : RustModule.LeafModule =
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
-            documentation = moduleName,
+            documentation = documentation ?: moduleName,
             parent = parentModule,
             inline = true,
         )
@@ -97,6 +96,13 @@ class RustCrateInlineModuleComposingWriterTest {
             writer.rust("""println!("from inside $moduleName");""")
         }
     }
+
+//    private fun extraRustFun(writer: RustWriter, moduleName: String) {
+//        writer.rustBlock("pub fn extra()") {
+//            writer.comment("Module $moduleName")
+//            writer.rust("""println!("extra function defined inside $moduleName");""")
+//        }
+//    }
 
     @Test
     fun `simple inline module works`() {
@@ -145,6 +151,8 @@ class RustCrateInlineModuleComposingWriterTest {
         modules["f"] = createTestInlineModule(ServerRustModule.Output, "f")
         modules["g"] = createTestInlineModule(modules["f"]!!, "g")
         modules["h"] = createTestInlineModule(ServerRustModule.Output, "h")
+        // A different kotlin object but would still go in the right place
+//        val moduleB = createTestInlineModule(ServerRustModule.Model, "b", "A new module")
 
         testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModule(this, modules["a"]!!) {
@@ -165,6 +173,10 @@ class RustCrateInlineModuleComposingWriterTest {
             testProject.getInlineModuleWriter().withInlineModule(this, modules["b"]!!) {
                 byeWorld(this, "b")
             }
+
+//            testProject.getInlineModuleWriter().withInlineModule(this, moduleB) {
+//                extraRustFun(this, "b")
+//            }
         }
 
         // Write directly to an inline module without specifying the immediate parent. crate::model::b::c
@@ -175,7 +187,7 @@ class RustCrateInlineModuleComposingWriterTest {
             }
         }
         // Write to a different top level module to confirm that works.
-        testProject.withModule(ServerRustModule.Model) {
+        testProject.withModule(ServerRustModule.Input) {
             testProject.getInlineModuleWriter().withInlineModuleHierarchy(this, modules["e"]!!) {
                 helloWorld(this, "e")
             }
@@ -226,6 +238,7 @@ class RustCrateInlineModuleComposingWriterTest {
             this.unitTest("test_b") {
                 rust("crate::model::b::hello_world();")
                 rust("crate::model::b::bye_world();")
+//                rust("crate::model::b::extra();")
             }
             this.unitTest("test_someother_writer_wrote") {
                 rust("crate::model::b::some_other_writer_wrote_this();")

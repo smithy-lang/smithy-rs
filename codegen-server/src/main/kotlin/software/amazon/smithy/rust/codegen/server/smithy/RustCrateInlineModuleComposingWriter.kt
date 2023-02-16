@@ -131,7 +131,7 @@ private data class InlineModuleWithWriter(val inlineModule : RustModule.LeafModu
 private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
     ConcurrentHashMap()
 
-class InnerModule(private val debugMode : Boolean) {
+class InnerModule(debugMode : Boolean) {
     private val topLevelModuleWriters: MutableSet<RustWriter> = mutableSetOf()
     private val inlineModuleWriters: HashMap<RustWriter, MutableList<InlineModuleWithWriter>> = hashMapOf()
     private val docWriters: HashMap<RustModule.LeafModule, MutableList<DocWriter>> = hashMapOf()
@@ -179,10 +179,10 @@ class InnerModule(private val debugMode : Boolean) {
             rustCrate.withModule(topMost) {
                 var writer = this
                 hierarchy.forEach {
-                    writer = getWriter(writer, it as RustModule.LeafModule)
+                    writer = getWriter(writer, it)
                 }
 
-                withInlineModule(writer, bottomMost as RustModule.LeafModule, docWriter, writable)
+                withInlineModule(writer, bottomMost, docWriter, writable)
             }
         } else {
             check(!bottomMost.isInline()) {
@@ -214,10 +214,10 @@ class InnerModule(private val debugMode : Boolean) {
         // Create an entry in the HashMap for all the descendent modules in the hierarchy.
         var writer = outerWriter
         hierarchy.forEach {
-            writer = getWriter(writer, it as RustModule.LeafModule)
+            writer = getWriter(writer, it)
         }
 
-        withInlineModule(writer, bottomMost as RustModule.LeafModule, docWriter, writable)
+        withInlineModule(writer, bottomMost, docWriter, writable)
     }
 
     /**
@@ -228,7 +228,7 @@ class InnerModule(private val debugMode : Boolean) {
         var hierarchy = listOf<RustModule.LeafModule>()
 
         while (current is RustModule.LeafModule) {
-            hierarchy = listOf(current as RustModule.LeafModule) + hierarchy
+            hierarchy = listOf(current) + hierarchy
             current = current.parent
         }
 
@@ -275,7 +275,6 @@ class InnerModule(private val debugMode : Boolean) {
      * has never been registered before then a new `RustWriter` is created and returned.
      */
     private fun getWriter(outerWriter: RustWriter, inlineModule: RustModule.LeafModule): RustWriter {
-        // Is this one of our inner writers?
         val nestedModuleWriter = inlineModuleWriters[outerWriter]
         if (nestedModuleWriter != null) {
             return findOrAddToList(nestedModuleWriter, inlineModule)
@@ -301,16 +300,42 @@ class InnerModule(private val debugMode : Boolean) {
         inlineModuleList: MutableList<InlineModuleWithWriter>,
         lookForModule: RustModule.LeafModule
     ): RustWriter {
-        val inlineModule = inlineModuleList.firstOrNull() {
-            it.inlineModule == lookForModule
+        val inlineModuleAndWriter = inlineModuleList.firstOrNull() {
+            it.inlineModule.name == lookForModule.name
         }
-        return if (inlineModule == null) {
+        return if (inlineModuleAndWriter == null) {
             val inlineWriter = createNewInlineModule()
             inlineModuleList.add(InlineModuleWithWriter(lookForModule, inlineWriter))
             inlineWriter
         } else {
-            inlineModule.writer
+            check(inlineModuleAndWriter.inlineModule == lookForModule) {
+                "the two inline modules have the same name but different attributes on them"
+            }
+
+            inlineModuleAndWriter.writer
         }
+    }
+
+    private fun combine(inlineModuleWithWriter: InlineModuleWithWriter, inlineModule: RustModule.LeafModule) : InlineModuleWithWriter {
+        check(inlineModuleWithWriter.inlineModule.name == inlineModule.name) {
+            "only inline module objects that have the same name can be combined"
+        }
+        check(inlineModuleWithWriter.inlineModule.rustMetadata.visibility == inlineModule.rustMetadata.visibility) {
+            "only inline modules with same visibility can be combined"
+        }
+        check(inlineModuleWithWriter.inlineModule.inline && inlineModule.inline) {
+            "both modules need to be inline to be combined together"
+        }
+
+        val newModule = RustModule.new(
+            name = inlineModule.name,
+            parent = inlineModuleWithWriter.inlineModule.parent,
+            documentation = inlineModuleWithWriter.inlineModule.documentation?.plus("\n")?.plus(inlineModule.documentation) ?: inlineModule.documentation,
+            visibility = inlineModule.rustMetadata.visibility,
+            additionalAttributes = inlineModuleWithWriter.inlineModule.rustMetadata.additionalAttributes + inlineModule.rustMetadata.additionalAttributes,
+            inline = inlineModule.inline
+        )
+        return InlineModuleWithWriter(newModule, inlineModuleWithWriter.writer)
     }
 
     private fun writeDocs(innerModule: RustModule.LeafModule) {

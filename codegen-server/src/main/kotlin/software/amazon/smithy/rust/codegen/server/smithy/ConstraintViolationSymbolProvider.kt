@@ -107,9 +107,7 @@ class ConstraintViolationSymbolProvider(
         return RustModule.new(
             name = name,
             visibility = visibility,
-            // FZ rebase
-            //parent = ServerRustModule.Model,
-            parent = ServerRustModule.Model,
+            parent = module,
             inline = true,
             documentation = documentation,
         )
