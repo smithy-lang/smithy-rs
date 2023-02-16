@@ -12,7 +12,9 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Mark unconstrained structures with optional _or_ default members."
-references = ["smithy-rs#2352"]
+message = """
+Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
+produced Rust code that did not compile"""
+references = ["smithy-rs#2352", "smithy-rs#2343"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
 author = "82marbag"
