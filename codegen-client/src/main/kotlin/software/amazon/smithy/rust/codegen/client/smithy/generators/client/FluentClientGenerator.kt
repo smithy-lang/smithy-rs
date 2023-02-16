@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -168,7 +167,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+                val operationErr = symbolProvider.symbolForOperationError(operation)
 
                 val inputFieldsBody =
                     generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
@@ -202,6 +201,9 @@ class FluentClientGenerator(
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     """,
                 )
+
+                // Write a deprecation notice if this operation is deprecated.
+                writer.deprecatedShape(operation)
 
                 writer.rust(
                     """
@@ -263,7 +265,7 @@ class FluentClientGenerator(
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(symbolProvider)
+                    val errorType = symbolProvider.symbolForOperationError(operation)
 
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
@@ -333,7 +335,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(symbolProvider),
+                            symbolProvider.symbolForOperationError(operation),
                         ),
                     )
                     input.members().forEach { member ->

@@ -15,17 +15,21 @@
 //! | `rt-tokio`     | Provides features that are dependent on `tokio` including the `ByteStream::from_path` util |
 //! | `event-stream` | Provides Sender/Receiver implementations for Event Stream codegen. |
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod body;
 pub mod endpoint;
 pub mod header;
+pub mod http;
 pub mod http_versions;
 pub mod label;
 pub mod middleware;
 pub mod operation;
 pub mod property_bag;
 pub mod query;
+#[doc(hidden)]
+pub mod query_writer;
 pub mod response;
 pub mod result;
 pub mod retry;

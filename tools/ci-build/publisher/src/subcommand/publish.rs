@@ -52,7 +52,7 @@ pub async fn subcommand_publish(
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats, *skip_confirmation)?;
 
-    for batch in batches {
+    for batch in &batches {
         let mut any_published = false;
         for package in batch {
             // Only publish if it hasn't been published yet.
@@ -65,19 +65,24 @@ pub async fn subcommand_publish(
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then
                 // the next package publish can fail if it depends on this package.
-                wait_for_eventual_consistency(&package).await?;
-                info!("Successfully published `{}`", package.handle);
+                wait_for_eventual_consistency(package).await?;
+                info!("Successfully published `{}`", &package.handle);
                 any_published = true;
             } else {
-                info!("`{}` was already published", package.handle);
+                info!("`{}` was already published", &package.handle);
             }
-            correct_owner(&package.handle, &package.category).await?;
         }
         if any_published {
             info!("Sleeping 30 seconds after completion of the batch");
             tokio::time::sleep(Duration::from_secs(30)).await;
         } else {
             info!("No packages in the batch needed publishing. Proceeding with the next batch immediately.")
+        }
+    }
+
+    for batch in &batches {
+        for package in batch {
+            correct_owner(&package.handle, &package.category).await?;
         }
     }
 
@@ -142,6 +147,11 @@ async fn wait_for_eventual_consistency(package: &Package) -> Result<()> {
 
 /// Corrects the crate ownership.
 pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -> Result<()> {
+    // https://github.com/orgs/awslabs/teams/smithy-rs-server
+    const SMITHY_RS_SERVER_OWNER: &str = "github:awslabs:smithy-rs-server";
+    // https://github.com/orgs/awslabs/teams/rust-sdk-owners
+    const RUST_SDK_OWNER: &str = "github:awslabs:rust-sdk-owners";
+
     run_with_retry(
         &format!("Correcting ownership of `{}`", handle.name),
         3,
@@ -151,7 +161,7 @@ pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -
             let expected_owners = expected_package_owners(category, &handle.name);
 
             let owners_to_be_added = expected_owners.difference(&actual_owners);
-            let incorrect_owners = actual_owners.difference(&expected_owners);
+            let owners_to_be_removed = actual_owners.difference(&expected_owners);
 
             let mut added_individual = false;
             for crate_owner in owners_to_be_added {
@@ -162,21 +172,26 @@ pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -
                 // Teams in crates.io start with `github:` while individuals are just the GitHub user name
                 added_individual |= !crate_owner.starts_with("github:");
             }
-            for incorrect_owner in incorrect_owners {
+            for crate_owner in owners_to_be_removed {
+                // Trying to remove them will result in an error due to a bug in crates.io
+                // Upstream tracking issue: https://github.com/rust-lang/crates.io/issues/2736
+                if crate_owner == SMITHY_RS_SERVER_OWNER || crate_owner == RUST_SDK_OWNER {
+                    continue;
+                }
                 // Adding an individual owner requires accepting an invite, so don't attempt to remove
                 // anyone if an owner was added, as removing the last individual owner may break.
                 // The next publish run will remove the incorrect owner.
                 if !added_individual {
-                    cargo::RemoveOwner::new(&handle.name, incorrect_owner)
+                    cargo::RemoveOwner::new(&handle.name, crate_owner)
                         .spawn()
                         .await
-                        .context(format!("remove incorrect owner `{}` from crate `{}`", incorrect_owner, handle))?;
+                        .with_context(|| format!("remove incorrect owner `{}` from crate `{}`", crate_owner, handle))?;
                     info!(
                         "Removed incorrect owner `{}` from crate `{}`",
-                        incorrect_owner, handle
+                        crate_owner, handle
                     );
                 } else {
-                    info!("Skipping removal of incorrect owner `{}` from crate `{}` due to new owners", incorrect_owner, handle);
+                    info!("Skipping removal of incorrect owner `{}` from crate `{}` due to new owners", crate_owner, handle);
                 }
             }
             Result::<_, BoxError>::Ok(())

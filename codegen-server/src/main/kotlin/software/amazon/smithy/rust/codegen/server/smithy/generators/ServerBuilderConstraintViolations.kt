@@ -17,17 +17,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 
 /**
  * Renders constraint violation types that arise when building a structure shape builder.
@@ -38,6 +37,7 @@ class ServerBuilderConstraintViolations(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val builderTakesInUnconstrainedTypes: Boolean,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -138,8 +138,8 @@ class ServerBuilderConstraintViolations(
 
                     val constraintViolationSymbol =
                         constraintViolationSymbolProvider.toSymbol(targetShape)
-                            // If the corresponding structure's member is boxed, box this constraint violation symbol too.
-                            .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
+                            // Box this constraint violation symbol if necessary.
+                            .letIf(constraintViolation.forMember.hasTrait<ConstraintViolationRustBoxTrait>()) {
                                 it.makeRustBoxed()
                             }
 
@@ -154,25 +154,6 @@ class ServerBuilderConstraintViolations(
     }
 
     private fun renderAsValidationExceptionFieldList(writer: RustWriter) {
-        val validationExceptionFieldWritable = writable {
-            rustBlock("match self") {
-                all.forEach {
-                    if (it.hasInner()) {
-                        rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
-                    } else {
-                        rust(
-                            """
-                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
-                                path: path + "/${it.forMember.memberName}",
-                            },
-                            """,
-                        )
-                    }
-                }
-            }
-        }
-
         writer.rustTemplate(
             """
             impl ConstraintViolation {
@@ -181,7 +162,7 @@ class ServerBuilderConstraintViolations(
                 }
             }
             """,
-            "ValidationExceptionFieldWritable" to validationExceptionFieldWritable,
+            "ValidationExceptionFieldWritable" to validationExceptionConversionGenerator.builderConstraintViolationImplBlock((all)),
             "String" to RuntimeType.String,
         )
     }

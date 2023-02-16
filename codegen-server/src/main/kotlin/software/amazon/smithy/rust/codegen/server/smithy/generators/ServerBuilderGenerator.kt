@@ -49,6 +49,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
@@ -88,6 +89,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
 class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
+    private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -141,7 +143,7 @@ class ServerBuilderGenerator(
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
+        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
@@ -214,21 +216,9 @@ class ServerBuilderGenerator(
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(constraint_violation: ConstraintViolation) -> Self {
-                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
-                    let validation_exception = crate::error::ValidationException {
-                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
-                        field_list: Some(vec![first_validation_exception_field]),
-                    };
-                    Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
-                            .expect("impossible")
-                    )
-                }
-            }
+            #{Converter:W}
             """,
-            *codegenScope,
+            "Converter" to customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(),
         )
     }
 
@@ -552,6 +542,8 @@ class ServerBuilderGenerator(
         val hasBox = builderMemberSymbol(member)
             .mapRustType { it.stripOuter<RustType.Option>() }
             .isRustBoxed()
+        val errHasBox = member.hasTrait<ConstraintViolationRustBoxTrait>()
+
         if (hasBox) {
             writer.rustTemplate(
                 """
@@ -559,11 +551,6 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                 })
-                .map(|res|
-                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
-                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
@@ -574,15 +561,22 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                 })
-                .map(|res|
-                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                       .map_err(ConstraintViolation::${constraintViolation.name()})
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
         }
+
+        writer.rustTemplate(
+            """
+            .map(|res|
+                res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
+                   ${if (errHasBox) ".map_err(Box::new)" else "" }
+                   .map_err(ConstraintViolation::${constraintViolation.name()})
+            )
+            .transpose()?
+            """,
+            *codegenScope,
+        )
 
         // Constrained types are not public and this is a member shape that would have generated a
         // public constrained type, were the setting to be enabled.

@@ -17,13 +17,14 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
@@ -76,7 +77,7 @@ class ConstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
+        project.withModule(ServerRustModule.Model) {
             render(codegenContext, this, constrainedMapShape)
 
             val instantiator = serverInstantiator(codegenContext)
@@ -138,7 +139,7 @@ class ConstrainedMapGeneratorTest {
         """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
 
-        val writer = RustWriter.forModule(ModelsModule.name)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
         val codegenContext = serverTestCodegenContext(model)
         render(codegenContext, writer, constrainedMapShape)
@@ -153,6 +154,11 @@ class ConstrainedMapGeneratorTest {
         constrainedMapShape: MapShape,
     ) {
         ConstrainedMapGenerator(codegenContext, writer, constrainedMapShape).render()
-        MapConstraintViolationGenerator(codegenContext, writer, constrainedMapShape).render()
+        MapConstraintViolationGenerator(
+            codegenContext,
+            writer,
+            constrainedMapShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
     }
 }

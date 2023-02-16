@@ -8,14 +8,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -50,17 +49,17 @@ class UnconstrainedCollectionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
+        project.withModule(ServerRustModule.Model) {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
-        project.withModule(ConstrainedModule) {
+        project.withModule(ServerRustModule.ConstrainedModule) {
             listOf(listA, listB).forEach {
                 PubCrateConstrainedCollectionGenerator(codegenContext, this, it).render()
             }
         }
-        project.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-            project.withModule(ModelsModule) modelsModuleWriter@{
+        project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+            project.withModule(ServerRustModule.Model) modelsModuleWriter@{
                 listOf(listA, listB).forEach {
                     UnconstrainedCollectionGenerator(
                         codegenContext,
@@ -68,7 +67,13 @@ class UnconstrainedCollectionGeneratorTest {
                         it,
                     ).render()
 
-                    CollectionConstraintViolationGenerator(codegenContext, this@modelsModuleWriter, it, listOf()).render()
+                    CollectionConstraintViolationGenerator(
+                        codegenContext,
+                        this@modelsModuleWriter,
+                        it,
+                        CollectionTraitInfo.fromShape(it, codegenContext.constrainedShapeSymbolProvider),
+                        SmithyValidationExceptionConversionGenerator(codegenContext),
+                    ).render()
                 }
 
                 this@unconstrainedModuleWriter.unitTest(

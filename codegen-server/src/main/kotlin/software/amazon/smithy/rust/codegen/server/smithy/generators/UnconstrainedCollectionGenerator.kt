@@ -19,11 +19,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 
 /**
  * Generates a Rust type for a constrained collection shape that is able to hold values for the corresponding
@@ -107,7 +109,11 @@ class UnconstrainedCollectionGenerator(
                         constrainedShapeSymbolProvider.toSymbol(shape.member)
                     }
                     val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
-
+                    val boxErr = if (shape.member.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                        ".map_err(|(idx, inner_violation)| (idx, Box::new(inner_violation)))"
+                    } else {
+                        ""
+                    }
                     val constrainValueWritable = writable {
                         conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
                             rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
@@ -124,7 +130,9 @@ class UnconstrainedCollectionGenerator(
                                 #{ConstrainValueWritable:W}
                             })
                             .collect();
-                        let inner = res.map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
+                        let inner = res
+                            $boxErr
+                            .map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
                         """,
                         "Vec" to RuntimeType.Vec,
                         "ConstrainedMemberSymbol" to constrainedMemberSymbol,

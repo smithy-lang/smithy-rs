@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
-class ClientContextParamsDecoratorTest {
+class ClientContextConfigCustomizationTest {
     val model = """
         namespace test
         use smithy.rules#clientContextParams
