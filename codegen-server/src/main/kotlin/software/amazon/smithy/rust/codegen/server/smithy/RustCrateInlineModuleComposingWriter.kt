@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap
 typealias DocWriter = () -> Any
 typealias InlineModuleCreator = (Symbol, Writable) -> Unit
 
-
 /**
  * Initializes RustCrate -> InnerModule data structure.
  */
@@ -40,7 +39,7 @@ fun RustCrate.createInlineModuleCreator(): InlineModuleCreator {
 
 /**
  * If the passed in `shape` is a synthetic extracted shape resulting from a constrained struct member,
- * the `Writable` is called using the structure's builder module. Otherwise the `Writable` is called
+ * the `Writable` is called using the structure's builder module. Otherwise, the `Writable` is called
  * using the given `module`.
  */
 fun RustCrate.withModuleOrWithStructureBuilderModule(
@@ -133,21 +132,14 @@ private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
 
 class InnerModule(debugMode : Boolean) {
     private val topLevelModuleWriters: MutableSet<RustWriter> = mutableSetOf()
-    private val inlineModuleWriters: HashMap<RustWriter, MutableList<InlineModuleWithWriter>> = hashMapOf()
-    private val docWriters: HashMap<RustModule.LeafModule, MutableList<DocWriter>> = hashMapOf()
+    private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
+    private val docWriters: ConcurrentHashMap<RustModule.LeafModule, MutableList<DocWriter>> = ConcurrentHashMap()
     private val writerCreator = RustWriter.factory(debugMode)
     private val emptyLineCount: Int = writerCreator
         .apply("lines-it-always-writes.rs", "crate")
         .toString()
         .split("\n")[0]
         .length
-
-    private fun createNewInlineModule(): RustWriter {
-        val writer = writerCreator.apply("unknown-module-would-never-be-written.rs", "crate")
-        // There has never been a child of the top most inner module, hence create a new one
-        inlineModuleWriters[writer] = mutableListOf()
-        return writer
-    }
 
     fun withInlineModule(outerWriter: RustWriter, innerModule: RustModule.LeafModule, docWriter: DocWriter? = null, writable: Writable) {
         if (docWriter != null) {
@@ -219,6 +211,17 @@ class InnerModule(debugMode : Boolean) {
 
         withInlineModule(writer, bottomMost, docWriter, writable)
     }
+
+    /**
+     * Creates an in memory writer and registers it with a map of RustWriter -> listOf(Inline descendent modules)
+     */
+    private fun createNewInlineModule(): RustWriter {
+        val writer = writerCreator.apply("unknown-module-would-never-be-written.rs", "crate")
+        // Register the new RustWriter in the map to allow further descendent inline modules to be created inside it.
+        inlineModuleWriters[writer] = mutableListOf()
+        return writer
+    }
+
 
     /**
      * Returns the complete hierarchy of a `RustModule.LeafModule` from top to bottom
@@ -314,28 +317,6 @@ class InnerModule(debugMode : Boolean) {
 
             inlineModuleAndWriter.writer
         }
-    }
-
-    private fun combine(inlineModuleWithWriter: InlineModuleWithWriter, inlineModule: RustModule.LeafModule) : InlineModuleWithWriter {
-        check(inlineModuleWithWriter.inlineModule.name == inlineModule.name) {
-            "only inline module objects that have the same name can be combined"
-        }
-        check(inlineModuleWithWriter.inlineModule.rustMetadata.visibility == inlineModule.rustMetadata.visibility) {
-            "only inline modules with same visibility can be combined"
-        }
-        check(inlineModuleWithWriter.inlineModule.inline && inlineModule.inline) {
-            "both modules need to be inline to be combined together"
-        }
-
-        val newModule = RustModule.new(
-            name = inlineModule.name,
-            parent = inlineModuleWithWriter.inlineModule.parent,
-            documentation = inlineModuleWithWriter.inlineModule.documentation?.plus("\n")?.plus(inlineModule.documentation) ?: inlineModule.documentation,
-            visibility = inlineModule.rustMetadata.visibility,
-            additionalAttributes = inlineModuleWithWriter.inlineModule.rustMetadata.additionalAttributes + inlineModule.rustMetadata.additionalAttributes,
-            inline = inlineModule.inline
-        )
-        return InlineModuleWithWriter(newModule, inlineModuleWithWriter.writer)
     }
 
     private fun writeDocs(innerModule: RustModule.LeafModule) {
