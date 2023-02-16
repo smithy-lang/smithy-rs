@@ -202,6 +202,9 @@ class FluentClientGenerator(
                     """,
                 )
 
+                // Write a deprecation notice if this operation is deprecated.
+                writer.deprecatedShape(operation)
+
                 writer.rust(
                     """
                     pub fn ${
