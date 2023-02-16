@@ -27,6 +27,15 @@ pub struct ParseResponseService<S, O, R> {
     _output_type: PhantomData<(O, R)>,
 }
 
+impl<S, O, R> ParseResponseService<S, O, R> {
+    pub fn new(inner: S) -> Self {
+        Self {
+            inner,
+            _output_type: Default::default(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ParseResponseLayer<O, R> {
     _output_type: PhantomData<(O, R)>,

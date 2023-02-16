@@ -50,19 +50,21 @@ pub mod hyper_ext;
 #[doc(hidden)]
 pub mod static_tests;
 
+use crate::timeout::TimeoutService;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
 pub use aws_smithy_http::result::{SdkError, SdkSuccess};
-use aws_smithy_http_tower::dispatch::DispatchLayer;
-use aws_smithy_http_tower::parse_response::ParseResponseLayer;
+use aws_smithy_http_tower::dispatch::DispatchService;
+use aws_smithy_http_tower::parse_response::ParseResponseService;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ProvideErrorKind;
 use aws_smithy_types::timeout::OperationTimeoutConfig;
 use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 pub use timeout::TimeoutLayer;
-use tower::{Service, ServiceBuilder, ServiceExt};
+use tower::retry::RetryLayer;
+use tower::{Layer, Service, ServiceExt};
 use tracing::{debug_span, field, field::display, Instrument};
 
 /// Smithy service client.
@@ -74,7 +76,7 @@ use tracing::{debug_span, field, field::display, Instrument};
 /// for filling in any request parameters that aren't specified by the Smithy protocol definition,
 /// such as those used for routing (like the URL), authentication, and authorization.
 ///
-/// The middleware takes the form of a [`tower::Layer`] that wraps the actual connection for each
+/// The middleware takes the form of a [`tower::Layer`][Layer] that wraps the actual connection for each
 /// request. The [`tower::Service`](Service) that the middleware produces must accept requests of the type
 /// [`aws_smithy_http::operation::Request`] and return responses of the type
 /// [`http::Response<SdkBody>`], most likely by modifying the provided request in place, passing it
@@ -173,19 +175,19 @@ where
         let timeout_params =
             ClientTimeoutParams::new(&self.operation_timeout_config, self.sleep_impl.clone());
 
-        let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(timeout_params.operation_timeout))
-            .retry(
-                self.retry_policy
-                    .new_request_policy(self.sleep_impl.clone()),
-            )
-            .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
-            .layer(ParseResponseLayer::<O, Retry>::new())
-            // These layers can be considered as occurring in order. That is, first invoke the
-            // customer-provided middleware, then dispatch dispatch over the wire.
-            .layer(&self.middleware)
-            .layer(DispatchLayer::new())
-            .service(connector);
+        // Create a service by constructing it in reverse order. Think of this like an onion.
+        // The first service created will be the innermost service, wrapping the connector.
+        // The last service created will be the outermost service, wrapping all other services.
+        let svc = DispatchService::new(connector);
+        let svc = self.middleware.layer(svc);
+        let svc = ParseResponseService::<_, O, Retry>::new(svc);
+        let svc = TimeoutService::new(svc, timeout_params.operation_attempt_timeout);
+        let svc = RetryLayer::new(
+            self.retry_policy
+                .new_request_policy(self.sleep_impl.clone()),
+        )
+        .layer(svc);
+        let svc = TimeoutService::new(svc, timeout_params.operation_timeout);
 
         // send_operation records the full request-response lifecycle.
         // NOTE: For operations that stream output, only the setup is captured in this span.

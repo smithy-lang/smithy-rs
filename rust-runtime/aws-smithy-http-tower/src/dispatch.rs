@@ -22,6 +22,12 @@ pub struct DispatchService<S> {
     inner: S,
 }
 
+impl<S> DispatchService<S> {
+    pub fn new(inner: S) -> Self {
+        Self { inner }
+    }
+}
+
 type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
 impl<S> Service<operation::Request> for DispatchService<S>
