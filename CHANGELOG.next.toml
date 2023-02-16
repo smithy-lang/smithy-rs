@@ -288,7 +288,6 @@ references = ["smithy-rs#2448"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
-
 [[smithy-rs]]
 message = "Fix bug in timestamp format resolution. Prior to this fix, the timestamp format may have been incorrect if set on the target instead of on the member."
 references = ["smithy-rs#2226"]
@@ -326,3 +325,11 @@ be reused.
 references = ["aws-sdk-rust#160", "smithy-rs#2445"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """Remove deprecated `ResolveAwsEndpoint` interfaces.
+[For details see the longform changelog entry](https://github.com/awslabs/aws-sdk-rust/discussions/755).
+"""
+author = "rcoh"
+references = ["smithy-rs#2390", "smithy-rs#1784"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
