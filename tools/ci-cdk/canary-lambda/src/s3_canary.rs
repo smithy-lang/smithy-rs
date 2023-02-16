@@ -10,7 +10,6 @@ use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::presigning::config::PresigningConfig;
 use s3::types::ByteStream;
-use std::fmt::format;
 use std::time::Duration;
 use uuid::Uuid;
 
