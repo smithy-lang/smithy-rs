@@ -186,7 +186,6 @@ fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
  * Returns the parent and the inline module that this particular shape should go in.
  */
 fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolProvider, pubCrateServerBuilder: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
-    //val container = overriddenConstrainedMemberInfo()?.first ?: return null
     val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
     return if (overriddenTrait.container is StructureShape) {
         val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()
@@ -201,7 +200,7 @@ fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolPro
             val shapeSymbol = symbolProvider.toSymbol(this)
             val shapeModule = shapeSymbol.module()
             check(!shapeModule.parent.isInline()) {
-                "parent module of $id should not be an inline module"
+                "Parent module of $id should not be an inline module"
             }
             Pair(shapeModule.parent as RustModule.LeafModule, shapeModule)
         }

@@ -67,7 +67,7 @@ fun RustCrate.withModuleOrWithStructureBuilderModule(
 
 /**
  * If the passed in `shape` is a synthetic extracted shape resulting from a constrained struct member,
- * the `Writable` is called using the structure's builder module. Otherwise the `Writable` is called
+ * the `Writable` is called using the structure's builder module. Otherwise, the `Writable` is called
  * using shape's `module`.
  */
 fun RustCrate.useShapeWriterOrUseWithStructureBuilder(
@@ -104,7 +104,7 @@ fun RustCrate.withInMemoryInlineModule(
     codeWritable: Writable,
 ) {
     check(inlineModule.isInline()) {
-        "module has to be an inline module for it to be used with the InlineModuleWriter"
+        "Module has to be an inline module for it to be used with the InlineModuleWriter"
     }
     this.getInlineModuleWriter().withInlineModuleHierarchy(outerWriter, inlineModule, docWriter) {
         codeWritable(this)
@@ -155,7 +155,7 @@ class InnerModule(debugMode : Boolean) {
     fun withInlineModuleHierarchyUsingCrate(rustCrate: RustCrate, inlineModule: RustModule.LeafModule, docWriter: DocWriter? = null, writable: Writable) {
         val hierarchy = getHierarchy(inlineModule).toMutableList()
         check(!hierarchy.first().isInline()) {
-            "when adding a `RustModule.LeafModule` to the crate, the topmost module in the hierarchy cannot be an inline module"
+            "When adding a `RustModule.LeafModule` to the crate, the topmost module in the hierarchy cannot be an inline module."
         }
         // The last in the hierarchy is the one we will return the writer for.
         val bottomMost = hierarchy.removeLast()
@@ -178,7 +178,7 @@ class InnerModule(debugMode : Boolean) {
             }
         } else {
             check(!bottomMost.isInline()) {
-                "there is only one module in hierarchy so it has to be non-inlined"
+                "There is only one module in the hierarchy, so it has to be non-inlined."
             }
             rustCrate.withModule(bottomMost) {
                 registerTopMostWriter(this)
@@ -197,7 +197,7 @@ class InnerModule(debugMode : Boolean) {
             hierarchy.removeFirst()
         }
         check(hierarchy.isNotEmpty()) {
-            "an inline module should always have one parent besides itself"
+            "An inline module should always have one parent besides itself."
         }
 
         // The last in the hierarchy is the module under which the new inline module resides.
