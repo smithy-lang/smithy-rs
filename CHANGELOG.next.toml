@@ -222,3 +222,20 @@ message = "Fluent builder methods on the client are now marked as deprecated whe
 references = ["aws-sdk-rust#740"]
 meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """Remove deprecated `ResolveAwsEndpoint` interfaces.
+In general, the path forward is to either:
+1. Replace usages with either `endpoint_url` either on [`SdkConfig`](https://docs.rs/aws-types/0.54.1/aws_types/sdk_config/struct.Builder.html#method.endpoint_url), [`ConfigLoader`](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.endpoint_url) or [`<service>::config::Builder::endpoint_url`](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/config/struct.Builder.html#method.endpoint_url).
+2. Replace usages with a [service-specific resolver override](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/config/struct.Builder.html#method.endpoint_resolver).
+
+The following APIs have been removed:
+1. [`SdkConfig::endpoint_resolver()`](https://docs.rs/aws-config/0.54.1/aws_config/struct.SdkConfig.html#method.endpoint_resolver): This getter referred a field that has been removed.
+2. [`sdk_config::Builder::set_endpoint_resolver(resolver)`](https://docs.rs/aws-types/0.54.1/aws_types/sdk_config/struct.Builder.html#method.set_endpoint_resolver): This setter has been removed.
+3. [`ConfigLoader::endpoint_resolver(resolver)](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.endpoint_resolver): This previously deprecated setter has been removed.
+4. Three types have been removed from the [`aws-endpoint`](https://docs.rs/aws-endpoint/0.54.1/aws_endpoint/) crate: `AwsEndpoint`, `CredentialScope`, and `ResolveAwsEndpoint`.
+5. The re-export of `Endpoint` has been removed from generated services. Use `endpoint_url` which accepts a string directly instead.
+"""
+author = "rcoh"
+references = ["smithy-rs#2390", "smithy-rs#1784"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
