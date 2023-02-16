@@ -53,7 +53,6 @@ class UnconstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider, debugMode = true)
 
-        // FZ rebase
         project.withModule(Model) {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
         }
@@ -72,7 +71,6 @@ class UnconstrainedMapGeneratorTest {
                     UnconstrainedMapGenerator(codegenContext,
                         this@unconstrainedModuleWriter.createTestInlineModuleCreator(), it).render()
 
-                    // FZ rebase
                     MapConstraintViolationGenerator(
                         codegenContext,
                         this@modelsModuleWriter.createTestInlineModuleCreator(),

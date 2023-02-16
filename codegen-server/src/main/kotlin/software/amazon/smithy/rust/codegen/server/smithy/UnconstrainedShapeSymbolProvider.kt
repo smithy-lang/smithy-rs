@@ -105,8 +105,6 @@ class UnconstrainedShapeSymbolProvider(
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            // FZ rebase
-            // parent = ServerRustModule.UnconstrainedModule,
             parent = parent,
             inline = true,
         )

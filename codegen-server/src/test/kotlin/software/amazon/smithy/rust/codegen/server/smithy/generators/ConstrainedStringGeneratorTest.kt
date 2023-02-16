@@ -83,7 +83,6 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             ConstrainedStringGenerator(
                 codegenContext,
@@ -145,7 +144,6 @@ class ConstrainedStringGeneratorTest {
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
-        // FZ rebase
         ConstrainedStringGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),
@@ -177,7 +175,6 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
-        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
             ConstrainedStringGenerator(
@@ -230,7 +227,6 @@ class ConstrainedStringGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
-        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             ConstrainedStringGenerator(
                 codegenContext,

@@ -68,9 +68,6 @@ class ConstrainedShapeSymbolProvider(
 
     private fun publicConstrainedSymbolForMapOrCollectionShape(shape: Shape): Symbol {
         check(shape is MapShape || shape is CollectionShape)
-        // FZ rebase
-        // val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        // return symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
 
         val (name, module) = getMemberNameAndModule(shape, serviceShape, ServerRustModule.Model, !publicConstrainedTypes)
         val rustType = RustType.Opaque(name)
@@ -123,10 +120,6 @@ class ConstrainedShapeSymbolProvider(
 
             is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    // FZ rebase
-                    //val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    //symbolBuilder(shape, rustType).locatedIn(ServerRustModule.Model).build()
-
                     // A standalone constrained shape goes into `ModelsModule`, but one
                     // arising from a constrained member shape goes into a module for the container.
                     val (name, module) = getMemberNameAndModule(shape, serviceShape, ServerRustModule.Model, !publicConstrainedTypes)
@@ -179,9 +172,9 @@ class ConstrainedShapeSymbolProvider(
             // For List, Union and Map, the new shape defined for a constrained member shape
             // need to be placed into an inline module named `pub {container_name_in_snake_case}`
             val innerModuleName = RustReservedWords.escapeIfNeeded(container.id.name.toSnakeCase()) + if (pubCrateServerBuilder) {
-                    "_internal"
+                "_internal"
             } else {
-                    ""
+                ""
             }
 
             val innerModule = RustModule.new(

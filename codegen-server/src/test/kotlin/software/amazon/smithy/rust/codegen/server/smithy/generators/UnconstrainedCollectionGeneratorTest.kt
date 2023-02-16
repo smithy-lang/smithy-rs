@@ -50,7 +50,6 @@ class UnconstrainedCollectionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
         }
@@ -68,12 +67,10 @@ class UnconstrainedCollectionGeneratorTest {
                 listOf(listA, listB).forEach {
                     UnconstrainedCollectionGenerator(
                         codegenContext,
-                        //this@unconstrainedModuleWriter,
                         this@unconstrainedModuleWriter.createTestInlineModuleCreator(),
                         it,
                     ).render()
 
-                    // FZ rebase
                     CollectionConstraintViolationGenerator(
                         codegenContext,
                         this@modelsModuleWriter.createTestInlineModuleCreator(),

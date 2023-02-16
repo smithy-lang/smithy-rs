@@ -105,6 +105,18 @@ class RustCrateInlineModuleComposingWriterTest {
 //    }
 
     @Test
+    fun `calling withModule multiple times returns same object on rustModule`() {
+        val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
+        val writers : MutableSet<RustWriter> = mutableSetOf()
+        testProject.withModule(ServerRustModule.Model) {
+            writers.add(this)
+        }
+        testProject.withModule(ServerRustModule.Model) {
+            check(writers.contains(this))
+        }
+    }
+
+    @Test
     fun `simple inline module works`() {
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         val moduleA = createTestInlineModule(ServerRustModule.Model, "a")

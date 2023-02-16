@@ -129,10 +129,6 @@ fun StructureShape.serverRenderWithModelBuilder(rustCrate: RustCrate, model: Mod
     val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this, SmithyValidationExceptionConversionGenerator(serverCodegenContext))
     modelBuilder.render(rustCrate, writer)
     writer.implBlock(symbolProvider.toSymbol(this)) {
-        // FZ Rebase mine
-        // val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
-        // modelBuilder.render(rustCrate, writer)
-        // writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)
     }
     rustCrate.getInlineModuleWriter().render()

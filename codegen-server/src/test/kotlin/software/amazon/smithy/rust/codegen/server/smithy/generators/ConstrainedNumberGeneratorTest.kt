@@ -72,7 +72,6 @@ class ConstrainedNumberGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        // FZ rebase
         project.withModule(ServerRustModule.Model) {
             ConstrainedNumberGenerator(
                 codegenContext,
@@ -141,7 +140,6 @@ class ConstrainedNumberGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
-        // FZ rebase
         ConstrainedNumberGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),

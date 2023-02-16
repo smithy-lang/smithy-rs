@@ -76,7 +76,6 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
     ) {
         val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-            // FZ rebase
             ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
                 render(rustCrate, writer)
                 writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {

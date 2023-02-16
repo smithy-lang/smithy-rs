@@ -138,7 +138,7 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        // FZ rebase
+
         project.withModule(ServerRustModule.Model) {
             structure.serverRenderWithModelBuilder(project, model, symbolProvider, this)
             inner.serverRenderWithModelBuilder(project, model, symbolProvider, this)

@@ -137,7 +137,7 @@ class ConstrainedMapGenerator(
                         value
                             .into_inner()
                             .into_iter()
-                            .map(|(k, v)| (k, v.into()))
+                            .map(|(k, v)| (k.into(), v.into()))
                             .collect()
                     }
                 }

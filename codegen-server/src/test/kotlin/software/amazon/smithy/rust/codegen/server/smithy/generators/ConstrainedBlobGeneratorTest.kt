@@ -70,7 +70,7 @@ class ConstrainedBlobGeneratorTest {
 
         project.withModule(ServerRustModule.Model) {
             addDependency(RuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
-            // FZ Rebase
+
             ConstrainedBlobGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -130,7 +130,6 @@ class ConstrainedBlobGeneratorTest {
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
-        // FZ rebase
         ConstrainedBlobGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),
@@ -138,12 +137,6 @@ class ConstrainedBlobGeneratorTest {
             constrainedBlobShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render()
-
-        // FZ rebase main
-        // ConstrainedBlobGenerator(codegenContext,
-        //     writer.createTestInlineModuleCreator(),
-        //     writer,
-        //     constrainedBlobShape).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedBlob(pub(crate) aws_smithy_types::Blob);"

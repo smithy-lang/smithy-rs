@@ -286,7 +286,6 @@ class ConstrainedCollectionGeneratorTest {
     ) {
         val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape, codegenContext.symbolProvider)
         ConstrainedCollectionGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
-        // FZ rebase
         CollectionConstraintViolationGenerator(
             codegenContext,
             writer.createTestInlineModuleCreator(),

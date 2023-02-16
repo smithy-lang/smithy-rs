@@ -39,7 +39,6 @@ class ServerBuilderGeneratorTest {
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StructureShape>("test#Credentials")
 
-        // FZ rebase
         StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()).render()
         val builderGenerator = ServerBuilderGenerator(codegenContext, shape, SmithyValidationExceptionConversionGenerator(codegenContext))
         val project = TestWorkspace.testProject()
