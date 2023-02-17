@@ -470,6 +470,7 @@ class Attribute(val inner: Writable) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
