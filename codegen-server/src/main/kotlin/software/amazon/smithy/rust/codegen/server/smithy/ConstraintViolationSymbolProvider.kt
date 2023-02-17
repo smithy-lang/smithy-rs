@@ -81,12 +81,8 @@ class ConstraintViolationSymbolProvider(
 
     private fun Shape.shapeModule(): RustModule.LeafModule {
         val documentation = if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
-            if (this.hasTrait(SyntheticStructureFromConstrainedMemberTrait.ID)) {
-                val symbol = base.toSymbol(this)
-                "See [`${this.contextName(serviceShape)}`]($symbol)."
-            } else {
-                "See [`${this.contextName(serviceShape)}`]."
-            }
+            val symbol = base.toSymbol(this)
+            "See [`${this.contextName(serviceShape)}`]($symbol)."
         } else {
             null
         }
@@ -96,7 +92,7 @@ class ConstraintViolationSymbolProvider(
         val (module, name) = if (syntheticTrait != null) {
             // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
             // that is a descendant of the module that contains the extracted shape itself.
-            val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, !publicConstrainedTypes)!!
+            val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, publicConstrainedTypes)!!
             val name = syntheticTrait.member.memberName
             Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
         } else {

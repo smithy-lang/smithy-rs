@@ -59,7 +59,6 @@ class UnconstrainedCollectionGeneratorTest {
             listOf(listA, listB).forEach {
                 PubCrateConstrainedCollectionGenerator(
                     codegenContext,
-                    // this,
                     this.createTestInlineModuleCreator(),
                     it,
                 ).render()

@@ -55,7 +55,7 @@ fun RustCrate.withModuleOrWithStructureBuilderModule(
 ) {
     // All structure constrained-member-shapes code is generated inside the structure builder's module.
     val parentAndInlineModuleInfo =
-        shape.getParentAndInlineModuleForConstrainedMember(codegenContext.symbolProvider, !codegenContext.settings.codegenConfig.publicConstrainedTypes)
+        shape.getParentAndInlineModuleForConstrainedMember(codegenContext.symbolProvider, codegenContext.settings.codegenConfig.publicConstrainedTypes)
     if (parentAndInlineModuleInfo == null) {
         this.withModule(module, codeWritable)
     } else {
@@ -83,7 +83,7 @@ fun RustCrate.useShapeWriterOrUseWithStructureBuilder(
 ) {
     // All structure constrained-member-shapes code is generated inside the structure builder's module.
     val parentAndInlineModuleInfo =
-        shape.getParentAndInlineModuleForConstrainedMember(codegenContext.symbolProvider, !codegenContext.settings.codegenConfig.publicConstrainedTypes)
+        shape.getParentAndInlineModuleForConstrainedMember(codegenContext.symbolProvider, codegenContext.settings.codegenConfig.publicConstrainedTypes)
     if (parentAndInlineModuleInfo == null) {
         docWriter?.invoke()
         this.useShapeWriter(shape, writable)
@@ -180,7 +180,7 @@ class InnerModule(debugMode: Boolean) {
         if (hierarchy.isNotEmpty()) {
             val topMost = hierarchy.removeFirst()
 
-            // Create an intermediate writer for all inner modules in the hierarchy
+            // Create an intermediate writer for all inner modules in the hierarchy.
             rustCrate.withModule(topMost) {
                 var writer = this
                 hierarchy.forEach {
@@ -271,18 +271,18 @@ class InnerModule(debugMode: Boolean) {
                     renderDescendents(this, it.writer)
                 }
 
-                // Add dependencies introduced by the inline module to the
+                // Add dependencies introduced by the inline module to the top most RustWriter.
                 it.writer.dependencies.forEach { dep -> writerToAddDependencies!!.addDependency(dep) }
             }
         }
 
         // Go over all the top level modules, create an `inlineModule` on the `RustWriter`
-        // and call the descendent hierarchy renderer using the `inlineModule::RustWriter`
+        // and call the descendent hierarchy renderer using the `inlineModule::RustWriter`.
         topLevelModuleWriters.forEach {
             writerToAddDependencies = it
 
             check(inlineModuleWriters[it] != null) {
-                "There must be a registered RustWriter for this module"
+                "There must be a registered RustWriter for this module."
             }
 
             renderDescendents(it, it)
@@ -328,7 +328,7 @@ class InnerModule(debugMode: Boolean) {
             inlineWriter
         } else {
             check(inlineModuleAndWriter.inlineModule == lookForModule) {
-                "the two inline modules have the same name but different attributes on them"
+                "The two inline modules have the same name but different attributes on them."
             }
 
             inlineModuleAndWriter.writer
