@@ -105,13 +105,12 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * derives for a given shape.
  */
 open class SymbolVisitor(
-    private val model: Model,
+    override val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: RustSymbolProviderConfig,
-) : RustSymbolProvider,
-    ShapeVisitor<Symbol> {
+    override val config: RustSymbolProviderConfig,
+) : RustSymbolProvider, ShapeVisitor<Symbol> {
+    override val moduleProviderContext = ModuleProviderContext(model, serviceShape)
     private val nullableIndex = NullableIndex.of(model)
-    override fun config(): RustSymbolProviderConfig = config
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)

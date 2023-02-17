@@ -135,7 +135,7 @@ class BuilderGenerator(
                     }
     }
 
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.builderSymbol(symbolProvider)

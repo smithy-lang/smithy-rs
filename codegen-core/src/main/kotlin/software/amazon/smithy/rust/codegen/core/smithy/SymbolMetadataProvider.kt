@@ -94,7 +94,6 @@ fun containerDefaultMetadata(
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
-    private val model: Model,
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
 

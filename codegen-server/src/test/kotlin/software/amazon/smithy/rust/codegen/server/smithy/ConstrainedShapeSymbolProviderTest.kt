@@ -90,7 +90,7 @@ class ConstrainedShapeSymbolProviderTest {
     private val model = baseModelString.asSmithyModel()
     private val serviceShape = model.lookup<ServiceShape>("test#TestService")
     private val symbolProvider = serverTestSymbolProvider(model, serviceShape)
-    private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape, true)
+    private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, serviceShape, true)
 
     companion object {
         @JvmStatic

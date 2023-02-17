@@ -8,12 +8,14 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -22,8 +24,10 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
-    class Stub : RustSymbolProvider {
-        override fun config(): RustSymbolProviderConfig = PANIC()
+    class Stub(override val model: Model) : RustSymbolProvider {
+        override val moduleProviderContext: ModuleProviderContext get() = PANIC()
+        override val config: RustSymbolProviderConfig get() = PANIC()
+
         override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
         override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
 
@@ -44,7 +48,7 @@ internal class RustReservedWordSymbolProviderTest {
                 async: String
             }
         """.trimMargin().asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(Stub(), model)
+        val provider = RustReservedWordSymbolProvider(Stub(model))
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -68,7 +72,7 @@ internal class RustReservedWordSymbolProviderTest {
 
     private fun expectEnumRename(original: String, expected: MaybeRenamed) {
         val model = "namespace foo".asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(Stub(), model)
+        val provider = RustReservedWordSymbolProvider(Stub(model))
         provider.toEnumVariantName(EnumDefinition.builder().name(original).value("foo").build()) shouldBe expected
     }
 }

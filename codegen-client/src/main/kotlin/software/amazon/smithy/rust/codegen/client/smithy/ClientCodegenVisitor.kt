@@ -71,7 +71,10 @@ class ClientCodegenVisitor(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
             nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-            moduleProvider = ClientModuleProvider,
+            moduleProvider = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                true -> ClientModuleProvider
+                else -> OldModuleSchemeClientModuleProvider
+            },
         )
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
@@ -263,7 +266,7 @@ class ClientCodegenVisitor(
      * Generate errors for operation shapes
      */
     override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(ClientRustModule.Error) {
+        rustCrate.withModule(symbolProvider.moduleForOperationError(shape)) {
             OperationErrorGenerator(
                 model,
                 symbolProvider,
