@@ -222,3 +222,10 @@ message = "Fluent builder methods on the client are now marked as deprecated whe
 references = ["aws-sdk-rust#740"]
 meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
 author = "Velfi"
+
+[[smithy-rs]]
+message = """Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
+produced Rust code that did not compile"""
+references = ["smithy-rs#2352", "smithy-rs#2343"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "82marbag"
