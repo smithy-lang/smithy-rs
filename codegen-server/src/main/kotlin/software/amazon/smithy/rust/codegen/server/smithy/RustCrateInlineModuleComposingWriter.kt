@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 typealias DocWriter = () -> Any
 typealias InlineModuleCreator = (Symbol, Writable) -> Unit
@@ -144,7 +145,8 @@ private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
     ConcurrentHashMap()
 
 class InnerModule(debugMode: Boolean) {
-    private val topLevelModuleWriters: MutableSet<RustWriter> = mutableSetOf()
+    // Holds the root modules to start rendering the descendents from.
+    private val topLevelModuleWriters: ConcurrentLinkedQueue<RustWriter> = ConcurrentLinkedQueue()
     private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
     private val docWriters: ConcurrentHashMap<RustModule.LeafModule, MutableList<DocWriter>> = ConcurrentHashMap()
     private val writerCreator = RustWriter.factory(debugMode)
