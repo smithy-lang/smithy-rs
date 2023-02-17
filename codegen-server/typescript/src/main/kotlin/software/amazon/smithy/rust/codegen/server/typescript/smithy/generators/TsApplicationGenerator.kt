@@ -82,7 +82,6 @@ class TsApplicationGenerator(
                 val operationName = symbolProvider.toSymbol(operation).name
                 val input = "${operationName}Input"
                 val output = "${operationName}Output"
-                val error = "${operationName}Error"
                 val fnName = operationName.toSnakeCase()
                 rustTemplate(
                     """

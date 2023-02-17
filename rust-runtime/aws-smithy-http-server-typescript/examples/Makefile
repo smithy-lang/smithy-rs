@@ -16,13 +16,13 @@ codegen:
 
 build:
 	cd pokemon-service-server-sdk && npm run build:debug
-	# ln -sf pokemon-service-server-sdk/pokemon-service-server-sdk.*.node .
+	ln -sf $(shell find pokemon-service-server-sdk -name '*.node') .
 	ln -sf pokemon-service-server-sdk/index.d.ts
 	ln -sf pokemon-service-server-sdk/index.js
 
 release:
 	cd pokemon-service-server-sdk && npm run build
-	# ln -sf pokemon-service-server-sdk/pokemon-service-server-sdk.*.node .
+	ln -sf $(shell find pokemon-service-server-sdk -name '*.node') .
 	ln -sf pokemon-service-server-sdk/index.d.ts
 	ln -sf pokemon-service-server-sdk/index.js
 

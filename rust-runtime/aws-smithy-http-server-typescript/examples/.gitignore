@@ -89,4 +89,5 @@ yarn-debug.log*
 yarn-error.log*
 package-lock.json
 index.d.ts
+index.js
 pokemon-service-server-sdk.*.node
