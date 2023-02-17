@@ -20,8 +20,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStre
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 
 class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
@@ -33,7 +36,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
             return
         }
 
-        EventStreamTestTools.runTestCase(
+        val testProject = EventStreamTestTools.runTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
@@ -70,6 +73,8 @@ class ServerEventStreamUnmarshallerGeneratorTest {
             },
             CodegenTarget.SERVER,
             EventStreamTestVariety.Unmarshall,
+            transformers = listOf(ConstrainedMemberTransform::transform),
         )
+        testProject.compileAndTest()
     }
 }

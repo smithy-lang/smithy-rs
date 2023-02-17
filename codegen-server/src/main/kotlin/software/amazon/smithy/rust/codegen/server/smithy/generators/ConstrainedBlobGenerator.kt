@@ -154,8 +154,7 @@ data class BlobLength(val lengthTrait: LengthTrait) {
                 Self::Length(length) => crate::model::ValidationExceptionField {
                     message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
                     path,
-                },
-                """,
+                },""",
             )
         },
         this::renderValidationFunction,

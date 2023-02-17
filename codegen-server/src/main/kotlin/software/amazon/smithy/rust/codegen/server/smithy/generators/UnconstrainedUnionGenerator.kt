@@ -135,7 +135,6 @@ class UnconstrainedUnionGenerator(
         }
 
         inlineModuleCreator(
-            //constraintViolationSymbol.module(), codegenContext
             constraintViolationSymbol
         ) {
             Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
@@ -227,9 +226,7 @@ class UnconstrainedUnionGenerator(
                                     """
                                     {
                                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
-                                            .try_into()
-                                            $boxIt
-                                            $boxErr
+                                            .try_into() $boxIt $boxErr
                                             .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                         constrained.into()
                                     }

@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 
 class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
@@ -41,6 +42,6 @@ class ClientEventStreamMarshallerGeneratorTest {
             },
             CodegenTarget.CLIENT,
             EventStreamTestVariety.Marshall,
-        )
+        ).compileAndTest()
     }
 }

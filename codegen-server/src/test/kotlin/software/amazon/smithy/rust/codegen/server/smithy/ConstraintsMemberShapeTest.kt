@@ -1,21 +1,21 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -26,11 +26,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRe
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.io.File
 import java.nio.file.Path
-import java.util.logging.Level
-import java.util.logging.Logger
 
 class ConstraintsMemberShapeTest {
     private val outputModelOnly = """
@@ -276,8 +273,13 @@ class ConstraintsMemberShapeTest {
             runtimeConfig = runtimeConfig,
             overrideTestDir = dirToUse,
         )
-        val codegenDecorator: CombinedServerCodegenDecorator =
-            CombinedServerCodegenDecorator.fromClasspath(context)
+        val codegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(
+                context,
+                ServerRequiredCustomizations(),
+                SmithyValidationExceptionDecorator(),
+                CustomValidationExceptionWithReasonDecorator(),
+            )
 
         ServerCodegenVisitor(context, codegenDecorator)
             .execute()
@@ -383,46 +385,49 @@ class ConstraintsMemberShapeTest {
         lazyMessage: () -> Any = ::defaultError,
     ) {
         val memberId = ShapeId.from(member)
-        check(model.getShape(memberId).isPresent, lazyMessage)
+        assert(model.getShape(memberId).isPresent) { lazyMessage }
+
         val memberShape = model.expectShape(memberId).asMemberShape().get()
         val memberTargetShape = model.expectShape(memberShape.target)
         val orgMemberId = ShapeId.from(orgModelMember)
-        check(baseModel.getShape(orgMemberId).isPresent, lazyMessage)
-        val originalShape = baseModel.expectShape(orgMemberId).asMemberShape().get()
-        val originalTargetShape = model.expectShape(originalShape.target)
+        assert(baseModel.getShape(orgMemberId).isPresent) { lazyMessage }
+
+        val beforeTransformMemberShape = baseModel.expectShape(orgMemberId).asMemberShape().get()
+        val originalTargetShape = model.expectShape(beforeTransformMemberShape.target)
 
         val extractableConstraintTraits = allConstraintTraits - RequiredTrait::class.java
 
         // New member shape should not have the overridden constraints on it
-        check(!extractableConstraintTraits.any(memberShape::hasTrait), lazyMessage)
+        assert(!extractableConstraintTraits.any(memberShape::hasTrait)) { lazyMessage }
 
         // Target shape has to be changed to a new shape
-        check(memberTargetShape.id.name != originalShape.target.name, lazyMessage)
+        memberTargetShape.id.name shouldNotBe beforeTransformMemberShape.target.name
+
         // Target shape's name should match the expected name
         val expectedName = memberShape.container.name.substringAfter('#') +
             memberShape.memberName.substringBefore('#').toPascalCase()
-        check(memberTargetShape.id.name == expectedName, lazyMessage)
-        // New shape should have all of the constraint traits that were on the member shape,
+
+        memberTargetShape.id.name shouldBe expectedName
+
+        // New shape should have all the constraint traits that were on the member shape,
         // and it should also have the traits that the target type contains.
-        val originalConstrainedTraits =
-            originalShape.allTraits.values.filter { allConstraintTraits.contains(it.javaClass) }.toSet()
+        val beforeTransformConstraintTraits =
+            beforeTransformMemberShape.allTraits.values.filter { allConstraintTraits.contains(it.javaClass) }.toSet()
         val newShapeConstrainedTraits =
             memberTargetShape.allTraits.values.filter { allConstraintTraits.contains(it.javaClass) }.toSet()
 
-        val leftOutConstraintTrait = originalConstrainedTraits - newShapeConstrainedTraits
-        check(
+        val leftOutConstraintTrait = beforeTransformConstraintTraits - newShapeConstrainedTraits
+        assert(
             leftOutConstraintTrait.isEmpty() || leftOutConstraintTrait.all {
                 it.toShapeId() == RequiredTrait.ID
-            },
-            lazyMessage,
-        )
+            },) { lazyMessage }
 
         // In case the target shape has some more constraints, which the member shape did not override,
         // then those still need to apply on the new standalone shape that has been defined.
         val leftOverTraits = originalTargetShape.allTraits.values
-            .filter { beforeOverridingTrait -> originalConstrainedTraits.none { beforeOverridingTrait.toShapeId() == it.toShapeId() } }
+            .filter { beforeOverridingTrait -> beforeTransformConstraintTraits.none { beforeOverridingTrait.toShapeId() == it.toShapeId() } }
         val allNewShapeTraits = memberTargetShape.allTraits.values.toList()
-        check((leftOverTraits + newShapeConstrainedTraits).all { it in allNewShapeTraits }, lazyMessage)
+        assert((leftOverTraits + newShapeConstrainedTraits).all { it in allNewShapeTraits }) { lazyMessage }
     }
 
     private fun defaultError() = "test failed"
@@ -439,16 +444,16 @@ class ConstraintsMemberShapeTest {
         lazyMessage: () -> Any = ::defaultError,
     ) {
         val memberId = ShapeId.from(member)
-        check(model.getShape(memberId).isPresent, lazyMessage)
+        assert(model.getShape(memberId).isPresent) { lazyMessage }
 
         val memberShape = model.expectShape(memberId).asMemberShape().get()
         val memberTargetShape = model.expectShape(memberShape.target)
         val originalShape = baseModel.expectShape(ShapeId.from(orgModelMember)).asMemberShape().get()
 
         // Member shape should not have any constraints on it
-        check(!memberShape.hasConstraintTrait(), lazyMessage)
+        assert(!memberShape.hasConstraintTrait()) { lazyMessage }
         // Target shape has to be same as the original shape
-        check(memberTargetShape.id == originalShape.target, lazyMessage)
+        memberTargetShape.id shouldBe originalShape.target
     }
 
     private fun checkShapeHasTrait(
@@ -462,13 +467,11 @@ class ConstraintsMemberShapeTest {
         val memberShape = model.expectShape(memberId).asMemberShape().get()
         val orgMemberShape = orgModel.expectShape(ShapeId.from(orgModelMember)).asMemberShape().get()
 
-        check(memberShape.allTraits.keys.contains(ShapeId.from(traitName)))
-        { "given $member does not have the $traitName applied to it" }
-        check(orgMemberShape.allTraits.keys.contains(ShapeId.from(traitName)))
-        { "given $member does not have the $traitName applied to it in the original model" }
+        memberShape.allTraits.keys shouldContain ShapeId.from(traitName)
+        orgMemberShape.allTraits.keys shouldContain ShapeId.from(traitName)
 
         val newMemberTrait = memberShape.allTraits[ShapeId.from(traitName)]
         val oldMemberTrait = orgMemberShape.allTraits[ShapeId.from(traitName)]
-        check(newMemberTrait == oldMemberTrait) { "contents of the two traits do not match in the transformed model" }
+        newMemberTrait shouldBe oldMemberTrait
     }
 }

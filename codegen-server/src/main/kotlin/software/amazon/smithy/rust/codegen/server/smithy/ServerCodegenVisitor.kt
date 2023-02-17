@@ -413,7 +413,6 @@ open class ServerCodegenVisitor(
             rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.Model, shape, codegenContext) {
                 ConstrainedMapGenerator(
                     codegenContext,
-                    // check?
                     this,
                     shape,
                     if (renderUnconstrainedMap) codegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape) else null,

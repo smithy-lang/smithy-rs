@@ -78,7 +78,7 @@ interface EventStreamTestRequirements<C : CodegenContext> {
     )
 
     /** Render an error struct and builder */
-    fun renderError(writer: RustWriter, codegenContext: C, shape: StructureShape)
+    fun renderError(rustCrate: RustCrate, writer: RustWriter, codegenContext: C, shape: StructureShape)
 }
 
 object EventStreamTestTools {
@@ -87,8 +87,12 @@ object EventStreamTestTools {
         requirements: EventStreamTestRequirements<C>,
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
-    ) {
-        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
+        transformers: List<(Model)->Model> = listOf()
+    ) : TestWriterDelegator {
+        val model = (listOf(OperationNormalizer::transform, EventStreamNormalizer::transform) + transformers).fold (testCase.model) { model, transformer ->
+            transformer(model)
+        }
+
         val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val codegenContext = requirements.createCodegenContext(
             model,
@@ -106,7 +110,10 @@ object EventStreamTestTools {
                 EventStreamTestVariety.Unmarshall -> writeUnmarshallTestCases(testCase, codegenTarget, generator)
             }
         }
-        test.project.compileAndTest()
+
+        println(testCase.model.toString())
+
+        return test.project
     }
 
     private fun <C : CodegenContext> generateTestProject(
@@ -130,7 +137,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                requirements.renderError(this, codegenContext, shape)
+                requirements.renderError(project,this, codegenContext, shape)
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")

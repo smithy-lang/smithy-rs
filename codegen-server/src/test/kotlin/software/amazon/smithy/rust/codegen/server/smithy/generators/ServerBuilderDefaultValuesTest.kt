@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
@@ -145,6 +146,7 @@ class ServerBuilderDefaultValuesTest {
             )
         }
 
+        project.renderInlineMemoryModules()
         // Run clippy because the builder's code for handling `@default` is prone to upset it.
         project.compileAndTest(runClippy = true)
     }

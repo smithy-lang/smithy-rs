@@ -94,6 +94,14 @@ fun RustCrate.useShapeWriterOrUseWithStructureBuilder(
     }
 }
 
+
+fun RustCrate.renderInlineMemoryModules() {
+    val inlineModule = crateToInlineModule[this]
+    check(inlineModule != null) {
+        "InlineModule writer has not been registered for this crate"
+    }
+    inlineModule.render()
+}
 /**
  * Given a `RustWriter` calls the `Writable` using a `RustWriter` for the `inlineModule`
  */
@@ -243,6 +251,8 @@ class InnerModule(debugMode : Boolean) {
      * Writes out each inline module's code (`toString`) to the respective top level `RustWriter`.
      */
     fun render() {
+        var writerToAddDependencies : RustWriter? = null
+
         fun writeInlineCode(rustWriter: RustWriter, code: String) {
             val inlineCode = code.drop(emptyLineCount)
             rustWriter.writeWithNoFormatting(inlineCode)
@@ -250,7 +260,7 @@ class InnerModule(debugMode : Boolean) {
 
         fun renderDescendents(topLevelWriter: RustWriter, inMemoryWriter: RustWriter) {
             // Traverse all descendent inline modules and render them.
-            inlineModuleWriters[inMemoryWriter]?.forEach {
+            inlineModuleWriters[inMemoryWriter]!!.forEach {
                 writeDocs(it.inlineModule)
 
                 topLevelWriter.withInlineModule(it.inlineModule) {
@@ -259,17 +269,20 @@ class InnerModule(debugMode : Boolean) {
                 }
 
                 // Add dependencies introduced by the inline module to the
-                it.writer.dependencies.forEach { dep -> topLevelWriter.addDependency(dep) }
+                it.writer.dependencies.forEach { dep -> writerToAddDependencies!!.addDependency(dep) }
             }
         }
 
         // Go over all the top level modules, create an `inlineModule` on the `RustWriter`
         // and call the descendent hierarchy renderer using the `inlineModule::RustWriter`
         topLevelModuleWriters.forEach {
-            val inlineModuleWithWriter = inlineModuleWriters[it]
-            if (inlineModuleWithWriter != null) {
-                renderDescendents(it, it)
+            writerToAddDependencies = it
+
+            check(inlineModuleWriters[it] != null) {
+                "There must be a registered RustWriter for this module"
             }
+
+            renderDescendents(it, it)
         }
     }
 

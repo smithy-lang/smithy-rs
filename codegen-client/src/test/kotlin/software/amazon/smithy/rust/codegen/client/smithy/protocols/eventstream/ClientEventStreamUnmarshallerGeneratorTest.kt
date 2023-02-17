@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 
 class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
@@ -44,6 +45,6 @@ class ClientEventStreamUnmarshallerGeneratorTest {
             },
             CodegenTarget.CLIENT,
             EventStreamTestVariety.Unmarshall,
-        )
+        ).compileAndTest()
     }
 }

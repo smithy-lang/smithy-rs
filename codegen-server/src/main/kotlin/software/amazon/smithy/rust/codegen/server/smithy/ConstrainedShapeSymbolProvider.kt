@@ -33,11 +33,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderModule
+import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
 /**
  * The [ConstrainedShapeSymbolProvider] returns, for a given _directly_
@@ -62,7 +64,7 @@ class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,
-    private val publicConstrainedTypes : Boolean = true
+    private val publicConstrainedTypes: Boolean
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
@@ -161,17 +163,18 @@ class ConstrainedShapeSymbolProvider(
         defaultModule: RustModule.LeafModule,
         pubCrateServerBuilder: Boolean,
     ): Pair<String, RustModule.LeafModule> {
-        val (container, member) =
-            shape.overriddenConstrainedMemberInfo() ?: return Pair(shape.contextName(serviceShape), defaultModule)
+        val syntheticMemberTrait = shape.getTrait<SyntheticStructureFromConstrainedMemberTrait>()
+            ?: return Pair(shape.contextName(serviceShape), defaultModule)
 
-        return if (container is StructureShape) {
-            val builderModule = container.serverBuilderModule(base, pubCrateServerBuilder)
-            val renameTo = member.memberName ?: member.id.name
+        return if (syntheticMemberTrait.container is StructureShape) {
+            val builderModule = syntheticMemberTrait.container.serverBuilderModule(base, pubCrateServerBuilder)
+            val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), builderModule)
         } else {
             // For List, Union and Map, the new shape defined for a constrained member shape
             // need to be placed into an inline module named `pub {container_name_in_snake_case}`
-            val innerModuleName = RustReservedWords.escapeIfNeeded(container.id.name.toSnakeCase()) + if (pubCrateServerBuilder) {
+            val moduleName = RustReservedWords.escapeIfNeeded(syntheticMemberTrait.container.id.name.toSnakeCase())
+            val innerModuleName = moduleName + if (pubCrateServerBuilder) {
                 "_internal"
             } else {
                 ""
@@ -183,7 +186,7 @@ class ConstrainedShapeSymbolProvider(
                 parent = defaultModule,
                 inline = true,
             )
-            val renameTo = member.memberName ?: member.id.name
+            val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), innerModule)
         }
     }

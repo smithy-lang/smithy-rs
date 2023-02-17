@@ -131,5 +131,4 @@ fun StructureShape.serverRenderWithModelBuilder(rustCrate: RustCrate, model: Mod
     writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
     }
-    rustCrate.getInlineModuleWriter().render()
 }

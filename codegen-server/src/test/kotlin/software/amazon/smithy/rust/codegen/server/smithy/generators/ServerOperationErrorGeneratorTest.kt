@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
@@ -94,7 +95,7 @@ class ServerOperationErrorGeneratorTest {
                     let error: GreetingError = variant.into();
                 """,
             )
-
+            project.renderInlineMemoryModules()
             project.compileAndTest()
         }
     }

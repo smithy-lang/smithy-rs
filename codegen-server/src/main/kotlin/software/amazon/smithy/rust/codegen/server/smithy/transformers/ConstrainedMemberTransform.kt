@@ -21,6 +21,7 @@ import java.lang.IllegalStateException
 import java.util.*
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
 
 /**
@@ -77,7 +78,7 @@ object ConstrainedMemberTransform {
         // The transformer will add new shapes, and will replace existing member shapes' target
         // with the newly added shapes.
         val transformations = model.operationShapes
-            .flatMap    { listOfNotNull(it.input.orNull(), it.output.orNull()) }
+            .flatMap    { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
             .mapNotNull { model.expectShape(it).asStructureShape().orElse(null) }
             .filter     { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
             .flatMap    { walker.walkShapes(it) }

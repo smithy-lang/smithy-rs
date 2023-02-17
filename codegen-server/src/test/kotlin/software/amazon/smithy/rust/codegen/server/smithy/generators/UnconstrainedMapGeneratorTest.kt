@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Model
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -60,7 +61,6 @@ class UnconstrainedMapGeneratorTest {
         project.withModule(ServerRustModule.ConstrainedModule) {
             listOf(mapA, mapB).forEach {
                 PubCrateConstrainedMapGenerator(codegenContext,
-                    //this,
                     this.createTestInlineModuleCreator(),
                 it).render()
             }
@@ -169,7 +169,7 @@ class UnconstrainedMapGeneratorTest {
                 )
             }
         }
-
+        project.renderInlineMemoryModules()
         project.compileAndTest()
     }
 }

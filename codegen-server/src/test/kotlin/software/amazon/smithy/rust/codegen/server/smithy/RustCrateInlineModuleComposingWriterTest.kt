@@ -1,5 +1,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.matchers.collections.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -97,13 +98,6 @@ class RustCrateInlineModuleComposingWriterTest {
         }
     }
 
-//    private fun extraRustFun(writer: RustWriter, moduleName: String) {
-//        writer.rustBlock("pub fn extra()") {
-//            writer.comment("Module $moduleName")
-//            writer.rust("""println!("extra function defined inside $moduleName");""")
-//        }
-//    }
-
     @Test
     fun `calling withModule multiple times returns same object on rustModule`() {
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
@@ -112,7 +106,7 @@ class RustCrateInlineModuleComposingWriterTest {
             writers.add(this)
         }
         testProject.withModule(ServerRustModule.Model) {
-            check(writers.contains(this))
+            writers shouldContain this
         }
     }
 
@@ -164,7 +158,6 @@ class RustCrateInlineModuleComposingWriterTest {
         modules["g"] = createTestInlineModule(modules["f"]!!, "g")
         modules["h"] = createTestInlineModule(ServerRustModule.Output, "h")
         // A different kotlin object but would still go in the right place
-//        val moduleB = createTestInlineModule(ServerRustModule.Model, "b", "A new module")
 
         testProject.withModule(ServerRustModule.Model) {
             testProject.getInlineModuleWriter().withInlineModule(this, modules["a"]!!) {
@@ -185,10 +178,6 @@ class RustCrateInlineModuleComposingWriterTest {
             testProject.getInlineModuleWriter().withInlineModule(this, modules["b"]!!) {
                 byeWorld(this, "b")
             }
-
-//            testProject.getInlineModuleWriter().withInlineModule(this, moduleB) {
-//                extraRustFun(this, "b")
-//            }
         }
 
         // Write directly to an inline module without specifying the immediate parent. crate::model::b::c
@@ -216,7 +205,6 @@ class RustCrateInlineModuleComposingWriterTest {
         testProject.getInlineModuleWriter().withInlineModuleHierarchyUsingCrate(testProject, modules["f"]!!) {
             helloWorld(this, "f")
         }
-
 
         // It should work even if the inner descendent module was added using `withInlineModuleHierarchy` and then
         // code is added to the intermediate module using `withInlineModuleHierarchyUsingCrate`
@@ -250,7 +238,6 @@ class RustCrateInlineModuleComposingWriterTest {
             this.unitTest("test_b") {
                 rust("crate::model::b::hello_world();")
                 rust("crate::model::b::bye_world();")
-//                rust("crate::model::b::extra();")
             }
             this.unitTest("test_someother_writer_wrote") {
                 rust("crate::model::b::some_other_writer_wrote_this();")

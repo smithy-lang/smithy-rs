@@ -102,6 +102,7 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
     }
 
     override fun renderError(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
@@ -115,8 +116,6 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
             shape.getTrait()!!,
             listOf(),
         ).render(CodegenTarget.SERVER)
-        // FZ TODO()
-        //TODO()
-        //renderBuilderForShape(writer, codegenContext, shape)
+        renderBuilderForShape(rustCrate, writer, codegenContext, shape)
     }
 }
