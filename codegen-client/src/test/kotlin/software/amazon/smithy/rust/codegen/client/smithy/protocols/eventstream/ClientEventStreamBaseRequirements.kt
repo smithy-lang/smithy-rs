@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSetting
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
@@ -48,6 +49,7 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
     )
 
     override fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ClientCodegenContext,
         shape: StructureShape,
@@ -66,6 +68,23 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     ) {
-        OperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
+        OperationErrorGenerator(model, symbolProvider, operationOrEventStream, emptyList()).render(writer)
+    }
+
+    override fun renderError(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+        codegenContext: ClientCodegenContext,
+        shape: StructureShape,
+    ) {
+        val errorTrait = shape.expectTrait<ErrorTrait>()
+        ErrorGenerator(
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            writer,
+            shape,
+            errorTrait,
+            emptyList(),
+        ).render()
     }
 }

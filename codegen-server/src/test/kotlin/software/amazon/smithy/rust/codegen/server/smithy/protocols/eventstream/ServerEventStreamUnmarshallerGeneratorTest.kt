@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -19,8 +20,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStre
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 
 class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
@@ -32,7 +35,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
             return
         }
 
-        EventStreamTestTools.runTestCase(
+        val testProject = EventStreamTestTools.setupTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
@@ -54,6 +57,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
 
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Delete this function override to use the correct builder from the parent class
                 override fun renderBuilderForShape(
+                    rustCrate: RustCrate,
                     writer: RustWriter,
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
@@ -68,6 +72,8 @@ class ServerEventStreamUnmarshallerGeneratorTest {
             },
             CodegenTarget.SERVER,
             EventStreamTestVariety.Unmarshall,
+            transformers = listOf(ConstrainedMemberTransform::transform),
         )
+        testProject.compileAndTest()
     }
 }

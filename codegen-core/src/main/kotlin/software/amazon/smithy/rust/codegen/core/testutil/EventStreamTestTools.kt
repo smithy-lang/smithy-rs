@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -63,6 +64,7 @@ interface EventStreamTestRequirements<C : CodegenContext> {
 
     /** Render a builder for the given shape */
     fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: C,
         shape: StructureShape,
@@ -75,16 +77,23 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     )
+
+    /** Render an error struct and builder */
+    fun renderError(rustCrate: RustCrate, writer: RustWriter, codegenContext: C, shape: StructureShape)
 }
 
 object EventStreamTestTools {
-    fun <C : CodegenContext> runTestCase(
+    fun <C : CodegenContext> setupTestCase(
         testCase: EventStreamTestModels.TestCase,
         requirements: EventStreamTestRequirements<C>,
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
-    ) {
-        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
+        transformers: List<(Model) -> Model> = listOf(),
+    ): TestWriterDelegator {
+        val model = (listOf(OperationNormalizer::transform, EventStreamNormalizer::transform) + transformers).fold(testCase.model) { model, transformer ->
+            transformer(model)
+        }
+
         val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val codegenContext = requirements.createCodegenContext(
             model,
@@ -102,7 +111,8 @@ object EventStreamTestTools {
                 EventStreamTestVariety.Unmarshall -> writeUnmarshallTestCases(testCase, codegenTarget, generator)
             }
         }
-        test.project.compileAndTest()
+
+        return test.project
     }
 
     private fun <C : CodegenContext> generateTestProject(
@@ -115,7 +125,6 @@ object EventStreamTestTools {
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape
         val walker = DirectedWalker(model)
-
         val project = TestWorkspace.testProject(symbolProvider)
         val errors = model.serviceShapes
             .flatMap { walker.walkShapes(it) }
@@ -126,8 +135,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
-                requirements.renderBuilderForShape(this, codegenContext, shape)
+                requirements.renderError(project, this, codegenContext, shape)
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")

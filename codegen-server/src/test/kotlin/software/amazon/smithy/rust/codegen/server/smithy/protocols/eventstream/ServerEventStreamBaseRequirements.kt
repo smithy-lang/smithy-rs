@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
@@ -65,6 +66,7 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
     )
 
     override fun renderBuilderForShape(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
@@ -72,15 +74,15 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                render(rustCrate, writer)
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
             ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator).apply {
-                render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                render(rustCrate, writer)
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
@@ -94,5 +96,23 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         operationOrEventStream: Shape,
     ) {
         ServerOperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
+    }
+
+    override fun renderError(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+        codegenContext: ServerCodegenContext,
+        shape: StructureShape,
+    ) {
+        StructureGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape, listOf()).render()
+        ErrorImplGenerator(
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            writer,
+            shape,
+            shape.getTrait()!!,
+            listOf(),
+        ).render(CodegenTarget.SERVER)
+        renderBuilderForShape(rustCrate, writer, codegenContext, shape)
     }
 }

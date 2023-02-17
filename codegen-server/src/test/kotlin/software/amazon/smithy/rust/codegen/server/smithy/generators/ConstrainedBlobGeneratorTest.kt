@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
@@ -69,8 +70,10 @@ class ConstrainedBlobGeneratorTest {
 
         project.withModule(ServerRustModule.Model) {
             addDependency(RuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
+
             ConstrainedBlobGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 constrainedBlobShape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
@@ -129,6 +132,7 @@ class ConstrainedBlobGeneratorTest {
 
         ConstrainedBlobGenerator(
             codegenContext,
+            writer.createTestInlineModuleCreator(),
             writer,
             constrainedBlobShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
