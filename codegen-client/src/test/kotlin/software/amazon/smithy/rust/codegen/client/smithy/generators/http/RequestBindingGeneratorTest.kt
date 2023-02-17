@@ -12,7 +12,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -130,7 +130,7 @@ class RequestBindingGeneratorTest {
     private fun renderOperation(rustCrate: RustCrate) {
         inputShape.renderWithModelBuilder(model, symbolProvider, rustCrate)
         rustCrate.withModule(ClientRustModule.Input) {
-            val codegenContext = testCodegenContext(model)
+            val codegenContext = testClientCodegenContext(model)
             val bindingGen = RequestBindingGenerator(
                 codegenContext,
                 // Any protocol is fine for this test.

@@ -36,36 +36,47 @@ object ClientRustModule {
 
     /** crate::client */
     val client = Client.self
-
     object Client {
         /** crate::client */
         val self = RustModule.public("client", "Client and fluent builders for calling the service.")
 
         /** crate::client::customize */
-        val customize = RustModule.public("customize", "Operation customization and supporting types", parent = self)
+        val customize = RustModule.public("customize", parent = self, documentation = "Operation customization and supporting types")
     }
 
     val Config = RustModule.public("config", documentation = "Configuration for the service.")
     val Error = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
     val Operation = RustModule.public("operation", documentation = "All operations that this crate can perform.")
     val Meta = RustModule.public("meta", documentation = "Information about this crate.")
-    val Model = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
     val Input = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
     val Output = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
-    val Types = RustModule.public("types", documentation = "Data primitives referenced by other data types.")
+    val Primitives = RustModule.public("primitives", documentation = "Data primitives referenced by other data types.")
+
+    /** crate::types */
+    val types = Types.self
+    object Types {
+        /** crate::types */
+        val self = RustModule.public("types", documentation = "Data primitives referenced by other data types.")
+
+        /** crate::types::error */
+        val Error = RustModule.public("error", parent = self, documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
+    }
+
+    // TODO(CrateReorganization): Remove this module when cleaning up `enableNewCrateOrganizationScheme`
+    val Model = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
 }
 
 object ClientModuleProvider : ModuleProvider {
     override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule = when (shape) {
         is OperationShape -> perOperationModule(context, shape)
         is StructureShape -> when {
-            shape.hasTrait<ErrorTrait>() -> ClientRustModule.Error
+            shape.hasTrait<ErrorTrait>() -> ClientRustModule.Types.Error
             shape.hasTrait<SyntheticInputTrait>() -> perOperationModule(context, shape)
             shape.hasTrait<SyntheticOutputTrait>() -> perOperationModule(context, shape)
-            else -> ClientRustModule.Model
+            else -> ClientRustModule.types
         }
 
-        else -> ClientRustModule.Model
+        else -> ClientRustModule.types
     }
 
     override fun moduleForOperationError(
@@ -173,3 +184,9 @@ fun ClientCodegenContext.featureGatedPaginatorModule(symbolProvider: RustSymbolP
         )
         else -> RustModule.public("paginator", "Paginators for the service")
     }
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedPrimitivesModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Primitives
+    else -> ClientRustModule.types
+}
