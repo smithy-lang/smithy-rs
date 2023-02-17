@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
@@ -171,8 +172,8 @@ class UnconstrainedUnionGenerator(
 
         val constraintViolationSymbol =
             constraintViolationSymbolProvider.toSymbol(targetShape)
-                // If the corresponding union's member is boxed, box this constraint violation symbol too.
-                .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
+                // Box this constraint violation symbol if necessary.
+                .letIf(constraintViolation.forMember.hasTrait<ConstraintViolationRustBoxTrait>()) {
                     it.makeRustBoxed()
                 }
 
@@ -201,9 +202,14 @@ class UnconstrainedUnionGenerator(
                                     (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {
-                                "(*unconstrained)" to ".map(Box::new).map_err(Box::new)"
+                                "(*unconstrained)" to ".map(Box::new)"
                             } else {
                                 "unconstrained" to ""
+                            }
+                            val boxErr = if (member.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                                ".map_err(Box::new)"
+                            } else {
+                                ""
                             }
 
                             if (resolveToNonPublicConstrainedType) {
@@ -219,6 +225,7 @@ class UnconstrainedUnionGenerator(
                                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
                                             .try_into()
                                             $boxIt
+                                            $boxErr
                                             .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                         constrained.into()
                                     }
@@ -231,6 +238,7 @@ class UnconstrainedUnionGenerator(
                                     $unconstrainedVar
                                         .try_into()
                                         $boxIt
+                                        $boxErr
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?
                                     """,
                                 )

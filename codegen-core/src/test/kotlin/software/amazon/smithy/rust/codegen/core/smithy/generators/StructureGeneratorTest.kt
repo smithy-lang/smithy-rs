@@ -313,7 +313,7 @@ class StructureGeneratorTest {
     @Test
     fun `it generates accessor methods`() {
         val testModel =
-            RecursiveShapeBoxer.transform(
+            RecursiveShapeBoxer().transform(
                 """
                 namespace test
 
