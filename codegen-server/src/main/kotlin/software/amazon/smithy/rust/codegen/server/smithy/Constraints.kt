@@ -191,7 +191,7 @@ fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolPro
     } else {
         // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
         // that is a descendant of the module that contains the extracted shape itself.
-        if (!publicConstrainedTypes) {
+        if (publicConstrainedTypes) {
             // List, union and map types need to go into their own module
             val shapeSymbol = symbolProvider.toSymbol(this)
             val shapeModule = shapeSymbol.module()
