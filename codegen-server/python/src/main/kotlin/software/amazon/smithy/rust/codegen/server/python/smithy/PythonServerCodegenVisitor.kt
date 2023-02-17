@@ -78,6 +78,7 @@ class PythonServerCodegenVisitor(
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
+            includeConstraintShapeProvider: Boolean,
         ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(

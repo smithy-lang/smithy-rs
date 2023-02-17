@@ -79,7 +79,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // Generate public constrained types for directly constrained shapes.
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
-                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
+                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape, constrainedTypes) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

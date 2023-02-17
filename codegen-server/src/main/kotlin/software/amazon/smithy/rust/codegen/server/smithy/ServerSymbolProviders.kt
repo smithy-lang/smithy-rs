@@ -28,15 +28,16 @@ class ServerSymbolProviders private constructor(
             service: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-            baseSymbolProviderFactory: (model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean) -> RustSymbolProvider,
+            baseSymbolProviderFactory: (model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean) -> RustSymbolProvider,
         ): ServerSymbolProviders {
-            val baseSymbolProvider = baseSymbolProviderFactory(model, service, rustSymbolProviderConfig, publicConstrainedTypes)
+            val baseSymbolProvider = baseSymbolProviderFactory(model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes)
             return ServerSymbolProviders(
                 symbolProvider = baseSymbolProvider,
                 constrainedShapeSymbolProvider = baseSymbolProviderFactory(
                     model,
                     service,
                     rustSymbolProviderConfig,
+                    publicConstrainedTypes,
                     true,
                 ),
                 unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
@@ -44,6 +45,7 @@ class ServerSymbolProviders private constructor(
                         model,
                         service,
                         rustSymbolProviderConfig,
+                        false,
                         false,
                     ),
                     model, publicConstrainedTypes, service,

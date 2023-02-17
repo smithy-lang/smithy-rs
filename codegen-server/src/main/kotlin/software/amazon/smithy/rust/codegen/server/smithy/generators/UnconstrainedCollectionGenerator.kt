@@ -18,8 +18,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.UnconstrainedShapeSymbolProvider
@@ -40,7 +40,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolat
  */
 class UnconstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
-    private val unconstrainedModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     val shape: CollectionShape,
 ) {
     private val model = codegenContext.model
@@ -72,7 +72,7 @@ class UnconstrainedCollectionGenerator(
 
         val innerMemberSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape.member)
 
-        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
+        inlineModuleCreator(symbol) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
