@@ -210,3 +210,9 @@ message = "Fix issue where clients using native-tls connector were prevented fro
 references = ["aws-sdk-rust#736"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Support for constraint traits on member shapes (constraint trait precedence)"
+references = ["smithy-rs#1969"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
