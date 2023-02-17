@@ -25,7 +25,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        EventStreamTestTools.runTestCase(
+        EventStreamTestTools.setupTestCase(
             testCase,
             object : ClientEventStreamBaseRequirements() {
                 override fun renderGenerator(

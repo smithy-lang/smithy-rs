@@ -23,7 +23,7 @@ class ServerEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: TestCase) {
-        val testProject = EventStreamTestTools.runTestCase(
+        val testProject = EventStreamTestTools.setupTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes

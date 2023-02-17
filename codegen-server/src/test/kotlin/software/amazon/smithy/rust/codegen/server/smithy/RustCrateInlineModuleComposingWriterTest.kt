@@ -92,7 +92,6 @@ class RustCrateInlineModuleComposingWriterTest {
     private fun helloWorld(writer: RustWriter, moduleName: String) {
         writer.rustBlock("pub fn hello_world()") {
             writer.comment("Module $moduleName")
-            writer.rust("""println!("from inside $moduleName");""")
         }
     }
 

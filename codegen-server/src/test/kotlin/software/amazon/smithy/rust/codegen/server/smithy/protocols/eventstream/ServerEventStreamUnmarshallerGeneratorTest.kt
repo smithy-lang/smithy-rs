@@ -35,7 +35,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
             return
         }
 
-        val testProject = EventStreamTestTools.runTestCase(
+        val testProject = EventStreamTestTools.setupTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes

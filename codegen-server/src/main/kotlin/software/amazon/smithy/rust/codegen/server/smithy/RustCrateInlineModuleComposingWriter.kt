@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 
 typealias DocWriter = () -> Any
 typealias InlineModuleCreator = (Symbol, Writable) -> Unit
@@ -146,10 +145,15 @@ private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
 
 class InnerModule(debugMode: Boolean) {
     // Holds the root modules to start rendering the descendents from.
-    private val topLevelModuleWriters: ConcurrentLinkedQueue<RustWriter> = ConcurrentLinkedQueue()
+    private val topLevelModuleWriters: ConcurrentHashMap<RustWriter, Unit> = ConcurrentHashMap()
     private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
     private val docWriters: ConcurrentHashMap<RustModule.LeafModule, MutableList<DocWriter>> = ConcurrentHashMap()
     private val writerCreator = RustWriter.factory(debugMode)
+
+    // By default, when a RustWriter is rendered, it prints a comment on top
+    // indicating that it contains generated code and should not be manually edited. This comment
+    // appears on each descendent inline module. To remove those comments, each time an inline
+    // module is rendered, first `emptyLineCount` characters are removed from it.
     private val emptyLineCount: Int = writerCreator
         .apply("lines-it-always-writes.rs", "crate")
         .toString()
@@ -280,7 +284,7 @@ class InnerModule(debugMode: Boolean) {
 
         // Go over all the top level modules, create an `inlineModule` on the `RustWriter`
         // and call the descendent hierarchy renderer using the `inlineModule::RustWriter`.
-        topLevelModuleWriters.forEach {
+        topLevelModuleWriters.keys.forEach {
             writerToAddDependencies = it
 
             check(inlineModuleWriters[it] != null) {
@@ -309,7 +313,7 @@ class InnerModule(debugMode: Boolean) {
      * Records the root of a dependency graph of inline modules.
      */
     private fun registerTopMostWriter(outerWriter: RustWriter): MutableList<InlineModuleWithWriter> {
-        topLevelModuleWriters.add(outerWriter)
+        topLevelModuleWriters[outerWriter] = Unit
         return inlineModuleWriters.getOrPut(outerWriter) { mutableListOf() }
     }
 

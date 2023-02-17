@@ -82,7 +82,7 @@ interface EventStreamTestRequirements<C : CodegenContext> {
 }
 
 object EventStreamTestTools {
-    fun <C : CodegenContext> runTestCase(
+    fun <C : CodegenContext> setupTestCase(
         testCase: EventStreamTestModels.TestCase,
         requirements: EventStreamTestRequirements<C>,
         codegenTarget: CodegenTarget,
@@ -110,8 +110,6 @@ object EventStreamTestTools {
                 EventStreamTestVariety.Unmarshall -> writeUnmarshallTestCases(testCase, codegenTarget, generator)
             }
         }
-
-        println(testCase.model.toString())
 
         return test.project
     }

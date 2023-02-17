@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNor
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
