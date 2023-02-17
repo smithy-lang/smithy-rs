@@ -5,13 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.aws.traits.DataTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -22,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNor
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -265,7 +268,19 @@ class ConstraintsMemberShapeTest {
             outputModelOnly,
             "constrainedMemberShape.synthetic#OperationUsingGetOutput\$constrainedPatternString",
             "constrainedMemberShape#OperationUsingGetOutput\$constrainedPatternString",
-            "aws.api#data",
+            DataTrait("content", SourceLocation.NONE),
+        )
+    }
+
+    @Test
+    fun `required remains on constrained member shape`() {
+        val transformedModel = loadModel(outputModelOnly)
+        checkShapeHasTrait(
+            transformedModel,
+            outputModelOnly,
+            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$requiredConstrainedString",
+            "constrainedMemberShape#OperationUsingGetOutput\$requiredConstrainedString",
+            RequiredTrait(),
         )
     }
 
@@ -467,17 +482,15 @@ class ConstraintsMemberShapeTest {
         orgModel: Model,
         member: String,
         orgModelMember: String,
-        traitName: String,
+        trait: Trait,
     ) {
         val memberId = ShapeId.from(member)
         val memberShape = model.expectShape(memberId).asMemberShape().get()
         val orgMemberShape = orgModel.expectShape(ShapeId.from(orgModelMember)).asMemberShape().get()
 
-        memberShape.allTraits.keys shouldContain ShapeId.from(traitName)
-        orgMemberShape.allTraits.keys shouldContain ShapeId.from(traitName)
+        val newMemberTrait = memberShape.expectTrait(trait::class.java)
+        val oldMemberTrait = orgMemberShape.expectTrait(trait::class.java)
 
-        val newMemberTrait = memberShape.allTraits[ShapeId.from(traitName)]
-        val oldMemberTrait = orgMemberShape.allTraits[ShapeId.from(traitName)]
         newMemberTrait shouldBe oldMemberTrait
     }
 }
