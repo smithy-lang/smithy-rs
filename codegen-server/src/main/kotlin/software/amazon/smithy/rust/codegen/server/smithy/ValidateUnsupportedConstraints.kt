@@ -123,7 +123,7 @@ private sealed class UnsupportedConstraintMessageKind {
                     willSupport = false,
                     trackingIssue = "https://github.com/awslabs/smithy/issues/1567",
                     canBeIgnored = false,
-                )
+                ),
             )
         }
     }
