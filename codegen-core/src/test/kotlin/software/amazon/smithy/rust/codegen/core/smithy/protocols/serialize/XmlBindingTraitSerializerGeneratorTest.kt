@@ -146,17 +146,15 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             )
         }
         model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
             project.moduleFor(top) {
-                top.renderWithModelBuilder(model, symbolProvider, this)
                 UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
                 EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
             }
         }
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
-            project.moduleFor(input) {
-                input.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            input.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

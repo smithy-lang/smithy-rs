@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -100,7 +99,6 @@ internal class XmlBindingTraitParserGeneratorTest {
         val parserGenerator = XmlBindingTraitParserGenerator(
             codegenContext,
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
-            builderSymbolFn(symbolProvider),
         ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
 
@@ -122,7 +120,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                         <prefix:local>hey</prefix:local>
                     </Top>
                     "##;
-                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::OpOutput::builder()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), #{Choice}::S("hello".to_string()));
                     assert_eq!(output.choice, Some(#{Choice}::FlatMap(map)));
@@ -152,7 +150,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "##;
-                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::OpOutput::builder()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), #{Choice}::S("hello".to_string()));
                     assert_eq!(output.choice, Some(#{Choice}::FlatMap(map)));
@@ -181,7 +179,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    ${format(operationParser)}(xml, test_output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
+                    ${format(operationParser)}(xml, test_output::OpOutput::builder()).expect("unknown union variant does not cause failure");
                 """,
             )
             unitTest(
@@ -198,15 +196,14 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    let output = ${format(operationParser)}(xml, test_output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::OpOutput::builder()).unwrap().build();
                     assert!(output.choice.unwrap().is_unknown());
                 """,
             )
         }
         model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
             project.moduleFor(top) {
-                top.renderWithModelBuilder(model, symbolProvider, this)
-
                 UnionGenerator(model, symbolProvider, this, choiceShape).render()
                 model.lookup<StringShape>("test#FooEnum").also { enum ->
                     EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
@@ -215,9 +212,7 @@ internal class XmlBindingTraitParserGeneratorTest {
         }
 
         model.lookup<OperationShape>("test#Op").outputShape(model).also { out ->
-            project.moduleFor(out) {
-                out.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            out.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

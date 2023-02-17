@@ -140,12 +140,10 @@ object EventStreamTestTools {
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
         project.withModule(codegenContext.symbolProvider.moduleForShape(inputOutput)) {
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, this, codegenTarget)
+            recursivelyGenerateModels(project, model, symbolProvider, inputOutput, this, codegenTarget)
         }
         operationShape.outputShape(model).also { outputShape ->
-            project.moduleFor(outputShape) {
-                outputShape.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            outputShape.renderWithModelBuilder(model, symbolProvider, project)
         }
         return TestEventStreamProject(
             model,
@@ -158,6 +156,7 @@ object EventStreamTestTools {
     }
 
     private fun recursivelyGenerateModels(
+        rustCrate: RustCrate,
         model: Model,
         symbolProvider: RustSymbolProvider,
         shape: Shape,
@@ -170,7 +169,7 @@ object EventStreamTestTools {
             }
             val target = model.expectShape(member.target)
             when (target) {
-                is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
+                is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, rustCrate)
                 is UnionShape -> UnionGenerator(
                     model,
                     symbolProvider,
@@ -180,7 +179,7 @@ object EventStreamTestTools {
                 ).render()
                 else -> TODO("EventStreamTestTools doesn't support rendering $target")
             }
-            recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
+            recursivelyGenerateModels(rustCrate, model, symbolProvider, target, writer, mode)
         }
     }
 }

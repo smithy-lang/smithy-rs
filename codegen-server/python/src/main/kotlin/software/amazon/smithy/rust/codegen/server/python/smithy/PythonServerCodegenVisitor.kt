@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -74,14 +75,16 @@ class PythonServerCodegenVisitor(
         settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
         fun baseSymbolProviderFactory(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes)
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
+            settings,
             model,
             service,
             rustSymbolProviderConfig,

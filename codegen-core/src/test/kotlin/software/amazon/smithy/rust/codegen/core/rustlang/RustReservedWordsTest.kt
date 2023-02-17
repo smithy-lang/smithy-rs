@@ -30,6 +30,7 @@ internal class RustReservedWordSymbolProviderTest {
 
         override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
         override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
+        override fun symbolForBuilder(shape: Shape): Symbol = PANIC()
 
         override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
             return definition.name.orNull()?.let { MaybeRenamed(it.toPascalCase(), null) }

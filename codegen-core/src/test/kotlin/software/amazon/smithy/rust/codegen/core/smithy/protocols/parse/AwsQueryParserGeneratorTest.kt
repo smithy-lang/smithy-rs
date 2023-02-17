@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -48,7 +47,6 @@ class AwsQueryParserGeneratorTest {
         val parserGenerator = AwsQueryParserGenerator(
             codegenContext,
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
-            builderSymbolFn(symbolProvider),
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -64,21 +62,17 @@ class AwsQueryParserGeneratorTest {
                         </SomeOperationResult>
                     </someOperationResponse>
                     "#;
-                    let output = ${format(operationParser)}(xml, test_output::some_operation_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, test_output::SomeOperationOutput::builder()).unwrap().build();
                     assert_eq!(output.some_attribute, Some(5));
                     assert_eq!(output.some_val, Some("Some value".to_string()));
                 """,
             )
         }
         model.lookup<StructureShape>("test#SomeOutput").also { struct ->
-            project.moduleFor(struct) {
-                struct.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            struct.renderWithModelBuilder(model, symbolProvider, project)
         }
         model.lookup<OperationShape>("test#SomeOperation").outputShape(model).also { output ->
-            project.moduleFor(output) {
-                output.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            output.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

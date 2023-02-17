@@ -5,17 +5,22 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 object ServerRustModule {
     val Error = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
@@ -52,4 +57,19 @@ object ServerModuleProvider : ModuleProvider {
         context: ModuleProviderContext,
         eventStream: UnionShape,
     ): RustModule.LeafModule = ServerRustModule.Error
+
+    override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule {
+        val pubCrate = !(context.settings as ServerRustSettings).codegenConfig.publicConstrainedTypes
+        val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase()) +
+            if (pubCrate) {
+                "_internal"
+            } else {
+                ""
+            }
+        val visibility = when (pubCrate) {
+            true -> Visibility.PUBCRATE
+            false -> Visibility.PUBLIC
+        }
+        return RustModule.new(builderNamespace, visibility, parent = symbol.module(), inline = true)
+    }
 }

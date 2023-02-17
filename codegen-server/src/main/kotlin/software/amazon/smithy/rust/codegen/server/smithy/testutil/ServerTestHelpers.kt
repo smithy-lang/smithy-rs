@@ -48,6 +48,7 @@ fun serverTestSymbolProviders(
     settings: ServerRustSettings? = null,
 ) =
     ServerSymbolProviders.from(
+        serverTestRustSettings(),
         model,
         serviceShape ?: testServiceShapeFor(model),
         ServerTestRustSymbolProviderConfig,
@@ -97,6 +98,7 @@ fun serverTestCodegenContext(
             ?: ServiceShape.builder().version("test").id("test#Service").build()
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
     val serverSymbolProviders = ServerSymbolProviders.from(
+        settings,
         model,
         service,
         ServerTestRustSymbolProviderConfig,

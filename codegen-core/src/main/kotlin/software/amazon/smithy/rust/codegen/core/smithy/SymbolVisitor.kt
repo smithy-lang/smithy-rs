@@ -105,11 +105,12 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * derives for a given shape.
  */
 open class SymbolVisitor(
+    settings: CoreRustSettings,
     override val model: Model,
     private val serviceShape: ServiceShape?,
     override val config: RustSymbolProviderConfig,
 ) : RustSymbolProvider, ShapeVisitor<Symbol> {
-    override val moduleProviderContext = ModuleProviderContext(model, serviceShape)
+    override val moduleProviderContext = ModuleProviderContext(settings, model, serviceShape)
     private val nullableIndex = NullableIndex.of(model)
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -127,6 +128,11 @@ open class SymbolVisitor(
             val module = moduleForEventStreamError(eventStream)
             module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
         }
+
+    override fun symbolForBuilder(shape: Shape): Symbol = toSymbol(shape).let { symbol ->
+        val module = moduleForBuilder(shape)
+        module.toType().resolve(config.nameBuilderFor(symbol)).toSymbol().toBuilder().locatedIn(module).build()
+    }
 
     /**
      * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context

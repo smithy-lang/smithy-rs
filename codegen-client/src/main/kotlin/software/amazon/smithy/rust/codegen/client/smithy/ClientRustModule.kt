@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -13,9 +14,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -73,6 +76,9 @@ object ClientModuleProvider : ModuleProvider {
         eventStream: UnionShape,
     ): RustModule.LeafModule = ClientRustModule.Error
 
+    override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule =
+        RustModule.public("builders", parent = symbol.module(), documentation = "Builders")
+
     private fun Shape.findOperation(model: Model): OperationShape {
         val inputTrait = getTrait<SyntheticInputTrait>()
         val outputTrait = getTrait<SyntheticOutputTrait>()
@@ -120,6 +126,17 @@ object OldModuleSchemeClientModuleProvider : ModuleProvider {
         context: ModuleProviderContext,
         eventStream: UnionShape,
     ): RustModule.LeafModule = ClientRustModule.Error
+
+    override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule {
+        val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase())
+        return RustModule.new(
+            builderNamespace,
+            visibility = Visibility.PUBLIC,
+            parent = symbol.module(),
+            inline = true,
+            documentation = "See [${symbol.name}](${symbol.module().fullyQualifiedPath()}::${symbol.name}).",
+        )
+    }
 }
 
 // TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`

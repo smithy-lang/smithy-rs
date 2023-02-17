@@ -11,13 +11,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -127,45 +127,47 @@ class RequestBindingGeneratorTest {
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
 
-    private fun renderOperation(writer: RustWriter) {
-        inputShape.renderWithModelBuilder(model, symbolProvider, writer)
-        val codegenContext = testCodegenContext(model)
-        val bindingGen = RequestBindingGenerator(
-            codegenContext,
-            // Any protocol is fine for this test.
-            RestJson(codegenContext),
-            operationShape,
-        )
-        writer.rustBlock("impl PutObjectInput") {
-            // RequestBindingGenerator's functions expect to be rendered inside a function,
-            // but the unit test needs to call some of these functions individually. This generates
-            // some wrappers that can be called directly from the tests. The functions will get duplicated,
-            // but that's not a problem.
+    private fun renderOperation(rustCrate: RustCrate) {
+        inputShape.renderWithModelBuilder(model, symbolProvider, rustCrate)
+        rustCrate.withModule(ClientRustModule.Input) {
+            val codegenContext = testCodegenContext(model)
+            val bindingGen = RequestBindingGenerator(
+                codegenContext,
+                // Any protocol is fine for this test.
+                RestJson(codegenContext),
+                operationShape,
+            )
+            rustBlock("impl PutObjectInput") {
+                // RequestBindingGenerator's functions expect to be rendered inside a function,
+                // but the unit test needs to call some of these functions individually. This generates
+                // some wrappers that can be called directly from the tests. The functions will get duplicated,
+                // but that's not a problem.
 
-            rustBlock(
-                "pub fn test_uri_query(&self, mut output: &mut String) -> Result<(), #T>",
-                TestRuntimeConfig.operationBuildError(),
-            ) {
-                bindingGen.renderUpdateHttpBuilder(this)
-                rust("uri_query(self, output)")
-            }
+                rustBlock(
+                    "pub fn test_uri_query(&self, mut output: &mut String) -> Result<(), #T>",
+                    TestRuntimeConfig.operationBuildError(),
+                ) {
+                    bindingGen.renderUpdateHttpBuilder(this)
+                    rust("uri_query(self, output)")
+                }
 
-            rustBlock(
-                "pub fn test_uri_base(&self, mut output: &mut String) -> Result<(), #T>",
-                TestRuntimeConfig.operationBuildError(),
-            ) {
-                bindingGen.renderUpdateHttpBuilder(this)
-                rust("uri_base(self, output)")
-            }
+                rustBlock(
+                    "pub fn test_uri_base(&self, mut output: &mut String) -> Result<(), #T>",
+                    TestRuntimeConfig.operationBuildError(),
+                ) {
+                    bindingGen.renderUpdateHttpBuilder(this)
+                    rust("uri_base(self, output)")
+                }
 
-            rustBlock(
-                "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
-                RuntimeType.HttpRequestBuilder,
-                TestRuntimeConfig.operationBuildError(),
-            ) {
-                bindingGen.renderUpdateHttpBuilder(this)
-                rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
-                rust("update_http_builder(self, builder)")
+                rustBlock(
+                    "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
+                    RuntimeType.HttpRequestBuilder,
+                    TestRuntimeConfig.operationBuildError(),
+                ) {
+                    bindingGen.renderUpdateHttpBuilder(this)
+                    rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+                    rust("update_http_builder(self, builder)")
+                }
             }
         }
     }
@@ -179,9 +181,8 @@ class RequestBindingGeneratorTest {
     @Test
     fun `generates valid request bindings`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("input")) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
-            renderOperation(this)
-
+        renderOperation(project)
+        project.withModule(ClientRustModule.Input) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
             unitTest(
                 name = "generate_uris",
                 test = """

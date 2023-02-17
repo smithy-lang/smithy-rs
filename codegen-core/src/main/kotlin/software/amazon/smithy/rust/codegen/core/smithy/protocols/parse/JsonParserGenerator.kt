@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
-import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -77,8 +76,6 @@ class JsonParserGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
     /**
      * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
      * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
@@ -191,7 +188,7 @@ class JsonParserGenerator(
         }
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(outputShape), httpDocumentMembers)
+        return structureParser(fnName, symbolProvider.symbolForBuilder(outputShape), httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
@@ -199,7 +196,7 @@ class JsonParserGenerator(
             return null
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
-        return structureParser(fnName, builderSymbol(errorShape), errorShape.members().toList())
+        return structureParser(fnName, symbolProvider.symbolForBuilder(errorShape), errorShape.members().toList())
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
@@ -223,7 +220,7 @@ class JsonParserGenerator(
         }
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(inputShape), includedMembers)
+        return structureParser(fnName, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {
@@ -493,7 +490,11 @@ class JsonParserGenerator(
             ) {
                 startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
-                    rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to builderSymbol(shape))
+                    rustTemplate(
+                        "let mut builder = #{Builder}::default();",
+                        *codegenScope,
+                        "Builder" to symbolProvider.symbolForBuilder(shape),
+                    )
                     deserializeStructInner(shape.members())
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
                     if (returnSymbolToParse.isUnconstrained) {

@@ -115,8 +115,6 @@ class HttpBindingGenerator(
     private val codegenContext: CodegenContext,
     private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
     private val customizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -256,7 +254,6 @@ class HttpBindingGenerator(
             codegenContext,
             operationShape,
             targetShape,
-            builderSymbol,
         ).render()
         rustTemplate(
             """

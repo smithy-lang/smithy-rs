@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
@@ -22,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 
 class ServerEventStreamUnmarshallerGeneratorTest {
@@ -45,13 +43,11 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     project: TestEventStreamProject,
                     protocol: Protocol,
                 ): RuntimeType {
-                    fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
                     return EventStreamUnmarshallerGenerator(
                         protocol,
                         codegenContext,
                         project.operationShape,
                         project.streamShape,
-                        ::builderSymbol,
                     ).render()
                 }
 
@@ -62,10 +58,13 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList()).apply {
-                        render(writer)
+                    val builderGen = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList())
+                    rustCrate.withModule(codegenContext.symbolProvider.moduleForBuilder(shape)) {
+                        builderGen.render(this)
+                    }
+                    rustCrate.moduleFor(shape) {
                         writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
-                            renderConvenienceMethod(writer)
+                            builderGen.renderConvenienceMethod(this)
                         }
                     }
                 }

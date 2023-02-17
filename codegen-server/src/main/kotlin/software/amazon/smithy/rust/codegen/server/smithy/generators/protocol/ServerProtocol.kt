@@ -87,8 +87,6 @@ class ServerAwsJsonProtocol(
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.serverBuilderSymbol(serverCodegenContext)
         fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
             if (shape.canReachConstrainedShape(codegenContext.model, serverCodegenContext.symbolProvider)) {
                 ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
@@ -99,7 +97,6 @@ class ServerAwsJsonProtocol(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            ::builderSymbol,
             ::returnSymbolToParse,
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(serverCodegenContext),
@@ -168,7 +165,6 @@ class ServerRestJsonProtocol(
             codegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            ::builderSymbol,
             ::returnSymbolToParse,
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(
