@@ -75,39 +75,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         """.trimIndent()
     }
 
-    @Test
-    fun `it should detect when unsupported constraint traits on member shapes are used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                @length(min: 1, max: 69)
-                lengthString: String
-            }
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The member shape `test#TestInputOutput\$lengthString` has the constraint trait `smithy.api#length` attached"
-    }
-
-    @Test
-    fun `it should not detect when the required trait on a member shape is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                @required
-                string: String
-            }
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 0
-    }
-
     private val constraintTraitOnStreamingBlobShapeModel =
         """
         $baseModel

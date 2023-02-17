@@ -15,13 +15,15 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 
 class ServerEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: TestCase) {
-        EventStreamTestTools.runTestCase(
+        val testProject = EventStreamTestTools.setupTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
                 override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
@@ -45,5 +47,7 @@ class ServerEventStreamMarshallerGeneratorTest {
             CodegenTarget.SERVER,
             EventStreamTestVariety.Marshall,
         )
+        testProject.renderInlineMemoryModules()
+        testProject.compileAndTest()
     }
 }

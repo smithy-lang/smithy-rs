@@ -14,7 +14,9 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -50,12 +52,16 @@ class UnconstrainedCollectionGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
         }
 
         project.withModule(ServerRustModule.ConstrainedModule) {
             listOf(listA, listB).forEach {
-                PubCrateConstrainedCollectionGenerator(codegenContext, this, it).render()
+                PubCrateConstrainedCollectionGenerator(
+                    codegenContext,
+                    this.createTestInlineModuleCreator(),
+                    it,
+                ).render()
             }
         }
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
@@ -63,13 +69,13 @@ class UnconstrainedCollectionGeneratorTest {
                 listOf(listA, listB).forEach {
                     UnconstrainedCollectionGenerator(
                         codegenContext,
-                        this@unconstrainedModuleWriter,
+                        this@unconstrainedModuleWriter.createTestInlineModuleCreator(),
                         it,
                     ).render()
 
                     CollectionConstraintViolationGenerator(
                         codegenContext,
-                        this@modelsModuleWriter,
+                        this@modelsModuleWriter.createTestInlineModuleCreator(),
                         it,
                         CollectionTraitInfo.fromShape(it, codegenContext.constrainedShapeSymbolProvider),
                         SmithyValidationExceptionConversionGenerator(codegenContext),
@@ -126,6 +132,7 @@ class UnconstrainedCollectionGeneratorTest {
                 )
             }
         }
+        project.renderInlineMemoryModules()
         project.compileAndTest()
     }
 }

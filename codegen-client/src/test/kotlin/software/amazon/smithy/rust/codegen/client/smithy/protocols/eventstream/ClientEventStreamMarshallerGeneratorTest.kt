@@ -17,12 +17,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 
 class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        EventStreamTestTools.runTestCase(
+        EventStreamTestTools.setupTestCase(
             testCase,
             object : ClientEventStreamBaseRequirements() {
                 override fun renderGenerator(
@@ -41,6 +42,6 @@ class ClientEventStreamMarshallerGeneratorTest {
             },
             CodegenTarget.CLIENT,
             EventStreamTestVariety.Marshall,
-        )
+        ).compileAndTest()
     }
 }

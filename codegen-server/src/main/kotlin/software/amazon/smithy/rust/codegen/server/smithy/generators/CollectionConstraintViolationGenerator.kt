@@ -6,14 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -22,7 +21,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 
 class CollectionConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
-    private val modelsModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     private val shape: CollectionShape,
     private val collectionConstraintsInfo: List<CollectionTraitInfo>,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
@@ -47,7 +46,7 @@ class CollectionConstraintViolationGenerator(
         val isMemberConstrained = targetShape.canReachConstrainedShape(model, symbolProvider)
         val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
 
-        modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
+        inlineModuleCreator(constraintViolationSymbol) {
             val constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }.toMutableList()
             if (isMemberConstrained) {
                 constraintViolationVariants += {
@@ -76,6 +75,7 @@ class CollectionConstraintViolationGenerator(
             //  and is for use by the framework.
             rustTemplate(
                 """
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq)]
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}

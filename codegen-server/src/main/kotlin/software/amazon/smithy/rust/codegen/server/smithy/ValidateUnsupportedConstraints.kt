@@ -219,18 +219,7 @@ fun validateUnsupportedConstraints(
     // Traverse the model and error out if:
     val walker = DirectedWalker(model)
 
-    // 1. Constraint traits on member shapes are used. [Constraint trait precedence] has not been implemented yet.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    // [Constraint trait precedence]: https://awslabs.github.io/smithy/2.0/spec/model.html#applying-traits
-    val unsupportedConstraintOnMemberShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterIsInstance<MemberShape>()
-        .filterMapShapesToTraits(unsupportedConstraintsOnMemberShapes)
-        .map { (shape, trait) -> UnsupportedConstraintOnMemberShape(shape as MemberShape, trait) }
-        .toSet()
-
-    // 2. Constraint traits on streaming blob shapes are used. Their semantics are unclear.
+    // 1. Constraint traits on streaming blob shapes are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1389)
     val unsupportedLengthTraitOnStreamingBlobShapeSet = walker
         .walkShapes(service)
@@ -240,7 +229,7 @@ fun validateUnsupportedConstraints(
         .map { UnsupportedLengthTraitOnStreamingBlobShape(it, it.expectTrait(), it.expectTrait()) }
         .toSet()
 
-    // 3. Constraint traits in event streams are used. Their semantics are unclear.
+    // 2. Constraint traits in event streams are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1388)
     val eventStreamShapes = walker
         .walkShapes(service)
@@ -261,7 +250,7 @@ fun validateUnsupportedConstraints(
     val unsupportedConstraintShapeReachableViaAnEventStreamSet =
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
-    // 4. Range trait used on unsupported shapes.
+    // 3. Range trait used on unsupported shapes.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
@@ -289,8 +278,7 @@ fun validateUnsupportedConstraints(
         .toSet()
 
     val messages =
-        unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+        unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             mapShapeReachableFromUniqueItemsListShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
