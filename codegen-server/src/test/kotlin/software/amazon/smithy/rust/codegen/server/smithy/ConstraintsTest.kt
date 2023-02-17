@@ -81,7 +81,12 @@ class ConstraintsTest {
             @length(min: 1, max: 5)
             mapAPrecedence: MapA
         }
-        """.asSmithyModel()
+
+        structure StructWithInnerDefault {
+            @default(false)
+            inner: PrimitiveBoolean
+        }
+        """.asSmithyModel(smithyVersion = "2")
     private val symbolProvider = serverTestSymbolProvider(model)
 
     private val testInputOutput = model.lookup<StructureShape>("test#TestInputOutput")
@@ -93,6 +98,7 @@ class ConstraintsTest {
     private val structA = model.lookup<StructureShape>("test#StructureA")
     private val structAInt = model.lookup<MemberShape>("test#StructureA\$int")
     private val structAString = model.lookup<MemberShape>("test#StructureA\$string")
+    private val structWithInnerDefault = model.lookup<StructureShape>("test#StructWithInnerDefault")
 
     @Test
     fun `it should detect supported constrained traits as constrained`() {
@@ -118,5 +124,10 @@ class ConstraintsTest {
         testInputOutput.canReachConstrainedShape(model, symbolProvider) shouldBe true
         mapB.canReachConstrainedShape(model, symbolProvider) shouldBe true
         recursiveShape.canReachConstrainedShape(model, symbolProvider) shouldBe true
+    }
+
+    @Test
+    fun `it should not consider shapes with the default trait as constrained`() {
+        structWithInnerDefault.canReachConstrainedShape(model, symbolProvider) shouldBe false
     }
 }
