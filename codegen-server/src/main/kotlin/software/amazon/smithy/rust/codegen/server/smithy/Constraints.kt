@@ -83,7 +83,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         //  The only reason why the functions in this file have
         //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
         //  `required`, so we can't use `member.isOptional` here.
-        this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
+        this.members().any { !symbolProvider.toSymbol(it).isOptional() && !it.hasNonNullDefault() }
     }
 
     is MapShape -> this.hasTrait<LengthTrait>()
