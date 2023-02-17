@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 
 /**
  * Just a handy class to centralize initialization all the symbol providers required by the server code generators, to
@@ -26,17 +26,17 @@ class ServerSymbolProviders private constructor(
         fun from(
             model: Model,
             service: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-            baseSymbolProviderFactory: (model: Model, service: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean) -> RustSymbolProvider,
+            baseSymbolProviderFactory: (model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean) -> RustSymbolProvider,
         ): ServerSymbolProviders {
-            val baseSymbolProvider = baseSymbolProviderFactory(model, service, symbolVisitorConfig, publicConstrainedTypes, publicConstrainedTypes)
+            val baseSymbolProvider = baseSymbolProviderFactory(model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes)
             return ServerSymbolProviders(
                 symbolProvider = baseSymbolProvider,
                 constrainedShapeSymbolProvider = baseSymbolProviderFactory(
                     model,
                     service,
-                    symbolVisitorConfig,
+                    rustSymbolProviderConfig,
                     publicConstrainedTypes,
                     true,
                 ),
@@ -44,7 +44,7 @@ class ServerSymbolProviders private constructor(
                     baseSymbolProviderFactory(
                         model,
                         service,
-                        symbolVisitorConfig,
+                        rustSymbolProviderConfig,
                         false,
                         false,
                     ),

@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
-val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
+val ServerTestRustSymbolProviderConfig = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
     nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
@@ -50,7 +50,7 @@ fun serverTestSymbolProviders(
     ServerSymbolProviders.from(
         model,
         serviceShape ?: testServiceShapeFor(model),
-        ServerTestSymbolVisitorConfig,
+        ServerTestRustSymbolProviderConfig,
         (
             settings ?: serverTestRustSettings(
                 (serviceShape ?: testServiceShapeFor(model)).id,
@@ -99,7 +99,7 @@ fun serverTestCodegenContext(
     val serverSymbolProviders = ServerSymbolProviders.from(
         model,
         service,
-        ServerTestSymbolVisitorConfig,
+        ServerTestRustSymbolProviderConfig,
         settings.codegenConfig.publicConstrainedTypes,
         RustServerCodegenPlugin::baseSymbolProvider,
     )
