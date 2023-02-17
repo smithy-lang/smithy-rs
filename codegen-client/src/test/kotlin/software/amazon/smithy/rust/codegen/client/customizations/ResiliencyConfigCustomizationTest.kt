@@ -6,16 +6,17 @@
 package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
+import software.amazon.smithy.rust.codegen.client.testutil.clientRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigProject
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
 
 internal class ResiliencyConfigCustomizationTest {
     private val baseModel = """
@@ -37,8 +38,8 @@ internal class ResiliencyConfigCustomizationTest {
     @Test
     fun `generates a valid config`() {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
-        val project = TestWorkspace.testProject()
-        val codegenContext = testCodegenContext(model, settings = project.rustSettings())
+        val project = TestWorkspace.testProject(model, ClientCodegenConfig())
+        val codegenContext = testClientCodegenContext(model, settings = project.clientRustSettings())
 
         stubConfigProject(ResiliencyConfigCustomization(codegenContext), project)
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(project)

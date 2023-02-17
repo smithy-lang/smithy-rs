@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -52,7 +53,7 @@ class UnconstrainedMapGeneratorTest {
         val mapA = model.lookup<MapShape>("test#MapA")
         val mapB = model.lookup<MapShape>("test#MapB")
 
-        val project = TestWorkspace.testProject(symbolProvider, debugMode = true)
+        val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
 
         project.withModule(Model) {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)

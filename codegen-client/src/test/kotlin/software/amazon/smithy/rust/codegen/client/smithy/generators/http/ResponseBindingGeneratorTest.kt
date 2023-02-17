@@ -9,10 +9,9 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
@@ -67,7 +66,7 @@ class ResponseBindingGeneratorTest {
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
-    private val codegenContext: CodegenContext = testCodegenContext(model)
+    private val codegenContext = testClientCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
 
     private fun RustCrate.renderOperation() {

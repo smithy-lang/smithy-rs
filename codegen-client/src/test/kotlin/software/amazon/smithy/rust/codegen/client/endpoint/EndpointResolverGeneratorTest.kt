@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.End
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -64,7 +64,7 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                codegenContext = testCodegenContext(model = Model.builder().build()),
+                codegenContext = testClientCodegenContext(model = Model.builder().build()),
                 endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
@@ -90,7 +90,7 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                codegenContext = testCodegenContext(Model.builder().build()),
+                codegenContext = testClientCodegenContext(Model.builder().build()),
                 endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
