@@ -24,7 +24,7 @@ class ServerBuilderConstraintViolationsTest {
                 operations: [Operation]
             }
 
-            @http(uri: "/operation", method: "GET")
+            @http(uri: "/operation", method: "POST")
             operation Operation {
                 input: OperationInput
                 errors: [ValidationException]
