@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -54,7 +53,6 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
  */
 class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
-    private val model: Model,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
@@ -74,7 +72,7 @@ class ConstrainedShapeSymbolProvider(
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
                 // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
+                handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config.nullabilityCheckMode)
             }
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {

@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
@@ -49,7 +48,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  */
 class DeriveEqAndHashSymbolMetadataProvider(
     private val base: RustSymbolProvider,
-    val model: Model,
 ) : SymbolMetadataProvider(base) {
     private val walker = DirectedWalker(model)
 

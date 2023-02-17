@@ -32,7 +32,10 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * Default delegator to enable easily decorating another symbol provider.
  */
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
-    override fun config(): SymbolVisitorConfig = base.config()
+    override val model: Model get() = base.model
+    override val moduleProviderContext: ModuleProviderContext get() = base.moduleProviderContext
+    override val config: SymbolVisitorConfig get() = base.config
+
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
     override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
     override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
@@ -109,7 +112,6 @@ fun containerDefaultMetadata(
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
-    private val model: Model,
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
 

@@ -46,7 +46,7 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), CodegenTarget.CLIENT)
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
@@ -82,7 +82,7 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), CodegenTarget.CLIENT)
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape

@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -31,7 +32,7 @@ object ServerRustModule {
 }
 
 object ServerModuleProvider : ModuleProvider {
-    override fun moduleForShape(shape: Shape): RustModule.LeafModule = when (shape) {
+    override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule = when (shape) {
         is OperationShape -> ServerRustModule.Operation
         is StructureShape -> when {
             shape.hasTrait<ErrorTrait>() -> ServerRustModule.Error
@@ -42,9 +43,13 @@ object ServerModuleProvider : ModuleProvider {
         else -> ServerRustModule.Model
     }
 
-    override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
-        ServerRustModule.Error
+    override fun moduleForOperationError(
+        context: ModuleProviderContext,
+        operation: OperationShape,
+    ): RustModule.LeafModule = ServerRustModule.Error
 
-    override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
-        ServerRustModule.Error
+    override fun moduleForEventStreamError(
+        context: ModuleProviderContext,
+        eventStream: UnionShape,
+    ): RustModule.LeafModule = ServerRustModule.Error
 }
