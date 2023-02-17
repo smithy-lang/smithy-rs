@@ -23,11 +23,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -49,7 +49,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  */
 class UnconstrainedUnionGenerator(
     val codegenContext: ServerCodegenContext,
-    private val unconstrainedModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape,
 ) {
@@ -77,7 +77,7 @@ class UnconstrainedUnionGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
+        inlineModuleCreator(symbol) {
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]
@@ -133,11 +133,16 @@ class UnconstrainedUnionGenerator(
         } else {
             Visibility.PUBCRATE
         }
-        modelsModuleWriter.withInlineModule(
-            constraintViolationSymbol.module(),
+
+        inlineModuleCreator(
+            constraintViolationSymbol,
         ) {
             Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
-            rustBlock("pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName") {
+            rustBlock(
+                """
+                ##[allow(clippy::enum_variant_names)]
+                pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName""",
+            ) {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
@@ -223,9 +228,7 @@ class UnconstrainedUnionGenerator(
                                     """
                                     {
                                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
-                                            .try_into()
-                                            $boxIt
-                                            $boxErr
+                                            .try_into() $boxIt $boxErr
                                             .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                         constrained.into()
                                     }
