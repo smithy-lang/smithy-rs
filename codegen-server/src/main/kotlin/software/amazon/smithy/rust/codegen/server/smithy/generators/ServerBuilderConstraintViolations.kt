@@ -71,9 +71,11 @@ class ServerBuilderConstraintViolations(
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-        writer.rustBlock("""
+        writer.rustBlock(
+            """
             ##[allow(clippy::enum_variant_names)]
-            pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName""") {
+            pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName""",
+        ) {
             renderConstraintViolations(writer)
         }
 

@@ -64,7 +64,7 @@ class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,
-    private val publicConstrainedTypes: Boolean
+    private val publicConstrainedTypes: Boolean,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
@@ -150,7 +150,6 @@ class ConstrainedShapeSymbolProvider(
             .isEmpty()
     }
 
-
     /**
      * Returns the pair (Rust Symbol Name, Inline Module) for the shape. At the time of model transformation all
      * constrained member shapes are extracted and are given a model-wide unique name. However, the generated code
@@ -171,8 +170,8 @@ class ConstrainedShapeSymbolProvider(
             val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), builderModule)
         } else {
-            // For List, Union and Map, the new shape defined for a constrained member shape
-            // need to be placed into an inline module named `pub {container_name_in_snake_case}`
+            // For non-structure shapes, the new shape defined for a constrained member shape
+            // needs to be placed in an inline module named `pub {container_name_in_snake_case}`.
             val moduleName = RustReservedWords.escapeIfNeeded(syntheticMemberTrait.container.id.name.toSnakeCase())
             val innerModuleName = moduleName + if (pubCrateServerBuilder) {
                 "_internal"

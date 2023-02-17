@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
@@ -15,14 +20,13 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 import software.amazon.smithy.utils.ToSmithyBuilder
 import java.lang.IllegalStateException
 import java.util.*
-import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
-import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
 
 /**
  * Transforms all member shapes that have constraints on them into equivalent non-constrained
@@ -78,12 +82,12 @@ object ConstrainedMemberTransform {
         // The transformer will add new shapes, and will replace existing member shapes' target
         // with the newly added shapes.
         val transformations = model.operationShapes
-            .flatMap    { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
+            .flatMap { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
             .mapNotNull { model.expectShape(it).asStructureShape().orElse(null) }
-            .filter     { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
-            .flatMap    { walker.walkShapes(it) }
-            .filter     { it is StructureShape || it is ListShape || it is UnionShape || it is MapShape }
-            .flatMap    { it.constrainedMembers() }
+            .filter { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
+            .flatMap { walker.walkShapes(it) }
+            .filter { it is StructureShape || it is ListShape || it is UnionShape || it is MapShape }
+            .flatMap { it.constrainedMembers() }
             .mapNotNull {
                 val transformation = it.makeNonConstrained(model, additionalNames)
                 // Keep record of new names that have been generated to ensure none of them regenerated.
@@ -150,8 +154,9 @@ object ConstrainedMemberTransform {
             // by appending a new number as the suffix.
             (0..100).forEach {
                 val extractedStructName = if (it == 0) makeStructName("") else makeStructName("$it")
-                if (structNameIsUnique(extractedStructName))
+                if (structNameIsUnique(extractedStructName)) {
                     return extractedStructName
+                }
             }
 
             throw IllegalStateException("A unique name for the overridden structure type could not be generated")
@@ -181,8 +186,9 @@ object ConstrainedMemberTransform {
         // have all of the original constraints that have not been overridden, and the ones
         // that this member shape overrides.
         val targetShape = model.expectShape(this.target)
-        if (targetShape !is ToSmithyBuilder<*>)
+        if (targetShape !is ToSmithyBuilder<*>) {
             UNREACHABLE("Member target shapes will always be buildable")
+        }
 
         return when (val builder = targetShape.toBuilder()) {
             is AbstractShapeBuilder<*, *> -> {

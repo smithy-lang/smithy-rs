@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.getInlineModuleWriter
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(

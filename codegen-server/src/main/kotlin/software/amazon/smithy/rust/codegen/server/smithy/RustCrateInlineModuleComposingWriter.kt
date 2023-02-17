@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
@@ -15,14 +20,14 @@ typealias InlineModuleCreator = (Symbol, Writable) -> Unit
 /**
  * Initializes RustCrate -> InnerModule data structure.
  */
-fun RustCrate.initializeInlineModuleWriter(debugMode : Boolean): InnerModule =
+fun RustCrate.initializeInlineModuleWriter(debugMode: Boolean): InnerModule =
     crateToInlineModule
         .getOrPut(this) { InnerModule(debugMode) }
 
 /**
  * Returns the InnerModule for the given RustCrate
  */
-fun RustCrate.getInlineModuleWriter() : InnerModule {
+fun RustCrate.getInlineModuleWriter(): InnerModule {
     return crateToInlineModule.getOrPut(this) { InnerModule(false) }
 }
 
@@ -94,7 +99,6 @@ fun RustCrate.useShapeWriterOrUseWithStructureBuilder(
     }
 }
 
-
 fun RustCrate.renderInlineMemoryModules() {
     val inlineModule = crateToInlineModule[this]
     check(inlineModule != null) {
@@ -102,6 +106,7 @@ fun RustCrate.renderInlineMemoryModules() {
     }
     inlineModule.render()
 }
+
 /**
  * Given a `RustWriter` calls the `Writable` using a `RustWriter` for the `inlineModule`
  */
@@ -130,7 +135,7 @@ fun RustWriter.createTestInlineModuleCreator(): InlineModuleCreator {
 /**
  * Maintains the `RustWriter` that has been created for a `RustModule.LeafModule`.
  */
-private data class InlineModuleWithWriter(val inlineModule : RustModule.LeafModule, val writer : RustWriter)
+private data class InlineModuleWithWriter(val inlineModule: RustModule.LeafModule, val writer: RustWriter)
 
 /**
  * For each RustCrate a separate mapping of inline-module to `RustWriter` is maintained.
@@ -138,7 +143,7 @@ private data class InlineModuleWithWriter(val inlineModule : RustModule.LeafModu
 private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
     ConcurrentHashMap()
 
-class InnerModule(debugMode : Boolean) {
+class InnerModule(debugMode: Boolean) {
     private val topLevelModuleWriters: MutableSet<RustWriter> = mutableSetOf()
     private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
     private val docWriters: ConcurrentHashMap<RustModule.LeafModule, MutableList<DocWriter>> = ConcurrentHashMap()
@@ -230,7 +235,6 @@ class InnerModule(debugMode : Boolean) {
         return writer
     }
 
-
     /**
      * Returns the complete hierarchy of a `RustModule.LeafModule` from top to bottom
      */
@@ -246,12 +250,11 @@ class InnerModule(debugMode : Boolean) {
         return hierarchy
     }
 
-
     /**
      * Writes out each inline module's code (`toString`) to the respective top level `RustWriter`.
      */
     fun render() {
-        var writerToAddDependencies : RustWriter? = null
+        var writerToAddDependencies: RustWriter? = null
 
         fun writeInlineCode(rustWriter: RustWriter, code: String) {
             val inlineCode = code.drop(emptyLineCount)
@@ -303,7 +306,7 @@ class InnerModule(debugMode : Boolean) {
     /**
      * Records the root of a dependency graph of inline modules.
      */
-    private fun registerTopMostWriter(outerWriter: RustWriter) : MutableList<InlineModuleWithWriter> {
+    private fun registerTopMostWriter(outerWriter: RustWriter): MutableList<InlineModuleWithWriter> {
         topLevelModuleWriters.add(outerWriter)
         return inlineModuleWriters.getOrPut(outerWriter) { mutableListOf() }
     }
@@ -314,7 +317,7 @@ class InnerModule(debugMode : Boolean) {
      */
     private fun findOrAddToList(
         inlineModuleList: MutableList<InlineModuleWithWriter>,
-        lookForModule: RustModule.LeafModule
+        lookForModule: RustModule.LeafModule,
     ): RustWriter {
         val inlineModuleAndWriter = inlineModuleList.firstOrNull() {
             it.inlineModule.name == lookForModule.name
@@ -333,7 +336,7 @@ class InnerModule(debugMode : Boolean) {
     }
 
     private fun writeDocs(innerModule: RustModule.LeafModule) {
-        docWriters[innerModule]?.forEach{
+        docWriters[innerModule]?.forEach {
             it()
         }
     }

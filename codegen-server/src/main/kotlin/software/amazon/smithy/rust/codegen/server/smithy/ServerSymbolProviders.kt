@@ -38,7 +38,7 @@ class ServerSymbolProviders private constructor(
                     service,
                     symbolVisitorConfig,
                     publicConstrainedTypes,
-                    true
+                    true,
                 ),
                 unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
                     baseSymbolProviderFactory(

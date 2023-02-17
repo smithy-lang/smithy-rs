@@ -155,8 +155,8 @@ class ServerBuilderGenerator(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(rustCrate : RustCrate, writer: RustWriter) {
-        val docWriter : () -> Unit = { writer.docs("See #D.", structureSymbol) }
+    fun render(rustCrate: RustCrate, writer: RustWriter) {
+        val docWriter: () -> Unit = { writer.docs("See #D.", structureSymbol) }
         rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
         }

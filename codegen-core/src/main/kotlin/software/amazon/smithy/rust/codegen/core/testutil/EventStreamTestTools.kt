@@ -87,9 +87,9 @@ object EventStreamTestTools {
         requirements: EventStreamTestRequirements<C>,
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
-        transformers: List<(Model)->Model> = listOf()
-    ) : TestWriterDelegator {
-        val model = (listOf(OperationNormalizer::transform, EventStreamNormalizer::transform) + transformers).fold (testCase.model) { model, transformer ->
+        transformers: List<(Model) -> Model> = listOf(),
+    ): TestWriterDelegator {
+        val model = (listOf(OperationNormalizer::transform, EventStreamNormalizer::transform) + transformers).fold(testCase.model) { model, transformer ->
             transformer(model)
         }
 
@@ -137,7 +137,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                requirements.renderError(project,this, codegenContext, shape)
+                requirements.renderError(project, this, codegenContext, shape)
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")

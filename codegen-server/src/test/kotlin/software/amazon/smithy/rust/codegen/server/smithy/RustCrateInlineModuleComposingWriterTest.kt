@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.matchers.collections.shouldContain
@@ -25,33 +30,33 @@ class RustCrateInlineModuleComposingWriterTest {
     private val rustCrate: RustCrate
     private val codegenContext: ServerCodegenContext
     private val model: Model = """
-            ${'$'}version: "2.0"
-            namespace test
+        ${'$'}version: "2.0"
+        namespace test
 
-            use aws.api#data
-            use aws.protocols#restJson1
+        use aws.api#data
+        use aws.protocols#restJson1
 
-            @title("Weather Service")
-            @restJson1
-            service WeatherService {
-                operations: [MalformedPatternOverride]
-            }
+        @title("Weather Service")
+        @restJson1
+        service WeatherService {
+            operations: [MalformedPatternOverride]
+        }
 
-            @suppress(["UnstableTrait"])
-            @http(uri: "/MalformedPatternOverride", method: "GET")
-            operation MalformedPatternOverride {
-                output: MalformedPatternOverrideInput,
-                errors: []
-            }
+        @suppress(["UnstableTrait"])
+        @http(uri: "/MalformedPatternOverride", method: "GET")
+        operation MalformedPatternOverride {
+            output: MalformedPatternOverrideInput,
+            errors: []
+        }
 
-            structure MalformedPatternOverrideInput {
-                @pattern("^[g-m]+${'$'}")
-                string: PatternString,
-            }
+        structure MalformedPatternOverrideInput {
+            @pattern("^[g-m]+${'$'}")
+            string: PatternString,
+        }
 
-            @pattern("^[a-m]+${'$'}")
-            string PatternString
-        """.trimIndent().asSmithyModel()
+        @pattern("^[a-m]+${'$'}")
+        string PatternString
+    """.trimIndent().asSmithyModel()
 
     init {
         codegenContext = serverTestCodegenContext(model)
@@ -66,7 +71,7 @@ class RustCrateInlineModuleComposingWriterTest {
         rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
     }
 
-    private fun createTestInlineModule(parentModule: RustModule, moduleName : String, documentation : String? = null) : RustModule.LeafModule =
+    private fun createTestInlineModule(parentModule: RustModule, moduleName: String, documentation: String? = null): RustModule.LeafModule =
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
@@ -75,7 +80,7 @@ class RustCrateInlineModuleComposingWriterTest {
             inline = true,
         )
 
-    private fun createTestOrphanInlineModule(moduleName : String) : RustModule.LeafModule =
+    private fun createTestOrphanInlineModule(moduleName: String): RustModule.LeafModule =
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
@@ -101,7 +106,7 @@ class RustCrateInlineModuleComposingWriterTest {
     @Test
     fun `calling withModule multiple times returns same object on rustModule`() {
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        val writers : MutableSet<RustWriter> = mutableSetOf()
+        val writers: MutableSet<RustWriter> = mutableSetOf()
         testProject.withModule(ServerRustModule.Model) {
             writers.add(this)
         }

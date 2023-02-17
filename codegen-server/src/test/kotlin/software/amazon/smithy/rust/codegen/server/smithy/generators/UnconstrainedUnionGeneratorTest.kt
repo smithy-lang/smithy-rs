@@ -50,7 +50,7 @@ class UnconstrainedUnionGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
-        
+
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
             project.withModule(ServerRustModule.Model) modelsModuleWriter@{
                 UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()

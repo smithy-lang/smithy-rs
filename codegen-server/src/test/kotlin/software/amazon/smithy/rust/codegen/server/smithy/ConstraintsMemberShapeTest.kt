@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.matchers.collections.shouldContain
@@ -10,12 +15,11 @@ import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -26,132 +30,133 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRe
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import java.io.File
 import java.nio.file.Path
 
 class ConstraintsMemberShapeTest {
     private val outputModelOnly = """
-            namespace constrainedMemberShape
+        namespace constrainedMemberShape
 
-            use aws.protocols#restJson1
-            use aws.api#data
+        use aws.protocols#restJson1
+        use aws.api#data
 
-            @restJson1
-            service ConstrainedService {
-                operations: [OperationUsingGet]
-            }
+        @restJson1
+        service ConstrainedService {
+            operations: [OperationUsingGet]
+        }
 
-            @http(uri: "/anOperation", method: "GET")
-            operation OperationUsingGet {
-                output : OperationUsingGetOutput
-            }
-            structure OperationUsingGetOutput {
-                plainLong : Long
-                plainInteger : Integer
-                plainShort : Short
-                plainByte : Byte
-                plainFloat: Float
-                plainString: String
+        @http(uri: "/anOperation", method: "GET")
+        operation OperationUsingGet {
+            output : OperationUsingGetOutput
+        }
+        structure OperationUsingGetOutput {
+            plainLong : Long
+            plainInteger : Integer
+            plainShort : Short
+            plainByte : Byte
+            plainFloat: Float
+            plainString: String
 
-                @range(min: 1, max:100)
-                constrainedLong : Long
-                @range(min: 2, max:100)
-                constrainedInteger : Integer
-                @range(min: 3, max:100)
-                constrainedShort : Short
-                @range(min: 4, max:100)
-                constrainedByte : Byte
-                @length(max: 100)
-                constrainedString: String
+            @range(min: 1, max:100)
+            constrainedLong : Long
+            @range(min: 2, max:100)
+            constrainedInteger : Integer
+            @range(min: 3, max:100)
+            constrainedShort : Short
+            @range(min: 4, max:100)
+            constrainedByte : Byte
+            @length(max: 100)
+            constrainedString: String
 
-                @required
-                @range(min: 5, max:100)
-                requiredConstrainedLong : Long
-                @required
-                @range(min: 6, max:100)
-                requiredConstrainedInteger : Integer
-                @required
-                @range(min: 7, max:100)
-                requiredConstrainedShort : Short
-                @required
-                @range(min: 8, max:100)
-                requiredConstrainedByte : Byte
-                @required
-                @length(max: 101)
-                requiredConstrainedString: String
+            @required
+            @range(min: 5, max:100)
+            requiredConstrainedLong : Long
+            @required
+            @range(min: 6, max:100)
+            requiredConstrainedInteger : Integer
+            @required
+            @range(min: 7, max:100)
+            requiredConstrainedShort : Short
+            @required
+            @range(min: 8, max:100)
+            requiredConstrainedByte : Byte
+            @required
+            @length(max: 101)
+            requiredConstrainedString: String
 
-                patternString : PatternString
+            patternString : PatternString
 
-                @data("content")
-                @pattern("^[g-m]+${'$'}")
-                constrainedPatternString : PatternString
+            @data("content")
+            @pattern("^[g-m]+${'$'}")
+            constrainedPatternString : PatternString
 
-                plainStringList : PlainStringList
-                patternStringList : PatternStringList
-                patternStringListOverride : PatternStringListOverride
+            plainStringList : PlainStringList
+            patternStringList : PatternStringList
+            patternStringListOverride : PatternStringListOverride
 
-                plainStructField : PlainStructWithInteger
-                structWithConstrainedMember : StructWithConstrainedMember
-                structWithConstrainedMemberOverride : StructWithConstrainedMemberOverride
+            plainStructField : PlainStructWithInteger
+            structWithConstrainedMember : StructWithConstrainedMember
+            structWithConstrainedMemberOverride : StructWithConstrainedMemberOverride
 
-                patternUnion: PatternUnion
-                patternUnionOverride: PatternUnionOverride
-                patternMap : PatternMap
-                patternMapOverride: PatternMapOverride
-            }
-            list ListWithIntegerMemberStruct {
-                member: PlainStructWithInteger
-            }
-            structure PlainStructWithInteger {
-                lat : Integer
-                long : Integer
-            }
-            structure StructWithConstrainedMember {
-                @range(min: 100)
-                lat : Integer
-                long : Integer
-            }
-            structure StructWithConstrainedMemberOverride {
-                @range(min: 10)
-                lat : RangedInteger
-                @range(min: 10, max:100)
-                long : RangedInteger
-            }
-            list PlainStringList {
-                member: String
-            }
-            list PatternStringList {
-                member: PatternString
-            }
-            list PatternStringListOverride {
-                @pattern("^[g-m]+${'$'}")
-                member: PatternString
-            }
-            map PatternMap {
-                key: PatternString,
-                value: PatternString
-            }
-            map PatternMapOverride {
-                @pattern("^[g-m]+${'$'}")
-                key: PatternString,
-                @pattern("^[g-m]+${'$'}")
-                value: PatternString
-            }
-            union PatternUnion {
-                first: PatternString,
-                second: PatternString
-            }
-            union PatternUnionOverride {
-                @pattern("^[g-m]+${'$'}")
-                first: PatternString,
-                @pattern("^[g-m]+${'$'}")
-                second: PatternString
-            }
-            @pattern("^[a-m]+${'$'}")
-            string PatternString
-            @range(min: 0, max:1000)
-            integer RangedInteger
-        """.asSmithyModel()
+            patternUnion: PatternUnion
+            patternUnionOverride: PatternUnionOverride
+            patternMap : PatternMap
+            patternMapOverride: PatternMapOverride
+        }
+        list ListWithIntegerMemberStruct {
+            member: PlainStructWithInteger
+        }
+        structure PlainStructWithInteger {
+            lat : Integer
+            long : Integer
+        }
+        structure StructWithConstrainedMember {
+            @range(min: 100)
+            lat : Integer
+            long : Integer
+        }
+        structure StructWithConstrainedMemberOverride {
+            @range(min: 10)
+            lat : RangedInteger
+            @range(min: 10, max:100)
+            long : RangedInteger
+        }
+        list PlainStringList {
+            member: String
+        }
+        list PatternStringList {
+            member: PatternString
+        }
+        list PatternStringListOverride {
+            @pattern("^[g-m]+${'$'}")
+            member: PatternString
+        }
+        map PatternMap {
+            key: PatternString,
+            value: PatternString
+        }
+        map PatternMapOverride {
+            @pattern("^[g-m]+${'$'}")
+            key: PatternString,
+            @pattern("^[g-m]+${'$'}")
+            value: PatternString
+        }
+        union PatternUnion {
+            first: PatternString,
+            second: PatternString
+        }
+        union PatternUnionOverride {
+            @pattern("^[g-m]+${'$'}")
+            first: PatternString,
+            @pattern("^[g-m]+${'$'}")
+            second: PatternString
+        }
+        @pattern("^[a-m]+${'$'}")
+        string PatternString
+        @range(min: 0, max:1000)
+        integer RangedInteger
+    """.asSmithyModel()
 
     private fun loadModel(model: Model): Model =
         ConstrainedMemberTransform.transform(OperationNormalizer.transform(model))
@@ -314,7 +319,7 @@ class ConstraintsMemberShapeTest {
                     "builder_module_has_${typeName.toSnakeCase()}",
                     """
                     #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
-                """,
+                    """,
                 )
             }
 
@@ -420,7 +425,8 @@ class ConstraintsMemberShapeTest {
         assert(
             leftOutConstraintTrait.isEmpty() || leftOutConstraintTrait.all {
                 it.toShapeId() == RequiredTrait.ID
-            },) { lazyMessage }
+            },
+        ) { lazyMessage }
 
         // In case the target shape has some more constraints, which the member shape did not override,
         // then those still need to apply on the new standalone shape that has been defined.

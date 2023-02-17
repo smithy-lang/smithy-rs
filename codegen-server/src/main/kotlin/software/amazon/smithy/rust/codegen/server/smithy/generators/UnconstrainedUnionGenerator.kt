@@ -135,12 +135,14 @@ class UnconstrainedUnionGenerator(
         }
 
         inlineModuleCreator(
-            constraintViolationSymbol
+            constraintViolationSymbol,
         ) {
             Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
-            rustBlock("""
+            rustBlock(
+                """
                 ##[allow(clippy::enum_variant_names)]
-                pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName""") {
+                pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName""",
+            ) {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
