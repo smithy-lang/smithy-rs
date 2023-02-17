@@ -41,7 +41,7 @@ data class TestEventStreamProject(
 
 enum class EventStreamTestVariety {
     Marshall,
-    Unmarshall
+    Unmarshall,
 }
 
 interface EventStreamTestRequirements<C : CodegenContext> {

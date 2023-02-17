@@ -37,7 +37,7 @@ install-wheel:
 generate-stubs:
 	python3 $(CUR_DIR)/stubgen.py pokemon_service_server_sdk $(SERVER_SDK_DST)/python/pokemon_service_server_sdk
 
-build: codegen 
+build: codegen
 	$(MAKE) build-wheel
 	$(MAKE) install-wheel
 	$(MAKE) generate-stubs

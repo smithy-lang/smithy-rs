@@ -153,7 +153,9 @@ class JsonParserGenerator(
 
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) { "payload parser should only be used on structures & unions" }
+        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) {
+            "payload parser should only be used on structures & unions"
+        }
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             rustBlockTemplate(

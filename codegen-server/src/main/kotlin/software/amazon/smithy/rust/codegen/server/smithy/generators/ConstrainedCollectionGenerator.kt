@@ -115,7 +115,9 @@ class ConstrainedCollectionGenerator(
                 #{ValidationFunctions:W}
                 """,
                 *codegenScope,
-                "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
+                "ValidationFunctions" to constraintsInfo.map {
+                    it.validationFunctionDefinition(constraintViolation, inner)
+                }.join("\n"),
             )
         }
 
@@ -246,7 +248,7 @@ sealed class CollectionTraitInfo {
                     // [1]: https://github.com/awslabs/smithy-typescript/blob/517c85f8baccf0e5334b4e66d8786bdb5791c595/smithy-typescript-ssdk-libs/server-common/src/validation/index.ts#L106-L111
                     rust(
                         """
-                        Self::UniqueItems { duplicate_indices, .. } => 
+                        Self::UniqueItems { duplicate_indices, .. } =>
                             crate::model::ValidationExceptionField {
                                 message: format!("${uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
                                 path,

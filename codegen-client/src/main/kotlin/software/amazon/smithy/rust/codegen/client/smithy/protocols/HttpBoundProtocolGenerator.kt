@@ -350,7 +350,9 @@ class HttpBoundProtocolTraitImplGenerator(
 
         val err = if (BuilderGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
             ".map_err(${format(errorSymbol)}::unhandled)?"
-        } else ""
+        } else {
+            ""
+        }
 
         writeCustomizations(customizations, OperationSection.MutateOutput(customizations, operationShape))
 

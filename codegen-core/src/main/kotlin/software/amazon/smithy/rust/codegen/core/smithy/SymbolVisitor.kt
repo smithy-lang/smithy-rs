@@ -119,12 +119,16 @@ interface RustSymbolProvider : SymbolProvider, ModuleProvider {
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
-fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
-fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
@@ -203,7 +207,9 @@ open class SymbolVisitor(
                 name(rustType.name)
                 build()
             }
-        } else symbol
+        } else {
+            symbol
+        }
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
@@ -321,7 +327,9 @@ open class SymbolVisitor(
 fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
     if (shape.hasTrait<RustBoxTrait>()) {
         symbol.makeRustBoxed()
-    } else symbol
+    } else {
+        symbol
+    }
 
 fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
     Symbol.builder().shape(shape).rustType(rustType)

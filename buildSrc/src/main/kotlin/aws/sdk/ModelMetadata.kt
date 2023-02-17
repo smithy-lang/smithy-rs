@@ -11,7 +11,7 @@ import java.io.File
 enum class ChangeType {
     UNCHANGED,
     FEATURE,
-    DOCUMENTATION
+    DOCUMENTATION,
 }
 
 /** Model metadata toml file */

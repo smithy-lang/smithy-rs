@@ -226,7 +226,9 @@ fun validateUnsupportedConstraints(
         .filterMapShapesToTraits(allConstraintTraits)
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
-    val eventStreamErrors = eventStreamShapes.map { it.expectTrait<SyntheticEventStreamUnionTrait>() }.map { it.errorMembers }
+    val eventStreamErrors = eventStreamShapes.map {
+        it.expectTrait<SyntheticEventStreamUnionTrait>()
+    }.map { it.errorMembers }
     val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet = eventStreamErrors
         .flatMap { it }
         .flatMap { walker.walkShapes(it) }
@@ -248,8 +250,12 @@ fun validateUnsupportedConstraints(
 
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedLengthTraitOnStreamingBlobShapeSet.map {
+                it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+            } +
+            unsupportedConstraintShapeReachableViaAnEventStreamSet.map {
+                it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+            } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)

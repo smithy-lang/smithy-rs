@@ -710,10 +710,10 @@ mod tests {
                     .into(),
                 ),
                 "{
-                    't': True, 
-                    'foo': 'foo', 
-                    'f42': 42.0, 
-                    'i42': 42, 
+                    't': True,
+                    'foo': 'foo',
+                    'f42': 42.0,
+                    'i42': 42,
                     'f': False,
                     'vec': [
                         'inner',

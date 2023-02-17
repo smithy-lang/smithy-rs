@@ -210,10 +210,12 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun collectionShapeConstraintViolationImplBlock(
         collectionConstraintsInfo:
-            Collection<CollectionTraitInfo>,
+        Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ) = writable {
-        val validationExceptionFields = collectionConstraintsInfo.map { it.toTraitInfo().asValidationExceptionField }.toMutableList()
+        val validationExceptionFields = collectionConstraintsInfo.map {
+            it.toTraitInfo().asValidationExceptionField
+        }.toMutableList()
         if (isMemberConstrained) {
             validationExceptionFields += {
                 rust(

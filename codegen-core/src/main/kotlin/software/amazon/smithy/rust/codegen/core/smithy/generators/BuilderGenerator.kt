@@ -142,7 +142,9 @@ class BuilderGenerator(
     private val metadata = structureSymbol.expectRustMetadata()
 
     // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
-    private val builderDerives = metadata.derives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
+    private val builderDerives = metadata.derives.filter {
+        it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
+    } + RuntimeType.Default
     private val builderName = "Builder"
 
     fun render(writer: RustWriter) {

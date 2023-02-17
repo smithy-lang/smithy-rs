@@ -122,7 +122,9 @@ class ConstrainedShapeSymbolProvider(
      *  - That it has no unsupported constraints applied.
      */
     private fun constrainedCollectionCheck(shape: CollectionShape): Boolean {
-        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
+        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull {
+            shape.getTrait(it).orNull()
+        }.toSet()
         val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
 
         return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits).isEmpty()

@@ -189,7 +189,9 @@ class ServerBuilderGenerator(
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         // Filter out any derive that isn't Debug or Clone. Then add a Default derive
-        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        val builderDerives = baseDerives.filter {
+            it == RuntimeType.Debug || it == RuntimeType.Clone
+        } + RuntimeType.Default
         Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
@@ -391,12 +393,12 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
-                if (symbolProvider.toSymbol(member).isOptional()) {
-                    "input.map(|v| v.into())"
-                } else {
-                    "Some(input.into())"
-                }
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+                    if (symbolProvider.toSymbol(member).isOptional()) {
+                        "input.map(|v| v.into())"
+                    } else {
+                        "Some(input.into())"
+                    }
                 };
                 self
                 """,

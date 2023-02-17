@@ -129,7 +129,9 @@ class RegionDecorator : ClientCodegenDecorator {
             object : EndpointCustomization {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
-                        Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+                        Builtins.REGION.builtIn -> writable {
+                            rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
+                        }
                         else -> null
                     }
                 }

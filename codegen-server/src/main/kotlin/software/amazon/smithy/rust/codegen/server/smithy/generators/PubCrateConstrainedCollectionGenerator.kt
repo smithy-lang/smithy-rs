@@ -109,11 +109,11 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<#{Symbol}> for $name {
                         fn from(v: #{Symbol}) -> Self {
                             ${
-                    if (innerNeedsConstraining) {
-                        "Self(v.into_iter().map(|item| item.into()).collect())"
-                    } else {
-                        "Self(v)"
-                    }
+                        if (innerNeedsConstraining) {
+                            "Self(v.into_iter().map(|item| item.into()).collect())"
+                        } else {
+                            "Self(v)"
+                        }
                     }
                         }
                     }
@@ -121,11 +121,11 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${
-                    if (innerNeedsConstraining) {
-                        "v.0.into_iter().map(|item| item.into()).collect()"
-                    } else {
-                        "v.0"
-                    }
+                        if (innerNeedsConstraining) {
+                            "v.0.into_iter().map(|item| item.into()).collect()"
+                        } else {
+                            "v.0"
+                        }
                     }
                         }
                     }
