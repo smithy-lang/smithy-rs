@@ -123,7 +123,7 @@ class ServerInstantiatorTest {
             },
         ])
         string NamedEnum
-    """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
+    """.asSmithyModel().let { RecursiveShapeBoxer().transform(it) }
 
     private val codegenContext = serverTestCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider

@@ -43,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -64,83 +63,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     LongShape::class to RustType.Integer(64),
     StringShape::class to RustType.String,
 )
-
-/**
- * Make the Rust type of a symbol optional (hold `Option<T>`)
- *
- * This is idempotent and will have no change if the type is already optional.
- */
-fun Symbol.makeOptional(): Symbol =
-    if (isOptional()) {
-        this
-    } else {
-        val rustType = RustType.Option(this.rustType())
-        Symbol.builder()
-            .rustType(rustType)
-            .addReference(this)
-            .name(rustType.name)
-            .build()
-    }
-
-/**
- * Make the Rust type of a symbol boxed (hold `Box<T>`).
- *
- * This is idempotent and will have no change if the type is already boxed.
- */
-fun Symbol.makeRustBoxed(): Symbol =
-    if (isRustBoxed()) {
-        this
-    } else {
-        val rustType = RustType.Box(this.rustType())
-        Symbol.builder()
-            .rustType(rustType)
-            .addReference(this)
-            .name(rustType.name)
-            .build()
-    }
-
-/**
- * Make the Rust type of a symbol wrapped in `MaybeConstrained`. (hold `MaybeConstrained<T>`).
- *
- * This is idempotent and will have no change if the type is already `MaybeConstrained<T>`.
- */
-fun Symbol.makeMaybeConstrained(): Symbol =
-    if (this.rustType() is RustType.MaybeConstrained) {
-        this
-    } else {
-        val rustType = RustType.MaybeConstrained(this.rustType())
-        Symbol.builder()
-            .rustType(rustType)
-            .addReference(this)
-            .name(rustType.name)
-            .build()
-    }
-
-/**
- * Map the [RustType] of a symbol with [f].
- *
- * WARNING: This function does not set any `SymbolReference`s on the returned symbol. You will have to add those
- * yourself if your logic relies on them.
- **/
-fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
-    val newType = f(this.rustType())
-    return Symbol.builder().rustType(newType)
-        .name(newType.name)
-        .build()
-}
-
-/** Set the symbolLocation for this symbol builder */
-fun Symbol.Builder.locatedIn(rustModule: RustModule.LeafModule): Symbol.Builder {
-    val currentRustType = this.build().rustType()
-    check(currentRustType is RustType.Opaque) {
-        "Only `Opaque` can have their namespace updated"
-    }
-    val newRustType = currentRustType.copy(namespace = rustModule.fullyQualifiedPath())
-    return this.definitionFile(rustModule.definitionFile())
-        .namespace(rustModule.fullyQualifiedPath(), "::")
-        .rustType(newRustType)
-        .module(rustModule)
-}
 
 /**
  * Track both the past and current name of a symbol
@@ -360,27 +282,15 @@ fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
         symbol.makeRustBoxed()
     } else symbol
 
-fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-    val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)
-    return builder.rustType(rustType)
+fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
+    Symbol.builder().shape(shape).rustType(rustType)
         .name(rustType.name)
         // Every symbol that actually gets defined somewhere should set a definition file
         // If we ever generate a `thisisabug.rs`, there is a bug in our symbol generation
         .definitionFile("thisisabug.rs")
-}
 
 fun handleOptionality(symbol: Symbol, member: MemberShape, nullableIndex: NullableIndex, nullabilityCheckMode: CheckMode): Symbol =
     symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
-
-private const val RUST_TYPE_KEY = "rusttype"
-private const val RUST_MODULE_KEY = "rustmodule"
-private const val SHAPE_KEY = "shape"
-private const val SYMBOL_DEFAULT = "symboldefault"
-private const val RENAMED_FROM_KEY = "renamedfrom"
-
-fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
-fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
-fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
 
 /**
  * Creates a test module for this symbol.
@@ -403,49 +313,6 @@ fun SymbolProvider.testModuleForShape(shape: Shape): RustModule.LeafModule {
         additionalAttributes = listOf(Attribute.CfgTest),
     )
 }
-
-fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
-    return this.putProperty(RENAMED_FROM_KEY, name)
-}
-
-fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
-
-fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
-fun Symbol.Builder.setDefault(default: Default): Symbol.Builder = this.putProperty(SYMBOL_DEFAULT, default)
-
-/**
- * Type representing the default value for a given type. (eg. for Strings, this is `""`)
- */
-sealed class Default {
-    /**
-     * This symbol has no default value. If the symbol is not optional, this will be an error during builder construction
-     */
-    object NoDefault : Default()
-
-    /**
-     * This symbol should use the Rust `std::default::Default` when unset
-     */
-    object RustDefault : Default()
-}
-
-/**
- * True when it is valid to use the default/0 value for [this] symbol during construction.
- */
-fun Symbol.canUseDefault(): Boolean = this.defaultValue() != Default.NoDefault
-
-/**
- * True when [this] is will be represented by Option<T> in Rust
- */
-fun Symbol.isOptional(): Boolean = when (this.rustType()) {
-    is RustType.Option -> true
-    else -> false
-}
-
-fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
-
-// Symbols should _always_ be created with a Rust type & shape attached
-fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
-fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 
 /**
  *  You should rarely need this function, rust names in general should be symbol-aware,

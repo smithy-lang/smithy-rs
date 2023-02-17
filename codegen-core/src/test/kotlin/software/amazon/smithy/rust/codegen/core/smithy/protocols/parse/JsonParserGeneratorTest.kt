@@ -114,7 +114,7 @@ class JsonParserGeneratorTest {
 
     @Test
     fun `generates valid deserializers`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         fun builderSymbol(shape: StructureShape): Symbol =

@@ -11,10 +11,13 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 class MapConstraintViolationGenerator(
@@ -47,7 +50,14 @@ class MapConstraintViolationGenerator(
             constraintViolationCodegenScopeMutableList.add("KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape))
         }
         if (isValueConstrained(valueShape, model, symbolProvider)) {
-            constraintViolationCodegenScopeMutableList.add("ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape))
+            constraintViolationCodegenScopeMutableList.add(
+                "ValueConstraintViolationSymbol" to
+                    constraintViolationSymbolProvider.toSymbol(valueShape).letIf(
+                        shape.value.hasTrait<ConstraintViolationRustBoxTrait>(),
+                    ) {
+                        it.makeRustBoxed()
+                    },
+            )
             constraintViolationCodegenScopeMutableList.add("KeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape))
         }
         val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
