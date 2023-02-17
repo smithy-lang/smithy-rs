@@ -65,38 +65,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 )
 
 /**
- * Module providers can't use the full CodegenContext since they're invoked from
- * inside the SymbolVisitor, which is created before CodegenContext is created.
- */
-data class ModuleProviderContext(
-    val model: Model,
-    val serviceShape: ServiceShape?,
-)
-
-fun CodegenContext.toModuleProviderContext(): ModuleProviderContext = ModuleProviderContext(model, serviceShape)
-
-/**
- * Provider for RustModules so that the symbol provider knows where to organize things.
- */
-interface ModuleProvider {
-    /** Returns the module for a shape */
-    fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule
-
-    /** Returns the module for an operation error */
-    fun moduleForOperationError(context: ModuleProviderContext, operation: OperationShape): RustModule.LeafModule
-
-    /** Returns the module for an event stream error */
-    fun moduleForEventStreamError(context: ModuleProviderContext, eventStream: UnionShape): RustModule.LeafModule
-}
-
-data class SymbolVisitorConfig(
-    val runtimeConfig: RuntimeConfig,
-    val renameExceptions: Boolean,
-    val nullabilityCheckMode: CheckMode,
-    val moduleProvider: ModuleProvider,
-)
-
-/**
  * Track both the past and current name of a symbol
  *
  * When a symbol name conflicts with another name, we need to rename it. This tracks both names enabling us to generate helpful
@@ -106,30 +74,6 @@ data class SymbolVisitorConfig(
  * field will be set.
  */
 data class MaybeRenamed(val name: String, val renamedFrom: String?)
-
-/**
- * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
- */
-interface RustSymbolProvider : SymbolProvider {
-    val model: Model
-    val moduleProviderContext: ModuleProviderContext
-    val config: SymbolVisitorConfig
-
-    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
-
-    fun moduleForShape(shape: Shape): RustModule.LeafModule =
-        config.moduleProvider.moduleForShape(moduleProviderContext, shape)
-    fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
-        config.moduleProvider.moduleForOperationError(moduleProviderContext, operation)
-    fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
-        config.moduleProvider.moduleForEventStreamError(moduleProviderContext, eventStream)
-
-    /** Returns the symbol for an operation error */
-    fun symbolForOperationError(operation: OperationShape): Symbol
-
-    /** Returns the symbol for an event stream error */
-    fun symbolForEventStreamError(eventStream: UnionShape): Symbol
-}
 
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
@@ -163,7 +107,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
 open class SymbolVisitor(
     override val model: Model,
     private val serviceShape: ServiceShape?,
-    override val config: SymbolVisitorConfig,
+    override val config: RustSymbolProviderConfig,
 ) : RustSymbolProvider, ShapeVisitor<Symbol> {
     override val moduleProviderContext = ModuleProviderContext(model, serviceShape)
     private val nullableIndex = NullableIndex.of(model)

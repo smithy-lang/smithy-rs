@@ -19,8 +19,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -40,7 +40,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolat
  */
 class UnconstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,
-    private val unconstrainedModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     val shape: MapShape,
 ) {
     private val model = codegenContext.model
@@ -74,7 +74,7 @@ class UnconstrainedMapGenerator(
         val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
         val valueMemberSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape.value)
 
-        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
+        inlineModuleCreator(symbol) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

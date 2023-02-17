@@ -17,7 +17,7 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 internal class RustReservedWordSymbolProviderTest {
     class Stub(override val model: Model) : RustSymbolProvider {
         override val moduleProviderContext: ModuleProviderContext get() = PANIC()
-        override val config: SymbolVisitorConfig get() = PANIC()
+        override val config: RustSymbolProviderConfig get() = PANIC()
 
         override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
         override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()

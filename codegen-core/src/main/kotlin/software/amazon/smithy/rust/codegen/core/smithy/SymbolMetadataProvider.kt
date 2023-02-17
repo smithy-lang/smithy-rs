@@ -14,12 +14,10 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -27,22 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-
-/**
- * Default delegator to enable easily decorating another symbol provider.
- */
-open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
-    override val model: Model get() = base.model
-    override val moduleProviderContext: ModuleProviderContext get() = base.moduleProviderContext
-    override val config: SymbolVisitorConfig get() = base.config
-
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
-    override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
-    override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
-    override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
-    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
-        base.symbolForEventStreamError(eventStream)
-}
 
 /**
  * Attach `meta` to symbols. `meta` is used by the generators (e.g. StructureGenerator) to configure the generated models.

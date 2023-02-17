@@ -28,8 +28,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
 /**
  * The [ConstraintViolationSymbolProvider] returns, for a given constrained
@@ -77,15 +79,29 @@ class ConstraintViolationSymbolProvider(
 
     private fun Shape.shapeModule(): RustModule.LeafModule {
         val documentation = if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
-            "See [`${this.contextName(serviceShape)}`]."
+            val symbol = base.toSymbol(this)
+            "See [`${this.contextName(serviceShape)}`]($symbol)."
         } else {
             null
         }
-        return RustModule.new(
+
+        val syntheticTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>()
+
+        val (module, name) = if (syntheticTrait != null) {
+            // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
+            // that is a descendant of the module that contains the extracted shape itself.
+            val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, publicConstrainedTypes)!!
+            val name = syntheticTrait.member.memberName
+            Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
+        } else {
             // Need to use the context name so we get the correct name for maps.
-            name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
+            Pair(ServerRustModule.Model, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
+        }
+
+        return RustModule.new(
+            name = name,
             visibility = visibility,
-            parent = ServerRustModule.Model,
+            parent = module,
             inline = true,
             documentation = documentation,
         )

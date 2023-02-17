@@ -98,10 +98,12 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
+        val parent = shape.getParentAndInlineModuleForConstrainedMember(this, publicConstrainedTypes)?.second ?: ServerRustModule.UnconstrainedModule
+
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            parent = ServerRustModule.UnconstrainedModule,
+            parent = parent,
             inline = true,
         )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
