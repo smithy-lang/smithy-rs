@@ -182,22 +182,23 @@ fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
 /**
  * Returns the parent and the inline module that this particular shape should go in.
  */
-fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolProvider, pubCrateServerBuilder: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
+fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolProvider, publicConstrainedTypes: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
     val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
     return if (overriddenTrait.container is StructureShape) {
         val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()
-        val builderModule = overriddenTrait.container.serverBuilderModule(symbolProvider, pubCrateServerBuilder)
+        val builderModule = overriddenTrait.container.serverBuilderModule(symbolProvider, !publicConstrainedTypes)
         Pair(structureModule, builderModule)
     } else {
         // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
         // that is a descendant of the module that contains the extracted shape itself.
-        return if (!pubCrateServerBuilder) {
+        if (!publicConstrainedTypes) {
             // List, union and map types need to go into their own module
             val shapeSymbol = symbolProvider.toSymbol(this)
             val shapeModule = shapeSymbol.module()
             check(!shapeModule.parent.isInline()) {
                 "Parent module of $id should not be an inline module"
             }
+
             Pair(shapeModule.parent as RustModule.LeafModule, shapeModule)
         } else {
             val name = RustReservedWords.escapeIfNeeded(overriddenTrait.container.id.name).toSnakeCase() + "_internal"

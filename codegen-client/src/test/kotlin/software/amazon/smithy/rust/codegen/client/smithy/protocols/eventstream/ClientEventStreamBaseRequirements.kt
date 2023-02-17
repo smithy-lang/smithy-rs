@@ -75,6 +75,7 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
     }
 
     override fun renderError(
+        rustCrate: RustCrate,
         writer: RustWriter,
         codegenContext: ClientCodegenContext,
         shape: StructureShape,
