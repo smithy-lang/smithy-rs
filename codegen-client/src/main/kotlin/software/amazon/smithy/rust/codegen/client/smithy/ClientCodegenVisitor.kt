@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -67,7 +67,7 @@ class ClientCodegenVisitor(
     private val protocolGenerator: ClientProtocolGenerator
 
     init {
-        val symbolVisitorConfig = SymbolVisitorConfig(
+        val rustSymbolProviderConfig = RustSymbolProviderConfig(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
             nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
@@ -82,7 +82,7 @@ class ClientCodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, rustSymbolProviderConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
 
@@ -105,14 +105,14 @@ class ClientCodegenVisitor(
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
-            .let(RecursiveShapeBoxer::transform)
+            .let(RecursiveShapeBoxer()::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
             // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
-            // - Normalize event stream operations
+            // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
     /**

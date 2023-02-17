@@ -13,10 +13,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
@@ -65,14 +65,15 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
+            includeConstrainedShapeProvider: Boolean = true,
         ) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+            SymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
-                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
+                .let { if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, model, serviceShape, constrainedTypes) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
+                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

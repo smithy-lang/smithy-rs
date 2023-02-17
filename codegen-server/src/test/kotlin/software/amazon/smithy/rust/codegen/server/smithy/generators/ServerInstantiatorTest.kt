@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -123,7 +124,7 @@ class ServerInstantiatorTest {
             },
         ])
         string NamedEnum
-    """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
+    """.asSmithyModel().let { RecursiveShapeBoxer().transform(it) }
 
     private val codegenContext = serverTestCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
@@ -138,10 +139,11 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
+
         project.withModule(ServerRustModule.Model) {
-            structure.serverRenderWithModelBuilder(model, symbolProvider, this)
-            inner.serverRenderWithModelBuilder(model, symbolProvider, this)
-            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
+            structure.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            inner.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
             withInlineModule(RustModule.inlineTests()) {
@@ -180,6 +182,7 @@ class ServerInstantiatorTest {
                 }
             }
         }
+        project.renderInlineMemoryModules()
         project.compileAndTest()
     }
 

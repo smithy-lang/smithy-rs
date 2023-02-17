@@ -57,12 +57,11 @@ internal class BuilderGeneratorTest {
     @Test
     fun `generate fallible builders`() {
         val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
-        val provider =
-            object : WrappingSymbolProvider(baseProvider) {
-                override fun toSymbol(shape: Shape): Symbol {
-                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
-                }
+        val provider = object : WrappingSymbolProvider(baseProvider) {
+            override fun toSymbol(shape: Shape): Symbol {
+                return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
             }
+        }
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(StructureGeneratorTest.struct) {
             AllowDeprecated.render(this)
