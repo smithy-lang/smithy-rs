@@ -27,6 +27,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * Modules for code generated client crates.
  */
 object ClientRustModule {
+    /** crate */
+    val root = RustModule.LibRs
+
     /** crate::client */
     val client = Client.self
 
@@ -117,4 +120,20 @@ object OldModuleSchemeClientModuleProvider : ModuleProvider {
         context: ModuleProviderContext,
         eventStream: UnionShape,
     ): RustModule.LeafModule = ClientRustModule.Error
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedConfigModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Config
+    else -> ClientRustModule.root
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedCustomizeModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Client.customize
+    else -> RustModule.public(
+        "customize",
+        "Operation customization and supporting types",
+        parent = ClientRustModule.Operation,
+    )
 }
