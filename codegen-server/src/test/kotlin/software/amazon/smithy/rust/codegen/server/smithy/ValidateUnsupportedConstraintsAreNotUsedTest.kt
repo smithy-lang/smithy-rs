@@ -27,7 +27,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         namespace test
 
         service TestService {
-            version: "123",
             operations: [TestOperation]
         }
 
@@ -151,6 +150,47 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 """.trimIndent().replace("\n", " ")
             it.message shouldNotContain "If you want to go ahead and generate the server SDK ignoring unsupported constraint traits"
         }
+    }
+
+    private val mapShapeReachableFromUniqueItemsListShapeModel =
+        """
+        $baseModel
+        
+        structure TestInputOutput {
+            uniqueItemsList: UniqueItemsList
+        }
+        
+        @uniqueItems
+        list UniqueItemsList {
+            member: Map
+        }
+        
+        map Map {
+            key: String
+            value: String
+        }
+        """.asSmithyModel()
+
+    @Test
+    fun `it should detect when a map shape is reachable from a uniqueItems list shape`() {
+        val validationResult = validateModel(mapShapeReachableFromUniqueItemsListShapeModel)
+
+        validationResult.messages shouldHaveSize 1
+        validationResult.shouldAbort shouldBe true
+        validationResult.messages[0].message shouldContain """
+            The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the 
+            `@uniqueItems` trait attached.
+        """.trimIndent().replace("\n", " ")
+    }
+
+    @Test
+    fun `it should abort when a map shape is reachable from a uniqueItems list shape, despite opting into ignoreUnsupportedConstraintTraits`() {
+        val validationResult = validateModel(
+            mapShapeReachableFromUniqueItemsListShapeModel,
+            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+        )
+
+        validationResult.shouldAbort shouldBe true
     }
 
     @Test

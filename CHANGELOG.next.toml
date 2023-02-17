@@ -211,8 +211,27 @@ references = ["aws-sdk-rust#736"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "Velfi"
 
+[[aws-sdk-rust]]
+message = "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated."
+references = ["aws-sdk-rust#740"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "Velfi"
+
 [[smithy-rs]]
-message = "Support for constraint traits on member shapes (constraint trait precedence)"
+message = "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated."
+references = ["aws-sdk-rust#740"]
+meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
+produced Rust code that did not compile"""
+references = ["smithy-rs#2352", "smithy-rs#2343"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "82marbag"
+
+[[smithy-rs]]
+message = "Support for constraint traits on member shapes (constraint trait precedence) has been added."
 references = ["smithy-rs#1969"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
