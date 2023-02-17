@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.inspectors.forAll
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -99,6 +100,7 @@ class ConstraintsTest {
     private val structAInt = model.lookup<MemberShape>("test#StructureA\$int")
     private val structAString = model.lookup<MemberShape>("test#StructureA\$string")
     private val structWithInnerDefault = model.lookup<StructureShape>("test#StructWithInnerDefault")
+    private val primitiveBoolean = model.lookup<BooleanShape>("smithy.api#PrimitiveBoolean")
 
     @Test
     fun `it should detect supported constrained traits as constrained`() {
@@ -129,5 +131,6 @@ class ConstraintsTest {
     @Test
     fun `it should not consider shapes with the default trait as constrained`() {
         structWithInnerDefault.canReachConstrainedShape(model, symbolProvider) shouldBe false
+        primitiveBoolean.isDirectlyConstrained(symbolProvider) shouldBe false
     }
 }
