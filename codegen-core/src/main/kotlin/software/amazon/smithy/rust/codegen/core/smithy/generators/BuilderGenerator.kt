@@ -207,7 +207,7 @@ class BuilderGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
-        writer.docs("This is the datatype that Builder of this module build itself into.")
+        writer.docs("This is the datatype returned when calling `Builder::build()`.")
         writer.rustInline("pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
