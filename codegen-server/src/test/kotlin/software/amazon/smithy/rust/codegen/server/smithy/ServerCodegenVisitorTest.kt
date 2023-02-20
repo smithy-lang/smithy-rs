@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import kotlin.io.path.writeText
 
@@ -45,8 +46,12 @@ class ServerCodegenVisitorTest {
         """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, testDir) = generatePluginContext(model)
         testDir.resolve("src/main.rs").writeText("fn main() {}")
-        val codegenDecorator: CombinedServerCodegenDecorator =
-            CombinedServerCodegenDecorator.fromClasspath(ctx, ServerRequiredCustomizations())
+        val codegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(
+                ctx,
+                ServerRequiredCustomizations(),
+                SmithyValidationExceptionDecorator(),
+            )
         val visitor = ServerCodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransformInternalTest(model)
         baselineModel.getShapesWithTrait(ShapeId.from("smithy.api#mixin")).isEmpty() shouldBe true

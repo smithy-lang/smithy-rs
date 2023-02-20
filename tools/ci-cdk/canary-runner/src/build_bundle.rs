@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = "0.11.14"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -428,6 +429,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = "0.11.14"
 aws-config = { path = "some/sdk/path/aws-config" }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
@@ -490,6 +492,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = "0.11.14"
 aws-config = "0.46.0"
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"

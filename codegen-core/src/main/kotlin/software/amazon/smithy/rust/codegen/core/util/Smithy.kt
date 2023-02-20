@@ -137,3 +137,6 @@ fun Shape.isPrimitive(): Boolean {
         else -> false
     }
 }
+
+/** Convert a string to a ShapeId */
+fun String.shapeId() = ShapeId.from(this)

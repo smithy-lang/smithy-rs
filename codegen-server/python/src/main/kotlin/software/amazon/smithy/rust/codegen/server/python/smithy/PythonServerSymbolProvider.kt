@@ -22,9 +22,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -44,11 +44,11 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
  * `aws_smithy_http_server_python::types`.
  */
 class PythonServerSymbolVisitor(
-    private val model: Model,
+    model: Model,
     serviceShape: ServiceShape?,
-    config: SymbolVisitorConfig,
+    config: RustSymbolProviderConfig,
 ) : SymbolVisitor(model, serviceShape, config) {
-    private val runtimeConfig = config().runtimeConfig
+    private val runtimeConfig = config.runtimeConfig
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = shape.accept(this)
@@ -68,7 +68,7 @@ class PythonServerSymbolVisitor(
         // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
         // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
-            PythonServerRuntimeType.byteStream(config().runtimeConfig).toSymbol()
+            PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
         } else {
             initial
         }
@@ -95,7 +95,7 @@ class PythonServerSymbolVisitor(
  *
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
-class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider, private val model: Model) : SymbolMetadataProvider(base) {
+class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {

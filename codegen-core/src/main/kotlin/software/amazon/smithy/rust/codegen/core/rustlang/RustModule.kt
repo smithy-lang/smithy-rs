@@ -99,26 +99,6 @@ sealed class RustModule {
             parent = parent,
         ).cfgTest()
 
-        /* Common modules used across client, server and tests */
-        val Config = public("config", documentation = "Configuration for the service.")
-        val Error = public(
-            "error",
-            documentation = "All error types that operations can return. Documentation on these types is copied from the model.",
-        )
-        val Model = public(
-            "model",
-            documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.",
-        )
-        val Input = public(
-            "input",
-            documentation = "Input structures for operations. Documentation on these types is copied from the model.",
-        )
-        val Output = public(
-            "output",
-            documentation = "Output structures for operations. Documentation on these types is copied from the model.",
-        )
-        val Types = public("types", documentation = "Data primitives referenced by other data types.")
-
         /**
          * Helper method to generate the `operation` Rust module.
          * Its visibility depends on the generation context (client or server).

@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -26,27 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-
-/**
- * Default delegator to enable easily decorating another symbol provider.
- */
-open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
-    override fun config(): SymbolVisitorConfig {
-        return base.config()
-    }
-
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-        return base.toEnumVariantName(definition)
-    }
-
-    override fun toSymbol(shape: Shape): Symbol {
-        return base.toSymbol(shape)
-    }
-
-    override fun toMemberName(shape: MemberShape): String {
-        return base.toMemberName(shape)
-    }
-}
 
 /**
  * Attach `meta` to symbols. `meta` is used by the generators (e.g. StructureGenerator) to configure the generated models.
@@ -92,7 +70,7 @@ fun containerDefaultMetadata(
     model: Model,
     additionalAttributes: List<Attribute> = emptyList(),
 ): RustMetadata {
-    val defaultDerives = setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
+    val derives = mutableSetOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
 
     val isSensitive = shape.hasTrait<SensitiveTrait>() ||
         // Checking the shape's direct members for the sensitive trait should suffice.
@@ -101,27 +79,21 @@ fun containerDefaultMetadata(
         // shape; any sensitive descendant should still be printed as redacted.
         shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
 
-    val setOfDerives = if (isSensitive) {
-        defaultDerives - RuntimeType.Debug
-    } else {
-        defaultDerives
+    if (isSensitive) {
+        derives.remove(RuntimeType.Debug)
     }
-    return RustMetadata(
-        setOfDerives,
-        additionalAttributes,
-        Visibility.PUBLIC,
-    )
+
+    return RustMetadata(derives, additionalAttributes, Visibility.PUBLIC)
 }
 
 /**
  * The base metadata supports a set of attributes that are used by generators to decorate code.
  *
- * By default we apply `#[non_exhaustive]` in [additionalAttributes] only to client structures since breaking model
+ * By default, we apply `#[non_exhaustive]` in [additionalAttributes] only to client structures since breaking model
  * changes are fine when generating server code.
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
-    private val model: Model,
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
 

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -48,7 +49,7 @@ class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: CollectionShape,
-    private val constraintsInfo: List<TraitInfo>,
+    collectionConstraintsInfo: List<CollectionTraitInfo>,
     private val unconstrainedSymbol: Symbol? = null,
 ) {
     private val model = codegenContext.model
@@ -63,6 +64,7 @@ class ConstrainedCollectionGenerator(
             }
         }
     private val symbolProvider = codegenContext.symbolProvider
+    private val constraintsInfo = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         check(constraintsInfo.isNotEmpty()) {
@@ -120,23 +122,23 @@ class ConstrainedCollectionGenerator(
 
         writer.rustTemplate(
             """
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
+        impl #{TryFrom}<$inner> for $name {
+            type Error = #{ConstraintViolation};
 
-                /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    #{ConstraintChecks:W}
+            /// ${rustDocsTryFromMethod(name, inner)}
+            fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                #{ConstraintChecks:W}
 
-                    Ok(Self(value))
-                }
+                Ok(Self(value))
             }
+        }
 
-            impl #{From}<$name> for $inner {
-                fn from(value: $name) -> Self {
-                    value.into_inner()
-                }
+        impl #{From}<$name> for $inner {
+            fn from(value: $name) -> Self {
+                value.into_inner()
             }
-            """,
+        }
+        """,
             *codegenScope,
             "ConstraintChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
         )
@@ -145,7 +147,8 @@ class ConstrainedCollectionGenerator(
         if (!publicConstrainedTypes &&
             innerShape.canReachConstrainedShape(model, symbolProvider) &&
             innerShape !is StructureShape &&
-            innerShape !is UnionShape
+            innerShape !is UnionShape &&
+            innerShape !is EnumShape
         ) {
             writer.rustTemplate(
                 """
@@ -178,7 +181,7 @@ class ConstrainedCollectionGenerator(
     }
 }
 
-internal sealed class CollectionTraitInfo {
+sealed class CollectionTraitInfo {
     data class UniqueItems(val uniqueItemsTrait: UniqueItemsTrait, val memberSymbol: Symbol) : CollectionTraitInfo() {
         override fun toTraitInfo(): TraitInfo =
             TraitInfo(
@@ -365,11 +368,10 @@ internal sealed class CollectionTraitInfo {
             }
         }
 
-        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<TraitInfo> =
+        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<CollectionTraitInfo> =
             supportedCollectionConstraintTraits
                 .mapNotNull { shape.getTrait(it).orNull() }
                 .map { trait -> fromTrait(trait, shape, symbolProvider) }
-                .map(CollectionTraitInfo::toTraitInfo)
     }
 
     abstract fun toTraitInfo(): TraitInfo

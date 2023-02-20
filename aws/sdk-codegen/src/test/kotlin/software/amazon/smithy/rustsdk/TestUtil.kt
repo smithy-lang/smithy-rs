@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
@@ -39,9 +40,10 @@ fun awsSdkIntegrationTest(
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
-        model, runtimeConfig = AwsTestRuntimeConfig,
-        additionalSettings = ObjectNode.builder()
-            .withMember(
+        model,
+        IntegrationTestParams(
+            runtimeConfig = AwsTestRuntimeConfig,
+            additionalSettings = ObjectNode.builder().withMember(
                 "customizationConfig",
                 ObjectNode.builder()
                     .withMember(
@@ -51,6 +53,7 @@ fun awsSdkIntegrationTest(
                             .build(),
                     ).build(),
             )
-            .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+                .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+        ),
         test = test,
     )

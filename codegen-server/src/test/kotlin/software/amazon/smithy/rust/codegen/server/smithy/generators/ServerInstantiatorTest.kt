@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -21,8 +20,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -123,7 +124,7 @@ class ServerInstantiatorTest {
             },
         ])
         string NamedEnum
-    """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
+    """.asSmithyModel().let { RecursiveShapeBoxer().transform(it) }
 
     private val codegenContext = serverTestCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
@@ -138,10 +139,11 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
-            structure.serverRenderWithModelBuilder(model, symbolProvider, this)
-            inner.serverRenderWithModelBuilder(model, symbolProvider, this)
-            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
+
+        project.withModule(ServerRustModule.Model) {
+            structure.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            inner.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
             withInlineModule(RustModule.inlineTests()) {
@@ -180,6 +182,7 @@ class ServerInstantiatorTest {
                 }
             }
         }
+        project.renderInlineMemoryModules()
         project.compileAndTest()
     }
 
@@ -190,8 +193,12 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+        project.withModule(ServerRustModule.Model) {
+            ServerEnumGenerator(
+                codegenContext,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render(this)
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
@@ -209,8 +216,12 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+        project.withModule(ServerRustModule.Model) {
+            ServerEnumGenerator(
+                codegenContext,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render(this)
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
