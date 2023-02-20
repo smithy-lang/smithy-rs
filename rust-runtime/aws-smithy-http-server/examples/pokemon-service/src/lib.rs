@@ -227,7 +227,7 @@ pub async fn capture_pokemon(
                         let capturing_event = event.as_event();
                         if let Ok(attempt) = capturing_event {
                             let payload = attempt.payload.clone().unwrap_or_else(|| CapturingPayload::builder().build());
-                            let pokeball = payload.pokeball.as_deref().unwrap_or("");
+                            let pokeball = payload.pokeball().unwrap_or("");
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
@@ -249,8 +249,7 @@ pub async fn capture_pokemon(
                                 if captured {
                                     let shiny = rand::thread_rng().gen_range(0..4096) == 0;
                                     let pokemon = payload
-                                        .name
-                                        .as_deref()
+                                        .name()
                                         .unwrap_or("")
                                         .to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
