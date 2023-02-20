@@ -58,13 +58,12 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    val builderGen = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList())
                     rustCrate.withModule(codegenContext.symbolProvider.moduleForBuilder(shape)) {
-                        builderGen.render(this)
+                        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList()).render(this)
                     }
                     rustCrate.moduleFor(shape) {
                         writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
-                            builderGen.renderConvenienceMethod(this)
+                            BuilderGenerator.renderConvenienceMethod(this, codegenContext.symbolProvider, shape)
                         }
                     }
                 }

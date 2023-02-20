@@ -41,44 +41,6 @@ class ErrorGenerator(
     fun render() {
         val symbol = symbolProvider.toSymbol(shape)
 
-        val builderGen = BuilderGenerator(
-            model, symbolProvider, shape,
-            listOf(
-                object : BuilderCustomization() {
-                    override fun section(section: BuilderSection): Writable = writable {
-                        when (section) {
-                            is BuilderSection.AdditionalFields -> {
-                                rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
-                            }
-
-                            is BuilderSection.AdditionalMethods -> {
-                                rustTemplate(
-                                    """
-                                    /// Sets error metadata
-                                    pub fn meta(mut self, meta: #{error_metadata}) -> Self {
-                                        self.meta = Some(meta);
-                                        self
-                                    }
-
-                                    /// Sets error metadata
-                                    pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
-                                        self.meta = meta;
-                                        self
-                                    }
-                                    """,
-                                    "error_metadata" to errorMetadata(runtimeConfig),
-                                )
-                            }
-
-                            is BuilderSection.AdditionalFieldsInBuild -> {
-                                rust("meta: self.meta.unwrap_or_default(),")
-                            }
-                        }
-                    }
-                },
-            ),
-        )
-
         rustCrate.useShapeWriter(shape) {
             StructureGenerator(
                 model, symbolProvider, this, shape,
@@ -106,12 +68,48 @@ class ErrorGenerator(
             }
 
             implBlock(symbol) {
-                builderGen.renderConvenienceMethod(this)
+                BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
             }
         }
 
         rustCrate.withModule(symbolProvider.moduleForBuilder(shape)) {
-            builderGen.render(this)
+            BuilderGenerator(
+                model, symbolProvider, shape,
+                listOf(
+                    object : BuilderCustomization() {
+                        override fun section(section: BuilderSection): Writable = writable {
+                            when (section) {
+                                is BuilderSection.AdditionalFields -> {
+                                    rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
+                                }
+
+                                is BuilderSection.AdditionalMethods -> {
+                                    rustTemplate(
+                                        """
+                                        /// Sets error metadata
+                                        pub fn meta(mut self, meta: #{error_metadata}) -> Self {
+                                            self.meta = Some(meta);
+                                            self
+                                        }
+
+                                        /// Sets error metadata
+                                        pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
+                                            self.meta = meta;
+                                            self
+                                        }
+                                        """,
+                                        "error_metadata" to errorMetadata(runtimeConfig),
+                                    )
+                                }
+
+                                is BuilderSection.AdditionalFieldsInBuild -> {
+                                    rust("meta: self.meta.unwrap_or_default(),")
+                                }
+                            }
+                        }
+                    },
+                ),
+            ).render(this)
         }
     }
 }

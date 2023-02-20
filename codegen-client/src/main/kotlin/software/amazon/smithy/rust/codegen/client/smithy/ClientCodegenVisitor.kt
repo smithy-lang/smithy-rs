@@ -194,15 +194,13 @@ class ClientCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         when (val errorTrait = shape.getTrait<ErrorTrait>()) {
             null -> {
-                val builderGenerator =
+                rustCrate.withModule(symbolProvider.moduleForBuilder(shape)) {
                     BuilderGenerator(
                         codegenContext.model,
                         codegenContext.symbolProvider,
                         shape,
                         codegenDecorator.builderCustomizations(codegenContext, emptyList()),
-                    )
-                rustCrate.withModule(symbolProvider.moduleForBuilder(shape)) {
-                    builderGenerator.render(this)
+                    ).render(this)
                 }
 
                 rustCrate.useShapeWriter(shape) {
@@ -215,7 +213,7 @@ class ClientCodegenVisitor(
                     ).render()
 
                     implBlock(symbolProvider.toSymbol(shape)) {
-                        builderGenerator.renderConvenienceMethod(this)
+                        BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
                     }
                 }
             }

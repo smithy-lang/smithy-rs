@@ -112,6 +112,15 @@ class BuilderGenerator(
                         // generate a fallible builder.
                         !it.isOptional() && !it.canUseDefault()
                     }
+
+        fun renderConvenienceMethod(implBlock: RustWriter, symbolProvider: RustSymbolProvider, shape: StructureShape) {
+            implBlock.docs("Creates a new builder-style object to manufacture #D.", symbolProvider.toSymbol(shape))
+            symbolProvider.symbolForBuilder(shape).also { builderSymbol ->
+                implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
+                    write("#T::default()", builderSymbol)
+                }
+            }
+        }
     }
 
     private val runtimeConfig = symbolProvider.config.runtimeConfig
@@ -151,13 +160,6 @@ class BuilderGenerator(
     private fun RustWriter.missingRequiredField(field: String) {
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
-    }
-
-    fun renderConvenienceMethod(implBlock: RustWriter) {
-        implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
-        implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
-            write("#T::default()", builderSymbol)
-        }
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>

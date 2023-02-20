@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -17,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -59,8 +62,14 @@ open class ClientProtocolGenerator(
         }
 
         // pub struct Operation { ... }
+        val fluentBuilderName = FluentClientGenerator.clientOperationFnName(operationShape, symbolProvider)
         operationWriter.rust(
             """
+            /// Operation shape for `$operationName`.
+            ///
+            /// This is usually constructed for you using the the fluent builder returned by
+            /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
+            ///
             /// `ParseStrictResponse` impl for `$operationName`.
             ##[doc(hidden)]
             """,
@@ -70,7 +79,10 @@ open class ClientProtocolGenerator(
             write("_private: ()")
         }
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            rustBlock("pub(crate) fn new() -> Self") {
+            BuilderGenerator.renderConvenienceMethod(this, symbolProvider, inputShape)
+
+            rust("/// Creates a new `$operationName` operation.")
+            rustBlock("pub fn new() -> Self") {
                 rust("Self { _private: () }")
             }
 

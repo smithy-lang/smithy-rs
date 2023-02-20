@@ -172,14 +172,13 @@ fun StructureShape.renderWithModelBuilder(
     rustCrate: RustCrate,
 ) {
     val struct = this
-    val builderGen = BuilderGenerator(model, symbolProvider, this, emptyList())
     rustCrate.withModule(symbolProvider.moduleForShape(struct)) {
         StructureGenerator(model, symbolProvider, this, struct, emptyList()).render()
         implBlock(symbolProvider.toSymbol(struct)) {
-            builderGen.renderConvenienceMethod(this)
+            BuilderGenerator.renderConvenienceMethod(this, symbolProvider, struct)
         }
     }
     rustCrate.withModule(symbolProvider.moduleForBuilder(struct)) {
-        builderGen.render(this)
+        BuilderGenerator(model, symbolProvider, struct, emptyList()).render(this)
     }
 }
