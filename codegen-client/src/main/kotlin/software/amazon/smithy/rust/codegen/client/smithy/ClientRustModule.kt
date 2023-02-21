@@ -134,7 +134,7 @@ object OldModuleSchemeClientModuleProvider : ModuleProvider {
             visibility = Visibility.PUBLIC,
             parent = symbol.module(),
             inline = true,
-            documentation = "See [${symbol.name}](${symbol.module().fullyQualifiedPath()}::${symbol.name}).",
+            documentation = "See [`${symbol.name}`](${symbol.module().fullyQualifiedPath()}::${symbol.name}).",
         )
     }
 }
