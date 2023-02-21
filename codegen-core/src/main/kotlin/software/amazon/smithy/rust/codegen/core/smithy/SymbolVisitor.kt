@@ -65,27 +65,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 )
 
 /**
- * Provider for RustModules so that the symbol provider knows where to organize things.
- */
-interface ModuleProvider {
-    /** Returns the module for a shape */
-    fun moduleForShape(shape: Shape): RustModule.LeafModule
-
-    /** Returns the module for an operation error */
-    fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule
-
-    /** Returns the module for an event stream error */
-    fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule
-}
-
-data class SymbolVisitorConfig(
-    val runtimeConfig: RuntimeConfig,
-    val renameExceptions: Boolean,
-    val nullabilityCheckMode: CheckMode,
-    val moduleProvider: ModuleProvider,
-)
-
-/**
  * Track both the past and current name of a symbol
  *
  * When a symbol name conflicts with another name, we need to rename it. This tracks both names enabling us to generate helpful
@@ -95,26 +74,6 @@ data class SymbolVisitorConfig(
  * field will be set.
  */
 data class MaybeRenamed(val name: String, val renamedFrom: String?)
-
-/**
- * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
- */
-interface RustSymbolProvider : SymbolProvider, ModuleProvider {
-    fun config(): SymbolVisitorConfig
-    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
-
-    override fun moduleForShape(shape: Shape): RustModule.LeafModule = config().moduleProvider.moduleForShape(shape)
-    override fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
-        config().moduleProvider.moduleForOperationError(operation)
-    override fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
-        config().moduleProvider.moduleForEventStreamError(eventStream)
-
-    /** Returns the symbol for an operation error */
-    fun symbolForOperationError(operation: OperationShape): Symbol
-
-    /** Returns the symbol for an event stream error */
-    fun symbolForEventStreamError(eventStream: UnionShape): Symbol
-}
 
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
@@ -146,13 +105,12 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * derives for a given shape.
  */
 open class SymbolVisitor(
-    private val model: Model,
+    override val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig,
-) : RustSymbolProvider,
-    ShapeVisitor<Symbol> {
+    override val config: RustSymbolProviderConfig,
+) : RustSymbolProvider, ShapeVisitor<Symbol> {
+    override val moduleProviderContext = ModuleProviderContext(model, serviceShape)
     private val nullableIndex = NullableIndex.of(model)
-    override fun config(): SymbolVisitorConfig = config
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
