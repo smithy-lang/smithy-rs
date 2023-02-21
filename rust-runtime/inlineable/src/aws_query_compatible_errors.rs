@@ -31,10 +31,9 @@ pub fn parse_aws_query_compatible_error(headers: &HeaderMap<HeaderValue>) -> Opt
         _ => return None,
     };
 
-    match header_value.find(QUERY_COMPATIBLE_ERRORCODE_DELIMITER) {
-        Some(idx) => Some((&header_value[..idx], &header_value[idx + 1..])),
-        None => None,
-    }
+    header_value
+        .find(QUERY_COMPATIBLE_ERRORCODE_DELIMITER)
+        .map(|idx| (&header_value[..idx], &header_value[idx + 1..]))
 }
 
 #[cfg(test)]
