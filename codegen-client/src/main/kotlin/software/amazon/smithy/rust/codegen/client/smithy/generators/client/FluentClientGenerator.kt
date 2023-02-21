@@ -55,6 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
+    private val reexportSmithyClientBuilder: Boolean = true,
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
@@ -86,6 +87,15 @@ class FluentClientGenerator(
     }
 
     private fun renderFluentClient(writer: RustWriter) {
+        if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
+            writer.rustTemplate(
+                """
+                ##[doc(inline)]
+                pub use #{client}::Builder;
+                """,
+                "client" to RuntimeType.smithyClient(runtimeConfig),
+            )
+        }
         writer.rustTemplate(
             """
             ##[derive(Debug)]
@@ -105,9 +115,6 @@ class FluentClientGenerator(
                     Self { handle: self.handle.clone() }
                 }
             }
-
-            ##[doc(inline)]
-            pub use #{client}::Builder;
 
             impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
                 fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {

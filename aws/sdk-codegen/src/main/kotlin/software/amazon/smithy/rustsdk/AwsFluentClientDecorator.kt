@@ -96,7 +96,8 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val generics = AwsClientGenerics(types)
         FluentClientGenerator(
             codegenContext,
-            generics,
+            reexportSmithyClientBuilder = false,
+            generics = generics,
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
