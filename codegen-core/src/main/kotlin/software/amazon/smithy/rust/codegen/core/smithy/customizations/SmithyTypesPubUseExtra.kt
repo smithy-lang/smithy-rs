@@ -54,15 +54,8 @@ internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<Run
         listOf(
             PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
-        ) + RuntimeType.smithyTypes(runtimeConfig).let { types ->
-            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
-                // Only re-export `ProvideErrorMetadata` for clients
-                .letIf(codegenContext.target == CodegenTarget.CLIENT) { list ->
-                    list + listOf(PubUseType(types.resolve("error::metadata::ProvideErrorMetadata")) { true })
-                }
-        } + RuntimeType.smithyHttp(runtimeConfig).let { http ->
+        ) + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
-                PubUseType(http.resolve("result::SdkError")) { true },
                 PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
                 PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
             )
@@ -70,10 +63,32 @@ internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<Run
         ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }
 }
 
-/** Adds re-export statements in a separate file for the types module */
-fun pubUseSmithyTypes(codegenContext: CodegenContext, model: Model): Writable = writable {
+/** Adds re-export statements for Smithy primitives */
+fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writable = writable {
     val types = pubUseTypes(codegenContext, model)
     if (types.isNotEmpty()) {
         types.forEach { type -> rust("pub use #T;", type) }
+    }
+}
+
+/** Adds re-export statements for error types */
+fun pubUseSmithyErrorTypes(codegenContext: CodegenContext): Writable = writable {
+    val runtimeConfig = codegenContext.runtimeConfig
+    val reexports = listOf(
+        listOf(
+            RuntimeType.smithyHttp(runtimeConfig).let { http ->
+                PubUseType(http.resolve("result::SdkError")) { true }
+            },
+        ),
+        RuntimeType.smithyTypes(runtimeConfig).let { types ->
+            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
+                // Only re-export `ProvideErrorMetadata` for clients
+                .letIf(codegenContext.target == CodegenTarget.CLIENT) { list ->
+                    list + listOf(PubUseType(types.resolve("error::metadata::ProvideErrorMetadata")) { true })
+                }
+        },
+    ).flatten()
+    reexports.forEach { reexport ->
+        rust("pub use #T;", reexport.type)
     }
 }
