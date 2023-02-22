@@ -95,6 +95,13 @@ class InlineDependency(
                 CargoDependency.Http,
             )
 
+        fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
+            forInlineableRustFile(
+                "aws_query_compatible_errors",
+                CargoDependency.smithyJson(runtimeConfig),
+                CargoDependency.Http,
+            )
+
         fun idempotencyToken() =
             forInlineableRustFile("idempotency_token", CargoDependency.FastRand)
 

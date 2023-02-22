@@ -246,10 +246,10 @@ class ProtocolTestGenerator(
         expectedShape: StructureShape,
     ) {
         if (!protocolSupport.responseDeserialization || (
-            !protocolSupport.errorDeserialization && expectedShape.hasTrait(
+                !protocolSupport.errorDeserialization && expectedShape.hasTrait(
                     ErrorTrait::class.java,
                 )
-            )
+                )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -356,7 +356,7 @@ class ProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.write(
                     "#T(&body, ${
-                    rustWriter.escape(body).dq()
+                        rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),

@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -35,7 +36,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -47,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import kotlin.reflect.KClass
@@ -78,12 +77,16 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
-fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
-fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
@@ -128,21 +131,13 @@ open class SymbolVisitor(
             module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
         }
 
-    /**
-     * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
-     * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
-     *
-     * Because enum variants are not member shape, a separate handler is required.
-     */
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-        val baseName = definition.name.orNull()?.toPascalCase() ?: return null
-        return MaybeRenamed(baseName, null)
-    }
-
-    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
-        is StructureShape -> shape.memberName.toSnakeCase()
-        is UnionShape -> shape.memberName.toPascalCase()
-        else -> error("unexpected container shape: $container")
+    override fun toMemberName(shape: MemberShape): String {
+        val container = model.expectShape(shape.container)
+        return when {
+            container is StructureShape -> shape.memberName.toSnakeCase()
+            container is UnionShape || container is EnumShape || container.hasTrait<EnumTrait>() -> shape.memberName.toPascalCase()
+            else -> error("unexpected container shape: $container")
+        }
     }
 
     override fun blobShape(shape: BlobShape?): Symbol {
@@ -161,7 +156,9 @@ open class SymbolVisitor(
                 name(rustType.name)
                 build()
             }
-        } else symbol
+        } else {
+            symbol
+        }
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
@@ -279,7 +276,9 @@ open class SymbolVisitor(
 fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
     if (shape.hasTrait<RustBoxTrait>()) {
         symbol.makeRustBoxed()
-    } else symbol
+    } else {
+        symbol
+    }
 
 fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
     Symbol.builder().shape(shape).rustType(rustType)

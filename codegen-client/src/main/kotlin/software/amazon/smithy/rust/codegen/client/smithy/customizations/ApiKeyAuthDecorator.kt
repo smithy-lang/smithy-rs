@@ -100,7 +100,7 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                     """
                     ${section.request}.properties_mut().insert(api_key_config.clone());
                     let api_key = api_key_config.api_key();
-                """,
+                    """,
                 )
                 val definitionName = authDefinition.getName()
                 if (authDefinition.getIn() == HttpApiKeyAuthTrait.Location.QUERY) {
