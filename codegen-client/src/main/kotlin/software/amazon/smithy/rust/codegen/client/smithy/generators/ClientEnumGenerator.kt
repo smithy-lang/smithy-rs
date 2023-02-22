@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -86,7 +87,7 @@ data class InfallibleEnumType(
     }
 
     private fun unknownVariantValue(context: EnumGeneratorContext): RuntimeType {
-        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Types) {
+        return RuntimeType.forInlineFun(UnknownVariantValue, ClientRustModule.Types) {
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
@@ -167,4 +168,4 @@ data class InfallibleEnumType(
 }
 
 class ClientEnumGenerator(codegenContext: CodegenContext, shape: StringShape) :
-    EnumGenerator(codegenContext.model, codegenContext.symbolProvider, shape, InfallibleEnumType(RustModule.Types))
+    EnumGenerator(codegenContext.model, codegenContext.symbolProvider, shape, InfallibleEnumType(ClientRustModule.Types))

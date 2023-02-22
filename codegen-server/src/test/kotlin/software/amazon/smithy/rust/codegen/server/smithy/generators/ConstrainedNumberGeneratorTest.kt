@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
@@ -74,6 +75,7 @@ class ConstrainedNumberGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             ConstrainedNumberGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
@@ -140,6 +142,7 @@ class ConstrainedNumberGeneratorTest {
         val writer = RustWriter.forModule(ServerRustModule.Model.name)
         ConstrainedNumberGenerator(
             codegenContext,
+            writer.createTestInlineModuleCreator(),
             writer,
             constrainedShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),

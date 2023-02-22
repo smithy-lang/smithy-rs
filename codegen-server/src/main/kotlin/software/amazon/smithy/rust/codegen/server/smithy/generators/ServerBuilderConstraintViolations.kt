@@ -71,7 +71,11 @@ class ServerBuilderConstraintViolations(
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-        writer.rustBlock("pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName") {
+        writer.rustBlock(
+            """
+            ##[allow(clippy::enum_variant_names)]
+            pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName""",
+        ) {
             renderConstraintViolations(writer)
         }
 
@@ -129,7 +133,11 @@ class ServerBuilderConstraintViolations(
         for (constraintViolation in all) {
             when (constraintViolation.kind) {
                 ConstraintViolationKind.MISSING_MEMBER -> {
-                    writer.docs("${constraintViolation.message(symbolProvider, model).replaceFirstChar { it.uppercaseChar() }}.")
+                    writer.docs(
+                        "${constraintViolation.message(symbolProvider, model).replaceFirstChar {
+                            it.uppercaseChar()
+                        }}.",
+                    )
                     writer.rust("${constraintViolation.name()},")
                 }
 
@@ -145,7 +153,11 @@ class ServerBuilderConstraintViolations(
 
                     // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
                     // be `pub(crate)` and that would leak `T` in a public interface.
-                    writer.docs("${constraintViolation.message(symbolProvider, model)}.".replaceFirstChar { it.uppercaseChar() })
+                    writer.docs(
+                        "${constraintViolation.message(symbolProvider, model)}.".replaceFirstChar {
+                            it.uppercaseChar()
+                        },
+                    )
                     Attribute.DocHidden.render(writer)
                     writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
                 }

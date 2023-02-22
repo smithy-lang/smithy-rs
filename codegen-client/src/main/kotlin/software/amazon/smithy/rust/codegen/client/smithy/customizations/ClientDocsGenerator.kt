@@ -16,7 +16,9 @@ class ClientDocsGenerator : LibRsCustomization() {
         return when (section) {
             is LibRsSection.ModuleDocumentation -> if (section.subsection == LibRsSection.CrateOrganization) {
                 crateLayout()
-            } else emptySection
+            } else {
+                emptySection
+            }
             else -> emptySection
         }
     }

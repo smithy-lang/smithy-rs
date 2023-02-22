@@ -11,4 +11,4 @@ set -eo pipefail
 cd "$(dirname "$0")"
 cd "$(git rev-parse --show-toplevel)"
 
-git ls-files -s --full-name "tools" | git hash-object --stdin
+git ls-files -s --full-name "tools/ci-build" | git hash-object --stdin
