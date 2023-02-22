@@ -73,11 +73,6 @@ class SmithyTypesPubUseExtraTest {
     }
 
     @Test
-    fun `it always re-exports SdkError`() {
-        assertHasType(typesWithEmptyModel(), "aws_smithy_http::result::SdkError")
-    }
-
-    @Test
     fun `it re-exports Blob when a model uses blobs`() {
         assertDoesntHaveType(typesWithEmptyModel(), "aws_smithy_types::Blob")
         assertHasType(typesWithMember(inputMember = "foo: Blob"), "aws_smithy_types::Blob")

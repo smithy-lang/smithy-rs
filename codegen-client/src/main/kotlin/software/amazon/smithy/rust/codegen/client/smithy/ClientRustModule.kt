@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -144,3 +145,14 @@ fun ClientCodegenContext.featureGatedMetaModule() = when (settings.codegenConfig
     true -> ClientRustModule.Meta
     else -> ClientRustModule.root
 }
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedPaginatorModule(symbolProvider: RustSymbolProvider, operation: OperationShape) =
+    when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+        true -> RustModule.public(
+            "paginator",
+            parent = symbolProvider.moduleForShape(operation),
+            documentation = "Paginator for this operation",
+        )
+        else -> RustModule.public("paginator", "Paginators for the service")
+    }
