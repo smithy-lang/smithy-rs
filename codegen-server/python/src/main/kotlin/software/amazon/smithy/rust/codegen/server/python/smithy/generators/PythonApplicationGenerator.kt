@@ -106,7 +106,7 @@ class PythonApplicationGenerator(
             ##[#{pyo3}::pyclass]
             ##[derive(Debug)]
             /// :generic Ctx:
-            /// :extends typing.Generic\[Ctx\]: 
+            /// :extends typing.Generic\[Ctx\]:
             /// :rtype None:
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
@@ -285,10 +285,10 @@ class PythonApplicationGenerator(
 
                 /// Main entrypoint: start the server on multiple workers.
                 ///
-                /// :param address ${PythonType.Optional(PythonType.Str).renderAsDocstring()}: 
-                /// :param port ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
-                /// :param backlog ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
-                /// :param workers ${PythonType.Optional(PythonType.Int).renderAsDocstring()}: 
+                /// :param address ${PythonType.Optional(PythonType.Str).renderAsDocstring()}:
+                /// :param port ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                /// :param backlog ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                /// :param workers ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
                 /// :param tls ${PythonType.Optional(tlsConfig).renderAsDocstring()}:
                 /// :rtype ${PythonType.None.renderAsDocstring()}:
                 ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None)")]
@@ -434,7 +434,9 @@ class PythonApplicationGenerator(
             val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
             val ret = if (!operationDocumentation.isNullOrBlank()) {
                 operationDocumentation.replace("#", "##").prependIndent("/// ## ") + "\n"
-            } else ""
+            } else {
+                ""
+            }
             ret +
                 """
                 /// ${it.signature()}:

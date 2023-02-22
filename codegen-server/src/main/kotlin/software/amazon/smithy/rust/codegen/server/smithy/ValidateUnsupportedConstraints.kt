@@ -40,7 +40,7 @@ private sealed class UnsupportedConstraintMessageKind {
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
         fun buildMessage(intro: String, willSupport: Boolean, trackingIssue: String? = null, canBeIgnored: Boolean = true): String {
             var msg = """
-                    $intro
+                $intro
                     This is not supported in the smithy-rs server SDK."""
             if (willSupport) {
                 msg += """
@@ -117,7 +117,7 @@ private sealed class UnsupportedConstraintMessageKind {
                 Level.SEVERE,
                 buildMessage(
                     """
-                    The map shape `${mapShape.id}` is reachable from the list shape `${listShape.id}`, which has the 
+                    The map shape `${mapShape.id}` is reachable from the list shape `${listShape.id}`, which has the
                     `@uniqueItems` trait attached.
                     """.trimIndent().replace("\n", " "),
                     willSupport = false,
@@ -240,7 +240,9 @@ fun validateUnsupportedConstraints(
         .filterMapShapesToTraits(allConstraintTraits)
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
-    val eventStreamErrors = eventStreamShapes.map { it.expectTrait<SyntheticEventStreamUnionTrait>() }.map { it.errorMembers }
+    val eventStreamErrors = eventStreamShapes.map {
+        it.expectTrait<SyntheticEventStreamUnionTrait>()
+    }.map { it.errorMembers }
     val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet = eventStreamErrors
         .flatMap { it }
         .flatMap { walker.walkShapes(it) }
@@ -278,10 +280,16 @@ fun validateUnsupportedConstraints(
         .toSet()
 
     val messages =
-        unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+        unsupportedLengthTraitOnStreamingBlobShapeSet.map {
+            it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+        } +
+            unsupportedConstraintShapeReachableViaAnEventStreamSet.map {
+                it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+            } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            mapShapeReachableFromUniqueItemsListShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
+            mapShapeReachableFromUniqueItemsListShapeSet.map {
+                it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+            }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }

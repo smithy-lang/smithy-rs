@@ -445,7 +445,11 @@ class ConstraintsMemberShapeTest {
         // In case the target shape has some more constraints, which the member shape did not override,
         // then those still need to apply on the new standalone shape that has been defined.
         val leftOverTraits = originalTargetShape.allTraits.values
-            .filter { beforeOverridingTrait -> beforeTransformConstraintTraits.none { beforeOverridingTrait.toShapeId() == it.toShapeId() } }
+            .filter { beforeOverridingTrait ->
+                beforeTransformConstraintTraits.none {
+                    beforeOverridingTrait.toShapeId() == it.toShapeId()
+                }
+            }
         val allNewShapeTraits = memberTargetShape.allTraits.values.toList()
         assert((leftOverTraits + newShapeConstrainedTraits).all { it in allNewShapeTraits }) { lazyMessage }
     }

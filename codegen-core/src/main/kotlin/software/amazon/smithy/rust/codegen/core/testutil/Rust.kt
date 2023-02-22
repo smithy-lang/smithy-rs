@@ -229,11 +229,13 @@ fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (Cargo
         val writtenOut = this.toString()
         val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
         throw CodegenException(
-            "found invalid dependencies. ${invalidDeps.map { it.first }}\nHint: the following lines may be the problem.\n${
-            badLines.joinToString(
-                separator = "\n",
-                prefix = "   ",
-            )
+            "found invalid dependencies. ${invalidDeps.map {
+                it.first
+            }}\nHint: the following lines may be the problem.\n${
+                badLines.joinToString(
+                    separator = "\n",
+                    prefix = "   ",
+                )
             }",
         )
     }

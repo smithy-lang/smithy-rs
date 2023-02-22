@@ -56,7 +56,7 @@ class DeriveEqAndHashSymbolMetadataProvider(
         val baseMetadata = base.toSymbol(shape).expectRustMetadata()
         // See class-level documentation for why we filter these out.
         return if (walker.walkShapes(shape)
-            .any { it is FloatShape || it is DoubleShape || it is DocumentShape || it.hasTrait<StreamingTrait>() }
+                .any { it is FloatShape || it is DoubleShape || it is DocumentShape || it.hasTrait<StreamingTrait>() }
         ) {
             baseMetadata
         } else {

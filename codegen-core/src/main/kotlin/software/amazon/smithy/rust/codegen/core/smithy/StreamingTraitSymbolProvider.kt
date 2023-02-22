@@ -62,14 +62,18 @@ class StreamingShapeMetadataProvider(private val base: RustSymbolProvider) : Sym
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {
             baseMetadata.withoutDerives(RuntimeType.Clone, RuntimeType.PartialEq)
-        } else baseMetadata
+        } else {
+            baseMetadata
+        }
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
         val baseMetadata = base.toSymbol(unionShape).expectRustMetadata()
         return if (unionShape.hasStreamingMember(model)) {
             baseMetadata.withoutDerives(RuntimeType.Clone, RuntimeType.PartialEq)
-        } else baseMetadata
+        } else {
+            baseMetadata
+        }
     }
 
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
