@@ -96,9 +96,10 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val generics = AwsClientGenerics(types)
         FluentClientGenerator(
             codegenContext,
-            generics,
+            reexportSmithyClientBuilder = false,
+            generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(runtimeConfig),
+                AwsPresignedFluentBuilderMethod(codegenContext, runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
