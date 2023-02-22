@@ -9,13 +9,14 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.fluentBuilderType
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -105,15 +106,16 @@ open class ClientProtocolGenerator(
 
         // pub struct Operation { ... }
         val fluentBuilderName = FluentClientGenerator.clientOperationFnName(operationShape, symbolProvider)
-        operationWriter.rust(
+        operationWriter.rustTemplate(
             """
             /// Operation shape for `$operationName`.
             ///
             /// This is usually constructed for you using the the fluent builder returned by
-            /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
+            /// [`$fluentBuilderName`](#{fluentBuilder}).
             ///
             /// `ParseStrictResponse` impl for `$operationName`.
             """,
+            "fluentBuilder" to operationShape.fluentBuilderType(codegenContext, symbolProvider),
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
