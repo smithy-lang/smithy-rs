@@ -140,12 +140,6 @@ fun ClientCodegenContext.featureGatedCustomizeModule() = when (settings.codegenC
 }
 
 // TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
-fun ClientCodegenContext.featureGatedConfigModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
-    true -> ClientRustModule.Config
-    else -> ClientRustModule.root
-}
-
-// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
 fun ClientCodegenContext.featureGatedMetaModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
     true -> ClientRustModule.Meta
     else -> ClientRustModule.root
