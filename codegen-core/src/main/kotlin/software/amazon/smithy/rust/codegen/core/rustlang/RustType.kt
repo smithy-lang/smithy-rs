@@ -222,7 +222,9 @@ fun RustType.asArgument(name: String) = Argument(
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
-    } else ""
+    } else {
+        ""
+    }
     val base = when (this) {
         is RustType.Unit -> this.name
         is RustType.Bool -> this.name
@@ -426,7 +428,7 @@ enum class AttributeKind {
     /**
      * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
      */
-    Outer
+    Outer,
 }
 
 /**

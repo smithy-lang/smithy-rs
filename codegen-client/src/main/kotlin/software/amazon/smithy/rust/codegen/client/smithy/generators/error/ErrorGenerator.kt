@@ -36,7 +36,7 @@ class ErrorGenerator(
     private val error: ErrorTrait,
     private val implCustomizations: List<ErrorImplCustomization>,
 ) {
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
 
     fun render() {
         val symbol = symbolProvider.toSymbol(shape)
@@ -52,6 +52,7 @@ class ErrorGenerator(
                         is StructureSection.AdditionalDebugFields -> {
                             rust("""${section.formatterName}.field("meta", &self.meta);""")
                         }
+                        else -> {}
                     }
                 }
             },
@@ -90,6 +91,8 @@ class ErrorGenerator(
                             is BuilderSection.AdditionalFieldsInBuild -> {
                                 rust("meta: self.meta.unwrap_or_default(),")
                             }
+
+                            else -> {}
                         }
                     }
                 },

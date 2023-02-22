@@ -131,7 +131,9 @@ class XmlBindingTraitParserGenerator(
      */
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
+        check(shape is UnionShape || shape is StructureShape) {
+            "payload parser should only be used on structures & unions"
+        }
         val fnName = symbolProvider.deserializeFunctionName(member)
         return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlock(
@@ -456,7 +458,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.case(member: MemberShape, inner: Writable) {
         rustBlock(
             "s if ${
-            member.xmlName().matchExpression("s")
+                member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => ",
         ) {
             inner()

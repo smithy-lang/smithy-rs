@@ -69,7 +69,7 @@ class PaginatorGenerator private constructor(
     }
 
     private val paginatorName = "${operation.id.name.toPascalCase()}Paginator"
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo =
         idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")

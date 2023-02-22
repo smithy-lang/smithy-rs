@@ -77,12 +77,16 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
-fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
-fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) {
+    "Some($value)"
+}
 
 /**
  * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
@@ -104,13 +108,12 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * derives for a given shape.
  */
 open class SymbolVisitor(
-    private val model: Model,
+    override val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: RustSymbolProviderConfig,
-) : RustSymbolProvider,
-    ShapeVisitor<Symbol> {
+    override val config: RustSymbolProviderConfig,
+) : RustSymbolProvider, ShapeVisitor<Symbol> {
+    override val moduleProviderContext = ModuleProviderContext(model, serviceShape)
     private val nullableIndex = NullableIndex.of(model)
-    override fun config(): RustSymbolProviderConfig = config
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
@@ -153,7 +156,9 @@ open class SymbolVisitor(
                 name(rustType.name)
                 build()
             }
-        } else symbol
+        } else {
+            symbol
+        }
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
@@ -271,7 +276,9 @@ open class SymbolVisitor(
 fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
     if (shape.hasTrait<RustBoxTrait>()) {
         symbol.makeRustBoxed()
-    } else symbol
+    } else {
+        symbol
+    }
 
 fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
     Symbol.builder().shape(shape).rustType(rustType)

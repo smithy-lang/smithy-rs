@@ -29,7 +29,7 @@ internal class RustReservedWordSymbolProviderTest {
                 async: String
             }
         """.trimMargin().asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -45,7 +45,7 @@ internal class RustReservedWordSymbolProviderTest {
             namespace foo
             @enum([{ name: "dontcare", value: "dontcare" }]) string Container
         """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
 
         fun expectEnumRename(original: String, expected: MaybeRenamed) {
             val symbol = provider.toSymbol(

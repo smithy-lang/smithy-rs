@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -62,7 +61,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructu
  */
 class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
-    private val model: Model,
     private val serviceShape: ServiceShape,
     private val publicConstrainedTypes: Boolean,
 ) : WrappingSymbolProvider(base) {
@@ -88,7 +86,7 @@ class ConstrainedShapeSymbolProvider(
                     handleRustBoxing(targetSymbol, shape),
                     shape,
                     nullableIndex,
-                    base.config().nullabilityCheckMode,
+                    base.config.nullabilityCheckMode,
                 )
             }
 
