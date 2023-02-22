@@ -23,7 +23,10 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     private val internal =
-        ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
+        ReservedWordSymbolProvider.builder().symbolProvider(base)
+            .nameReservedWords(RustReservedWords)
+            .memberReservedWords(RustReservedWords)
+            .build()
 
     override fun toMemberName(shape: MemberShape): String {
         val baseName = super.toMemberName(shape)
@@ -49,20 +52,10 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
                 // that represent union variants that have been added since this SDK was generated.
                 UnionGenerator.UnknownVariantName -> "${UnionGenerator.UnknownVariantName}Value"
                 "${UnionGenerator.UnknownVariantName}Value" -> "${UnionGenerator.UnknownVariantName}Value_"
-                // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
-                // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
-                "Self" -> "SelfValue"
-                // Real models won't end in `_` so it's safe to stop here
-                "SelfValue" -> "SelfValue_"
                 else -> reservedWordReplacedName
             }
 
             container is EnumShape || container.hasTrait<EnumTrait>() -> when (baseName) {
-                // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
-                // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
-                "Self" -> "SelfValue"
-                // Real models won't end in `_` so it's safe to stop here
-                "SelfValue" -> "SelfValue_"
                 // Unknown is used as the name of the variant containing unexpected values
                 "Unknown" -> "UnknownValue"
                 // Real models won't end in `_` so it's safe to stop here
@@ -103,7 +96,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
                     }.build()
             }
 
-            else -> base.toSymbol(shape)
+            else -> renamedSymbol
         }
     }
 }
@@ -165,11 +158,20 @@ object RustReservedWords : ReservedWords {
         "try",
     )
 
-    private val cantBeRaw = setOf("self", "crate", "super")
+    // Some things can't be used as a raw identifier, so we can't use the normal escaping strategy
+    // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
+    private val keywordEscapingMap = mapOf(
+        "crate" to "crate_",
+        "super" to "super_",
+        "self" to "self_",
+        "Self" to "SelfValue",
+        // Real models won't end in `_` so it's safe to stop here
+        "SelfValue" to "SelfValue_",
+    )
 
-    override fun escape(word: String): String = when {
-        cantBeRaw.contains(word) -> "${word}_"
-        else -> "r##$word"
+    override fun escape(word: String): String = when (val mapped = keywordEscapingMap[word]) {
+        null -> "r##$word"
+        else -> mapped
     }
 
     fun escapeIfNeeded(word: String): String = when (isReserved(word)) {
@@ -177,5 +179,5 @@ object RustReservedWords : ReservedWords {
         else -> word
     }
 
-    override fun isReserved(word: String): Boolean = RustKeywords.contains(word)
+    override fun isReserved(word: String): Boolean = RustKeywords.contains(word) || keywordEscapingMap.contains(word)
 }
