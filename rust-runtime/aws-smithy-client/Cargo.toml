@@ -26,6 +26,7 @@ fastrand = "1.4.0"
 http = "0.2.3"
 http-body = "0.4.4"
 hyper = { version = "0.14.12", features = ["client", "http2", "http1", "tcp"], optional = true }
+h2 = "0.3.15"
 # cargo does not support optional test dependencies, so to completely disable rustls when
 # the native-tls feature is enabled, we need to add the webpki-roots feature here.
 # https://github.com/rust-lang/cargo/issues/1596

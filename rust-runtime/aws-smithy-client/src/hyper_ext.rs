@@ -174,20 +174,26 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 /// Convert a [`hyper::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: hyper::Error) -> ConnectorError {
     if err.is_timeout() || find_source::<HttpTimeoutError>(&err).is_some() {
-        ConnectorError::timeout(err.into())
-    } else if err.is_user() {
-        ConnectorError::user(err.into())
-    } else if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some()
-    {
-        ConnectorError::io(err.into())
+        return ConnectorError::timeout(err.into());
+    }
+    if err.is_user() {
+        return ConnectorError::user(err.into());
+    }
+    if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some() {
+        return ConnectorError::io(err.into());
     }
     // We sometimes receive this from S3: hyper::Error(IncompleteMessage)
-    else if err.is_incomplete_message() {
-        ConnectorError::other(err.into(), Some(ErrorKind::TransientError))
-    } else {
-        tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
-        ConnectorError::other(err.into(), None)
+    if err.is_incomplete_message() {
+        return ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
     }
+
+    if let Some(h2_error) = find_source::<h2::Error>(&err) {
+        if h2_error.is_go_away() {
+            return ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
+        }
+    }
+    tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
+    ConnectorError::other(err.into(), None)
 }
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
@@ -643,14 +649,20 @@ impl Connection for EmptyStream {
 
 #[cfg(test)]
 mod test {
+    use crate::conns::https;
     use crate::hyper_ext::Adapter;
     use aws_smithy_http::body::SdkBody;
-    use http::Uri;
+    use aws_smithy_http::byte_stream::ByteStream;
+    use h2::{server, Reason};
+    use http::{Response, Uri};
     use hyper::client::connect::{Connected, Connection};
+    use hyper::client::Builder;
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+    use tokio::net::TcpListener;
+    use tokio::time::resume;
     use tower::BoxError;
 
     #[tokio::test]
@@ -670,6 +682,66 @@ mod test {
             .await
             .expect_err("socket hangup");
         assert!(err.is_io(), "{:?}", err);
+    }
+
+    #[tokio::test]
+    async fn test_go_away() {}
+
+    #[tokio::test]
+    async fn test_go_awway2() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            // Accept all incoming TCP connections.
+            loop {
+                if let Ok((socket, _peer_addr)) = listener.accept().await {
+                    // Spawn a new task to process each connection.
+                    tokio::spawn(async {
+                        // Start the HTTP/2 connection handshake
+                        let mut h2 = server::handshake(socket).await.unwrap();
+                        // Accept all inbound HTTP/2 streams sent over the
+                        // connection.
+                        h2.graceful_shutdown();
+                        while let Some(request) = h2.accept().await {
+                            h2.graceful_shutdown();
+                            let (request, mut respond) = request.unwrap();
+                            let rest = respond
+                                .send_response(http::Response::new(()), false)
+                                .unwrap();
+                            //std::mem::forget(respond);
+                            // respond.send_reset(Reason::NO_ERROR);
+                            /*
+                            println!("Received request: {:?}", request);
+                            /*std::mem::forget(rest);
+                            h2.abrupt_shutdown(Reason::NO_ERROR);*/
+
+                            // Build a response with no body
+                            // respond.send_reset(Reason::STREAM_CLOSED)
+
+                             */
+                        }
+                    });
+                }
+            }
+        });
+        let mut builder = hyper::Client::builder();
+        builder.http2_only(true);
+        let mut adapter = Adapter::builder().hyper_builder(builder).build(https());
+        use tower::Service;
+        loop {
+            let err = adapter
+                .call(
+                    http::Request::builder()
+                        .uri(format!("http://{}", addr))
+                        .body(SdkBody::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("it worked but it should have failed");
+            println!("got it...");
+        }
+        // assert!(err, "wrong erorr: {:?}", err);
     }
 
     // ---- machinery to make a Hyper connector that responds with an IO Error
