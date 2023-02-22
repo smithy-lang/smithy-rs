@@ -50,8 +50,6 @@ class AwsQueryCompatible(
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
-        "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
         "Response" to RuntimeType.Http.resolve("Response"),
