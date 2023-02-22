@@ -236,7 +236,7 @@ references = ["smithy-rs#1969"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
 
-[[aws-sdk-rust]]
+[[smithy-rs]]
 message = """
 Add support for the `awsQueryCompatible` trait. This allows services to continue supporting a custom error code (via the `awsQueryError` trait) when the services migrate their protocol from `awsQuery` to `awsJson1_0` annotated with `awsQueryCompatible`. After the migration, services will include an additional header `x-amzn-query-error` in their responses whose value is in the form of `<error code>;<error type>`. An example response looks something like
 ```
@@ -268,6 +268,12 @@ match client.some_operation().send().await {
 }
 ```
 """
+references = ["smithy-rs#2398"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Add support for the `awsQueryCompatible` trait, allowing the Rust SDK to migrate from the AWS Query protocol to the AWS JSON 1.0 protocol to continue supporting custom error codes."
 references = ["smithy-rs#2398"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "ysaito1001"
