@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -112,7 +114,7 @@ class UnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.AllowIrrefutableLetPatterns.render(this)
                 }
-                writer.renderAsVariant(member, variantName, funcNamePart, unionSymbol, memberSymbol)
+                writer.renderAsVariant(model, symbolProvider, member, variantName, funcNamePart, unionSymbol)
                 rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
                     rust("self.as_$funcNamePart().is_ok()")
@@ -183,11 +185,12 @@ private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: Mem
 }
 
 private fun RustWriter.renderAsVariant(
+    model: Model,
+    symbolProvider: SymbolProvider,
     member: MemberShape,
     variantName: String,
     funcNamePart: String,
     unionSymbol: Symbol,
-    memberSymbol: Symbol,
 ) {
     if (member.isTargetUnit()) {
         rust(
@@ -198,13 +201,15 @@ private fun RustWriter.renderAsVariant(
             rust("if let ${unionSymbol.name}::$variantName = &self { Ok(()) } else { Err(self) }")
         }
     } else {
+        val memberSymbol = symbolProvider.toSymbol(member)
+        val targetSymbol = symbolProvider.toSymbol(model.expectShape(member.target))
         rust(
             "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.",
             unionSymbol,
-            memberSymbol,
+            targetSymbol,
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
+        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&${memberSymbol.rustType().render()}, &Self>") {
             rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(val) } else { Err(self) }")
         }
     }
