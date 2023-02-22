@@ -658,11 +658,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     {
                         input = input.${member.setterName()}(${
-                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                        "Some(value)"
-                    } else {
-                        "value"
-                    }
+                        if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                            "Some(value)"
+                        } else {
+                            "value"
+                        }
                     });
                     }
                     """,
@@ -690,7 +690,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             )
         ) {
             "?"
-        } else ""
+        } else {
+            ""
+        }
         rustTemplate("input.build()$err", *codegenScope)
     }
 
@@ -840,7 +842,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     //     * a map of list of string; or
     //     * a map of set of string.
     enum class QueryParamsTargetMapValueType {
-        STRING, LIST, SET;
+        STRING, LIST, SET
     }
 
     private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
@@ -1023,7 +1025,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                        binding.member.setterName()
+                            binding.member.setterName()
                         }(",
                         ");",
                     ) {
@@ -1032,7 +1034,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 "#T(",
                                 ")",
                                 conditional = hasConstrainedTarget,
-                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() },
+                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType {
+                                    it.stripOuter<RustType.Option>()
+                                },
                             ) {
                                 write(memberName)
                             }

@@ -344,8 +344,8 @@ class ServerProtocolTestGenerator(
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
-            !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
-            )
+                !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
+                )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -415,22 +415,22 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             .body(${
-            if (body != null) {
-                // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
-                // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
-                //
-                // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
-                // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
-                // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
-                // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                //
-                // We also escape to avoid interactions with templating in the case where the body contains `#`.
-                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+                if (body != null) {
+                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+                    //
+                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+                    //
+                    // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                    val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
-            } else {
-                "#{SmithyHttpServer}::body::Body::empty()"
-            }
+                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
+                } else {
+                    "#{SmithyHttpServer}::body::Body::empty()"
+                }
             }).unwrap();
             """,
             *codegenScope,
@@ -643,7 +643,7 @@ class ServerProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.rust(
                     "#T(&body, ${
-                    rustWriter.escape(body).dq()
+                        rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),

@@ -37,7 +37,9 @@ class AccountIdAutofill : OperationCustomization() {
             val input = operation.inputShape(model)
             return if (input.memberNames.contains("accountId")) {
                 AccountIdAutofill()
-            } else null
+            } else {
+                null
+            }
         }
     }
 }

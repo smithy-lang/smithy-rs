@@ -133,7 +133,11 @@ class ServerBuilderConstraintViolations(
         for (constraintViolation in all) {
             when (constraintViolation.kind) {
                 ConstraintViolationKind.MISSING_MEMBER -> {
-                    writer.docs("${constraintViolation.message(symbolProvider, model).replaceFirstChar { it.uppercaseChar() }}.")
+                    writer.docs(
+                        "${constraintViolation.message(symbolProvider, model).replaceFirstChar {
+                            it.uppercaseChar()
+                        }}.",
+                    )
                     writer.rust("${constraintViolation.name()},")
                 }
 
@@ -149,7 +153,11 @@ class ServerBuilderConstraintViolations(
 
                     // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
                     // be `pub(crate)` and that would leak `T` in a public interface.
-                    writer.docs("${constraintViolation.message(symbolProvider, model)}.".replaceFirstChar { it.uppercaseChar() })
+                    writer.docs(
+                        "${constraintViolation.message(symbolProvider, model)}.".replaceFirstChar {
+                            it.uppercaseChar()
+                        },
+                    )
                     Attribute.DocHidden.render(writer)
                     writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
                 }

@@ -163,11 +163,11 @@ class InitPyDecorator : ServerCodegenDecorator {
         rustCrate.withFile("python/$libName/__init__.py") {
             writeWithNoFormatting(
                 """
-from .$libName import *
+                from .$libName import *
 
-__doc__ = $libName.__doc__
-if hasattr($libName, "__all__"):
-    __all__ = $libName.__all__
+                __doc__ = $libName.__doc__
+                if hasattr($libName, "__all__"):
+                    __all__ = $libName.__all__
                 """.trimIndent(),
             )
         }
