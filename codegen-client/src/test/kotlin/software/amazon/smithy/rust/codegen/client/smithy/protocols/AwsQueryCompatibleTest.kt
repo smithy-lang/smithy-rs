@@ -76,10 +76,10 @@ class AwsQueryCompatibleTest {
                             .err()
                             .unwrap();
                         assert_eq!(
-                            error.meta().code(),
                             Some("AWS.SimpleQueueService.NonExistentQueue"),
+                            error.meta().code(),
                         );
-                        assert_eq!(error.meta().extra("type"), Some("Sender"));
+                        assert_eq!(Some("Sender"), error.meta().extra("type"));
                     }
                     """,
                 )
@@ -141,8 +141,8 @@ class AwsQueryCompatibleTest {
                             .parse(&response.map(bytes::Bytes::from))
                             .err()
                             .unwrap();
-                        assert_eq!(error.meta().code(), Some("QueueDoesNotExist"));
-                        assert_eq!(error.meta().extra("type"), None);
+                        assert_eq!(Some("QueueDoesNotExist"), error.meta().code());
+                        assert_eq!(None, error.meta().extra("type"));
                     }
                     """,
                 )

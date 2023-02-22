@@ -54,8 +54,8 @@ mod test {
         let actual = aws_query_compatible_error_from_header(response.headers()).unwrap();
 
         assert_eq!(
+            Some("AWS.SimpleQueueService.NonExistentQueue;Sender"),
             actual,
-            Some("AWS.SimpleQueueService.NonExistentQueue;Sender")
         );
     }
 
@@ -70,8 +70,8 @@ mod test {
         let actual = parse_aws_query_compatible_error(response.headers());
 
         assert_eq!(
+            Some(("AWS.SimpleQueueService.NonExistentQueue", "Sender")),
             actual,
-            Some(("AWS.SimpleQueueService.NonExistentQueue", "Sender"))
         );
     }
 
@@ -85,7 +85,7 @@ mod test {
 
         let actual = parse_aws_query_compatible_error(response.headers());
 
-        assert_eq!(actual, None,);
+        assert_eq!(None, actual);
     }
 
     #[test]
@@ -98,6 +98,6 @@ mod test {
 
         let actual = parse_aws_query_compatible_error(response.headers());
 
-        assert_eq!(actual, None,);
+        assert_eq!(None, actual);
     }
 }
