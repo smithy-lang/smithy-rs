@@ -97,22 +97,4 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
     ) {
         ServerOperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
     }
-
-    override fun renderError(
-        rustCrate: RustCrate,
-        writer: RustWriter,
-        codegenContext: ServerCodegenContext,
-        shape: StructureShape,
-    ) {
-        StructureGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape, listOf()).render()
-        ErrorImplGenerator(
-            codegenContext.model,
-            codegenContext.symbolProvider,
-            writer,
-            shape,
-            shape.getTrait()!!,
-            listOf(),
-        ).render(CodegenTarget.SERVER)
-        renderBuilderForShape(rustCrate, writer, codegenContext, shape)
-    }
 }

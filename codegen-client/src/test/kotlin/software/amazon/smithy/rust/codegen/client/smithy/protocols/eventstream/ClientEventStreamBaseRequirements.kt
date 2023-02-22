@@ -68,23 +68,6 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     ) {
-        OperationErrorGenerator(model, symbolProvider, operationOrEventStream, emptyList()).render(writer)
-    }
-
-    override fun renderError(
-        rustCrate: RustCrate,
-        writer: RustWriter,
-        codegenContext: ClientCodegenContext,
-        shape: StructureShape,
-    ) {
-        val errorTrait = shape.expectTrait<ErrorTrait>()
-        ErrorGenerator(
-            codegenContext.model,
-            codegenContext.symbolProvider,
-            writer,
-            shape,
-            errorTrait,
-            emptyList(),
-        ).render()
+        OperationErrorGenerator(model, symbolProvider, operationOrEventStream).render(writer)
     }
 }

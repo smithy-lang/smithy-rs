@@ -42,6 +42,17 @@ fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, 
     }
 }
 
+/**
+ * This is a fun that has been introduced in commit d47778e (Implement RequestID).
+ * Copied it here to make the current code compatible.
+ * Write an `impl` block for the given symbol
+ * */
+fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
+    rustBlock("impl ${symbol.name}") {
+        block()
+    }
+}
+
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
