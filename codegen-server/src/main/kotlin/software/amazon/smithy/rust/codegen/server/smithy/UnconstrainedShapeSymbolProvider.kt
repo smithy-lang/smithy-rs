@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -77,7 +76,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
  */
 class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
-    private val model: Model,
     private val publicConstrainedTypes: Boolean,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
@@ -100,10 +98,12 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
+        val parent = shape.getParentAndInlineModuleForConstrainedMember(this, publicConstrainedTypes)?.second ?: ServerRustModule.UnconstrainedModule
+
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            parent = ServerRustModule.UnconstrainedModule,
+            parent = parent,
             inline = true,
         )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
@@ -166,7 +166,7 @@ class UnconstrainedShapeSymbolProvider(
                         handleRustBoxing(targetSymbol, shape),
                         shape,
                         nullableIndex,
-                        base.config().nullabilityCheckMode,
+                        base.config.nullabilityCheckMode,
                     )
                 } else {
                     base.toSymbol(shape)

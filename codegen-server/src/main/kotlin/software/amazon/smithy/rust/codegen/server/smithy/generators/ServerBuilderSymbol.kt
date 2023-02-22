@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
@@ -23,7 +22,7 @@ fun StructureShape.serverBuilderSymbol(codegenContext: ServerCodegenContext): Sy
         !codegenContext.settings.codegenConfig.publicConstrainedTypes,
     )
 
-fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate: Boolean): Symbol {
+fun StructureShape.serverBuilderModule(symbolProvider: SymbolProvider, pubCrate: Boolean): RustModule.LeafModule {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase()) +
         if (pubCrate) {
@@ -35,7 +34,11 @@ fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate:
         true -> Visibility.PUBCRATE
         false -> Visibility.PUBLIC
     }
-    val builderModule = RustModule.new(builderNamespace, visibility, parent = structureSymbol.module(), inline = true)
+    return RustModule.new(builderNamespace, visibility, parent = structureSymbol.module(), inline = true)
+}
+
+fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate: Boolean): Symbol {
+    val builderModule = serverBuilderModule(symbolProvider, pubCrate)
     val rustType = RustType.Opaque("Builder", builderModule.fullyQualifiedPath())
     return Symbol.builder()
         .rustType(rustType)

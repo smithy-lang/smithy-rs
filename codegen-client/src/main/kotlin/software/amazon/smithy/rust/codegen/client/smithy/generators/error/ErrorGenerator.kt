@@ -36,7 +36,7 @@ class ErrorGenerator(
     private val error: ErrorTrait,
     private val implCustomizations: List<ErrorImplCustomization>,
 ) {
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
 
     fun render() {
         val symbol = symbolProvider.toSymbol(shape)

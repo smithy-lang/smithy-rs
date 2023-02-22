@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.core.smithy
 
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -26,12 +25,10 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 
 class SymbolVisitorTest {
     private fun Symbol.referenceClosure(): List<Symbol> {
@@ -54,8 +51,8 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "MyStruct"
-        sym.definitionFile shouldContain ClientRustModule.Model.definitionFile()
-        sym.namespace shouldBe "crate::model"
+        sym.definitionFile shouldBe "src/test_model.rs"
+        sym.namespace shouldBe "crate::test_model"
     }
 
     @Test
@@ -74,7 +71,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "TerribleError"
-        sym.definitionFile shouldContain ClientRustModule.Error.definitionFile()
+        sym.definitionFile shouldBe "src/test_error.rs"
     }
 
     @Test
@@ -98,8 +95,8 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
         sym.rustType().render(false) shouldBe "StandardUnit"
-        sym.definitionFile shouldContain ClientRustModule.Model.definitionFile()
-        sym.namespace shouldBe "crate::model"
+        sym.definitionFile shouldBe "src/test_model.rs"
+        sym.namespace shouldBe "crate::test_model"
     }
 
     @DisplayName("Creates primitives")
@@ -257,7 +254,7 @@ class SymbolVisitorTest {
             }
         """.asSmithyModel()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
-        symbol.definitionFile shouldBe ClientRustModule.Operation.definitionFile()
+        symbol.definitionFile shouldBe "src/test_operation.rs"
         symbol.name shouldBe "PutObject"
     }
 }

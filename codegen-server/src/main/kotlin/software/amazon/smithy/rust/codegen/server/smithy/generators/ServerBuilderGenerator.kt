@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -51,6 +52,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTar
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.withInMemoryInlineModule
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
 /**
@@ -87,7 +89,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
  * [derive_builder]: https://docs.rs/derive_builder/latest/derive_builder/index.html
  */
 class ServerBuilderGenerator(
-    codegenContext: ServerCodegenContext,
+    val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
@@ -153,9 +155,9 @@ class ServerBuilderGenerator(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(writer: RustWriter) {
-        writer.docs("See #D.", structureSymbol)
-        writer.withInlineModule(builderSymbol.module()) {
+    fun render(rustCrate: RustCrate, writer: RustWriter) {
+        val docWriter: () -> Unit = { writer.docs("See #D.", structureSymbol) }
+        rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
         }
     }
@@ -571,8 +573,7 @@ class ServerBuilderGenerator(
         writer.rustTemplate(
             """
             .map(|res|
-                res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                   ${if (errHasBox) ".map_err(Box::new)" else "" }
+                res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"} ${if (errHasBox) ".map_err(Box::new)" else "" }
                    .map_err(ConstraintViolation::${constraintViolation.name()})
             )
             .transpose()?
