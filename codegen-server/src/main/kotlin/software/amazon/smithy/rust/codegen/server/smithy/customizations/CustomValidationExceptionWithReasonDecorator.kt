@@ -256,7 +256,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
 
     override fun collectionShapeConstraintViolationImplBlock(
         collectionConstraintsInfo:
-            Collection<CollectionTraitInfo>,
+        Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ) = writable {
         val validationExceptionFields = collectionConstraintsInfo.map {
@@ -276,7 +276,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                     is CollectionTraitInfo.UniqueItems -> {
                         rust(
                             """
-                            Self::UniqueItems { duplicate_indices, .. } => 
+                            Self::UniqueItems { duplicate_indices, .. } =>
                                 crate::model::ValidationExceptionField {
                                     message: format!("${it.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
                                     name: path,

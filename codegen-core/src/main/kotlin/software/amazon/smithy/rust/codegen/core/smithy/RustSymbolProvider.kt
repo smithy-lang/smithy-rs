@@ -14,18 +14,15 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 
 /**
- * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
+ * SymbolProvider interface that carries additional configuration and module/symbol resolution.
  */
 interface RustSymbolProvider : SymbolProvider {
     val model: Model
     val moduleProviderContext: ModuleProviderContext
     val config: RustSymbolProviderConfig
-
-    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 
     fun moduleForShape(shape: Shape): RustModule.LeafModule =
         config.moduleProvider.moduleForShape(moduleProviderContext, shape)
@@ -84,7 +81,6 @@ open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSy
     override val moduleProviderContext: ModuleProviderContext get() = base.moduleProviderContext
     override val config: RustSymbolProviderConfig get() = base.config
 
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? = base.toEnumVariantName(definition)
     override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
     override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
     override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)

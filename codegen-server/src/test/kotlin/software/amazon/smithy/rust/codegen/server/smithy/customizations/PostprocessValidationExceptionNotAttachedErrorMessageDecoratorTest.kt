@@ -23,16 +23,16 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
             """
             namespace test
             use aws.protocols#restJson1
-            
+
             @restJson1
             service TestService {
                 operations: ["ConstrainedOperation"],
             }
-            
-            operation ConstrainedOperation { 
-                input: ConstrainedOperationInput 
+
+            operation ConstrainedOperation {
+                input: ConstrainedOperationInput
             }
-            
+
             structure ConstrainedOperationInput {
                 @required
                 requiredString: String
@@ -51,9 +51,9 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
                 val level = validationResult.messages.first().level
                 val message =
                     """
-${validationResult.messages.first().message}
+                    ${validationResult.messages.first().message}
 
-There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man.
+                    There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man.
                     """
 
                 return validationResult.copy(messages = listOf(LogMessage(level, message)))

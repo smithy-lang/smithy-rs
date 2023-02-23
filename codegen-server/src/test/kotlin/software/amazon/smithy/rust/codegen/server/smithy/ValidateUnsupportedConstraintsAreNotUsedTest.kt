@@ -155,16 +155,16 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     private val mapShapeReachableFromUniqueItemsListShapeModel =
         """
         $baseModel
-        
+
         structure TestInputOutput {
             uniqueItemsList: UniqueItemsList
         }
-        
+
         @uniqueItems
         list UniqueItemsList {
             member: Map
         }
-        
+
         map Map {
             key: String
             value: String
@@ -177,10 +177,12 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain """
-            The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the 
+        validationResult.messages[0].message shouldContain(
+            """
+            The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
             `@uniqueItems` trait attached.
-        """.trimIndent().replace("\n", " ")
+            """.trimIndent().replace("\n", " ")
+            )
     }
 
     @Test

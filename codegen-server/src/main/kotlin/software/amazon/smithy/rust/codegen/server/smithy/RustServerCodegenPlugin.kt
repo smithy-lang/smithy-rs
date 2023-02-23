@@ -71,7 +71,9 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
-                .let { if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it }
+                .let {
+                    if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+                }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)

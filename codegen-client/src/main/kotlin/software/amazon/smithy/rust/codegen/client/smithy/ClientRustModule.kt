@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -44,6 +45,7 @@ object ClientRustModule {
     val Config = RustModule.public("config", documentation = "Configuration for the service.")
     val Error = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
     val Operation = RustModule.public("operation", documentation = "All operations that this crate can perform.")
+    val Meta = RustModule.public("meta", documentation = "Information about this crate.")
     val Model = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
     val Input = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
     val Output = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
@@ -137,3 +139,20 @@ fun ClientCodegenContext.featureGatedCustomizeModule() = when (settings.codegenC
         parent = ClientRustModule.Operation,
     )
 }
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedMetaModule() = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> ClientRustModule.Meta
+    else -> ClientRustModule.root
+}
+
+// TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`
+fun ClientCodegenContext.featureGatedPaginatorModule(symbolProvider: RustSymbolProvider, operation: OperationShape) =
+    when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+        true -> RustModule.public(
+            "paginator",
+            parent = symbolProvider.moduleForShape(operation),
+            documentation = "Paginator for this operation",
+        )
+        else -> RustModule.public("paginator", "Paginators for the service")
+    }

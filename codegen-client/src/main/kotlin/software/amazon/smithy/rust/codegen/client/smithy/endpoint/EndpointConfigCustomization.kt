@@ -90,7 +90,9 @@ internal class EndpointConfigCustomization(
                         /// let config = $moduleUseName::Config::builder().endpoint_resolver(prefix_resolver);
                         /// ```
                         """
-                    } else ""
+                    } else {
+                        ""
+                    }
                     rustTemplate(
                         """
                         /// Sets the endpoint resolver to use when making requests.

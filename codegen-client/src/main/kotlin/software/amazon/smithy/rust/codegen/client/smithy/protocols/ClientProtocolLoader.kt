@@ -7,16 +7,19 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.AwsQueryCompatibleTrait
 import software.amazon.smithy.aws.traits.protocols.AwsQueryTrait
 import software.amazon.smithy.aws.traits.protocols.Ec2QueryTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryCompatible
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryProtocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Ec2QueryProtocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -25,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class ClientProtocolLoader(supportedProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>) :
     ProtocolLoader<ClientProtocolGenerator, ClientCodegenContext>(supportedProtocols) {
@@ -57,12 +61,20 @@ private val CLIENT_PROTOCOL_SUPPORT = ProtocolSupport(
 
 private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
     ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = AwsJson(codegenContext, version)
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol =
+        if (compatibleWithAwsQuery(codegenContext.serviceShape, version)) {
+            AwsQueryCompatible(codegenContext, AwsJson(codegenContext, version))
+        } else {
+            AwsJson(codegenContext, version)
+        }
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
+
+    private fun compatibleWithAwsQuery(serviceShape: ServiceShape, version: AwsJsonVersion) =
+        serviceShape.hasTrait<AwsQueryCompatibleTrait>() && version == AwsJsonVersion.Json10
 }
 
 private class ClientAwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {

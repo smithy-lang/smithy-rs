@@ -53,7 +53,9 @@ class ServiceErrorGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
 
-    private val allErrors = operations.flatMap { it.allErrors(model) }.map { it.id }.distinctBy { it.getName(codegenContext.serviceShape) }
+    private val allErrors = operations.flatMap {
+        it.allErrors(model)
+    }.map { it.id }.distinctBy { it.getName(codegenContext.serviceShape) }
         .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
         .sortedBy { it.id.getName(codegenContext.serviceShape) }
 

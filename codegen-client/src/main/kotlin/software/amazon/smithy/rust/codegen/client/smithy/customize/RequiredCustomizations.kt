@@ -14,12 +14,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVers
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyTypes
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
@@ -55,7 +57,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
+        baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -67,7 +69,21 @@ class RequiredCustomizations : ClientCodegenDecorator {
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Types) {
-            pubUseSmithyTypes(codegenContext, codegenContext.model)(this)
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                pubUseSmithyErrorTypes(codegenContext)(this)
+            }
+        }
+        if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+            rustCrate.withModule(ClientRustModule.Error) {
+                pubUseSmithyErrorTypes(codegenContext)(this)
+            }
+        }
+
+        codegenContext.featureGatedMetaModule().also { metaModule ->
+            rustCrate.withModule(metaModule) {
+                CrateVersionCustomization.extras(rustCrate, metaModule)
+            }
         }
     }
 }

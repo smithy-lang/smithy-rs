@@ -48,7 +48,9 @@ open class ServerServiceGenerator(
     fun documentation(writer: RustWriter) {
         val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
         val builderFieldNames =
-            operations.associateWith { RustReservedWords.escapeIfNeeded(codegenContext.symbolProvider.toSymbol(it).name.toSnakeCase()) }
+            operations.associateWith {
+                RustReservedWords.escapeIfNeeded(codegenContext.symbolProvider.toSymbol(it).name.toSnakeCase())
+            }
                 .toSortedMap(
                     compareBy { it.id },
                 )
