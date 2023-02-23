@@ -77,9 +77,6 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         symbolProvider: RustSymbolProvider,
         operationOrEventStream: Shape,
     )
-
-    /** Render an error struct and builder */
-    fun renderError(rustCrate: RustCrate, writer: RustWriter, codegenContext: C, shape: StructureShape)
 }
 
 object EventStreamTestTools {
@@ -135,7 +132,8 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationShape)
             requirements.renderOperationError(this, model, symbolProvider, unionShape)
             for (shape in errors) {
-                requirements.renderError(project, this, codegenContext, shape)
+                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
+                requirements.renderBuilderForShape(project, this, codegenContext, shape)
             }
         }
         val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")

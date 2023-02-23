@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -122,7 +121,7 @@ fun serverTestCodegenContext(
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.serverRenderWithModelBuilder(rustCrate: RustCrate, model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
-    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
+    StructureGenerator(model, symbolProvider, writer, this).render()
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
