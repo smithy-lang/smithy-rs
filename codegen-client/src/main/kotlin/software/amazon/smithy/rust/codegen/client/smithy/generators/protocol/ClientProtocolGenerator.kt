@@ -71,7 +71,6 @@ open class ClientProtocolGenerator(
             /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
             ///
             /// `ParseStrictResponse` impl for `$operationName`.
-            ##[doc(hidden)]
             """,
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
