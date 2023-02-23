@@ -148,7 +148,7 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-COPY --chown=build:build --from=musl_toolchain /usr/local/musl/bin/ /usr/local/musl/bin/
+COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
