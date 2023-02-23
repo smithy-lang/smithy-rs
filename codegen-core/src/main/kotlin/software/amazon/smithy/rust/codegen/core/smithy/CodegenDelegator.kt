@@ -147,15 +147,22 @@ open class RustCrate(
             is RustModule.LibRs -> lib { moduleWriter(this) }
             is RustModule.LeafModule -> {
                 checkDups(module)
-                // Create a dependency which adds the mod statement for this module. This will be added to the writer
-                // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
-                val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
-                    module.renderModStatement(this)
-                }
-                val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
-                inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
-                    moduleWriter(writer)
-                    writer.addDependency(modStatement.dependency)
+
+                if (module.isInline()) {
+                    withModule(module.parent) {
+                        withInlineModule(module, moduleWriter)
+                    }
+                } else {
+                    // Create a dependency which adds the mod statement for this module. This will be added to the writer
+                    // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
+                    val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
+                        module.renderModStatement(this)
+                    }
+                    val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                    inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
+                        moduleWriter(writer)
+                        writer.addDependency(modStatement.dependency)
+                    }
                 }
             }
         }

@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -255,7 +254,7 @@ class FluentClientGenerator(
                         inner: #{Inner}
                     }
                     """,
-                    "Inner" to input.builderSymbol(symbolProvider),
+                    "Inner" to symbolProvider.symbolForBuilder(input),
                     "client" to RuntimeType.smithyClient(runtimeConfig),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,

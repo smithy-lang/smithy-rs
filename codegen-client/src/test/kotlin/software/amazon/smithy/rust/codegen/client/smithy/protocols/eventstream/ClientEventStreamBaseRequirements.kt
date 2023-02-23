@@ -59,9 +59,9 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
     ) {
         BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList()).apply {
             render(writer)
-            writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
-                renderConvenienceMethod(writer)
-            }
+        }
+        writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
+            BuilderGenerator.renderConvenienceMethod(writer, codegenContext.symbolProvider, shape)
         }
     }
 
@@ -82,9 +82,9 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
     ) {
         val errorTrait = shape.expectTrait<ErrorTrait>()
         ErrorGenerator(
+            rustCrate,
             codegenContext.model,
             codegenContext.symbolProvider,
-            writer,
             shape,
             errorTrait,
             emptyList(),

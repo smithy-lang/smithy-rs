@@ -58,6 +58,7 @@ val ClientTestRustSymbolProviderConfig = RustSymbolProviderConfig(
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
+        clientTestRustSettings(),
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         ClientTestRustSymbolProviderConfig,

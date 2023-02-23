@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -98,7 +97,7 @@ class PaginatorGenerator private constructor(
         "Input" to inputType,
         "Output" to outputType,
         "Error" to errorType,
-        "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
+        "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
 
         // SDK Types
         "SdkError" to RuntimeType.sdkError(runtimeConfig),

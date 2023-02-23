@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.
@@ -44,10 +45,11 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
  * `aws_smithy_http_server_python::types`.
  */
 class PythonServerSymbolVisitor(
+    settings: ServerRustSettings,
     model: Model,
     serviceShape: ServiceShape?,
     config: RustSymbolProviderConfig,
-) : SymbolVisitor(model, serviceShape, config) {
+) : SymbolVisitor(settings, model, serviceShape, config) {
     private val runtimeConfig = config.runtimeConfig
 
     override fun toSymbol(shape: Shape): Symbol {

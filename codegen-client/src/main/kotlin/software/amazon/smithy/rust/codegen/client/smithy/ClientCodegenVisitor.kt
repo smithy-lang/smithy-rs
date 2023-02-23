@@ -36,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -75,6 +74,12 @@ class ClientCodegenVisitor(
                 true -> ClientModuleProvider
                 else -> OldModuleSchemeClientModuleProvider
             },
+            nameBuilderFor = { symbol ->
+                when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                    true -> "${symbol.name}Builder"
+                    else -> "Builder"
+                }
+            },
         )
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
@@ -85,7 +90,7 @@ class ClientCodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, rustSymbolProviderConfig)
+        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
 
@@ -187,9 +192,9 @@ class ClientCodegenVisitor(
      * This function _does not_ generate any serializers
      */
     override fun structureShape(shape: StructureShape) {
-        rustCrate.useShapeWriter(shape) {
-            when (val errorTrait = shape.getTrait<ErrorTrait>()) {
-                null -> {
+        when (val errorTrait = shape.getTrait<ErrorTrait>()) {
+            null -> {
+                rustCrate.useShapeWriter(shape) {
                     StructureGenerator(
                         model,
                         symbolProvider,
@@ -198,30 +203,29 @@ class ClientCodegenVisitor(
                         codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                     ).render()
 
-                    if (!shape.hasTrait<SyntheticInputTrait>()) {
-                        val builderGenerator =
-                            BuilderGenerator(
-                                codegenContext.model,
-                                codegenContext.symbolProvider,
-                                shape,
-                                codegenDecorator.builderCustomizations(codegenContext, emptyList()),
-                            )
-                        builderGenerator.render(this)
-                        implBlock(symbolProvider.toSymbol(shape)) {
-                            builderGenerator.renderConvenienceMethod(this)
-                        }
+                    implBlock(symbolProvider.toSymbol(shape)) {
+                        BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
                     }
                 }
-                else -> {
-                    ErrorGenerator(
-                        model,
-                        symbolProvider,
-                        this,
+
+                rustCrate.withModule(symbolProvider.moduleForBuilder(shape)) {
+                    BuilderGenerator(
+                        codegenContext.model,
+                        codegenContext.symbolProvider,
                         shape,
-                        errorTrait,
-                        codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
-                    ).render()
+                        codegenDecorator.builderCustomizations(codegenContext, emptyList()),
+                    ).render(this)
                 }
+            }
+            else -> {
+                ErrorGenerator(
+                    rustCrate,
+                    model,
+                    symbolProvider,
+                    shape,
+                    errorTrait,
+                    codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                ).render()
             }
         }
     }

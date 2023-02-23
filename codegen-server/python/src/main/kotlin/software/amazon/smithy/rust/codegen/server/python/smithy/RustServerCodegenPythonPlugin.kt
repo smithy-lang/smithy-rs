@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.D
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
@@ -68,6 +69,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
          * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
          */
         fun baseSymbolProvider(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
@@ -75,7 +77,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
-            PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+            PythonServerSymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.

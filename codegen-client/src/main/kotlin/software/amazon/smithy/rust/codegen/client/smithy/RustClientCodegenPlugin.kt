@@ -74,8 +74,13 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
          * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
-        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+        fun baseSymbolProvider(
+            settings: ClientRustSettings,
+            model: Model,
+            serviceShape: ServiceShape,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
+        ) =
+            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.CLIENT) }
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)

@@ -133,8 +133,8 @@ class AwsQuerySerializerGeneratorTest {
             )
         }
         model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
             project.moduleFor(top) {
-                top.renderWithModelBuilder(model, symbolProvider, this)
                 UnionGenerator(
                     model,
                     symbolProvider,
@@ -148,9 +148,7 @@ class AwsQuerySerializerGeneratorTest {
         }
 
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
-            project.moduleFor(input) {
-                input.renderWithModelBuilder(model, symbolProvider, this)
-            }
+            input.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

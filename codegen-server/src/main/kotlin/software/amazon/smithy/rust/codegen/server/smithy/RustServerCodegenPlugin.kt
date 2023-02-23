@@ -63,13 +63,14 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
          * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
          */
         fun baseSymbolProvider(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
             includeConstrainedShapeProvider: Boolean = true,
         ) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
                 .let {
                     if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it

@@ -145,10 +145,10 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         let conf = $moduleName::Config::builder().build();
-                        $moduleName::operation::SayHello::builder()
+                        $moduleName::input::SayHelloInput::builder()
                             .greeting("hey there!").build().expect("input is valid")
                             .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
-                        let op = $moduleName::operation::SayHello::builder()
+                        let op = $moduleName::input::SayHelloInput::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");

@@ -30,12 +30,17 @@ interface RustSymbolProvider : SymbolProvider {
         config.moduleProvider.moduleForOperationError(moduleProviderContext, operation)
     fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
         config.moduleProvider.moduleForEventStreamError(moduleProviderContext, eventStream)
+    fun moduleForBuilder(shape: Shape): RustModule.LeafModule =
+        config.moduleProvider.moduleForBuilder(moduleProviderContext, shape, toSymbol(shape))
 
     /** Returns the symbol for an operation error */
     fun symbolForOperationError(operation: OperationShape): Symbol
 
     /** Returns the symbol for an event stream error */
     fun symbolForEventStreamError(eventStream: UnionShape): Symbol
+
+    /** Returns the symbol for a builder */
+    fun symbolForBuilder(shape: Shape): Symbol
 }
 
 /**
@@ -43,11 +48,13 @@ interface RustSymbolProvider : SymbolProvider {
  * inside the SymbolVisitor, which is created before CodegenContext is created.
  */
 data class ModuleProviderContext(
+    val settings: CoreRustSettings,
     val model: Model,
     val serviceShape: ServiceShape?,
 )
 
-fun CodegenContext.toModuleProviderContext(): ModuleProviderContext = ModuleProviderContext(model, serviceShape)
+fun CodegenContext.toModuleProviderContext(): ModuleProviderContext =
+    ModuleProviderContext(settings, model, serviceShape)
 
 /**
  * Provider for RustModules so that the symbol provider knows where to organize things.
@@ -61,6 +68,9 @@ interface ModuleProvider {
 
     /** Returns the module for an event stream error */
     fun moduleForEventStreamError(context: ModuleProviderContext, eventStream: UnionShape): RustModule.LeafModule
+
+    /** Returns the module for a builder */
+    fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule
 }
 
 /**
@@ -71,6 +81,7 @@ data class RustSymbolProviderConfig(
     val renameExceptions: Boolean,
     val nullabilityCheckMode: NullableIndex.CheckMode,
     val moduleProvider: ModuleProvider,
+    val nameBuilderFor: (Symbol) -> String = { _ -> "Builder" },
 )
 
 /**
@@ -86,4 +97,5 @@ open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSy
     override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
     override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
         base.symbolForEventStreamError(eventStream)
+    override fun symbolForBuilder(shape: Shape): Symbol = base.symbolForBuilder(shape)
 }

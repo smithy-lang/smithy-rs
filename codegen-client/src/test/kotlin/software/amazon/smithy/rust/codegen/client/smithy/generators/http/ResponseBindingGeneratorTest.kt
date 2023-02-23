@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
@@ -70,20 +70,22 @@ class ResponseBindingGeneratorTest {
     private val codegenContext: CodegenContext = testCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
 
-    private fun RustWriter.renderOperation() {
+    private fun RustCrate.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
-        rustBlock("impl PutObjectOutput") {
-            val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
-                .responseBindings(operationShape)
-                .filter { it.location == HttpLocation.HEADER }
-            bindings.forEach { binding ->
-                val runtimeType = ResponseBindingGenerator(
-                    RestJson(codegenContext),
-                    codegenContext,
-                    operationShape,
-                ).generateDeserializeHeaderFn(binding)
-                // little hack to force these functions to be generated
-                rust("// use #T;", runtimeType)
+        withModule(ClientRustModule.Output) {
+            rustBlock("impl PutObjectOutput") {
+                val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
+                    .responseBindings(operationShape)
+                    .filter { it.location == HttpLocation.HEADER }
+                bindings.forEach { binding ->
+                    val runtimeType = ResponseBindingGenerator(
+                        RestJson(codegenContext),
+                        codegenContext,
+                        operationShape,
+                    ).generateDeserializeHeaderFn(binding)
+                    // little hack to force these functions to be generated
+                    rust("// use #T;", runtimeType)
+                }
             }
         }
     }
@@ -91,8 +93,8 @@ class ResponseBindingGeneratorTest {
     @Test
     fun deserializeHeadersIntoOutputShape() {
         val testProject = TestWorkspace.testProject(symbolProvider)
-        testProject.withModule(RustModule.public("output")) {
-            renderOperation()
+        testProject.renderOperation()
+        testProject.withModule(ClientRustModule.Output) {
             unitTest(
                 "http_header_deser",
                 """

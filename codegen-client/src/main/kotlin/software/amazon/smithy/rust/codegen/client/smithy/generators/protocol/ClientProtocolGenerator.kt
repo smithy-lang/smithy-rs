@@ -50,8 +50,6 @@ open class ClientProtocolGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
-        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model), emptyList())
-        builderGenerator.render(inputWriter)
 
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -61,9 +59,6 @@ open class ClientProtocolGenerator(
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
             )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
-
-            // pub fn builder() -> ... { }
-            builderGenerator.renderConvenienceMethod(this)
         }
 
         // pub struct Operation { ... }
@@ -75,7 +70,7 @@ open class ClientProtocolGenerator(
             /// This is usually constructed for you using the the fluent builder returned by
             /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
             ///
-            /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
+            /// `ParseStrictResponse` impl for `$operationName`.
             """,
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
@@ -83,7 +78,7 @@ open class ClientProtocolGenerator(
             write("_private: ()")
         }
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            builderGenerator.renderConvenienceMethod(this)
+            BuilderGenerator.renderConvenienceMethod(this, symbolProvider, inputShape)
 
             rust("/// Creates a new `$operationName` operation.")
             rustBlock("pub fn new() -> Self") {

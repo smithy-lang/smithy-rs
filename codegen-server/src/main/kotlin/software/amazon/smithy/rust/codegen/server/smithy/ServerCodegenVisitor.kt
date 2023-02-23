@@ -127,6 +127,7 @@ open class ServerCodegenVisitor(
         model = codegenDecorator.transformModel(service, baseModel)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
+            settings,
             model,
             service,
             rustSymbolProviderConfig,

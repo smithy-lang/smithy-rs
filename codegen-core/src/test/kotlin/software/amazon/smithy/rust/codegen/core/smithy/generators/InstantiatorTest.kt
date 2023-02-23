@@ -129,8 +129,8 @@ class InstantiatorTest {
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
         val project = TestWorkspace.testProject(model)
+        structure.renderWithModelBuilder(model, symbolProvider, project)
         project.moduleFor(structure) {
-            structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_struct_builders") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
@@ -163,8 +163,8 @@ class InstantiatorTest {
         )
 
         val project = TestWorkspace.testProject(model)
+        structure.renderWithModelBuilder(model, symbolProvider, project)
         project.moduleFor(structure) {
-            structure.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_builders_for_boxed_structs") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
@@ -246,8 +246,8 @@ class InstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
         val project = TestWorkspace.testProject(model)
+        inner.renderWithModelBuilder(model, symbolProvider, project)
         project.moduleFor(inner) {
-            inner.renderWithModelBuilder(model, symbolProvider, this)
             unitTest("generate_maps_of_maps") {
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#NestedMap"), data)
