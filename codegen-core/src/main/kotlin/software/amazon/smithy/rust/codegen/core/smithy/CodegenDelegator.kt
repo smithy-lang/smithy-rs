@@ -248,5 +248,7 @@ internal fun List<CargoDependency>.mergeIdenticalTestDependencies(): List<CargoD
     val compileDeps =
         this.filter { it.scope == DependencyScope.Compile }.toSet()
 
-    return this.filterNot { it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile)) }
+    return this.filterNot {
+        it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile))
+    }
 }

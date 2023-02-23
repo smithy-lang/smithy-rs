@@ -30,7 +30,7 @@ class TestStubgen(unittest.TestCase):
             """,
             """
             import typing
-            
+
             foo: typing.Any
             """,
         )

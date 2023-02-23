@@ -205,7 +205,9 @@ class FakeSigningDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.filterNot { it is EventStreamSigningConfig } + FakeSigningConfig(codegenContext.runtimeConfig)
+        return baseCustomizations.filterNot {
+            it is EventStreamSigningConfig
+        } + FakeSigningConfig(codegenContext.runtimeConfig)
     }
 }
 

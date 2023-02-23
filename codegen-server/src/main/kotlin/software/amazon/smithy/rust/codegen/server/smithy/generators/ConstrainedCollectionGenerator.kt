@@ -116,29 +116,31 @@ class ConstrainedCollectionGenerator(
                 #{ValidationFunctions:W}
                 """,
                 *codegenScope,
-                "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
+                "ValidationFunctions" to constraintsInfo.map {
+                    it.validationFunctionDefinition(constraintViolation, inner)
+                }.join("\n"),
             )
         }
 
         writer.rustTemplate(
             """
-        impl #{TryFrom}<$inner> for $name {
-            type Error = #{ConstraintViolation};
+            impl #{TryFrom}<$inner> for $name {
+                type Error = #{ConstraintViolation};
 
-            /// ${rustDocsTryFromMethod(name, inner)}
-            fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                #{ConstraintChecks:W}
+                /// ${rustDocsTryFromMethod(name, inner)}
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                    #{ConstraintChecks:W}
 
-                Ok(Self(value))
+                    Ok(Self(value))
+                }
             }
-        }
 
-        impl #{From}<$name> for $inner {
-            fn from(value: $name) -> Self {
-                value.into_inner()
+            impl #{From}<$name> for $inner {
+                fn from(value: $name) -> Self {
+                    value.into_inner()
+                }
             }
-        }
-        """,
+            """,
             *codegenScope,
             "ConstraintChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
         )
@@ -248,7 +250,7 @@ sealed class CollectionTraitInfo {
                     // [1]: https://github.com/awslabs/smithy-typescript/blob/517c85f8baccf0e5334b4e66d8786bdb5791c595/smithy-typescript-ssdk-libs/server-common/src/validation/index.ts#L106-L111
                     rust(
                         """
-                        Self::UniqueItems { duplicate_indices, .. } => 
+                        Self::UniqueItems { duplicate_indices, .. } =>
                             crate::model::ValidationExceptionField {
                                 message: format!("${uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
                                 path,

@@ -235,3 +235,44 @@ message = "Support for constraint traits on member shapes (constraint trait prec
 references = ["smithy-rs#1969"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
+
+[[smithy-rs]]
+message = """
+Add support for the `awsQueryCompatible` trait. This allows services to continue supporting a custom error code (via the `awsQueryError` trait) when the services migrate their protocol from `awsQuery` to `awsJson1_0` annotated with `awsQueryCompatible`.
+<details>
+<summary>Click to expand for more details...</summary>
+
+After the migration, services will include an additional header `x-amzn-query-error` in their responses whose value is in the form of `<error code>;<error type>`. An example response looks something like
+```
+HTTP/1.1 400
+x-amzn-query-error: AWS.SimpleQueueService.NonExistentQueue;Sender
+Date: Wed, 08 Sep 2021 23:46:52 GMT
+Content-Type: application/x-amz-json-1.0
+Content-Length: 163
+
+{
+    "__type": "com.amazonaws.sqs#QueueDoesNotExist",
+    "message": "some user-visible message"
+}
+```
+`<error code>` is `AWS.SimpleQueueService.NonExistentQueue` and `<error type>` is `Sender`.
+
+If an operation results in an error that causes a service to send back the response above, you can access `<error code>` and `<error type>` as follows:
+```rust
+match client.some_operation().send().await {
+    Ok(_) => { /* success */ }
+    Err(sdk_err) => {
+        let err = sdk_err.into_service_error();
+        assert_eq!(
+            error.meta().code(),
+            Some("AWS.SimpleQueueService.NonExistentQueue"),
+        );
+        assert_eq!(error.meta().extra("type"), Some("Sender"));
+    }
+}
+</details>
+```
+"""
+references = ["smithy-rs#2398"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"

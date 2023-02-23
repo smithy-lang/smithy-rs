@@ -54,6 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
+    private val reexportSmithyClientBuilder: Boolean = true,
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
@@ -85,6 +86,15 @@ class FluentClientGenerator(
     }
 
     private fun renderFluentClient(writer: RustWriter) {
+        if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
+            writer.rustTemplate(
+                """
+                ##[doc(inline)]
+                pub use #{client}::Builder;
+                """,
+                "client" to RuntimeType.smithyClient(runtimeConfig),
+            )
+        }
         writer.rustTemplate(
             """
             ##[derive(Debug)]
@@ -104,9 +114,6 @@ class FluentClientGenerator(
                     Self { handle: self.handle.clone() }
                 }
             }
-
-            ##[doc(inline)]
-            pub use #{client}::Builder;
 
             impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
                 fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
@@ -135,15 +142,15 @@ class FluentClientGenerator(
             "smithy_inst" to generics.smithyInst,
             "client" to RuntimeType.smithyClient(runtimeConfig),
             "client_docs" to writable
-            {
-                customizations.forEach {
-                    it.section(
-                        FluentClientSection.FluentClientDocs(
-                            serviceShape,
-                        ),
-                    )(this)
-                }
-            },
+                {
+                    customizations.forEach {
+                        it.section(
+                            FluentClientSection.FluentClientDocs(
+                                serviceShape,
+                            ),
+                        )(this)
+                    }
+                },
         )
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
@@ -155,7 +162,9 @@ class FluentClientGenerator(
                 val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                 val maybePaginated = if (operation.isPaginated(model)) {
                     "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
-                } else ""
+                } else {
+                    ""
+                }
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
@@ -200,10 +209,10 @@ class FluentClientGenerator(
                 writer.rust(
                     """
                     pub fn ${
-                    clientOperationFnName(
-                        operation,
-                        symbolProvider,
-                    )
+                        clientOperationFnName(
+                            operation,
+                            symbolProvider,
+                        )
                     }(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }

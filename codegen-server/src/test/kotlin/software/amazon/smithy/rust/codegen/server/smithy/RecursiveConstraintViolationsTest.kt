@@ -52,7 +52,7 @@ internal class RecursiveConstraintViolationsTest {
         private fun recursiveListModel(sparse: Boolean, listPrefix: String = ""): Pair<Model, String> =
             """
             $baseModel
-            
+
             structure Recursive {
                 list: ${listPrefix}List
             }
@@ -71,7 +71,7 @@ internal class RecursiveConstraintViolationsTest {
         private fun recursiveMapModel(sparse: Boolean, mapPrefix: String = ""): Pair<Model, String> =
             """
             $baseModel
-            
+
             structure Recursive {
                 map: ${mapPrefix}Map
             }
@@ -91,7 +91,7 @@ internal class RecursiveConstraintViolationsTest {
         private fun recursiveUnionModel(unionPrefix: String = ""): Pair<Model, String> =
             """
             $baseModel
-            
+
             structure Recursive {
                 attributeValue: ${unionPrefix}AttributeValue
             }

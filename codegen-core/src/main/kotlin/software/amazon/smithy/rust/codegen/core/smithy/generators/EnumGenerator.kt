@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -27,12 +29,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 data class EnumGeneratorContext(
     val enumName: String,
@@ -71,14 +75,41 @@ abstract class EnumType {
 }
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
-class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
+class EnumMemberModel(
+    private val parentShape: Shape,
+    private val definition: EnumDefinition,
+    private val symbolProvider: RustSymbolProvider,
+) {
+    companion object {
+        /**
+         * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
+         * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
+         *
+         * Ordinarily, the symbol provider would determine this name, but the enum trait doesn't allow for this.
+         *
+         * TODO(https://github.com/awslabs/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
+         */
+        @Deprecated("This function will go away when we handle EnumShape instead of EnumTrait")
+        fun toEnumVariantName(
+            symbolProvider: RustSymbolProvider,
+            parentShape: Shape,
+            definition: EnumDefinition,
+        ): MaybeRenamed? {
+            val name = definition.name.orNull()?.toPascalCase() ?: return null
+            // Create a fake member shape for symbol look up until we refactor to use EnumShape
+            val fakeMemberShape =
+                MemberShape.builder().id(parentShape.id.withMember(name)).target("smithy.api#String").build()
+            val symbol = symbolProvider.toSymbol(fakeMemberShape)
+            return MaybeRenamed(symbol.name, symbol.renamedFrom())
+        }
+    }
     // Because enum variants always start with an upper case letter, they will never
     // conflict with reserved words (which are always lower case), therefore, we never need
     // to fall back to raw identifiers
 
     val value: String get() = definition.value
 
-    fun name(): MaybeRenamed? = symbolProvider.toEnumVariantName(definition)
+    fun name(): MaybeRenamed? = toEnumVariantName(symbolProvider, parentShape, definition)
 
     private fun renderDocumentation(writer: RustWriter) {
         val name =
@@ -97,7 +128,7 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
         }
     }
 
-    fun derivedName() = checkNotNull(symbolProvider.toEnumVariantName(definition)).name
+    fun derivedName() = checkNotNull(toEnumVariantName(symbolProvider, parentShape, definition)).name
 
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
@@ -138,7 +169,7 @@ open class EnumGenerator(
         enumName = symbol.name,
         enumMeta = symbol.expectRustMetadata(),
         enumTrait = enumTrait,
-        sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) },
+        sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
     )
 
     fun render(writer: RustWriter) {

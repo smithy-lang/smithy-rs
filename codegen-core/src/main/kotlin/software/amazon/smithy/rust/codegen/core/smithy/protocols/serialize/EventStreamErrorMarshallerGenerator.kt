@@ -100,10 +100,10 @@ class EventStreamErrorMarshallerGenerator(
                 } else {
                     rustBlock("let payload = match _input") {
                         errorsShape.errorMembers.forEach { error ->
-                            val errorSymbol = symbolProvider.toSymbol(error)
                             val errorString = error.memberName
                             val target = model.expectShape(error.target, StructureShape::class.java)
-                            rustBlock("#T::${errorSymbol.name}(inner) => ", operationErrorSymbol) {
+                            val targetSymbol = symbolProvider.toSymbol(target)
+                            rustBlock("#T::${targetSymbol.name}(inner) => ", operationErrorSymbol) {
                                 addStringHeader(":exception-type", "${errorString.dq()}.into()")
                                 renderMarshallEvent(error, target)
                             }

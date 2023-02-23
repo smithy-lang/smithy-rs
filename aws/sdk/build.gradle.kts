@@ -52,7 +52,9 @@ dependencies {
 
 // Class and functions for service and protocol membership for SDK generation
 
-val awsServices: AwsServices by lazy { discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership()) }
+val awsServices: AwsServices by lazy {
+    discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership())
+}
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 

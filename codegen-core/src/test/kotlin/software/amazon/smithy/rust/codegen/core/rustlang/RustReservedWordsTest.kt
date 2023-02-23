@@ -7,38 +7,31 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class RustReservedWordSymbolProviderTest {
-    class Stub(override val model: Model) : RustSymbolProvider {
-        override val moduleProviderContext: ModuleProviderContext get() = PANIC()
-        override val config: RustSymbolProviderConfig get() = PANIC()
+    private class TestSymbolProvider(model: Model) :
+        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, TestRustSymbolProviderConfig))
 
-        override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
-        override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
-        override fun symbolForBuilder(shape: Shape): Symbol = PANIC()
-
-        override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-            return definition.name.orNull()?.let { MaybeRenamed(it.toPascalCase(), null) }
-        }
-
-        override fun toSymbol(shape: Shape): Symbol {
-            return Symbol.builder().name(shape.id.name).build()
-        }
+    @Test
+    fun `structs are escaped`() {
+        val model = """
+            namespace test
+            structure Self {}
+        """.asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
+        val symbol = provider.toSymbol(model.lookup("test#Self"))
+        symbol.name shouldBe "SelfValue"
     }
 
     @Test
@@ -48,8 +41,8 @@ internal class RustReservedWordSymbolProviderTest {
             structure container {
                 async: String
             }
-        """.trimMargin().asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(Stub(model))
+        """.asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -61,6 +54,23 @@ internal class RustReservedWordSymbolProviderTest {
 
     @Test
     fun `enum variant names are updated to avoid conflicts`() {
+        val model = """
+            namespace foo
+            @enum([{ name: "dontcare", value: "dontcare" }]) string Container
+        """.asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model))
+
+        fun expectEnumRename(original: String, expected: MaybeRenamed) {
+            val symbol = provider.toSymbol(
+                MemberShape.builder()
+                    .id(ShapeId.fromParts("foo", "Container").withMember(original))
+                    .target("smithy.api#String")
+                    .build(),
+            )
+            symbol.name shouldBe expected.name
+            symbol.renamedFrom() shouldBe expected.renamedFrom
+        }
+
         expectEnumRename("Unknown", MaybeRenamed("UnknownValue", "Unknown"))
         expectEnumRename("UnknownValue", MaybeRenamed("UnknownValue_", "UnknownValue"))
         expectEnumRename("UnknownOther", MaybeRenamed("UnknownOther", null))
@@ -69,11 +79,5 @@ internal class RustReservedWordSymbolProviderTest {
         expectEnumRename("SelfValue", MaybeRenamed("SelfValue_", "SelfValue"))
         expectEnumRename("SelfOther", MaybeRenamed("SelfOther", null))
         expectEnumRename("SELF", MaybeRenamed("SelfValue", "Self"))
-    }
-
-    private fun expectEnumRename(original: String, expected: MaybeRenamed) {
-        val model = "namespace foo".asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(Stub(model))
-        provider.toEnumVariantName(EnumDefinition.builder().name(original).value("foo").build()) shouldBe expected
     }
 }

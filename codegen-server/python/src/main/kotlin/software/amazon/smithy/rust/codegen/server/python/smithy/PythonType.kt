@@ -138,7 +138,9 @@ fun RustType.pythonType(): PythonType =
 fun PythonType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it." } ?: ""
-    } else ""
+    } else {
+        ""
+    }
     val base = when (this) {
         is PythonType.None -> this.name
         is PythonType.Bool -> this.name

@@ -250,8 +250,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                 }
 
                 ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
-                ServiceConfig.ConfigStructAdditionalDocs -> emptySection
-                ServiceConfig.Extras -> emptySection
+                else -> {}
             }
         }
     }

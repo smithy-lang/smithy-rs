@@ -457,7 +457,7 @@ class HttpBindingGenerator(
     // Rename here technically not required, operations and members cannot be renamed.
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
         "${
-        operationShape.id.getName(service).toSnakeCase()
+            operationShape.id.getName(service).toSnakeCase()
         }_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 
     /**
@@ -688,13 +688,13 @@ class HttpBindingGenerator(
                         #{invalid_header_name:W}
                     })?;
                     let header_value = ${
-                headerFmtFun(
-                    this,
-                    valueTargetShape,
-                    timestampFormat,
-                    "v",
-                    isMultiValuedHeader = false,
-                )
+                    headerFmtFun(
+                        this,
+                        valueTargetShape,
+                        timestampFormat,
+                        "v",
+                        isMultiValuedHeader = false,
+                    )
                 };
                     let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_header_value:W}
