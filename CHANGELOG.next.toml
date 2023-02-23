@@ -12,24 +12,6 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Upgrade Rust MSRV to 1.63.0"
-references = ["smithy-rs#2222"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
-author = "Nugine"
-
-[[smithy-rs]]
-message = "Upgrade Rust MSRV to 1.63.0"
-references = ["smithy-rs#2222"]
-meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
-author = "Nugine"
-
-[[aws-sdk-rust]]
-message = "Adds jitter to `LazyCredentialsCache`. This allows credentials with the same expiry to expire at slightly different times, thereby preventing thundering herds."
-references = ["smithy-rs#2335"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "ysaito1001"
-
-[[aws-sdk-rust]]
 message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
 ```rust
 // Import the trait to get the `request_id` method on outputs
@@ -193,24 +175,6 @@ references = ["smithy-rs#76", "smithy-rs#2129"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
-[[smithy-rs]]
-message = "Fix inconsistent casing in services re-export."
-references = ["smithy-rs#2349"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
-author = "hlbarber"
-
-[[aws-sdk-rust]]
-message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
-references = ["aws-sdk-rust#736"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
-references = ["aws-sdk-rust#736"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "Velfi"
-
 [[aws-sdk-rust]]
 message = "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated."
 references = ["aws-sdk-rust#740"]
@@ -222,19 +186,6 @@ message = "Fluent builder methods on the client are now marked as deprecated whe
 references = ["aws-sdk-rust#740"]
 meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
 author = "Velfi"
-
-[[smithy-rs]]
-message = """Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
-produced Rust code that did not compile"""
-references = ["smithy-rs#2352", "smithy-rs#2343"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
-author = "82marbag"
-
-[[smithy-rs]]
-message = "Support for constraint traits on member shapes (constraint trait precedence) has been added."
-references = ["smithy-rs#1969"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
-author = "drganjoo"
 
 [[smithy-rs]]
 message = """
