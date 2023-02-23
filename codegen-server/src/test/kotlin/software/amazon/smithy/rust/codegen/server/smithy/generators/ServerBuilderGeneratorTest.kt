@@ -7,9 +7,9 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -44,7 +44,7 @@ class ServerBuilderGeneratorTest {
             val writer = this
             val shape = model.lookup<StructureShape>("test#Credentials")
 
-            StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()).render()
+            StructureGenerator(model, codegenContext.symbolProvider, writer, shape).render()
             val builderGenerator = ServerBuilderGenerator(
                 codegenContext,
                 shape,
