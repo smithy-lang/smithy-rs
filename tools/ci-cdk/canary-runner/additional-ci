@@ -1,5 +1,4 @@
 # run build-bundle on musl to verify that everything works
-rustup target add x86_64-unknown-linux-musl
 cargo run -- build-bundle \
   --sdk-release-tag release-2022-12-14 \
   --canary-path ../canary-lambda \
