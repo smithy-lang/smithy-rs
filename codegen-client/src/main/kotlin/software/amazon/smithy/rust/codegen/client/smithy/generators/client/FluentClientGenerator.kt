@@ -23,12 +23,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
@@ -80,6 +78,12 @@ class FluentClientGenerator(
     fun render(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
             renderFluentClient(this)
+        }
+
+        operations.forEach { operation ->
+            crate.withModule(operation.fluentBuilderModule(codegenContext, symbolProvider)) {
+                renderFluentBuilder(operation)
+            }
         }
 
         CustomizableOperationGenerator(codegenContext, generics).render(crate)
@@ -159,7 +163,7 @@ class FluentClientGenerator(
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
-                val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
+                val fullPath = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
                 val maybePaginated = if (operation.isPaginated(model)) {
                     "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
                 } else {
@@ -170,10 +174,13 @@ class FluentClientGenerator(
                 val operationOk = symbolProvider.toSymbol(output)
                 val operationErr = symbolProvider.symbolForOperationError(operation)
 
-                val inputFieldsBody =
-                    generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
-                        "///   - $it"
-                    }
+                val inputFieldsBody = generateOperationShapeDocs(
+                    writer,
+                    codegenContext,
+                    symbolProvider,
+                    operation,
+                    model,
+                ).joinToString("\n") { "///   - $it" }
 
                 val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
                     "The fluent builder is configurable:"
@@ -206,157 +213,144 @@ class FluentClientGenerator(
                 // Write a deprecation notice if this operation is deprecated.
                 writer.deprecatedShape(operation)
 
-                writer.rust(
+                writer.rustTemplate(
                     """
-                    pub fn ${
-                        clientOperationFnName(
-                            operation,
-                            symbolProvider,
-                        )
-                    }(&self) -> fluent_builders::$name${generics.inst} {
-                        fluent_builders::$name::new(self.handle.clone())
+                    pub fn #{fnName}(&self) -> #{FluentBuilder}${generics.inst} {
+                        #{FluentBuilder}::new(self.handle.clone())
                     }
                     """,
+                    "fnName" to writable { rust(clientOperationFnName(operation, symbolProvider)) },
+                    "FluentBuilder" to operation.fluentBuilderType(codegenContext, symbolProvider),
                 )
             }
         }
-        writer.withInlineModule(RustModule.new("fluent_builders", visibility = Visibility.PUBLIC, inline = true)) {
-            docs(
+    }
+
+    private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val operationSymbol = symbolProvider.toSymbol(operation)
+        val input = operation.inputShape(model)
+        val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
+        // Filter out any derive that isn't Clone. Then add a Debug derive
+        val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
+        rust(
+            """
+            /// Fluent builder constructing a request to `${operationSymbol.name}`.
+            ///
+            """,
+        )
+
+        val builderName = operation.fluentBuilderType(codegenContext, symbolProvider).name
+        documentShape(operation, model, autoSuppressMissingDocs = false)
+        deprecatedShape(operation)
+        Attribute(derive(derives.toSet())).render(this)
+        rustTemplate(
+            """
+            pub struct $builderName#{generics:W} {
+                handle: std::sync::Arc<crate::client::Handle${generics.inst}>,
+                inner: #{Inner}
+            }
+            """,
+            "Inner" to symbolProvider.symbolForBuilder(input),
+            "client" to RuntimeType.smithyClient(runtimeConfig),
+            "generics" to generics.decl,
+            "operation" to operationSymbol,
+        )
+
+        rustBlockTemplate(
+            "impl${generics.inst} $builderName${generics.inst} #{bounds:W}",
+            "client" to RuntimeType.smithyClient(runtimeConfig),
+            "bounds" to generics.bounds,
+        ) {
+            val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+            val errorType = symbolProvider.symbolForOperationError(operation)
+
+            // Have to use fully-qualified result here or else it could conflict with an op named Result
+            rustTemplate(
                 """
-                Utilities to ergonomically construct a request to the service.
+                /// Creates a new `${operationSymbol.name}`.
+                pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>) -> Self {
+                    Self { handle, inner: Default::default() }
+                }
 
-                Fluent builders are created through the [`Client`](crate::client::Client) by calling
-                one if its operation methods. After parameters are set using the builder methods,
-                the `send` method can be called to initiate the request.
-                """.trim(),
-                newlinePrefix = "//! ",
+                /// Consume this builder, creating a customizable operation that can be modified before being
+                /// sent. The operation's inner [http::Request] can be modified as well.
+                pub async fn customize(self) -> std::result::Result<
+                    #{CustomizableOperation}#{customizable_op_type_params:W},
+                    #{SdkError}<#{OperationError}>
+                > #{send_bounds:W} {
+                    let handle = self.handle.clone();
+                    let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
+                        .make_operation(&handle.conf)
+                        .await
+                        .map_err(#{SdkError}::construction_failure)?;
+                    Ok(#{CustomizableOperation} { handle, operation })
+                }
+
+                /// Sends the request and returns the response.
+                ///
+                /// If an error occurs, an `SdkError` will be returned with additional details that
+                /// can be matched against.
+                ///
+                /// By default, any retryable failures will be retried twice. Retry behavior
+                /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
+                /// set when configuring the client.
+                pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                #{send_bounds:W} {
+                    let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
+                        .make_operation(&self.handle.conf)
+                        .await
+                        .map_err(#{SdkError}::construction_failure)?;
+                    self.handle.client.call(op).await
+                }
+                """,
+                "CustomizableOperation" to codegenContext.featureGatedCustomizeModule().toType()
+                    .resolve("CustomizableOperation"),
+                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+                "customizable_op_type_params" to rustTypeParameters(
+                    symbolProvider.toSymbol(operation),
+                    retryClassifier,
+                    generics.toRustGenerics(),
+                ),
             )
-            operations.forEach { operation ->
-                val operationSymbol = symbolProvider.toSymbol(operation)
-                val input = operation.inputShape(model)
-                val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-                // Filter out any derive that isn't Clone. Then add a Debug derive
-                val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
-                rust(
-                    """
-                    /// Fluent builder constructing a request to `${operationSymbol.name}`.
-                    ///
-                    """,
-                )
-
-                documentShape(operation, model, autoSuppressMissingDocs = false)
-                deprecatedShape(operation)
-                Attribute(derive(derives.toSet())).render(this)
+            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
                 rustTemplate(
                     """
-                    pub struct ${operationSymbol.name}#{generics:W} {
-                        handle: std::sync::Arc<super::Handle${generics.inst}>,
-                        inner: #{Inner}
+                    /// Create a paginator for this request
+                    ///
+                    /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                    pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                        #{Paginator}::new(self.handle, self.inner)
                     }
                     """,
-                    "Inner" to symbolProvider.symbolForBuilder(input),
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                    "generics" to generics.decl,
-                    "operation" to operationSymbol,
+                    "Paginator" to paginatorType,
                 )
-
-                rustBlockTemplate(
-                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                    "bounds" to generics.bounds,
-                ) {
-                    val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = symbolProvider.symbolForOperationError(operation)
-
-                    // Have to use fully-qualified result here or else it could conflict with an op named Result
-                    rustTemplate(
-                        """
-                        /// Creates a new `${operationSymbol.name}`.
-                        pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
-                            Self { handle, inner: Default::default() }
-                        }
-
-                        /// Consume this builder, creating a customizable operation that can be modified before being
-                        /// sent. The operation's inner [http::Request] can be modified as well.
-                        pub async fn customize(self) -> std::result::Result<
-                            #{CustomizableOperation}#{customizable_op_type_params:W},
-                            #{SdkError}<#{OperationError}>
-                        > #{send_bounds:W} {
-                            let handle = self.handle.clone();
-                            let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                                .make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure)?;
-                            Ok(#{CustomizableOperation} { handle, operation })
-                        }
-
-                        /// Sends the request and returns the response.
-                        ///
-                        /// If an error occurs, an `SdkError` will be returned with additional details that
-                        /// can be matched against.
-                        ///
-                        /// By default, any retryable failures will be retried twice. Retry behavior
-                        /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                        /// set when configuring the client.
-                        pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
-                        #{send_bounds:W} {
-                            let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                                .make_operation(&self.handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure)?;
-                            self.handle.client.call(op).await
-                        }
-                        """,
-                        "CustomizableOperation" to codegenContext.featureGatedCustomizeModule().toType()
-                            .resolve("CustomizableOperation"),
-                        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                        "OperationError" to errorType,
-                        "OperationOutput" to outputType,
-                        "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                        "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
-                        "customizable_op_type_params" to rustTypeParameters(
-                            symbolProvider.toSymbol(operation),
-                            retryClassifier,
-                            generics.toRustGenerics(),
-                        ),
-                    )
-                    PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
-                        rustTemplate(
-                            """
-                            /// Create a paginator for this request
-                            ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
-                                #{Paginator}::new(self.handle, self.inner)
-                            }
-                            """,
-                            "Paginator" to paginatorType,
-                        )
-                    }
-                    writeCustomizations(
-                        customizations,
-                        FluentClientSection.FluentBuilderImpl(
-                            operation,
-                            symbolProvider.symbolForOperationError(operation),
-                        ),
-                    )
-                    input.members().forEach { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        // All fields in the builder are optional
-                        val memberSymbol = symbolProvider.toSymbol(member)
-                        val outerType = memberSymbol.rustType()
-                        when (val coreType = outerType.stripOuter<RustType.Option>()) {
-                            is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
-                            is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
-                            else -> with(core) { renderInputHelper(member, memberName, coreType) }
-                        }
-                        // pure setter
-                        val setterName = member.setterName()
-                        val optionalInputType = outerType.asOptional()
-                        with(core) { renderInputHelper(member, setterName, optionalInputType) }
-                    }
+            }
+            writeCustomizations(
+                customizations,
+                FluentClientSection.FluentBuilderImpl(
+                    operation,
+                    symbolProvider.symbolForOperationError(operation),
+                ),
+            )
+            input.members().forEach { member ->
+                val memberName = symbolProvider.toMemberName(member)
+                // All fields in the builder are optional
+                val memberSymbol = symbolProvider.toSymbol(member)
+                val outerType = memberSymbol.rustType()
+                when (val coreType = outerType.stripOuter<RustType.Option>()) {
+                    is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
+                    is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
+                    else -> with(core) { renderInputHelper(member, memberName, coreType) }
                 }
+                // pure setter
+                val setterName = member.setterName()
+                val optionalInputType = outerType.asOptional()
+                with(core) { renderInputHelper(member, setterName, optionalInputType) }
             }
         }
     }
@@ -370,12 +364,13 @@ class FluentClientGenerator(
  */
 private fun generateOperationShapeDocs(
     writer: RustWriter,
-    symbolProvider: SymbolProvider,
+    codegenContext: ClientCodegenContext,
+    symbolProvider: RustSymbolProvider,
     operation: OperationShape,
     model: Model,
 ): List<String> {
     val input = operation.inputShape(model)
-    val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
+    val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
     return input.members().map { memberShape ->
         val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
         val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
@@ -418,17 +413,46 @@ private fun generateShapeMemberDocs(
     }
 }
 
+private fun OperationShape.fluentBuilderModule(
+    codegenContext: ClientCodegenContext,
+    symbolProvider: RustSymbolProvider,
+) = when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+    true -> symbolProvider.moduleForBuilder(this)
+    else -> RustModule.public(
+        "fluent_builders",
+        parent = ClientRustModule.client,
+        documentation = """
+            Utilities to ergonomically construct a request to the service.
+
+            Fluent builders are created through the [`Client`](crate::client::Client) by calling
+            one if its operation methods. After parameters are set using the builder methods,
+            the `send` method can be called to initiate the request.
+        """.trimIndent(),
+    )
+}
+
+internal fun OperationShape.fluentBuilderType(
+    codegenContext: ClientCodegenContext,
+    symbolProvider: RustSymbolProvider,
+): RuntimeType = fluentBuilderModule(codegenContext, symbolProvider).toType()
+    .resolve(
+        symbolProvider.toSymbol(this).name +
+            when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                true -> "FluentBuilder"
+                else -> ""
+            },
+    )
+
 /**
  * Generate a valid fully-qualified Type for a fluent builder e.g.
- * `OperationShape(AssumeRole)` -> `"crate::client::fluent_builders::AssumeRole"`
+ * `OperationShape(AssumeRole)` -> `"crate::operations::assume_role::AssumeRoleFluentBuilder"`
  *
  *  * _NOTE: This function generates the links that appear under **"The fluent builder is configurable:"**_
  */
-private fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): String {
-    val operationName = symbolProvider.toSymbol(this).name
-
-    return "crate::client::fluent_builders::$operationName"
-}
+private fun OperationShape.fullyQualifiedFluentBuilder(
+    codegenContext: ClientCodegenContext,
+    symbolProvider: RustSymbolProvider,
+): String = fluentBuilderType(codegenContext, symbolProvider).fullyQualifiedName()
 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder method e.g.

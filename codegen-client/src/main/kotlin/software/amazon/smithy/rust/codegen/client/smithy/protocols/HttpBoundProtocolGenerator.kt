@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -47,7 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
     protocol: Protocol,
 ) : ClientProtocolGenerator(
     codegenContext,
