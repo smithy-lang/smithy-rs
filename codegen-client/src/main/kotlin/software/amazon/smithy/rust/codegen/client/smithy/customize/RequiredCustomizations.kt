@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVers
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -56,7 +57,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
+        baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -76,6 +77,12 @@ class RequiredCustomizations : ClientCodegenDecorator {
         if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
             rustCrate.withModule(ClientRustModule.Error) {
                 pubUseSmithyErrorTypes(codegenContext)(this)
+            }
+        }
+
+        codegenContext.featureGatedMetaModule().also { metaModule ->
+            rustCrate.withModule(metaModule) {
+                CrateVersionCustomization.extras(rustCrate, metaModule)
             }
         }
     }

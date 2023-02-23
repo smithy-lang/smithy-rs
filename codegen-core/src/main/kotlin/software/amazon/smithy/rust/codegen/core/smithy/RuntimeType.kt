@@ -241,7 +241,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Tracing = CargoDependency.Tracing.toType()
 
         // codegen types
-        val Config = RuntimeType("crate::config")
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 

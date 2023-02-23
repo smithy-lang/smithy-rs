@@ -31,7 +31,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
+        baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -40,6 +40,10 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
             pubUseSmithyErrorTypes(codegenContext)(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.root) {
+            CrateVersionCustomization.extras(rustCrate, ServerRustModule.root)
         }
     }
 }

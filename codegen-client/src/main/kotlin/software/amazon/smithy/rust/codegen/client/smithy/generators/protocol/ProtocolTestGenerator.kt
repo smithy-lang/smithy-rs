@@ -19,6 +19,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
@@ -168,12 +169,12 @@ class ProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
             let config = builder.build();
 
             """,
-            "Config" to RuntimeType.Config,
+            "config" to ClientRustModule.Config,
             "customParams" to customParams,
         )
         writeInline("let input =")
