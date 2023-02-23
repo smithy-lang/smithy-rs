@@ -4,7 +4,7 @@
 
 One might characterize `smithy-rs` as a way of converting [Smithy shapes](https://smithy.io/2.0/spec/model.html#shapes) into Rust types. The generated Rust types are the customer facing interface and, for this reason, they should accurately and predictably reflect the properties of the shapes they represent. One property that Smithy shapes enjoy is reusability. This RFC proposes simple guiding principles to ensure that reusability of Rust types reflects the reusability of Smithy shapes.
 
-This RFC is does _not_ propose specific changes to the code generators API or the client or server Rust API. However the principles, when applied, are intended to enable desirable APIs for both the code generator and the client and server SDK.
+This RFC does _not_ propose specific changes to the code generators API or the client or server Rust API. However the principles, when applied, are intended to enable desirable APIs for both the code generator and the client and server SDK.
 
 ## Terminology
 
@@ -52,7 +52,7 @@ service AwsJsonPetService {
 }
 ```
 
-At high-level, the [Smithy library](https://github.com/awslabs/smithy-rs) library provides not only a way to parse the AST defined by the [Smithy IDL](https://smithy.io/2.0/spec/idl.html), but also exposes the conversion of the AST into an ASG which exposed through the [Walker](https://smithy.io/2.0/guides/building-codegen/mapping-shapes-to-languages.html#computing-a-service-closure) API.
+At high-level, the [Smithy library](https://github.com/awslabs/smithy-rs) provides not only a way to parse the AST defined by the [Smithy IDL](https://smithy.io/2.0/spec/idl.html), but also exposes the conversion of the AST into an ASG which is exposed through the [Walker](https://smithy.io/2.0/guides/building-codegen/mapping-shapes-to-languages.html#computing-a-service-closure) API.
 
 We visually represent the ASG of this model as:
 
@@ -95,7 +95,7 @@ graph TD
     Dog2 --> DogInput2
 ```
 
-Importantly, the `Food` structure gets transformed into a four incompatible types depending the context in which it is used. An obvious incompatibility is that `RestJsonPetService > Dog > Food` is transformed to `DogInput` while `RestJsonPetService > Cat > Food` is transformed to `CatInput`. The differences go deeper, these `DogInput` and `CatInput` have incompatible `FromRequest` implementations:
+Importantly, the `Food` structure gets transformed into four incompatible types depending on the context in which it is used. An obvious incompatibility is that `RestJsonPetService > Dog > Food` is transformed to `DogInput` while `RestJsonPetService > Cat > Food` is transformed to `CatInput`. The differences go deeper, these `DogInput` and `CatInput` have incompatible `FromRequest` implementations:
 
 ```rust
 trait FromRequest<P> {
@@ -137,13 +137,13 @@ This is because `FromRequest` is parameterized by the protocol and therefore a `
 
 <!-- Interesting aside: If you have a recursive structure which includes an input then the code generator maps a single shape to two distinct types within one service closure. -->
 
-Why are the generated types for `RestJsonPetService > Dog > Food` and `RestJsonPetService > Cat > Food` incompatible? How should be classify such failures?
+Why are the generated types for `RestJsonPetService > Dog > Food` and `RestJsonPetService > Cat > Food` incompatible? How should we classify such failures?
 
 ### Directed Closures
 
 A (directed) closure, `closure(S)`, of a given shape `S` is all shapes visitable by downwards directed traversal. In our example model `closure(Food)` only contains `Food`, whereas `closure(RestJsonPetService)` contains everything except for `AwsJsonPetService`.
 
-The typical customer interacts with code generator by providing a service shape, via `smithy-build-template.json`, which returns the generated code for `closure(service shape)`. Everything described in this RFC is compatible with a code generator able to accept _any_ model.
+The typical customer interacts with the code generator by providing a service shape, via `smithy-build-template.json`, which returns the generated code for `closure(service shape)`. Everything described in this RFC is compatible with a code generator able to accept _any_ model.
 
 Models have the following noteworthy properties:
 
@@ -221,7 +221,7 @@ Some example interactions with these principles are:
 - `FromRequest` on `Food` should be parameterized by the service `S` and the operation `Op`, and should be generated in the `serviceShape` visitor method. Why?
   - Any `FromRequest` implementation must be in the `serviceShape` method because the deserialization depends on the service shape via its protocol trait and we should be in compliance with (2).
   - Consider the entire example model, with a single `Food` type we would get conflicting `FromRequest` implementations without a type parameter for the service and operation.
-- A resolution to [this issue](https://github.com/awslabs/smithy-rs/issues/1839) would include an `enum` listing all operations of for a specific service. This `enum` would be generated in `serviceShape` by (2) and (3). However, we should not add an associated type to `OperationShape` and set it to a specific value in the implementation (which should be generated in `operationShape`) as this would be a violation of (2).
+- A resolution to [this issue](https://github.com/awslabs/smithy-rs/issues/1839) would include an `enum` listing all operations for a specific service. This `enum` would be generated in `serviceShape` by (2) and (3). However, we should not add an associated type to `OperationShape` and set it to a specific value in the implementation (which should be generated in `operationShape`) as this would be a violation of (2).
 
 ## Compliance
 
