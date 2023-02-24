@@ -102,6 +102,7 @@ class EventStreamUnmarshallerGenerator(
         val unmarshallerTypeName = unmarshallerType.name
         rustTemplate(
             """
+            /// unmarshaller
             ##[non_exhaustive]
             ##[derive(Debug)]
             pub struct $unmarshallerTypeName;

@@ -77,12 +77,14 @@ open class EventStreamMarshallerGenerator(
     private fun RustWriter.renderMarshaller(marshallerType: RuntimeType, unionSymbol: Symbol) {
         rustTemplate(
             """
+            /// Event stream Marshaller
             ##[non_exhaustive]
             ##[derive(Debug)]
             pub struct ${marshallerType.name};
 
             #{AllowClippyNewWithoutDefault:W}
             impl ${marshallerType.name} {
+                /// Create a new ${marshallerType.name}
                 pub fn new() -> Self {
                     ${marshallerType.name}
                 }
