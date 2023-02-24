@@ -1,4 +1,12 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 24th, 2023
+===================
+**New this release:**
+- 🎉 (server, [smithy-rs#1969](https://github.com/awslabs/smithy-rs/issues/1969)) Support for constraint traits on member shapes (constraint trait precedence) has been added.
+- 🐛 (server, [smithy-rs#2352](https://github.com/awslabs/smithy-rs/issues/2352), [smithy-rs#2343](https://github.com/awslabs/smithy-rs/issues/2343)) Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
+    produced Rust code that did not compile
+
+
 February 14th, 2023
 ===================
 **Breaking Changes:**

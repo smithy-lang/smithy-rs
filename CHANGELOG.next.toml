@@ -10,16 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[smithy-rs]]
-message = """Fix bug whereby nested server structure member shapes targeting simple shapes with `@default`
-produced Rust code that did not compile"""
-references = ["smithy-rs#2352", "smithy-rs#2343"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
-author = "82marbag"
-
-[[smithy-rs]]
-message = "Support for constraint traits on member shapes (constraint trait precedence) has been added."
-references = ["smithy-rs#1969"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
-author = "drganjoo"

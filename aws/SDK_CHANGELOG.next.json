@@ -18,7 +18,7 @@
         "smithy-rs#2227"
       ],
       "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The introduction of `CredentialsCache` comes with an accompanying type `SharedCredentialsCache`, which we will store in the property bag instead of a `SharedCredentialsProvider`. As a result, `aws_http::auth:set_provider` has been updated to `aws_http::auth::set_credentials_cache`.\n\nBefore:\n```rust\nuse aws_credential_types::Credentials;\nuse aws_credential_types::provider::SharedCredentialsProvider;\nuse aws_http::auth::set_provider;\nuse aws_smithy_http::body::SdkBody;\nuse aws_smithy_http::operation;\n\nlet mut req = operation::Request::new(http::Request::new(SdkBody::from(\"some body\")));\nlet credentials = Credentials::new(\"example\", \"example\", None, None, \"my_provider_name\");\nset_provider(\n    &mut req.properties_mut(),\n    SharedCredentialsProvider::new(credentials),\n);\n```\n\nAfter:\n```rust\nuse aws_credential_types::Credentials;\nuse aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};\nuse aws_credential_types::provider::SharedCredentialsProvider;\nuse aws_http::auth::set_credentials_cache;\nuse aws_smithy_http::body::SdkBody;\nuse aws_smithy_http::operation;\n\nlet mut req = operation::Request::new(http::Request::new(SdkBody::from(\"some body\")));\nlet credentials = Credentials::new(\"example\", \"example\", None, None, \"my_provider_name\");\nlet credentials_cache = CredentialsCache::lazy_builder()\n    .into_credentials_cache()\n    .create_cache(SharedCredentialsProvider::new(credentials));\nset_credentials_cache(\n    &mut req.properties_mut(),\n    SharedCredentialsCache::new(credentials_cache),\n);\n```\n",
@@ -33,7 +33,7 @@
         "smithy-rs#2227"
       ],
       "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix endpoint for s3.write_get_object_response(). This bug was introduced in 0.53.",
@@ -47,7 +47,7 @@
         "smithy-rs#2204"
       ],
       "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add `with_test_defaults()` and `set_test_defaults()` to `<service>::Config`. These methods fill in defaults for configuration that is mandatory to successfully send a request.",
@@ -61,7 +61,7 @@
         "smithy-rs#2204"
       ],
       "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Provide a way to retrieve fallback credentials if a call to `provide_credentials` is interrupted. An interrupt can occur when a timeout future is raced against a future for `provide_credentials`, and the former wins the race. A new method, `fallback_on_interrupt` on the `ProvideCredentials` trait, can be used in that case. The following code snippet from `LazyCredentialsCache::provide_cached_credentials` has been updated like so:\n\nBefore:\n```rust\nlet timeout_future = self.sleeper.sleep(self.load_timeout);\n// --snip--\nlet future = Timeout::new(provider.provide_credentials(), timeout_future);\nlet result = cache\n    .get_or_load(|| {\n        async move {\n            let credentials = future.await.map_err(|_err| {\n                CredentialsError::provider_timed_out(load_timeout)\n            })??;\n            // --snip--\n        }\n    }).await;\n// --snip--\n```\n\nAfter:\n```rust\nlet timeout_future = self.sleeper.sleep(self.load_timeout);\n// --snip--\nlet future = Timeout::new(provider.provide_credentials(), timeout_future);\nlet result = cache\n    .get_or_load(|| {\n        async move {\n           let credentials = match future.await {\n                Ok(creds) => creds?,\n                Err(_err) => match provider.fallback_on_interrupt() { // can provide fallback credentials\n                    Some(creds) => creds,\n                    None => return Err(CredentialsError::provider_timed_out(load_timeout)),\n                }\n            };\n            // --snip--\n        }\n    }).await;\n// --snip--\n```\n",
@@ -75,7 +75,7 @@
         "smithy-rs#2246"
       ],
       "since-commit": "1f3951f7f5100efdbd7465effe5615d9c75c225d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add static stability support to IMDS credentials provider. It does not alter common use cases for the provider, but allows the provider to serve expired credentials in case IMDS is unreachable. This allows requests to be dispatched to a target service with expired credentials. This, in turn, allows the target service to make the ultimate decision as to whether requests sent are valid or not.\n",
@@ -89,7 +89,7 @@
         "smithy-rs#2258"
       ],
       "since-commit": "1f3951f7f5100efdbd7465effe5615d9c75c225d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix broken doc link for `tokio_stream::Stream` that is a re-export of `futures_core::Stream`.",
@@ -103,7 +103,7 @@
         "smithy-rs#2271"
       ],
       "since-commit": "1f3951f7f5100efdbd7465effe5615d9c75c225d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix request canonicalization for HTTP requests with repeated headers (for example S3's `GetObjectAttributes`). Previously requests with repeated headers would fail with a 403 signature mismatch due to this bug.\n",
@@ -118,7 +118,7 @@
         "aws-sdk-rust#720"
       ],
       "since-commit": "1f3951f7f5100efdbd7465effe5615d9c75c225d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Upgrade Rust MSRV to 1.63.0",
@@ -132,7 +132,7 @@
         "smithy-rs#2222"
       ],
       "since-commit": "6c7fa4d227b1224de4b6a1980ce4544603e8ba72",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Adds jitter to `LazyCredentialsCache`. This allows credentials with the same expiry to expire at slightly different times, thereby preventing thundering herds.",
@@ -146,7 +146,7 @@
         "smithy-rs#2335"
       ],
       "since-commit": "6c7fa4d227b1224de4b6a1980ce4544603e8ba72",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix issue where clients using native-tls connector were prevented from making HTTPS requests.",
@@ -160,7 +160,7 @@
         "aws-sdk-rust#736"
       ],
       "since-commit": "6c7fa4d227b1224de4b6a1980ce4544603e8ba72",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
