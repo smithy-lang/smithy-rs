@@ -170,7 +170,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
                 """
                 Rust block template expected `$keyName` but was not present in template.
                 Hint: Template contains: ${scope.map { "`${it.first}`" }}
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
         "#{${keyName.lowercase()}$templateType}"
