@@ -81,13 +81,18 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         shape: StructureShape,
     ) {
         val errorTrait = shape.expectTrait<ErrorTrait>()
-        ErrorGenerator(
-            rustCrate,
+        val errorGenerator = ErrorGenerator(
             codegenContext.model,
             codegenContext.symbolProvider,
             shape,
             errorTrait,
             emptyList(),
-        ).render()
+        )
+        rustCrate.useShapeWriter(shape) {
+            errorGenerator.renderStruct(this)
+        }
+        rustCrate.withModule(codegenContext.symbolProvider.moduleForBuilder(shape)) {
+            errorGenerator.renderBuilder(this)
+        }
     }
 }

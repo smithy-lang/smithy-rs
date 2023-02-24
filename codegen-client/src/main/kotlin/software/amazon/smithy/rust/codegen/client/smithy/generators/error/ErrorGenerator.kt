@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -17,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.errorMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImp
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 
 class ErrorGenerator(
-    private val rustCrate: RustCrate,
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
@@ -37,11 +36,10 @@ class ErrorGenerator(
     private val implCustomizations: List<ErrorImplCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config.runtimeConfig
+    private val symbol = symbolProvider.toSymbol(shape)
 
-    fun render() {
-        val symbol = symbolProvider.toSymbol(shape)
-
-        rustCrate.useShapeWriter(shape) {
+    fun renderStruct(writer: RustWriter) {
+        writer.apply {
             StructureGenerator(
                 model, symbolProvider, this, shape,
                 listOf(
@@ -55,6 +53,7 @@ class ErrorGenerator(
                                 is StructureSection.AdditionalDebugFields -> {
                                     rust("""${section.formatterName}.field("meta", &self.meta);""")
                                 }
+
                                 else -> {}
                             }
                         }
@@ -62,7 +61,14 @@ class ErrorGenerator(
                 ),
             ).render()
 
-            ErrorImplGenerator(model, symbolProvider, this, shape, error, implCustomizations).render(CodegenTarget.CLIENT)
+            ErrorImplGenerator(
+                model,
+                symbolProvider,
+                this,
+                shape,
+                error,
+                implCustomizations,
+            ).render(CodegenTarget.CLIENT)
 
             rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorMetadataTrait(runtimeConfig)) {
                 rust("fn meta(&self) -> &#T { &self.meta }", errorMetadata(runtimeConfig))
@@ -72,8 +78,10 @@ class ErrorGenerator(
                 BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
             }
         }
+    }
 
-        rustCrate.withModule(symbolProvider.moduleForBuilder(shape)) {
+    fun renderBuilder(writer: RustWriter) {
+        writer.apply {
             BuilderGenerator(
                 model, symbolProvider, shape,
                 listOf(
