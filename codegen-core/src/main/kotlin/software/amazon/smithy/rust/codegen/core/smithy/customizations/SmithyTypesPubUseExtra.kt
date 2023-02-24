@@ -8,13 +8,15 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 private data class PubUseType(
     val type: RuntimeType,
@@ -46,16 +48,14 @@ private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(m
 private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Returns a list of types that should be re-exported for the given model */
-internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<RuntimeType> {
+internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<RuntimeType> {
+    val runtimeConfig = codegenContext.runtimeConfig
     return (
         listOf(
             PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
-        ) + RuntimeType.smithyTypes(runtimeConfig).let { types ->
-            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
-        } + RuntimeType.smithyHttp(runtimeConfig).let { http ->
+        ) + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
-                PubUseType(http.resolve("result::SdkError")) { true },
                 PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
                 PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
             )
@@ -63,12 +63,32 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }
 }
 
-/** Adds re-export statements in a separate file for the types module */
-fun pubUseSmithyTypes(runtimeConfig: RuntimeConfig, model: Model, rustCrate: RustCrate) {
-    rustCrate.withModule(RustModule.Types) {
-        val types = pubUseTypes(runtimeConfig, model)
-        if (types.isNotEmpty()) {
-            types.forEach { type -> rust("pub use #T;", type) }
-        }
+/** Adds re-export statements for Smithy primitives */
+fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writable = writable {
+    val types = pubUseTypes(codegenContext, model)
+    if (types.isNotEmpty()) {
+        types.forEach { type -> rust("pub use #T;", type) }
+    }
+}
+
+/** Adds re-export statements for error types */
+fun pubUseSmithyErrorTypes(codegenContext: CodegenContext): Writable = writable {
+    val runtimeConfig = codegenContext.runtimeConfig
+    val reexports = listOf(
+        listOf(
+            RuntimeType.smithyHttp(runtimeConfig).let { http ->
+                PubUseType(http.resolve("result::SdkError")) { true }
+            },
+        ),
+        RuntimeType.smithyTypes(runtimeConfig).let { types ->
+            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
+                // Only re-export `ProvideErrorMetadata` for clients
+                .letIf(codegenContext.target == CodegenTarget.CLIENT) { list ->
+                    list + listOf(PubUseType(types.resolve("error::metadata::ProvideErrorMetadata")) { true })
+                }
+        },
+    ).flatten()
+    reexports.forEach { reexport ->
+        rust("pub use #T;", reexport.type)
     }
 }

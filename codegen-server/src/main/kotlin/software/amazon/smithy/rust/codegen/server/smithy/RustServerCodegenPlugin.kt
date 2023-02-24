@@ -13,10 +13,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolP
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
@@ -63,28 +63,32 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
          * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
          */
         fun baseSymbolProvider(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
+            includeConstrainedShapeProvider: Boolean = true,
         ) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
-                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
+                .let {
+                    if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+                }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
+                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it, model) }
+                .let { StreamingShapeSymbolProvider(it) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
+                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
-                .let { ConstrainedShapeSymbolMetadataProvider(it, model, constrainedTypes) }
+                .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
                 // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
-                .let { StreamingShapeMetadataProvider(it, model) }
+                .let { StreamingShapeMetadataProvider(it) }
                 // Derive `Eq` and `Hash` if possible.
-                .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
+                .let { DeriveEqAndHashSymbolMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it) }
     }
 }

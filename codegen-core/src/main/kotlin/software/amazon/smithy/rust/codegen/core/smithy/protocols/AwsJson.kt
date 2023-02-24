@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -128,7 +127,7 @@ open class AwsJson(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
@@ -152,32 +151,31 @@ open class AwsJson(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            builderSymbolFn(codegenContext.symbolProvider),
         )
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_error_metadata", jsonDeserModule) {
             rustTemplate(
                 """
-                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response.body(), response.headers())
+                pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
                 }
                 """,
                 *errorScope,
             )
         }
 
-    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_error_metadata", jsonDeserModule) {
             rustTemplate(
                 """
-                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
                 }
                 """,
                 *errorScope,

@@ -89,27 +89,33 @@ def main():
 def generate_and_commit_generated_code(revision_sha):
     # Clean the build artifacts before continuing
     run("rm -rf aws/sdk/build")
+    run("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
     run("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
-    run("./gradlew --rerun-tasks :aws:sdk:assemble")
-    run("./gradlew --rerun-tasks :codegen-server-test:assemble")
-    run("./gradlew --rerun-tasks :codegen-server-test:python:assemble")
+    run("./gradlew --rerun-tasks aws:sdk:assemble codegen-client-test:assemble codegen-server-test:assemble")
+    run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True)
 
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
     run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+    run(f"mv codegen-client-test/build/smithyprojections/codegen-client-test {OUTPUT_PATH}/")
     run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
-    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}/")
+    run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/")
+
+    # Clean up the SDK directory
+    run(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
+
+    # Clean up the client-test folder
+    run(f"rm -rf {OUTPUT_PATH}/codegen-client-test/source")
+    run(f"find {OUTPUT_PATH}/codegen-client-test | "
+        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
+        f"xargs rm -f", shell=True)
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
-    run(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
@@ -155,6 +161,10 @@ def make_diffs(base_commit_sha, head_commit_sha):
                        head_commit_sha, "aws-sdk", whitespace=True)
     sdk_nows = make_diff("AWS SDK", f"{OUTPUT_PATH}/aws-sdk", base_commit_sha, head_commit_sha,
                          "aws-sdk-ignore-whitespace", whitespace=False)
+    client_ws = make_diff("Client Test", f"{OUTPUT_PATH}/codegen-client-test", base_commit_sha,
+                          head_commit_sha, "client-test", whitespace=True)
+    client_nows = make_diff("Client Test", f"{OUTPUT_PATH}/codegen-client-test", base_commit_sha,
+                            head_commit_sha, "client-test-ignore-whitespace", whitespace=False)
     server_ws = make_diff("Server Test", f"{OUTPUT_PATH}/codegen-server-test", base_commit_sha,
                           head_commit_sha, "server-test", whitespace=True)
     server_nows = make_diff("Server Test", f"{OUTPUT_PATH}/codegen-server-test", base_commit_sha,
@@ -166,6 +176,8 @@ def make_diffs(base_commit_sha, head_commit_sha):
 
     sdk_links = diff_link('AWS SDK', 'No codegen difference in the AWS SDK',
                           sdk_ws, 'ignoring whitespace', sdk_nows)
+    client_links = diff_link('Client Test', 'No codegen difference in the Client Test',
+                             client_ws, 'ignoring whitespace', client_nows)
     server_links = diff_link('Server Test', 'No codegen difference in the Server Test',
                              server_ws, 'ignoring whitespace', server_nows)
     server_links_python = diff_link('Server Test Python', 'No codegen difference in the Server Test Python',
@@ -173,6 +185,7 @@ def make_diffs(base_commit_sha, head_commit_sha):
     # Save escaped newlines so that the GitHub Action script gets the whole message
     return "A new generated diff is ready to view.\\n"\
         f"- {sdk_links}\\n"\
+        f"- {client_links}\\n"\
         f"- {server_links}\\n"\
         f"- {server_links_python}\\n"
 

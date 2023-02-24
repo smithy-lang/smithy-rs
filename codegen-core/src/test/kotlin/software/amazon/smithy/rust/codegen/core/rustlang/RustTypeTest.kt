@@ -163,7 +163,12 @@ internal class RustTypesTest {
                 ),
             ),
         )
-        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[cfg(all(feature = \"unstable\", any(feature = \"serialize\", feature = \"deserialize\")))]\n")
+        forInputExpectOutput(
+            writable {
+                attributeMacro.render(this)
+            },
+            "#[cfg(all(feature = \"unstable\", any(feature = \"serialize\", feature = \"deserialize\")))]\n",
+        )
     }
 
     @Test
@@ -178,7 +183,12 @@ internal class RustTypesTest {
                 ),
             ),
         )
-        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[cfg(all(feature = \"unstable\", feature = \"serialize\", feature = \"deserialize\"))]\n")
+        forInputExpectOutput(
+            writable {
+                attributeMacro.render(this)
+            },
+            "#[cfg(all(feature = \"unstable\", feature = \"serialize\", feature = \"deserialize\"))]\n",
+        )
     }
 
     @Test
@@ -197,7 +207,12 @@ internal class RustTypesTest {
                 RuntimeType.StdError,
             ),
         )
-        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[derive(std::clone::Clone, std::error::Error, std::fmt::Debug)]\n")
+        forInputExpectOutput(
+            writable {
+                attributeMacro.render(this)
+            },
+            "#[derive(std::clone::Clone, std::error::Error, std::fmt::Debug)]\n",
+        )
     }
 
     @Test

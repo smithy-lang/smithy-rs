@@ -8,30 +8,32 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
-class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
-    WrappingSymbolProvider(base) {
+class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     private val internal =
-        ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
+        ReservedWordSymbolProvider.builder().symbolProvider(base)
+            .nameReservedWords(RustReservedWords)
+            .memberReservedWords(RustReservedWords)
+            .build()
 
     override fun toMemberName(shape: MemberShape): String {
-        val baseName = internal.toMemberName(shape)
-        return when (val container = model.expectShape(shape.container)) {
-            is StructureShape -> when (baseName) {
+        val baseName = super.toMemberName(shape)
+        val reservedWordReplacedName = internal.toMemberName(shape)
+        val container = model.expectShape(shape.container)
+        return when {
+            container is StructureShape -> when (baseName) {
                 "build" -> "build_value"
                 "builder" -> "builder_value"
                 "default" -> "default_value"
@@ -40,20 +42,25 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                 "make_operation" -> "make_operation_value"
                 "presigned" -> "presigned_value"
                 "customize" -> "customize_value"
-                else -> baseName
+                // To avoid conflicts with the error metadata `meta` field
+                "meta" -> "meta_value"
+                else -> reservedWordReplacedName
             }
 
-            is UnionShape -> when (baseName) {
+            container is UnionShape -> when (baseName) {
                 // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
                 // that represent union variants that have been added since this SDK was generated.
                 UnionGenerator.UnknownVariantName -> "${UnionGenerator.UnknownVariantName}Value"
                 "${UnionGenerator.UnknownVariantName}Value" -> "${UnionGenerator.UnknownVariantName}Value_"
-                // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
-                // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
-                "Self" -> "SelfValue"
+                else -> reservedWordReplacedName
+            }
+
+            container is EnumShape || container.hasTrait<EnumTrait>() -> when (baseName) {
+                // Unknown is used as the name of the variant containing unexpected values
+                "Unknown" -> "UnknownValue"
                 // Real models won't end in `_` so it's safe to stop here
-                "SelfValue" -> "SelfValue_"
-                else -> baseName
+                "UnknownValue" -> "UnknownValue_"
+                else -> reservedWordReplacedName
             }
 
             else -> error("unexpected container: $container")
@@ -67,46 +74,36 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
      * code generators to generate special docs.
      */
     override fun toSymbol(shape: Shape): Symbol {
+        // Sanity check that the symbol provider stack is set up correctly
+        check(super.toSymbol(shape).renamedFrom() == null) {
+            "RustReservedWordSymbolProvider should only run once"
+        }
+
+        var renamedSymbol = internal.toSymbol(shape)
         return when (shape) {
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
-                if (!(container is StructureShape || container is UnionShape)) {
+                val containerIsEnum = container is EnumShape || container.hasTrait<EnumTrait>()
+                if (container !is StructureShape && container !is UnionShape && !containerIsEnum) {
                     return base.toSymbol(shape)
                 }
                 val previousName = base.toMemberName(shape)
                 val escapedName = this.toMemberName(shape)
-                val baseSymbol = base.toSymbol(shape)
                 // if the names don't match and it isn't a simple escaping with `r#`, record a rename
-                baseSymbol.letIf(escapedName != previousName && !escapedName.contains("r#")) {
-                    it.toBuilder().renamedFrom(previousName).build()
-                }
+                renamedSymbol.toBuilder().name(escapedName)
+                    .letIf(escapedName != previousName && !escapedName.contains("r#")) {
+                        it.renamedFrom(previousName)
+                    }.build()
             }
 
-            else -> base.toSymbol(shape)
+            else -> renamedSymbol
         }
     }
+}
 
-    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-        val baseName = base.toEnumVariantName(definition) ?: return null
-        check(definition.name.orNull()?.toPascalCase() == baseName.name) {
-            "Enum variants must already be in pascal case ${baseName.name} differed from ${baseName.name.toPascalCase()}. Definition: ${definition.name}"
-        }
-        check(baseName.renamedFrom == null) {
-            "definitions should only pass through the renamer once"
-        }
-        return when (baseName.name) {
-            // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
-            // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
-            "Self" -> MaybeRenamed("SelfValue", "Self")
-            // Real models won't end in `_` so it's safe to stop here
-            "SelfValue" -> MaybeRenamed("SelfValue_", "SelfValue")
-            // Unknown is used as the name of the variant containing unexpected values
-            "Unknown" -> MaybeRenamed("UnknownValue", "Unknown")
-            // Real models won't end in `_` so it's safe to stop here
-            "UnknownValue" -> MaybeRenamed("UnknownValue_", "UnknownValue")
-            else -> baseName
-        }
-    }
+enum class EscapeFor {
+    TypeName,
+    ModuleName,
 }
 
 object RustReservedWords : ReservedWords {
@@ -166,17 +163,33 @@ object RustReservedWords : ReservedWords {
         "try",
     )
 
-    private val cantBeRaw = setOf("self", "crate", "super")
+    // Some things can't be used as a raw identifier, so we can't use the normal escaping strategy
+    // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
+    private val keywordEscapingMap = mapOf(
+        "crate" to "crate_",
+        "super" to "super_",
+        "self" to "self_",
+        "Self" to "SelfValue",
+        // Real models won't end in `_` so it's safe to stop here
+        "SelfValue" to "SelfValue_",
+    )
 
-    override fun escape(word: String): String = when {
-        cantBeRaw.contains(word) -> "${word}_"
-        else -> "r##$word"
-    }
+    override fun escape(word: String): String = doEscape(word, EscapeFor.TypeName)
 
-    fun escapeIfNeeded(word: String): String = when (isReserved(word)) {
-        true -> escape(word)
-        else -> word
-    }
+    private fun doEscape(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (val mapped = keywordEscapingMap[word]) {
+            null -> when (escapeFor) {
+                EscapeFor.TypeName -> "r##$word"
+                EscapeFor.ModuleName -> "${word}_"
+            }
+            else -> mapped
+        }
 
-    override fun isReserved(word: String): Boolean = RustKeywords.contains(word)
+    fun escapeIfNeeded(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (isReserved(word)) {
+            true -> doEscape(word, escapeFor)
+            else -> word
+        }
+
+    override fun isReserved(word: String): Boolean = RustKeywords.contains(word) || keywordEscapingMap.contains(word)
 }

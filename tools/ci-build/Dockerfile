@@ -6,11 +6,18 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.62.1
+ARG rust_stable_version=1.63.0
 ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
+
+FROM bare_base_image as musl_toolchain
+RUN yum -y install tar gzip gcc make
+RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
+  && ls \
+  && tar xvzf musl-1.2.3.tar.gz \ 
+  && (cd musl-1.2.3 && ./configure && make install) 
 
 #
 # Rust & Tools Installation Stage
@@ -51,6 +58,7 @@ RUN set -eux; \
     rustup component add rustfmt; \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
+    rustup target add x86_64-unknown-linux-musl; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
@@ -106,6 +114,8 @@ ARG maturin_version=0.14.1
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
 
+
+
 #
 # Final image
 #
@@ -138,6 +148,8 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
+COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
+ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
@@ -154,6 +166,7 @@ ENV PATH=/opt/cargo/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

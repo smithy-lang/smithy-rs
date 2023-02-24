@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
@@ -13,7 +12,6 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -26,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -68,9 +65,8 @@ class RequestBindingGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
-    private fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(symbolProvider)
     private val httpBindingGenerator =
-        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
+        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
     private val index = HttpBindingIndex.of(model)
     private val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
 

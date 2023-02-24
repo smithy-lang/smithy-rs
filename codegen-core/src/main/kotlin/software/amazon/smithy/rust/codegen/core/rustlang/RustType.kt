@@ -222,7 +222,9 @@ fun RustType.asArgument(name: String) = Argument(
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
-    } else ""
+    } else {
+        ""
+    }
     val base = when (this) {
         is RustType.Unit -> this.name
         is RustType.Bool -> this.name
@@ -325,6 +327,16 @@ fun RustType.isCopy(): Boolean = when (this) {
     else -> false
 }
 
+/** Returns true if the type implements Eq */
+fun RustType.isEq(): Boolean = when (this) {
+    is RustType.Integer -> true
+    is RustType.Bool -> true
+    is RustType.String -> true
+    is RustType.Unit -> true
+    is RustType.Container -> this.member.isEq()
+    else -> false
+}
+
 enum class Visibility {
     PRIVATE, PUBCRATE, PUBLIC;
 
@@ -416,7 +428,7 @@ enum class AttributeKind {
     /**
      * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
      */
-    Outer
+    Outer,
 }
 
 /**
@@ -544,5 +556,12 @@ class Attribute(val inner: Writable) {
             val (key, value) = pair
             rustInline("$key = $value")
         }
+    }
+}
+
+/** Render all attributes in this list, one after another */
+fun Collection<Attribute>.render(writer: RustWriter) {
+    for (attr in this) {
+        attr.render(writer)
     }
 }

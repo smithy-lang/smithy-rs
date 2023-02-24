@@ -74,10 +74,9 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
     )
 
     override fun structFieldInit() = writable {
+        val json = Node.printJson(partitionsDotJson).dq()
         rustTemplate(
-            """partition_resolver: #{PartitionResolver}::new_from_json(b${
-            Node.printJson(partitionsDotJson).dq()
-            }).expect("valid JSON")""",
+            """partition_resolver: #{PartitionResolver}::new_from_json(b$json).expect("valid JSON")""",
             *codegenScope,
         )
     }

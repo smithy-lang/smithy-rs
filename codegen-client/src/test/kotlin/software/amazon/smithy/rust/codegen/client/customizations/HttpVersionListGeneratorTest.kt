@@ -62,7 +62,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::SayHello::builder()
+                        let op = $moduleName::input::SayHelloInput::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");
@@ -113,7 +113,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::SayHello::builder()
+                        let op = $moduleName::input::SayHelloInput::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");
@@ -181,7 +181,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::SayHello::builder()
+                        let op = $moduleName::input::SayHelloInput::builder()
                             .build().expect("valid operation")
                             .make_operation(&conf).await.unwrap();
                         let properties = op.properties();
@@ -205,7 +205,9 @@ class FakeSigningDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.filterNot { it is EventStreamSigningConfig } + FakeSigningConfig(codegenContext.runtimeConfig)
+        return baseCustomizations.filterNot {
+            it is EventStreamSigningConfig
+        } + FakeSigningConfig(codegenContext.runtimeConfig)
     }
 }
 

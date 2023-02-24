@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsGenerator
@@ -147,20 +149,33 @@ open class RustCrate(
             is RustModule.LibRs -> lib { moduleWriter(this) }
             is RustModule.LeafModule -> {
                 checkDups(module)
-                // Create a dependency which adds the mod statement for this module. This will be added to the writer
-                // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
-                val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
-                    module.renderModStatement(this)
-                }
-                val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
-                inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
-                    moduleWriter(writer)
-                    writer.addDependency(modStatement.dependency)
+
+                if (module.isInline()) {
+                    withModule(module.parent) {
+                        withInlineModule(module, moduleWriter)
+                    }
+                } else {
+                    // Create a dependency which adds the mod statement for this module. This will be added to the writer
+                    // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
+                    val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
+                        module.renderModStatement(this)
+                    }
+                    val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                    inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
+                        moduleWriter(writer)
+                        writer.addDependency(modStatement.dependency)
+                    }
                 }
             }
         }
         return this
     }
+
+    /**
+     * Returns the module for a given Shape.
+     */
+    fun moduleFor(shape: Shape, moduleWriter: Writable): RustCrate =
+        withModule((symbolProvider as RustSymbolProvider).moduleForShape(shape), moduleWriter)
 
     /**
      * Create a new file directly
@@ -170,26 +185,25 @@ open class RustCrate(
             fileWriter(it)
         }
     }
+
+    /**
+     * Render something in a private module and re-export it into the given symbol.
+     *
+     * @param privateModule: Private module to render into
+     * @param symbol: The symbol of the thing being rendered, which will be re-exported. This symbol
+     * should be the public-facing symbol rather than the private symbol.
+     */
+    fun inPrivateModuleWithReexport(privateModule: RustModule.LeafModule, symbol: Symbol, writer: Writable) {
+        withModule(privateModule, writer)
+        privateModule.toType().resolve(symbol.name).toSymbol().also { privateSymbol ->
+            withModule(symbol.module()) {
+                rust("pub use #T;", privateSymbol)
+            }
+        }
+    }
 }
 
-val ErrorsModule = RustModule.public(
-    "error",
-    documentation = "All error types that operations can return. Documentation on these types is copied from the model.",
-)
-val OperationsModule = RustModule.public("operation", documentation = "All operations that this crate can perform.")
-val ModelsModule = RustModule.public(
-    "model",
-    documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.",
-)
-val InputsModule = RustModule.public(
-    "input",
-    documentation = "Input structures for operations. Documentation on these types is copied from the model.",
-)
-val OutputsModule = RustModule.public(
-    "output",
-    documentation = "Output structures for operations. Documentation on these types is copied from the model.",
-)
-
+// TODO(https://github.com/awslabs/smithy-rs/issues/2341): Remove unconstrained/constrained from codegen-core
 val UnconstrainedModule =
     RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
 val ConstrainedModule =
@@ -252,5 +266,7 @@ internal fun List<CargoDependency>.mergeIdenticalTestDependencies(): List<CargoD
     val compileDeps =
         this.filter { it.scope == DependencyScope.Compile }.toSet()
 
-    return this.filterNot { it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile)) }
+    return this.filterNot {
+        it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile))
+    }
 }

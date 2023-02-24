@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -254,7 +253,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         )
 
         // Implement `into_response` for output types.
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
 
         rustTemplate(
             """
@@ -366,7 +365,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun serverSerializeError(operationShape: OperationShape): RuntimeType {
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
@@ -386,7 +385,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun RustWriter.serverRenderErrorShapeResponseSerializer(
         operationShape: OperationShape,
-        errorSymbol: RuntimeType,
+        errorSymbol: Symbol,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
@@ -659,11 +658,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     {
                         input = input.${member.setterName()}(${
-                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                        "Some(value)"
-                    } else {
-                        "value"
-                    }
+                        if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                            "Some(value)"
+                        } else {
+                            "value"
+                        }
                     });
                     }
                     """,
@@ -691,7 +690,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             )
         ) {
             "?"
-        } else ""
+        } else {
+            ""
+        }
         rustTemplate("input.build()$err", *codegenScope)
     }
 
@@ -841,7 +842,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     //     * a map of list of string; or
     //     * a map of set of string.
     enum class QueryParamsTargetMapValueType {
-        STRING, LIST, SET;
+        STRING, LIST, SET
     }
 
     private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
@@ -1024,7 +1025,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                        binding.member.setterName()
+                            binding.member.setterName()
                         }(",
                         ");",
                     ) {
@@ -1033,7 +1034,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 "#T(",
                                 ")",
                                 conditional = hasConstrainedTarget,
-                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() },
+                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType {
+                                    it.stripOuter<RustType.Option>()
+                                },
                             ) {
                                 write(memberName)
                             }
@@ -1154,18 +1157,18 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
      * Returns the error type of the function that deserializes a non-streaming HTTP payload (a byte slab) into the
      * shape targeted by the `httpPayload` trait.
      */
-    private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
+    private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): Symbol {
         check(binding.location == HttpLocation.PAYLOAD)
 
         if (model.expectShape(binding.member.target) is StringShape) {
-            return ServerRuntimeType.requestRejection(runtimeConfig)
+            return ServerRuntimeType.requestRejection(runtimeConfig).toSymbol()
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError")
+                RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError").toSymbol()
             }
             RestXmlTrait.ID -> {
-                RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError")
+                RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError").toSymbol()
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

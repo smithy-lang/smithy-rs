@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -51,8 +51,11 @@ class EnumGeneratorTest {
 
         private val enumTrait = testModel.lookup<StringShape>("test#EnumWithUnknown").expectTrait<EnumTrait>()
 
-        private fun model(name: String): EnumMemberModel =
-            EnumMemberModel(enumTrait.values.first { it.name.orNull() == name }, symbolProvider)
+        private fun model(name: String): EnumMemberModel = EnumMemberModel(
+            testModel.lookup("test#EnumWithUnknown"),
+            enumTrait.values.first { it.name.orNull() == name },
+            symbolProvider,
+        )
 
         @Test
         fun `it converts enum names to PascalCase and renames any named Unknown to UnknownValue`() {
@@ -128,7 +131,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#InstanceType")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 rust("##![allow(deprecated)]")
                 renderEnum(model, provider, shape)
                 unitTest(
@@ -139,12 +142,13 @@ class EnumGeneratorTest {
                     assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
                     """,
                 )
-                val output = toString()
-                output.shouldContain("#[non_exhaustive]")
-                // on enum variant `T2Micro`
-                output.shouldContain("#[deprecated]")
-                // on enum itself
-                output.shouldContain("#[deprecated(since = \"1.2.3\")]")
+                toString().also { output ->
+                    output.shouldContain("#[non_exhaustive]")
+                    // on enum variant `T2Micro`
+                    output.shouldContain("#[deprecated]")
+                    // on enum itself
+                    output.shouldContain("#[deprecated(since = \"1.2.3\")]")
+                }
             }
             project.compileAndTest()
         }
@@ -168,7 +172,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "named_enums_implement_eq_and_hash",
@@ -201,8 +205,8 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                rust("##![allow(deprecated)]")
+            project.moduleFor(shape) {
+                AllowDeprecated.render(this)
                 renderEnum(model, provider, shape)
                 unitTest(
                     "unnamed_enums_implement_eq_and_hash",
@@ -244,8 +248,8 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
-                rust("##![allow(deprecated)]")
+            project.moduleFor(shape) {
+                AllowDeprecated.render(this)
                 renderEnum(model, provider, shape)
                 unitTest(
                     "it_generates_unnamed_enums",
@@ -274,7 +278,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 val rendered = toString()
                 rendered shouldContain
@@ -303,7 +307,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 val rendered = toString()
                 rendered shouldContain
@@ -328,7 +332,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "it_handles_variants_that_clash_with_rust_reserved_words",
@@ -352,7 +356,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
@@ -380,7 +384,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "impl_debug_for_sensitive_enum_should_redact_text",
@@ -407,7 +411,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "impl_debug_for_non_sensitive_unnamed_enum_should_implement_the_derived_debug_trait",
@@ -439,7 +443,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape)
                 unitTest(
                     "impl_debug_for_sensitive_unnamed_enum_should_redact_text",
@@ -505,7 +509,7 @@ class EnumGeneratorTest {
             output shouldContain "// additional docs"
 
             val project = TestWorkspace.testProject(provider)
-            project.withModule(RustModule.Model) {
+            project.moduleFor(shape) {
                 renderEnum(model, provider, shape, CustomizingEnumType())
             }
             project.compileAndTest()

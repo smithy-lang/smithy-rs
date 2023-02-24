@@ -30,12 +30,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -129,23 +127,23 @@ class AwsPresigningDecorator internal constructor(
 }
 
 class AwsInputPresignedMethod(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
 
-    private val codegenScope = arrayOf(
-        "Error" to AwsRuntimeType.Presigning.resolve("config::Error"),
-        "PresignedRequest" to AwsRuntimeType.Presigning.resolve("request::PresignedRequest"),
-        "PresignedRequestService" to AwsRuntimeType.Presigning.resolve("service::PresignedRequestService"),
-        "PresigningConfig" to AwsRuntimeType.Presigning.resolve("config::PresigningConfig"),
-        "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
-        "sig_auth" to AwsRuntimeType.awsSigAuth(runtimeConfig),
-        "tower" to RuntimeType.Tower,
-        "Middleware" to runtimeConfig.defaultMiddleware(),
-    )
+    private val codegenScope = (
+        presigningTypes(codegenContext) + listOf(
+            "PresignedRequestService" to AwsRuntimeType.presigning(codegenContext)
+                .resolve("service::PresignedRequestService"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
+            "sig_auth" to AwsRuntimeType.awsSigAuth(runtimeConfig),
+            "tower" to RuntimeType.Tower,
+            "Middleware" to runtimeConfig.defaultMiddleware(),
+        )
+        ).toTypedArray()
 
     override fun section(section: OperationSection): Writable =
         writable {
@@ -155,7 +153,7 @@ class AwsInputPresignedMethod(
         }
 
     private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
-        val operationError = operationShape.errorSymbol(symbolProvider)
+        val operationError = symbolProvider.symbolForOperationError(operationShape)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
@@ -242,14 +240,15 @@ class AwsInputPresignedMethod(
 }
 
 class AwsPresignedFluentBuilderMethod(
+    codegenContext: ClientCodegenContext,
     runtimeConfig: RuntimeConfig,
 ) : FluentClientCustomization() {
-    private val codegenScope = arrayOf(
-        "Error" to AwsRuntimeType.Presigning.resolve("config::Error"),
-        "PresignedRequest" to AwsRuntimeType.Presigning.resolve("request::PresignedRequest"),
-        "PresigningConfig" to AwsRuntimeType.Presigning.resolve("config::PresigningConfig"),
-        "SdkError" to RuntimeType.sdkError(runtimeConfig),
-    )
+    private val codegenScope = (
+        presigningTypes(codegenContext) + arrayOf(
+            "Error" to AwsRuntimeType.presigning(codegenContext).resolve("config::Error"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        )
+        ).toTypedArray()
 
     override fun section(section: FluentClientSection): Writable =
         writable {
@@ -365,3 +364,15 @@ private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
         """,
     )
 }
+
+private fun presigningTypes(codegenContext: ClientCodegenContext): List<Pair<String, Any>> =
+    when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+        true -> listOf(
+            "PresignedRequest" to AwsRuntimeType.presigning(codegenContext).resolve("PresignedRequest"),
+            "PresigningConfig" to AwsRuntimeType.presigning(codegenContext).resolve("PresigningConfig"),
+        )
+        else -> listOf(
+            "PresignedRequest" to AwsRuntimeType.presigning(codegenContext).resolve("request::PresignedRequest"),
+            "PresigningConfig" to AwsRuntimeType.presigning(codegenContext).resolve("config::PresigningConfig"),
+        )
+    }
