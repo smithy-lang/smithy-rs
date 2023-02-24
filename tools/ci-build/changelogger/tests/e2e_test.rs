@@ -678,11 +678,11 @@ Thank you for your contributions! ❤
 <details>
 <summary>Click to expand to view crate versions...</summary>
 
-Crate|Version|
--|-|
-aws-config|0.54.1|
-aws-sdk-accessanalyzer|0.24.0|
-aws-smithy-async|0.54.1|
+|Crate|Version|
+|-|-|
+|aws-config|0.54.1|
+|aws-sdk-accessanalyzer|0.24.0|
+|aws-smithy-async|0.54.1|
 </details>
 
 
@@ -697,7 +697,7 @@ Old entry contents
         r#"{
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
-  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\nCrate|Version|\n-|-|\naws-config|0.54.1|\naws-sdk-accessanalyzer|0.24.0|\naws-smithy-async|0.54.1|\n</details>\n\n",
+  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
   "prerelease": true
 }"#,
         release_manifest

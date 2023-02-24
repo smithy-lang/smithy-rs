@@ -223,7 +223,7 @@ fn indented_message(message: &str) -> String {
 }
 
 fn render_table_row(columns: [&str; 2], out: &mut String) {
-    let mut row = String::new();
+    let mut row = "|".to_owned();
     for column in columns {
         row.push_str(column);
         row.push('|');
@@ -730,11 +730,11 @@ author = "rcoh"
 <details>
 <summary>Click to expand to view crate versions...</summary>
 
-Crate|Version|
--|-|
-aws-config|0.54.1|
-aws-sdk-accessanalyzer|0.24.0|
-aws-smithy-async|0.54.1|
+|Crate|Version|
+|-|-|
+|aws-config|0.54.1|
+|aws-sdk-accessanalyzer|0.24.0|
+|aws-smithy-async|0.54.1|
 </details>
 
 "#
