@@ -101,6 +101,11 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
     }
 }
 
+enum class EscapeFor {
+    TypeName,
+    ModuleName,
+}
+
 object RustReservedWords : ReservedWords {
     private val RustKeywords = setOf(
         "as",
@@ -169,15 +174,22 @@ object RustReservedWords : ReservedWords {
         "SelfValue" to "SelfValue_",
     )
 
-    override fun escape(word: String): String = when (val mapped = keywordEscapingMap[word]) {
-        null -> "r##$word"
-        else -> mapped
-    }
+    override fun escape(word: String): String = doEscape(word, EscapeFor.TypeName)
 
-    fun escapeIfNeeded(word: String): String = when (isReserved(word)) {
-        true -> escape(word)
-        else -> word
-    }
+    private fun doEscape(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (val mapped = keywordEscapingMap[word]) {
+            null -> when (escapeFor) {
+                EscapeFor.TypeName -> "r##$word"
+                EscapeFor.ModuleName -> "${word}_"
+            }
+            else -> mapped
+        }
+
+    fun escapeIfNeeded(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (isReserved(word)) {
+            true -> doEscape(word, escapeFor)
+            else -> word
+        }
 
     override fun isReserved(word: String): Boolean = RustKeywords.contains(word) || keywordEscapingMap.contains(word)
 }

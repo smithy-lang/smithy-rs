@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsGenerator
@@ -181,6 +183,22 @@ open class RustCrate(
     fun withFile(filename: String, fileWriter: Writable) {
         inner.useFileWriter(filename) {
             fileWriter(it)
+        }
+    }
+
+    /**
+     * Render something in a private module and re-export it into the given symbol.
+     *
+     * @param privateModule: Private module to render into
+     * @param symbol: The symbol of the thing being rendered, which will be re-exported. This symbol
+     * should be the public-facing symbol rather than the private symbol.
+     */
+    fun inPrivateModuleWithReexport(privateModule: RustModule.LeafModule, symbol: Symbol, writer: Writable) {
+        withModule(privateModule, writer)
+        privateModule.toType().resolve(symbol.name).toSymbol().also { privateSymbol ->
+            withModule(symbol.module()) {
+                rust("pub use #T;", privateSymbol)
+            }
         }
     }
 }
