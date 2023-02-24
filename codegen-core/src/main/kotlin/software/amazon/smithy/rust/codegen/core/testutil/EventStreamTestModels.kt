@@ -71,21 +71,17 @@ private fun fillInBaseModel(
         SomeError: SomeError,
     }
 
-    structure TestStreamInput {
-        @httpPayload
-        value: TestStream,
-    }
-
-    structure TestStreamOutput {
+    structure TestStreamInputOutput {
+        @required
         @httpPayload
         value: TestStream
     }
 
     @http(method: "POST", uri: "/test")
     operation TestStreamOp {
-        input: TestStreamInput,
-        output: TestStreamOutput,
-        errors: [SomeError],
+        input: TestStreamInputOutput,
+        output: TestStreamInputOutput,
+        errors: [SomeError, ValidationException],
     }
 
     $extraServiceAnnotations
