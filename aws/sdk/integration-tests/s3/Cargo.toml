@@ -4,10 +4,15 @@ name = "s3-tests"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
+async-std = "1.12.0"
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
@@ -17,10 +22,19 @@ aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", featur
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
+bytes-utils = "0.1.2"
+fastrand = "1.8.0"
+futures-util = "0.3.25"
+hdrhistogram = "7.5.2"
 http = "0.2.3"
+http-body = "0.4.5"
+hyper = "0.14.12"
 serde_json = "1"
-tokio = { version = "1", features = ["full", "test-util"] }
-tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
-tracing = "0.1"
-tracing-test = "0.2.1"
+smol = "1.2"
+tempfile = "3"
+tokio = { version = "1.8.4", features = ["macros", "test-util", "rt-multi-thread"] }
+tracing = "0.1.37"
+tracing-appender = "0.2.2"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }

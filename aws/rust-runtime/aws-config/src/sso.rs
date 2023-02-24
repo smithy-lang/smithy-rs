@@ -14,16 +14,16 @@ use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
 
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use aws_sdk_sso::middleware::DefaultMiddleware as SsoMiddleware;
 use aws_sdk_sso::model::RoleCredentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_json::deserialize::Token;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
-use aws_types::credentials::{CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
-use aws_types::{credentials, Credentials};
 
 use std::convert::TryInto;
 use std::error::Error;
@@ -39,12 +39,12 @@ impl crate::provider_config::ProviderConfig {
         &self,
     ) -> aws_smithy_client::Client<aws_smithy_client::erase::DynConnector, SsoMiddleware> {
         use crate::connector::expect_connector;
-        use aws_smithy_client::http_connector::HttpSettings;
 
-        aws_smithy_client::Builder::<(), SsoMiddleware>::new()
-            .connector(expect_connector(self.connector(&HttpSettings::default())))
-            .sleep_impl(self.sleep())
-            .build()
+        let mut client_builder = aws_smithy_client::Client::builder()
+            .connector(expect_connector(self.connector(&Default::default())))
+            .middleware(SsoMiddleware::default());
+        client_builder.set_sleep_impl(self.sleep());
+        client_builder.build()
     }
 }
 
@@ -80,17 +80,17 @@ impl SsoCredentialsProvider {
         }
     }
 
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> provider::Result {
         load_sso_credentials(&self.sso_config, &self.client, &self.env, &self.fs).await
     }
 }
 
 impl ProvideCredentials for SsoCredentialsProvider {
-    fn provide_credentials<'a>(&'a self) -> credentials::future::ProvideCredentials<'a>
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
     {
-        credentials::future::ProvideCredentials::new(self.credentials())
+        future::ProvideCredentials::new(self.credentials())
     }
 }
 
@@ -204,14 +204,14 @@ async fn load_sso_credentials(
     sso: &aws_smithy_client::Client<DynConnector, SsoMiddleware>,
     env: &Env,
     fs: &Fs,
-) -> credentials::Result {
+) -> provider::Result {
     let token = load_token(&sso_config.start_url, env, fs)
         .await
         .map_err(CredentialsError::provider_error)?;
     let config = aws_sdk_sso::Config::builder()
         .region(sso_config.region.clone())
         .build();
-    let operation = aws_sdk_sso::operation::GetRoleCredentials::builder()
+    let operation = aws_sdk_sso::input::GetRoleCredentialsInput::builder()
         .role_name(&sso_config.role_name)
         .access_token(&*token.access_token)
         .account_id(&sso_config.account_id)

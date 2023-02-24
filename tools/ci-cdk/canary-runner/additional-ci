@@ -1,11 +1,5 @@
-#!/bin/bash
-#
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Run by CI to check the canary-lambda
-set -e
-cd "$(dirname $0)"
-
-cargo test
-cargo clippy
+# run build-bundle on musl to verify that everything works
+cargo run -- build-bundle \
+  --sdk-release-tag release-2022-12-14 \
+  --canary-path ../canary-lambda \
+  --rust-version stable --musl

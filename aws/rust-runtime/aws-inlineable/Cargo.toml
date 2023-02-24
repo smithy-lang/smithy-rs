@@ -1,5 +1,5 @@
 [package]
-name = "inlineable-aws"
+name = "aws-inlineable"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """
@@ -12,29 +12,34 @@ publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
-aws-http = { path = "../aws-http" }
+aws-credential-types = { path = "../aws-credential-types" }
 aws-endpoint = { path = "../aws-endpoint" }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-http = { path = "../aws-http" }
+aws-sig-auth = { path = "../aws-sig-auth" }
+aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
-aws-types = { path = "../../rust-runtime/aws-types" }
-aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }
-http = "0.2.4"
-tower = { version = "0.4", default-features = false }
-
-# Checksum dependencies:
-ring = "0.16"
-bytes-utils = "0.1.1"
-tokio-stream = "0.1.7"
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-types = { path = "../aws-types" }
 bytes = "1"
-tokio = { version = "1", features = ["full"] }
+bytes-utils = "0.1.1"
 hex = "0.4.3"
+http = "0.2.4"
+http-body = "0.4.5"
+md-5 = "0.10.1"
+ring = "0.16"
+tokio = { version = "1.8.4", features = ["full"] }
+tokio-stream = "0.1.5"
+tower = { version = "0.4", default-features = false }
+tracing = "0.1"
 
 [dev-dependencies]
-temp-file = "0.1.6"
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+tempfile = "3.2.0"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
 [package.metadata.docs.rs]
 all-features = true

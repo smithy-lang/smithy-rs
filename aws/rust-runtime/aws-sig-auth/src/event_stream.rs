@@ -4,12 +4,12 @@
  */
 
 use crate::middleware::Signature;
+use aws_credential_types::Credentials;
 use aws_sigv4::event_stream::{sign_empty_message, sign_message};
 use aws_sigv4::SigningParams;
 use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
 use aws_smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use aws_types::region::SigningRegion;
-use aws_types::Credentials;
 use aws_types::SigningService;
 use std::time::SystemTime;
 
@@ -72,7 +72,7 @@ impl SignMessage for SigV4Signer {
         Ok(signed_message)
     }
 
-    fn sign_empty(&mut self) -> Result<Message, SignMessageError> {
+    fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>> {
         let properties = self.properties.acquire();
         if self.last_signature.is_none() {
             // The Signature property should exist in the property bag for all Event Stream requests.
@@ -83,7 +83,7 @@ impl SignMessage for SigV4Signer {
             sign_empty_message(self.last_signature.as_ref().unwrap(), &params).into_parts()
         };
         self.last_signature = Some(signature);
-        Ok(signed_message)
+        Some(Ok(signed_message))
     }
 }
 
@@ -91,11 +91,11 @@ impl SignMessage for SigV4Signer {
 mod tests {
     use crate::event_stream::SigV4Signer;
     use crate::middleware::Signature;
+    use aws_credential_types::Credentials;
     use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
     use aws_smithy_http::property_bag::PropertyBag;
     use aws_types::region::Region;
     use aws_types::region::SigningRegion;
-    use aws_types::Credentials;
     use aws_types::SigningService;
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -106,7 +106,7 @@ mod tests {
         properties.insert(region.clone());
         properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
         properties.insert(SigningService::from_static("transcribe"));
-        properties.insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+        properties.insert(Credentials::for_tests());
         properties.insert(SigningRegion::from(region));
         properties.insert(Signature::new("initial-signature".into()));
 

@@ -1,3 +1,634 @@
+<!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 25th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#920](https://github.com/awslabs/smithy-rs/issues/920)) Fix bug in `OperationExtensionFuture`s `Future::poll` implementation
+
+
+January 24th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (server, [smithy-rs#2161](https://github.com/awslabs/smithy-rs/issues/2161)) Remove deprecated service builder, this includes:
+
+    - Remove `aws_smithy_http_server::routing::Router` and `aws_smithy_http_server::request::RequestParts`.
+    - Move the `aws_smithy_http_server::routers::Router` trait and `aws_smithy_http_server::routing::RoutingService` into `aws_smithy_http_server::routing`.
+    - Remove the following from the generated SDK:
+        - `operation_registry.rs`
+        - `operation_handler.rs`
+        - `server_operation_handler_trait.rs`
+
+    If migration to the new service builder API has not already been completed a brief summary of required changes can be seen in [previous release notes](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) and in API documentation of the root crate.
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2213](https://github.com/awslabs/smithy-rs/issues/2213)) `@sparse` list shapes and map shapes with constraint traits and with constrained members are now supported
+- 🐛 (server, [smithy-rs#2200](https://github.com/awslabs/smithy-rs/pull/2200)) Event streams no longer generate empty error enums when their operations don’t have modeled errors
+- (all, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) `aws_smithy_types::date_time::DateTime`, `aws_smithy_types::Blob` now implement the `Eq` and `Hash` traits
+- (server, [smithy-rs#2223](https://github.com/awslabs/smithy-rs/issues/2223)) Code-generated types for server SDKs now implement the `Eq` and `Hash` traits when possible
+
+
+January 12th, 2023
+==================
+**New this release:**
+- 🐛 (server, [smithy-rs#2201](https://github.com/awslabs/smithy-rs/issues/2201)) Fix severe bug where a router fails to deserialize percent-encoded query strings, reporting no operation match when there could be one. If your Smithy model uses an operation with a request URI spec containing [query string literals](https://smithy.io/2.0/spec/http-bindings.html#query-string-literals), you are affected. This fix was released in `aws-smithy-http-server` v0.53.1.
+
+
+January 11th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name.
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+- ⚠ (server, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2103](https://github.com/awslabs/smithy-rs/issues/2103)) In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed.
+- (server, [smithy-rs#1879](https://github.com/awslabs/smithy-rs/issues/1879)) Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set.
+- (server, [smithy-rs#2131](https://github.com/awslabs/smithy-rs/issues/2131)) The constraint `@length` on non-streaming blob shapes is supported.
+- 🐛 (client, [smithy-rs#2150](https://github.com/awslabs/smithy-rs/issues/2150)) Fix bug where string default values were not supported for endpoint parameters
+- 🐛 (all, [smithy-rs#2170](https://github.com/awslabs/smithy-rs/issues/2170), [aws-sdk-rust#706](https://github.com/awslabs/aws-sdk-rust/issues/706)) Remove the webpki-roots feature from `hyper-rustls`
+- 🐛 (server, [smithy-rs#2054](https://github.com/awslabs/smithy-rs/issues/2054)) Servers can generate a unique request ID and use it in their handlers.
+
+
+December 12th, 2022
+===================
+**Breaking Changes:**
+- ⚠🎉 (all, [smithy-rs#1938](https://github.com/awslabs/smithy-rs/issues/1938), @jjantdev) Upgrade Rust MSRV to 1.62.1
+- ⚠🎉 (server, [smithy-rs#1199](https://github.com/awslabs/smithy-rs/issues/1199), [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342), [smithy-rs#1401](https://github.com/awslabs/smithy-rs/issues/1401), [smithy-rs#1998](https://github.com/awslabs/smithy-rs/issues/1998), [smithy-rs#2005](https://github.com/awslabs/smithy-rs/issues/2005), [smithy-rs#2028](https://github.com/awslabs/smithy-rs/issues/2028), [smithy-rs#2034](https://github.com/awslabs/smithy-rs/issues/2034), [smithy-rs#2036](https://github.com/awslabs/smithy-rs/issues/2036)) [Constraint traits](https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html) in server SDKs are beginning to be supported. The following are now supported:
+
+    * The `length` trait on `string` shapes.
+    * The `length` trait on `map` shapes.
+    * The `length` trait on `list` shapes.
+    * The `range` trait on `byte` shapes.
+    * The `range` trait on `short` shapes.
+    * The `range` trait on `integer` shapes.
+    * The `range` trait on `long` shapes.
+    * The `pattern` trait on `string` shapes.
+
+    Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
+
+    Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegen.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
+
+    ```json
+    {
+        ...
+        "rust-server-codegen": {
+            ...
+            "codegen": {
+                "ignoreUnsupportedConstraints": true
+            }
+        }
+    }
+    ```
+- ⚠🎉 (server, [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342), [smithy-rs#1119](https://github.com/awslabs/smithy-rs/issues/1119)) Server SDKs now generate "constrained types" for constrained shapes. Constrained types are [newtypes](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html) that encapsulate the modeled constraints. They constitute a [widespread pattern to guarantee domain invariants](https://www.lpalmieri.com/posts/2020-12-11-zero-to-production-6-domain-modelling/) and promote correctness in your business logic. So, for example, the model:
+
+    ```smithy
+    @length(min: 1, max: 69)
+    string NiceString
+    ```
+
+    will now render a `struct NiceString(String)`. Instantiating a `NiceString` is a fallible operation:
+
+    ```rust
+    let data: String = ... ;
+    let nice_string = NiceString::try_from(data).expect("data is not nice");
+    ```
+
+    A failed attempt to instantiate a constrained type will yield a `ConstraintViolation` error type you may want to handle. This type's API is subject to change.
+
+    Constrained types _guarantee_, by virtue of the type system, that your service's operation outputs adhere to the modeled constraints. To learn more about the motivation for constrained types and how they work, see [the RFC](https://github.com/awslabs/smithy-rs/pull/1199).
+
+    If you'd like to opt-out of generating constrained types, you can set `codegen.publicConstrainedTypes` to `false`. Note that if you do, the generated server SDK will still honor your operation input's modeled constraints upon receiving a request, but will not help you in writing business logic code that adheres to the constraints, and _will not prevent you from returning responses containing operation outputs that violate said constraints_.
+
+    ```json
+    {
+        ...
+        "rust-server-codegen": {
+            ...
+            "codegen": {
+                "publicConstrainedTypes": false
+            }
+        }
+    }
+    ```
+- 🐛⚠🎉 (server, [smithy-rs#1714](https://github.com/awslabs/smithy-rs/issues/1714), [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342)) Structure builders in server SDKs have undergone significant changes.
+
+    The API surface has been reduced. It is now simpler and closely follows what you would get when using the [`derive_builder`](https://docs.rs/derive_builder/latest/derive_builder/) crate:
+
+    1. Builders no longer have `set_*` methods taking in `Option<T>`. You must use the unprefixed method, named exactly after the structure's field name, and taking in a value _whose type matches exactly that of the structure's field_.
+    2. Builders no longer have convenience methods to pass in an element for a field whose type is a vector or a map. You must pass in the entire contents of the collection up front.
+    3. Builders no longer implement [`PartialEq`](https://doc.rust-lang.org/std/cmp/trait.PartialEq.html).
+
+    Bug fixes:
+
+    4. Builders now always fail to build if a value for a `required` member is not provided. Previously, builders were falling back to a default value (e.g. `""` for `String`s) for some shapes. This was a bug.
+
+    Additions:
+
+    5. A structure `Structure` with builder `Builder` now implements `TryFrom<Builder> for Structure` or `From<Builder> for Structure`, depending on whether the structure [is constrained](https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html) or not, respectively.
+
+    To illustrate how to migrate to the new API, consider the example model below.
+
+    ```smithy
+    structure Pokemon {
+        @required
+        name: String,
+        @required
+        description: String,
+        @required
+        evolvesTo: PokemonList
+    }
+
+    list PokemonList {
+        member: Pokemon
+    }
+    ```
+
+    In the Rust code below, note the references calling out the changes described in the numbered list above.
+
+    Before:
+
+    ```rust
+    let eevee_builder = Pokemon::builder()
+        // (1) `set_description` takes in `Some<String>`.
+        .set_description(Some("Su código genético es muy inestable. Puede evolucionar en diversas razas de Pokémon.".to_owned()))
+        // (2) Convenience method to add one element to the `evolvesTo` list.
+        .evolves_to(vaporeon)
+        .evolves_to(jolteon)
+        .evolves_to(flareon);
+
+    // (3) Builder types can be compared.
+    assert_ne!(eevee_builder, Pokemon::builder());
+
+    // (4) Builds fine even though we didn't provide a value for `name`, which is `required`!
+    let _eevee = eevee_builder.build();
+    ```
+
+    After:
+
+    ```rust
+    let eevee_builder = Pokemon::builder()
+        // (1) `set_description` no longer exists. Use `description`, which directly takes in `String`.
+        .description("Su código genético es muy inestable. Puede evolucionar en diversas razas de Pokémon.".to_owned())
+        // (2) Convenience methods removed; provide the entire collection up front.
+        .evolves_to(vec![vaporeon, jolteon, flareon]);
+
+    // (3) Binary operation `==` cannot be applied to `pokemon::Builder`.
+    // assert_ne!(eevee_builder, Pokemon::builder());
+
+    // (4) `required` member `name` was not set.
+    // (5) Builder type can be fallibly converted to the structure using `TryFrom` or `TryInto`.
+    let _error = Pokemon::try_from(eevee_builder).expect_err("name was not provided");
+    ```
+- ⚠🎉 (server, [smithy-rs#1620](https://github.com/awslabs/smithy-rs/issues/1620), [smithy-rs#1666](https://github.com/awslabs/smithy-rs/issues/1666), [smithy-rs#1731](https://github.com/awslabs/smithy-rs/issues/1731), [smithy-rs#1736](https://github.com/awslabs/smithy-rs/issues/1736), [smithy-rs#1753](https://github.com/awslabs/smithy-rs/issues/1753), [smithy-rs#1738](https://github.com/awslabs/smithy-rs/issues/1738), [smithy-rs#1782](https://github.com/awslabs/smithy-rs/issues/1782), [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829), [smithy-rs#1837](https://github.com/awslabs/smithy-rs/issues/1837), [smithy-rs#1891](https://github.com/awslabs/smithy-rs/issues/1891), [smithy-rs#1840](https://github.com/awslabs/smithy-rs/issues/1840), [smithy-rs#1844](https://github.com/awslabs/smithy-rs/issues/1844), [smithy-rs#1858](https://github.com/awslabs/smithy-rs/issues/1858), [smithy-rs#1930](https://github.com/awslabs/smithy-rs/issues/1930), [smithy-rs#1999](https://github.com/awslabs/smithy-rs/issues/1999), [smithy-rs#2003](https://github.com/awslabs/smithy-rs/issues/2003), [smithy-rs#2008](https://github.com/awslabs/smithy-rs/issues/2008), [smithy-rs#2010](https://github.com/awslabs/smithy-rs/issues/2010), [smithy-rs#2019](https://github.com/awslabs/smithy-rs/issues/2019), [smithy-rs#2020](https://github.com/awslabs/smithy-rs/issues/2020), [smithy-rs#2021](https://github.com/awslabs/smithy-rs/issues/2021), [smithy-rs#2038](https://github.com/awslabs/smithy-rs/issues/2038), [smithy-rs#2039](https://github.com/awslabs/smithy-rs/issues/2039), [smithy-rs#2041](https://github.com/awslabs/smithy-rs/issues/2041)) ### Plugins/New Service Builder API
+
+    The `Router` struct has been replaced by a new `Service` located at the root of the generated crate. Its name coincides with the same name as the Smithy service you are generating.
+
+    ```rust
+    use pokemon_service_server_sdk::PokemonService;
+    ```
+
+    The new service builder infrastructure comes with a `Plugin` system which supports middleware on `smithy-rs`. See the [mididleware documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/middleware.md) and the [API documentation](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/plugin/index.html) for more details.
+
+    Usage of the new service builder API:
+
+    ```rust
+    // Apply a sequence of plugins using `PluginPipeline`.
+    let plugins = PluginPipeline::new()
+        // Apply the `PrintPlugin`.
+        // This is a dummy plugin found in `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs`
+        .print()
+        // Apply the `InstrumentPlugin` plugin, which applies `tracing` instrumentation.
+        .instrument();
+
+    // Construct the service builder using the `plugins` defined above.
+    let app = PokemonService::builder_with_plugins(plugins)
+        // Assign all the handlers.
+        .get_pokemon_species(get_pokemon_species)
+        .get_storage(get_storage)
+        .get_server_statistics(get_server_statistics)
+        .capture_pokemon(capture_pokemon)
+        .do_nothing(do_nothing)
+        .check_health(check_health)
+        // Construct the `PokemonService`.
+        .build()
+        // If handlers are missing a descriptive error will be provided.
+        .expect("failed to build an instance of `PokemonService`");
+    ```
+
+    See the `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin` folder for various working examples.
+
+    ### Public `FromParts` trait
+
+    Previously, we only supported one [`Extension`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/struct.Extension.html) as an additional argument provided to the handler. This number has been increased to 8 and the argument type has been broadened to any struct which implements the [`FromParts`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) trait. The trait is publicly exported and therefore provides customers with the ability to extend the domain of the handlers.
+
+    As noted, a ubiqutious example of a struct that implements `FromParts` is the `Extension` struct, which extracts state from the `Extensions` typemap of a [`http::Request`](https://docs.rs/http/latest/http/request/struct.Request.html). A new example is the `ConnectInfo` struct which allows handlers to access the connection data. See the `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin/pokemon-service-connect-info.rs` example.
+
+    ```rust
+    fn get_pokemon_species(
+        input: GetPokemonSpeciesInput,
+        state: Extension<State>,
+        address: ConnectInfo<SocketAddr>
+    ) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
+        todo!()
+    }
+    ```
+
+    In addition to the [`ConnectInfo`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/connect_info/struct.ConnectInfo.html) extractor, we also have added [lambda extractors](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/lambda/index.html) which are feature gated with `aws-lambda`.
+
+    [`FromParts` documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md) has been added.
+
+    ### New Documentation
+
+    New sections to have been added to the [server side of the book](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/overview.md).
+
+    These include:
+
+    - [Middleware](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/middleware.md)
+    - [Accessing Un-modelled Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+    - [Anatomy of a Service](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/anatomy.md)
+
+    This release also introduces extensive documentation at the root of the generated crate. For best results compile documentation with `cargo +nightly doc --open`.
+
+    ### Deprecations
+
+    The existing service builder infrastructure, `OperationRegistryBuilder`/`OperationRegistry`/`Router`, is now deprecated. Customers should migrate to the newer scheme described above. The deprecated types will be removed in a future release.
+- ⚠ (client, [smithy-rs#1875](https://github.com/awslabs/smithy-rs/issues/1875)) Replace bool with enum for a function parameter of `label::fmt_string`.
+- ⚠ (all, [smithy-rs#1980](https://github.com/awslabs/smithy-rs/issues/1980)) aws_smithy_types_convert::date_time::DateTimeExt::to_chrono_utc returns a Result<>
+- ⚠ (client, [smithy-rs#1926](https://github.com/awslabs/smithy-rs/issues/1926), [smithy-rs#1819](https://github.com/awslabs/smithy-rs/issues/1819)) Several breaking changes have been made to errors. See [the upgrade guide](https://github.com/awslabs/smithy-rs/issues/1950) for more information.
+- 🐛⚠ (server, [smithy-rs#1714](https://github.com/awslabs/smithy-rs/issues/1714), [smithy-rs#1342](https://github.com/awslabs/smithy-rs/issues/1342), [smithy-rs#1860](https://github.com/awslabs/smithy-rs/issues/1860)) Server SDKs now correctly reject operation inputs that don't set values for `required` structure members. Previously, in some scenarios, server SDKs would accept the request and set a default value for the member (e.g. `""` for a `String`), even when the member shape did not have [Smithy IDL v2's `default` trait](https://awslabs.github.io/smithy/2.0/spec/type-refinement-traits.html#smithy-api-default-trait) attached. The `default` trait is [still unsupported](https://github.com/awslabs/smithy-rs/issues/1860).
+- ⚠ (client, [smithy-rs#1945](https://github.com/awslabs/smithy-rs/issues/1945)) Generate enums that guide the users to write match expressions in a forward-compatible way.
+    Before this change, users could write a match expression against an enum in a non-forward-compatible way:
+    ```rust
+    match some_enum {
+        SomeEnum::Variant1 => { /* ... */ },
+        SomeEnum::Variant2 => { /* ... */ },
+        Unknown(value) if value == "NewVariant" => { /* ... */ },
+        _ => { /* ... */ },
+    }
+    ```
+    This code can handle a case for "NewVariant" with a version of SDK where the enum does not yet include `SomeEnum::NewVariant`, but breaks with another version of SDK where the enum defines `SomeEnum::NewVariant` because the execution will hit a different match arm, i.e. the last one.
+    After this change, users are guided to write the above match expression as follows:
+    ```rust
+    match some_enum {
+        SomeEnum::Variant1 => { /* ... */ },
+        SomeEnum::Variant2 => { /* ... */ },
+        other @ _ if other.as_str() == "NewVariant" => { /* ... */ },
+        _ => { /* ... */ },
+    }
+    ```
+    This is forward-compatible because the execution will hit the second last match arm regardless of whether the enum defines `SomeEnum::NewVariant` or not.
+- ⚠ (client, [smithy-rs#1984](https://github.com/awslabs/smithy-rs/issues/1984), [smithy-rs#1496](https://github.com/awslabs/smithy-rs/issues/1496)) Functions on `aws_smithy_http::endpoint::Endpoint` now return a `Result` instead of panicking.
+- ⚠ (client, [smithy-rs#1984](https://github.com/awslabs/smithy-rs/issues/1984), [smithy-rs#1496](https://github.com/awslabs/smithy-rs/issues/1496)) `Endpoint::mutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::mutable_uri`.
+- ⚠ (client, [smithy-rs#1984](https://github.com/awslabs/smithy-rs/issues/1984), [smithy-rs#1496](https://github.com/awslabs/smithy-rs/issues/1496)) `Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::immutable_uri`.
+- ⚠ (server, [smithy-rs#1982](https://github.com/awslabs/smithy-rs/issues/1982)) [RestJson1](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization) server SDKs now serialize the [full shape ID](https://smithy.io/2.0/spec/model.html#shape-id) (including namespace) in operation error responses.
+
+    Example server error response before:
+
+    ```
+    HTTP/1.1 400 Bad Request
+    content-type: application/json
+    x-amzn-errortype: InvalidRequestException
+    ...
+    ```
+
+    Example server error response now:
+
+    ```
+    HTTP/1.1 400 Bad Request
+    content-type: application/json
+    x-amzn-errortype: com.example.service#InvalidRequestException
+    ...
+    ```
+- ⚠ (server, [smithy-rs#2035](https://github.com/awslabs/smithy-rs/issues/2035)) All types that are exclusively relevant within the context of an AWS Lambda function are now gated behind the
+    `aws-lambda` feature flag.
+
+    This will reduce the number of dependencies (and improve build times) for users that are running their Smithy services
+    in non-serverless environments (e.g. via `hyper`).
+- ⚠ (all, [smithy-rs#1983](https://github.com/awslabs/smithy-rs/issues/1983), [smithy-rs#2029](https://github.com/awslabs/smithy-rs/issues/2029)) Implementation of the Debug trait for container shapes now redacts what is printed per the sensitive trait.
+- ⚠ (client, [smithy-rs#2065](https://github.com/awslabs/smithy-rs/issues/2065)) `SdkBody` callbacks have been removed. If you were using these, please [file an issue](https://github.com/awslabs/smithy-rs/issues/new) so that we can better understand your use-case and provide the support you need.
+- ⚠ (client, [smithy-rs#2063](https://github.com/awslabs/smithy-rs/issues/2063)) Added SmithyEndpointStage which can be used to set an endpoint for smithy-native clients
+- ⚠ (all, [smithy-rs#1989](https://github.com/awslabs/smithy-rs/issues/1989)) The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.
+
+**New this release:**
+- 🎉 (all, [smithy-rs#1929](https://github.com/awslabs/smithy-rs/issues/1929)) Upgrade Smithy to v1.26
+- 🎉 (client, [smithy-rs#2044](https://github.com/awslabs/smithy-rs/issues/2044), [smithy-rs#371](https://github.com/awslabs/smithy-rs/issues/371)) Fixed and improved the request `tracing` span hierarchy to improve log messages, profiling, and debuggability.
+- 🐛 (all, [smithy-rs#1847](https://github.com/awslabs/smithy-rs/issues/1847)) Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile `ring`, so the implementation has been updated to rely on `hamc` + `sha2` to achive the same result with broader platform compatibility and higher performance. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit.
+- 🐛 (server, [smithy-rs#1910](https://github.com/awslabs/smithy-rs/issues/1910)) `aws_smithy_http_server::routing::Router` is exported from the crate root again. This reverts unintentional breakage that was introduced in `aws-smithy-http-server` v0.51.0 only.
+- 🐛 (client, [smithy-rs#1903](https://github.com/awslabs/smithy-rs/issues/1903), [smithy-rs#1902](https://github.com/awslabs/smithy-rs/issues/1902)) Fix bug that can cause panics in paginators
+- (client, [smithy-rs#1919](https://github.com/awslabs/smithy-rs/issues/1919)) Operation metadata is now added to the property bag before sending requests allowing middlewares to behave
+    differently depending on the operation being sent.
+- (all, [smithy-rs#1907](https://github.com/awslabs/smithy-rs/issues/1907)) Fix cargo audit issue on chrono.
+- 🐛 (client, [smithy-rs#1957](https://github.com/awslabs/smithy-rs/issues/1957)) It was previously possible to send requests without setting query parameters modeled as required. Doing this may cause a
+    service to interpret a request incorrectly instead of just sending back a 400 error. Now, when an operation has query
+    parameters that are marked as required, the omission of those query parameters will cause a BuildError, preventing the
+    invalid operation from being sent.
+- (all, [smithy-rs#1972](https://github.com/awslabs/smithy-rs/issues/1972)) Upgrade to Smithy 1.26.2
+- (all, [smithy-rs#2011](https://github.com/awslabs/smithy-rs/issues/2011), @lsr0) Make generated enum `values()` functions callable in const contexts.
+- (client, [smithy-rs#2064](https://github.com/awslabs/smithy-rs/issues/2064), [aws-sdk-rust#632](https://github.com/awslabs/aws-sdk-rust/issues/632)) Clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda.
+- (client, [smithy-rs#2057](https://github.com/awslabs/smithy-rs/issues/2057), [smithy-rs#371](https://github.com/awslabs/smithy-rs/issues/371)) Add more `tracing` events to signing and event streams
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jjantdev ([smithy-rs#1938](https://github.com/awslabs/smithy-rs/issues/1938))
+- @lsr0 ([smithy-rs#2011](https://github.com/awslabs/smithy-rs/issues/2011))
+
+October 24th, 2022
+==================
+**Breaking Changes:**
+- ⚠ (all, [smithy-rs#1825](https://github.com/awslabs/smithy-rs/issues/1825)) Bump MSRV to be 1.62.0.
+- ⚠ (server, [smithy-rs#1825](https://github.com/awslabs/smithy-rs/issues/1825)) Bump pyo3 and pyo3-asyncio from 0.16.x to 0.17.0 for aws-smithy-http-server-python.
+- ⚠ (client, [smithy-rs#1811](https://github.com/awslabs/smithy-rs/issues/1811)) Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+- ⚠ (server, [smithy-rs#1803](https://github.com/awslabs/smithy-rs/issues/1803)) Mark `operation` and `operation_handler` modules as private in the generated server crate.
+    Both modules did not contain any public types, therefore there should be no actual breakage when updating.
+- ⚠ (client, [smithy-rs#1740](https://github.com/awslabs/smithy-rs/issues/1740), [smithy-rs#256](https://github.com/awslabs/smithy-rs/issues/256)) A large list of breaking changes were made to accomodate default timeouts in the AWS SDK.
+    See [the smithy-rs upgrade guide](https://github.com/awslabs/smithy-rs/issues/1760) for a full list
+    of breaking changes and how to resolve them.
+- ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Remove `Protocol` enum, removing an obstruction to extending smithy to third-party protocols.
+- ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Convert the `protocol` argument on `PyMiddlewares::new` constructor to a type parameter.
+- ⚠ (server, [smithy-rs#1753](https://github.com/awslabs/smithy-rs/issues/1753)) `aws_smithy_http_server::routing::Router` is no longer exported from the crate root. This was unintentional breakage that will be reverted in the next release.
+
+**New this release:**
+- (server, [smithy-rs#1811](https://github.com/awslabs/smithy-rs/issues/1811)) Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+- 🐛 (all, [smithy-rs#1802](https://github.com/awslabs/smithy-rs/issues/1802)) Sensitive fields in errors now respect @sensitive trait and are properly redacted.
+- (server, [smithy-rs#1727](https://github.com/awslabs/smithy-rs/issues/1727), @GeneralSwiss) Pokémon Service example code now runs clippy during build.
+- (server, [smithy-rs#1734](https://github.com/awslabs/smithy-rs/issues/1734)) Implement support for pure Python request middleware. Improve idiomatic logging support over tracing.
+- 🐛 (client, [aws-sdk-rust#620](https://github.com/awslabs/aws-sdk-rust/issues/620), [smithy-rs#1748](https://github.com/awslabs/smithy-rs/issues/1748)) Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`.
+- 🐛 (all, [smithy-rs#1817](https://github.com/awslabs/smithy-rs/issues/1817), @ethyi) Update aws-types zeroize to flexible version to prevent downstream version conflicts.
+- (all, [smithy-rs#1852](https://github.com/awslabs/smithy-rs/issues/1852), @ogudavid) Enable local maven repo dependency override.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @GeneralSwiss ([smithy-rs#1727](https://github.com/awslabs/smithy-rs/issues/1727))
+- @ethyi ([smithy-rs#1817](https://github.com/awslabs/smithy-rs/issues/1817))
+- @ogudavid ([smithy-rs#1852](https://github.com/awslabs/smithy-rs/issues/1852))
+
+September 20th, 2022
+====================
+**Breaking Changes:**
+- ⚠ (client, [smithy-rs#1603](https://github.com/awslabs/smithy-rs/issues/1603), [aws-sdk-rust#586](https://github.com/awslabs/aws-sdk-rust/issues/586)) `aws_smithy_types::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`.
+- ⚠ (client, [smithy-rs#1603](https://github.com/awslabs/smithy-rs/issues/1603), [aws-sdk-rust#586](https://github.com/awslabs/aws-sdk-rust/issues/586)) Client creation now panics if retries or timeouts are enabled without an async sleep implementation.
+    If you're using the Tokio runtime and have the `rt-tokio` feature enabled (which is enabled by default),
+    then you shouldn't notice this change at all.
+    Otherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,
+    and that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be
+    explicitly turned off by setting `max_attempts` to 1, which will result in successful client creation without an
+    async sleep implementation.
+- ⚠ (client, [smithy-rs#1603](https://github.com/awslabs/smithy-rs/issues/1603), [aws-sdk-rust#586](https://github.com/awslabs/aws-sdk-rust/issues/586)) The `default_async_sleep` method on the `Client` builder has been removed. The default async sleep is
+    wired up by default if none is provided.
+- ⚠ (client, [smithy-rs#976](https://github.com/awslabs/smithy-rs/issues/976), [smithy-rs#1710](https://github.com/awslabs/smithy-rs/issues/1710)) Removed the need to generate operation output and retry aliases in codegen.
+- ⚠ (client, [smithy-rs#1715](https://github.com/awslabs/smithy-rs/issues/1715), [smithy-rs#1717](https://github.com/awslabs/smithy-rs/issues/1717)) `ClassifyResponse` was renamed to `ClassifyRetry` and is no longer implemented for the unit type.
+- ⚠ (client, [smithy-rs#1715](https://github.com/awslabs/smithy-rs/issues/1715), [smithy-rs#1717](https://github.com/awslabs/smithy-rs/issues/1717)) The `with_retry_policy` and `retry_policy` functions on `aws_smithy_http::operation::Operation` have been
+    renamed to `with_retry_classifier` and `retry_classifier` respectively. Public member `retry_policy` on
+    `aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.
+
+**New this release:**
+- 🎉 (client, [smithy-rs#1647](https://github.com/awslabs/smithy-rs/issues/1647), [smithy-rs#1112](https://github.com/awslabs/smithy-rs/issues/1112)) Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
+
+    Before this change, modifying operations before sending them required using lower-level APIs:
+
+    ```rust
+    let input = SomeOperationInput::builder().some_value(5).build()?;
+
+    let operation = {
+        let op = input.make_operation(&service_config).await?;
+        let (request, response) = op.into_request_response();
+
+        let request = request.augment(|req, _props| {
+            req.headers_mut().insert(
+                HeaderName::from_static("x-some-header"),
+                HeaderValue::from_static("some-value")
+            );
+            Result::<_, Infallible>::Ok(req)
+        })?;
+
+        Operation::from_parts(request, response)
+    };
+
+    let response = smithy_client.call(operation).await?;
+    ```
+
+    Now, users may easily modify operations before sending with the `customize` method:
+
+    ```rust
+    let response = client.some_operation()
+        .some_value(5)
+        .customize()
+        .await?
+        .mutate_request(|mut req| {
+            req.headers_mut().insert(
+                HeaderName::from_static("x-some-header"),
+                HeaderValue::from_static("some-value")
+            );
+        })
+        .send()
+        .await?;
+    ```
+- (client, [smithy-rs#1735](https://github.com/awslabs/smithy-rs/issues/1735), @vojtechkral) Lower log level of two info-level log messages.
+- (all, [smithy-rs#1710](https://github.com/awslabs/smithy-rs/issues/1710)) Added `writable` property to `RustType` and `RuntimeType` that returns them in `Writable` form
+- (all, [smithy-rs#1680](https://github.com/awslabs/smithy-rs/issues/1680), @ogudavid) Smithy IDL v2 mixins are now supported
+- 🐛 (client, [smithy-rs#1715](https://github.com/awslabs/smithy-rs/issues/1715), [smithy-rs#1717](https://github.com/awslabs/smithy-rs/issues/1717)) Generated clients now retry transient errors without replacing the retry policy.
+- 🐛 (all, [smithy-rs#1725](https://github.com/awslabs/smithy-rs/issues/1725), @sugmanue) Correctly determine nullability of members in IDLv2 models
+
+**Contributors**
+Thank you for your contributions! ❤
+- @ogudavid ([smithy-rs#1680](https://github.com/awslabs/smithy-rs/issues/1680))
+- @sugmanue ([smithy-rs#1725](https://github.com/awslabs/smithy-rs/issues/1725))
+- @vojtechkral ([smithy-rs#1735](https://github.com/awslabs/smithy-rs/issues/1735))
+
+August 31st, 2022
+=================
+**Breaking Changes:**
+- ⚠🎉 (client, [smithy-rs#1598](https://github.com/awslabs/smithy-rs/issues/1598)) Previously, the config customizations that added functionality related to retry configs, timeout configs, and the
+    async sleep impl were defined in the smithy codegen module but were being loaded in the AWS codegen module. They
+    have now been updated to be loaded during smithy codegen. The affected classes are all defined in the
+    `software.amazon.smithy.rust.codegen.smithy.customizations` module of smithy codegen.` This change does not affect
+    the generated code.
+
+    These classes have been removed:
+    - `RetryConfigDecorator`
+    - `SleepImplDecorator`
+    - `TimeoutConfigDecorator`
+
+    These classes have been renamed:
+    - `RetryConfigProviderConfig` is now `RetryConfigProviderCustomization`
+    - `PubUseRetryConfig` is now `PubUseRetryConfigGenerator`
+    - `SleepImplProviderConfig` is now `SleepImplProviderCustomization`
+    - `TimeoutConfigProviderConfig` is now `TimeoutConfigProviderCustomization`
+- ⚠🎉 (all, [smithy-rs#1635](https://github.com/awslabs/smithy-rs/issues/1635), [smithy-rs#1416](https://github.com/awslabs/smithy-rs/issues/1416), @weihanglo) Support granular control of specifying runtime crate versions.
+
+    For code generation, the field `runtimeConfig.version` in smithy-build.json has been removed.
+    The new field `runtimeConfig.versions` is an object whose keys are runtime crate names (e.g. `aws-smithy-http`),
+    and values are user-specified versions.
+
+    If you previously set `version = "DEFAULT"`, the migration path is simple.
+    By setting `versions` with an empty object or just not setting it at all,
+    the version number of the code generator will be used as the version for all runtime crates.
+
+    If you specified a certain version such as `version = "0.47.0", you can migrate to a special reserved key `DEFAULT`.
+    The equivalent JSON config would look like:
+
+    ```json
+    {
+      "runtimeConfig": {
+          "versions": {
+              "DEFAULT": "0.47.0"
+          }
+      }
+    }
+    ```
+
+    Then all runtime crates are set with version 0.47.0 by default unless overridden by specific crates. For example,
+
+    ```json
+    {
+      "runtimeConfig": {
+          "versions": {
+              "DEFAULT": "0.47.0",
+              "aws-smithy-http": "0.47.1"
+          }
+      }
+    }
+    ```
+
+    implies that we're using `aws-smithy-http` 0.47.1 specifically. For the rest of the crates, it will default to 0.47.0.
+- ⚠ (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Remove @sensitive trait tests which applied trait to member. The ability to mark members with @sensitive was removed in Smithy 1.22.
+- ⚠ (server, [smithy-rs#1544](https://github.com/awslabs/smithy-rs/issues/1544)) Servers now allow requests' ACCEPT header values to be:
+    - `*/*`
+    - `type/*`
+    - `type/subtype`
+- 🐛⚠ (all, [smithy-rs#1274](https://github.com/awslabs/smithy-rs/issues/1274)) Lossy converters into integer types for `aws_smithy_types::Number` have been
+    removed. Lossy converters into floating point types for
+    `aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+    directly using the integer lossy converters, we recommend you use the safe
+    converters.
+    _Before:_
+    ```rust
+    fn f1(n: aws_smithy_types::Number) {
+        let foo: f32 = n.to_f32(); // Lossy conversion!
+        let bar: u32 = n.to_u32(); // Lossy conversion!
+    }
+    ```
+    _After:_
+    ```rust
+    fn f1(n: aws_smithy_types::Number) {
+        use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+        let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+        // You can still do lossy conversions, but only into floating point types.
+        let foo: f32 = n.to_f32_lossy();
+        // To lossily convert into integer types, use an `as` cast directly.
+        let bar: u32 = n as u32; // Lossy conversion!
+    }
+    ```
+- ⚠ (all, [smithy-rs#1699](https://github.com/awslabs/smithy-rs/issues/1699)) Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.
+
+**New this release:**
+- 🎉 (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Update Smithy dependency to 1.23.1. Models using version 2.0 of the IDL are now supported.
+- 🎉 (server, [smithy-rs#1551](https://github.com/awslabs/smithy-rs/issues/1551), @hugobast) There is a canonical and easier way to run smithy-rs on Lambda [see example].
+
+    [see example]: https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/lambda.rs
+- 🐛 (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix detecting sensitive members through their target shape having the @sensitive trait applied.
+- (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix SetShape matching needing to occur before ListShape since it is now a subclass. Sets were deprecated in Smithy 1.22.
+- (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix Union shape test data having an invalid empty union. Break fixed from Smithy 1.21 to Smithy 1.22.
+- (all, [smithy-rs#1612](https://github.com/awslabs/smithy-rs/issues/1612), @unexge) Add codegen version to generated package metadata
+- (client, [aws-sdk-rust#609](https://github.com/awslabs/aws-sdk-rust/issues/609)) It is now possible to exempt specific operations from XML body root checking. To do this, add the `AllowInvalidXmlRoot`
+    trait to the output struct of the operation you want to exempt.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @hugobast ([smithy-rs#1551](https://github.com/awslabs/smithy-rs/issues/1551))
+- @ogudavid ([smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623))
+- @unexge ([smithy-rs#1612](https://github.com/awslabs/smithy-rs/issues/1612))
+- @weihanglo ([smithy-rs#1416](https://github.com/awslabs/smithy-rs/issues/1416), [smithy-rs#1635](https://github.com/awslabs/smithy-rs/issues/1635))
+
+August 4th, 2022
+================
+**Breaking Changes:**
+- ⚠🎉 (all, [smithy-rs#1570](https://github.com/awslabs/smithy-rs/issues/1570), @weihanglo) Support @deprecated trait for aggregate shapes
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) Rename EventStreamInput to EventStreamSender
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) The type of streaming unions that contain errors is generated without those errors.
+    Errors in a streaming union `Union` are generated as members of the type `UnionError`.
+    Taking Transcribe as an example, the `AudioStream` streaming union generates, in the client, both the `AudioStream` type:
+    ```rust
+    pub enum AudioStream {
+        AudioEvent(crate::model::AudioEvent),
+        Unknown,
+    }
+    ```
+    and its error type,
+    ```rust
+    pub struct AudioStreamError {
+        /// Kind of error that occurred.
+        pub kind: AudioStreamErrorKind,
+        /// Additional metadata about the error, including error code, message, and request ID.
+        pub(crate) meta: aws_smithy_types::Error,
+    }
+    ```
+    `AudioStreamErrorKind` contains all error variants for the union.
+    Before, the generated code looked as:
+    ```rust
+    pub enum AudioStream {
+        AudioEvent(crate::model::AudioEvent),
+        ... all error variants,
+        Unknown,
+    }
+    ```
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) `aws_smithy_http::event_stream::EventStreamSender` and `aws_smithy_http::event_stream::Receiver` are now generic over `<T, E>`,
+    where `T` is a streaming union and `E` the union's errors.
+    This means that event stream errors are now sent as `Err` of the union's error type.
+    With this example model:
+    ```smithy
+    @streaming union Event {
+        throttlingError: ThrottlingError
+    }
+    @error("client") structure ThrottlingError {}
+    ```
+    Before:
+    ```rust
+    stream! { yield Ok(Event::ThrottlingError ...) }
+    ```
+    After:
+    ```rust
+    stream! { yield Err(EventError::ThrottlingError ...) }
+    ```
+    An example from the SDK is in [transcribe streaming](https://github.com/awslabs/smithy-rs/blob/4f51dd450ea3234a7faf481c6025597f22f03805/aws/sdk/integration-tests/transcribestreaming/tests/test.rs#L80).
+
+**New this release:**
+- 🎉 (all, [smithy-rs#1482](https://github.com/awslabs/smithy-rs/issues/1482)) Update codegen to generate support for flexible checksums.
+- (all, [smithy-rs#1520](https://github.com/awslabs/smithy-rs/issues/1520)) Add explicit cast during JSON deserialization in case of custom Symbol providers.
+- (all, [smithy-rs#1578](https://github.com/awslabs/smithy-rs/issues/1578), @lkts) Change detailed logs in CredentialsProviderChain from info to debug
+- (all, [smithy-rs#1573](https://github.com/awslabs/smithy-rs/issues/1573), [smithy-rs#1569](https://github.com/awslabs/smithy-rs/issues/1569)) Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lkts ([smithy-rs#1578](https://github.com/awslabs/smithy-rs/issues/1578))
+- @weihanglo ([smithy-rs#1570](https://github.com/awslabs/smithy-rs/issues/1570))
+
+July 20th, 2022
+===============
+**New this release:**
+- 🎉 (all, [aws-sdk-rust#567](https://github.com/awslabs/aws-sdk-rust/issues/567)) Updated the smithy client's retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+    (named `r` in the code) was set to 2 seconds. This is not an ideal default for services that expect clients to quickly
+    retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their needs.
+- (all, [smithy-rs#1263](https://github.com/awslabs/smithy-rs/issues/1263)) Add checksum calculation and validation wrappers for HTTP bodies.
+- (all, [smithy-rs#1263](https://github.com/awslabs/smithy-rs/issues/1263)) `aws_smithy_http::header::append_merge_header_maps`, a function for merging two `HeaderMap`s, is now public.
+
+
+v0.45.0 (June 28th, 2022)
+=========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#932](https://github.com/awslabs/smithy-rs/issues/932)) Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this
+    change requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that
+    were updated had only private fields/variants and so have the same public API. However, this change does affect the
+    public API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a
+    single value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field
+    instead of the `0` field.
+
+**New this release:**
+- 🎉 ([smithy-rs#1411](https://github.com/awslabs/smithy-rs/issues/1411), [smithy-rs#1167](https://github.com/awslabs/smithy-rs/issues/1167)) Upgrade to Gradle 7. This change is not a breaking change, however, users of smithy-rs will need to switch to JDK 17
+- 🐛 ([smithy-rs#1505](https://github.com/awslabs/smithy-rs/issues/1505), @kiiadi) Fix issue with codegen on Windows where module names were incorrectly determined from filenames
+
+**Contributors**
+Thank you for your contributions! ❤
+- @kiiadi ([smithy-rs#1505](https://github.com/awslabs/smithy-rs/issues/1505))
 <!-- Do not manually edit this file, use `update-changelogs` -->
 v0.44.0 (June 22nd, 2022)
 =========================

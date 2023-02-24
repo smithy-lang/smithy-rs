@@ -10,29 +10,55 @@ categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 Python server runtime for Smithy Rust Server Framework.
 """
-# until this is not stable, it is not publishable.
-publish = false
+publish = true
 
 [dependencies]
-aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
+aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-bytes = "1.1"
-delegate = "0.6"
+aws-smithy-xml = { path = "../aws-smithy-xml" }
+bytes = "1.2"
+futures = "0.3"
 http = "0.2"
-hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
-num_cpus = "1.13"
-paste = "1.0"
-pyo3 = { version = "0.16.5" }
-pyo3-asyncio = { version = "0.16.0", features = ["attributes", "tokio-runtime"] }
-socket2 = { version = "0.4", features = ["all"] }
-thiserror = "1.0.31"
-tokio = { version = "1", features = ["full"] }
-tower = "0.4"
-tracing = "0.1.34"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "stream"] }
+tls-listener = { version = "0.5.1", features = ["rustls", "hyper-h2"] }
+rustls-pemfile = "1.0.1"
+tokio-rustls = "0.23.4"
+lambda_http = { version = "0.7.1" }
+# There is a breaking change in `lambda_runtime` between `0.7.0` and `0.7.1`,
+# and `lambda_http` depends on `0.7` which by default resolves to `0.7.1` but in our CI
+# we are running `minimal-versions` which downgrades `lambda_runtime` to `0.7.0` and fails to compile
+# because of the breaking change. Here we are forcing it to use `lambda_runtime = 0.7.1`.
+lambda_runtime = { version = "0.7.1" }
+num_cpus = "1.13.1"
+parking_lot = "0.12.1"
+pin-project-lite = "0.2"
+pyo3 = "0.17.0"
+pyo3-asyncio = { version = "0.17.0", features = ["tokio-runtime"] }
+signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
+socket2 = { version = "0.4.4", features = ["all"] }
+thiserror = "1.0.32"
+tokio = { version = "1.20.1", features = ["full"] }
+tokio-stream = "0.1"
+tower = { version = "0.4.13", features = ["util"] }
+tracing = "0.1.36"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]
 pretty_assertions = "1"
+futures-util = "0.3"
+tower-test = "0.4"
+tokio-test = "0.4"
+pyo3-asyncio = { version = "0.17.0", features = ["testing", "attributes", "tokio-runtime"] }
+rcgen = "0.10.0"
+hyper-rustls = { version = "0.23.1", features = ["http2"] }
+
+[[test]]
+name = "middleware_tests"
+path = "src/middleware/pytests/harness.rs"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

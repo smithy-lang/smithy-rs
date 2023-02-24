@@ -7,7 +7,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
-    maven
     `maven-publish`
 }
 
@@ -22,19 +21,15 @@ group = "software.amazon.smithy.rust.codegen.server.python.smithy"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val kotestVersion: String by project
 
 dependencies {
-    implementation(project(":codegen"))
+    implementation(project(":codegen-core"))
     implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-    testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
 tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
 
 // Reusable license copySpec
 val licenseSpec = copySpec {
@@ -52,19 +47,31 @@ tasks.jar {
 val sourcesJar by tasks.creating(Jar::class) {
     group = "publishing"
     description = "Assembles Kotlin sources jar"
-    classifier = "sources"
+    archiveClassifier.set("sources")
     from(sourceSets.getByName("main").allSource)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showExceptions = true
-        showStackTraces = true
-        showStandardStreams = true
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
+
+    dependencies {
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+    }
+
+    tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = TestExceptionFormat.FULL
+            showCauses = true
+            showExceptions = true
+            showStackTraces = true
+            showStandardStreams = true
+        }
     }
 }
 

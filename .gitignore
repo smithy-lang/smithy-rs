@@ -27,6 +27,8 @@ hs_err_pid*
 # Gradle
 .gradle
 build/
+**/bin/main/
+**/bin/test/
 
 # Ignore Gradle GUI config
 gradle-app.setting
@@ -45,3 +47,6 @@ gradle-app.setting
 
 # Rust build artifacts
 target/
+
+# IDEs
+.idea/

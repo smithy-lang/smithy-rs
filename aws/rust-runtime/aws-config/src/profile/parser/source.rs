@@ -4,19 +4,26 @@
  */
 
 use crate::fs_util::{home_dir, Os};
+
+use crate::profile::parser::{CouldNotReadProfileFile, ProfileFileLoadError};
+use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
+
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal;
 use std::borrow::Cow;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
-use tracing::Instrument;
+use std::sync::Arc;
+use tracing::{warn, Instrument};
+
+const HOME_EXPANSION_FAILURE_WARNING: &str =
+    "home directory expansion was requested (via `~` character) for the profile \
+     config file path, but no home directory could be determined";
 
 /// In-memory source of profile data
 pub(super) struct Source {
-    /// Contents and path of ~/.aws/config
-    pub(super) config_file: File,
-
-    /// Contents and path of ~/.aws/credentials
-    pub(super) credentials_file: File,
+    /// Profile file sources
+    pub(super) files: Vec<File>,
 
     /// Profile to use
     ///
@@ -26,49 +33,44 @@ pub(super) struct Source {
 
 /// In-memory configuration file
 pub(super) struct File {
-    pub(super) path: String,
+    pub(super) kind: ProfileFileKind,
+    pub(super) path: Option<String>,
     pub(super) contents: String,
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum FileKind {
-    Config,
-    Credentials,
-}
-
-impl FileKind {
-    fn default_path(&self) -> &'static str {
-        match &self {
-            FileKind::Credentials => "~/.aws/credentials",
-            FileKind::Config => "~/.aws/config",
-        }
-    }
-
-    fn override_environment_variable(&self) -> &'static str {
-        match &self {
-            FileKind::Config => "AWS_CONFIG_FILE",
-            FileKind::Credentials => "AWS_SHARED_CREDENTIALS_FILE",
-        }
-    }
-}
-
 /// Load a [Source](Source) from a given environment and filesystem.
-pub(super) async fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal::Fs) -> Source {
+pub(super) async fn load(
+    proc_env: &os_shim_internal::Env,
+    fs: &os_shim_internal::Fs,
+    profile_files: &ProfileFiles,
+) -> Result<Source, ProfileFileLoadError> {
     let home = home_dir(proc_env, Os::real());
-    let config = load_config_file(FileKind::Config, &home, fs, proc_env)
-        .instrument(tracing::debug_span!("load_config_file"))
-        .await;
-    let credentials = load_config_file(FileKind::Credentials, &home, fs, proc_env)
-        .instrument(tracing::debug_span!("load_credentials_file"))
-        .await;
 
-    Source {
-        config_file: config,
-        credentials_file: credentials,
+    let mut files = Vec::new();
+    for file in &profile_files.files {
+        let file = load_config_file(file, &home, fs, proc_env)
+            .instrument(tracing::debug_span!("load_config_file", file = ?file))
+            .await?;
+        files.push(file);
+    }
+
+    Ok(Source {
+        files,
         profile: proc_env
             .get("AWS_PROFILE")
             .map(Cow::Owned)
             .unwrap_or(Cow::Borrowed("default")),
+    })
+}
+
+fn file_contents_to_string(path: &Path, contents: Vec<u8>) -> String {
+    // if the file is not valid utf-8, log a warning and use an empty file instead
+    match String::from_utf8(contents) {
+        Ok(contents) => contents,
+        Err(e) => {
+            tracing::warn!(path = ?path, error = %DisplayErrorContext(&e), "config file did not contain utf-8 encoded data");
+            Default::default()
+        }
     }
 }
 
@@ -83,59 +85,80 @@ pub(super) async fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal
 /// * `fs`: Filesystem abstraction
 /// * `environment`: Process environment abstraction
 async fn load_config_file(
-    kind: FileKind,
+    source: &ProfileFile,
     home_directory: &Option<String>,
     fs: &os_shim_internal::Fs,
     environment: &os_shim_internal::Env,
-) -> File {
-    let path = environment
-        .get(kind.override_environment_variable())
-        .map(Cow::Owned)
-        .ok()
-        .unwrap_or_else(|| kind.default_path().into());
-    let expanded = expand_home(path.as_ref(), home_directory, environment);
-    if path != expanded.to_string_lossy() {
-        tracing::debug!(before = ?path, after = ?expanded, "home directory expanded");
-    }
-    // read the data at the specified path
-    // if the path does not exist, log a warning but pretend it was actually an empty file
-    let data = match fs.read_to_end(&expanded).await {
-        Ok(data) => data,
-        Err(e) => {
-            match e.kind() {
-                ErrorKind::NotFound if path == kind.default_path() => {
-                    tracing::debug!(path = %path, "config file not found")
+) -> Result<File, ProfileFileLoadError> {
+    let (path, kind, contents) = match source {
+        ProfileFile::Default(kind) => {
+            let (path_is_default, path) = environment
+                .get(kind.override_environment_variable())
+                .map(|p| (false, Cow::Owned(p)))
+                .ok()
+                .unwrap_or_else(|| (true, kind.default_path().into()));
+            let expanded = expand_home(path.as_ref(), path_is_default, home_directory);
+            if path != expanded.to_string_lossy() {
+                tracing::debug!(before = ?path, after = ?expanded, "home directory expanded");
+            }
+            // read the data at the specified path
+            // if the path does not exist, log a warning but pretend it was actually an empty file
+            let data = match fs.read_to_end(&expanded).await {
+                Ok(data) => data,
+                Err(e) => {
+                    // Important: The default config/credentials files MUST NOT return an error
+                    match e.kind() {
+                        ErrorKind::NotFound if path == kind.default_path() => {
+                            tracing::debug!(path = %path, "config file not found")
+                        }
+                        ErrorKind::NotFound if path != kind.default_path() => {
+                            // in the case where the user overrode the path with an environment variable,
+                            // log more loudly than the case where the default path was missing
+                            tracing::warn!(path = %path, env = %kind.override_environment_variable(), "config file overridden via environment variable not found")
+                        }
+                        _other => {
+                            tracing::warn!(path = %path, error = %DisplayErrorContext(&e), "failed to read config file")
+                        }
+                    };
+                    Default::default()
                 }
-                ErrorKind::NotFound if path != kind.default_path() => {
-                    // in the case where the user overrode the path with an environment variable,
-                    // log more loudly than the case where the default path was missing
-                    tracing::warn!(path = %path, env = %kind.override_environment_variable(), "config file overridden via environment variable not found")
-                }
-                _other => tracing::warn!(path = %path, error = %e, "failed to read config file"),
             };
-            Default::default()
+            let contents = file_contents_to_string(&expanded, data);
+            (Some(Cow::Owned(expanded)), kind, contents)
         }
-    };
-    // if the file is not valid utf-8, log a warning and use an empty file instead
-    let data = match String::from_utf8(data) {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::warn!(path = %path, error = %e, "config file did not contain utf-8 encoded data");
-            Default::default()
+        ProfileFile::FilePath { kind, path } => {
+            let data = match fs.read_to_end(&path).await {
+                Ok(data) => data,
+                Err(e) => {
+                    return Err(ProfileFileLoadError::CouldNotReadFile(
+                        CouldNotReadProfileFile {
+                            path: path.clone(),
+                            cause: Arc::new(e),
+                        },
+                    ))
+                }
+            };
+            (
+                Some(Cow::Borrowed(path)),
+                kind,
+                file_contents_to_string(path, data),
+            )
         }
+        ProfileFile::FileContents { kind, contents } => (None, kind, contents.clone()),
     };
-    tracing::debug!(path = %path, size = ?data.len(), "config file loaded");
-    File {
+    tracing::debug!(path = ?path, size = ?contents.len(), "config file loaded");
+    Ok(File {
+        kind: *kind,
         // lossy is OK here, the name of this file is just for debugging purposes
-        path: expanded.to_string_lossy().into(),
-        contents: data,
-    }
+        path: path.map(|p| p.to_string_lossy().into()),
+        contents,
+    })
 }
 
 fn expand_home(
     path: impl AsRef<Path>,
+    path_is_default: bool,
     home_dir: &Option<String>,
-    environment: &os_shim_internal::Env,
 ) -> PathBuf {
     let path = path.as_ref();
     let mut components = path.components();
@@ -150,15 +173,9 @@ fn expand_home(
                     dir.clone()
                 }
                 None => {
-                    // Lambdas don't have home directories and emitting this warning is not helpful
-                    // to users running the SDK from within a Lambda. This warning will be silenced
-                    // if we determine that that is the case.
-                    let is_likely_running_on_a_lambda =
-                        check_is_likely_running_on_a_lambda(environment);
-                    if !is_likely_running_on_a_lambda {
-                        tracing::warn!(
-                            "could not determine home directory but home expansion was requested"
-                        );
+                    // Only log a warning if the path was explicitly set by the customer.
+                    if !path_is_default {
+                        warn!(HOME_EXPANSION_FAILURE_WARNING);
                     }
                     // if we can't determine the home directory, just leave it as `~`
                     "~".into()
@@ -179,30 +196,27 @@ fn expand_home(
     }
 }
 
-/// Returns true or false based on whether or not this code is likely running inside an AWS Lambda.
-/// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
-/// that we can check.
-fn check_is_likely_running_on_a_lambda(environment: &aws_types::os_shim_internal::Env) -> bool {
-    // AWS_LAMBDA_FUNCTION_NAME – The name of the running Lambda function. Available both in Functions and Extensions
-    environment.get("AWS_LAMBDA_FUNCTION_NAME").is_ok()
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::profile::parser::source::{expand_home, load, load_config_file, FileKind};
+    use crate::profile::parser::source::{
+        expand_home, load, load_config_file, HOME_EXPANSION_FAILURE_WARNING,
+    };
+    use crate::profile::parser::ProfileFileLoadError;
+    use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
+    use futures_util::FutureExt;
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
     use std::fs;
+    use tracing_test::traced_test;
 
     #[test]
     fn only_expand_home_prefix() {
         // ~ is only expanded as a single component (currently)
         let path = "~aws/config";
-        let environment = Env::from_slice(&[]);
         assert_eq!(
-            expand_home(&path, &None, &environment).to_str().unwrap(),
+            expand_home(&path, false, &None).to_str().unwrap(),
             "~aws/config"
         );
     }
@@ -238,9 +252,6 @@ mod tests {
         Ok(())
     }
 
-    use futures_util::FutureExt;
-    use tracing_test::traced_test;
-
     #[traced_test]
     #[test]
     fn logs_produced_default() {
@@ -253,21 +264,41 @@ mod tests {
 
         let fs = Fs::from_map(fs);
 
-        let _src = load(&env, &fs).now_or_never();
+        let _src = load(&env, &fs, &Default::default()).now_or_never();
         assert!(logs_contain("config file loaded"));
         assert!(logs_contain("performing home directory substitution"));
     }
 
     #[traced_test]
     #[test]
-    fn load_config_file_should_not_emit_warning_on_lambda() {
-        let env = Env::from_slice(&[("AWS_LAMBDA_FUNCTION_NAME", "someName")]);
+    fn load_config_file_should_not_emit_warning_when_path_not_explicitly_set() {
+        let env = Env::from_slice(&[]);
         let fs = Fs::from_slice(&[]);
 
-        let _src = load_config_file(FileKind::Config, &None, &fs, &env).now_or_never();
-        assert!(!logs_contain(
-            "could not determine home directory but home expansion was requested"
-        ));
+        let _src = load_config_file(
+            &ProfileFile::Default(ProfileFileKind::Config),
+            &None,
+            &fs,
+            &env,
+        )
+        .now_or_never();
+        assert!(!logs_contain(HOME_EXPANSION_FAILURE_WARNING));
+    }
+
+    #[traced_test]
+    #[test]
+    fn load_config_file_should_emit_warning_when_path_explicitly_set() {
+        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "~/some/path")]);
+        let fs = Fs::from_slice(&[]);
+
+        let _src = load_config_file(
+            &ProfileFile::Default(ProfileFileKind::Config),
+            &None,
+            &fs,
+            &env,
+        )
+        .now_or_never();
+        assert!(logs_contain(HOME_EXPANSION_FAILURE_WARNING));
     }
 
     async fn check(test_case: TestCase) {
@@ -276,17 +307,19 @@ mod tests {
         let platform_matches = (cfg!(windows) && test_case.platform == "windows")
             || (!cfg!(windows) && test_case.platform != "windows");
         if platform_matches {
-            let source = load(&env, &fs).await;
+            let source = load(&env, &fs, &Default::default()).await.unwrap();
             if let Some(expected_profile) = test_case.profile {
                 assert_eq!(source.profile, expected_profile, "{}", &test_case.name);
             }
             assert_eq!(
-                source.config_file.path, test_case.config_location,
+                source.files[0].path,
+                Some(test_case.config_location),
                 "{}",
                 &test_case.name
             );
             assert_eq!(
-                source.credentials_file.path, test_case.credentials_location,
+                source.files[1].path,
+                Some(test_case.credentials_location),
                 "{}",
                 &test_case.name
             )
@@ -302,9 +335,8 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     fn test_expand_home() {
         let path = "~/.aws/config";
-        let environment = Env::from_slice(&[]);
         assert_eq!(
-            expand_home(&path, &Some("/user/foo".to_string()), &environment)
+            expand_home(&path, false, &Some("/user/foo".to_string()))
                 .to_str()
                 .unwrap(),
             "/user/foo/.aws/config"
@@ -313,21 +345,16 @@ mod tests {
 
     #[test]
     fn expand_home_no_home() {
-        let environment = Env::from_slice(&[]);
         // there is an edge case around expansion when no home directory exists
         // if no home directory can be determined, leave the path as is
         if !cfg!(windows) {
             assert_eq!(
-                expand_home("~/config", &None, &environment)
-                    .to_str()
-                    .unwrap(),
+                expand_home("~/config", false, &None).to_str().unwrap(),
                 "~/config"
             )
         } else {
             assert_eq!(
-                expand_home("~/config", &None, &environment)
-                    .to_str()
-                    .unwrap(),
+                expand_home("~/config", false, &None).to_str().unwrap(),
                 "~\\config"
             )
         }
@@ -338,12 +365,122 @@ mod tests {
     #[cfg_attr(not(windows), ignore)]
     fn test_expand_home_windows() {
         let path = "~/.aws/config";
-        let environment = Env::from_slice(&[]);
         assert_eq!(
-            expand_home(&path, &Some("C:\\Users\\name".to_string()), &environment)
+            expand_home(&path, true, &Some("C:\\Users\\name".to_string()),)
                 .to_str()
                 .unwrap(),
             "C:\\Users\\name\\.aws\\config"
         );
+    }
+
+    #[tokio::test]
+    async fn programmatically_set_credentials_file_contents() {
+        let contents = "[default]\n\
+            aws_access_key_id = AKIAFAKE\n\
+            aws_secret_access_key = FAKE\n\
+            ";
+        let env = Env::from_slice(&[]);
+        let fs = Fs::from_slice(&[]);
+        let profile_files = ProfileFiles::builder()
+            .with_contents(ProfileFileKind::Credentials, contents)
+            .build();
+        let source = load(&env, &fs, &profile_files).await.unwrap();
+        assert_eq!(1, source.files.len());
+        assert_eq!("default", source.profile);
+        assert_eq!(contents, source.files[0].contents);
+    }
+
+    #[tokio::test]
+    async fn programmatically_set_credentials_file_path() {
+        let contents = "[default]\n\
+            aws_access_key_id = AKIAFAKE\n\
+            aws_secret_access_key = FAKE\n\
+            ";
+        let mut fs = HashMap::new();
+        fs.insert(
+            "/custom/path/to/credentials".to_string(),
+            contents.to_string(),
+        );
+
+        let fs = Fs::from_map(fs);
+        let env = Env::from_slice(&[]);
+        let profile_files = ProfileFiles::builder()
+            .with_file(ProfileFileKind::Credentials, "/custom/path/to/credentials")
+            .build();
+        let source = load(&env, &fs, &profile_files).await.unwrap();
+        assert_eq!(1, source.files.len());
+        assert_eq!("default", source.profile);
+        assert_eq!(contents, source.files[0].contents);
+    }
+
+    #[tokio::test]
+    async fn programmatically_include_default_files() {
+        let config_contents = "[default]\nregion = us-east-1";
+        let credentials_contents = "[default]\n\
+            aws_access_key_id = AKIAFAKE\n\
+            aws_secret_access_key = FAKE\n\
+            ";
+        let custom_contents = "[profile some-profile]\n\
+            aws_access_key_id = AKIAFAKEOTHER\n\
+            aws_secret_access_key = FAKEOTHER\n\
+            ";
+        let mut fs = HashMap::new();
+        fs.insert(
+            "/user/name/.aws/config".to_string(),
+            config_contents.to_string(),
+        );
+        fs.insert(
+            "/user/name/.aws/credentials".to_string(),
+            credentials_contents.to_string(),
+        );
+
+        let fs = Fs::from_map(fs);
+        let env = Env::from_slice(&[("HOME", "/user/name")]);
+        let profile_files = ProfileFiles::builder()
+            .with_contents(ProfileFileKind::Config, custom_contents)
+            .include_default_credentials_file(true)
+            .include_default_config_file(true)
+            .build();
+        let source = load(&env, &fs, &profile_files).await.unwrap();
+        assert_eq!(3, source.files.len());
+        assert_eq!("default", source.profile);
+        assert_eq!(config_contents, source.files[0].contents);
+        assert_eq!(credentials_contents, source.files[1].contents);
+        assert_eq!(custom_contents, source.files[2].contents);
+    }
+
+    #[tokio::test]
+    async fn default_files_must_not_error() {
+        let custom_contents = "[profile some-profile]\n\
+            aws_access_key_id = AKIAFAKEOTHER\n\
+            aws_secret_access_key = FAKEOTHER\n\
+            ";
+
+        let fs = Fs::from_slice(&[]);
+        let env = Env::from_slice(&[("HOME", "/user/name")]);
+        let profile_files = ProfileFiles::builder()
+            .with_contents(ProfileFileKind::Config, custom_contents)
+            .include_default_credentials_file(true)
+            .include_default_config_file(true)
+            .build();
+        let source = load(&env, &fs, &profile_files).await.unwrap();
+        assert_eq!(3, source.files.len());
+        assert_eq!("default", source.profile);
+        assert_eq!("", source.files[0].contents);
+        assert_eq!("", source.files[1].contents);
+        assert_eq!(custom_contents, source.files[2].contents);
+    }
+
+    #[tokio::test]
+    async fn misconfigured_programmatic_custom_profile_path_must_error() {
+        let fs = Fs::from_slice(&[]);
+        let env = Env::from_slice(&[]);
+        let profile_files = ProfileFiles::builder()
+            .with_file(ProfileFileKind::Config, "definitely-doesnt-exist")
+            .build();
+        assert!(matches!(
+            load(&env, &fs, &profile_files).await,
+            Err(ProfileFileLoadError::CouldNotReadFile(_))
+        ));
     }
 }

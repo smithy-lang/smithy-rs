@@ -6,12 +6,17 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.testutil.testRustSettings
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
@@ -21,11 +26,34 @@ val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
         val path = File("../../rust-runtime")
         check(path.exists()) { "$path must exist to generate a working SDK" }
         RuntimeCrateLocation.Path(path.absolutePath)
-    }
+    },
 )
 
-fun awsTestCodegenContext(model: Model? = null, coreRustSettings: CoreRustSettings?) =
-    testCodegenContext(
+fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = null) =
+    testClientCodegenContext(
         model ?: "namespace test".asSmithyModel(),
-        settings = coreRustSettings ?: testRustSettings(runtimeConfig = AwsTestRuntimeConfig)
+        settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
+    )
+
+fun awsSdkIntegrationTest(
+    model: Model,
+    test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
+) =
+    clientIntegrationTest(
+        model,
+        IntegrationTestParams(
+            runtimeConfig = AwsTestRuntimeConfig,
+            additionalSettings = ObjectNode.builder().withMember(
+                "customizationConfig",
+                ObjectNode.builder()
+                    .withMember(
+                        "awsSdk",
+                        ObjectNode.builder()
+                            .withMember("integrationTestPath", "../sdk/integration-tests")
+                            .build(),
+                    ).build(),
+            )
+                .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+        ),
+        test = test,
     )

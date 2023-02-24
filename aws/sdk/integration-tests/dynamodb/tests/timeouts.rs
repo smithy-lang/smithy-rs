@@ -3,17 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::SdkError;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;
-use aws_smithy_types::timeout;
-use aws_smithy_types::timeout::Api;
-use aws_smithy_types::tristate::TriState;
-use aws_types::credentials::SharedCredentialsProvider;
+use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::region::Region;
-use aws_types::{Credentials, SdkConfig};
-use std::sync::Arc;
-use std::time::Duration;
+use aws_types::SdkConfig;
 
 #[derive(Debug, Clone)]
 struct InstantSleep;
@@ -28,18 +29,17 @@ async fn api_call_timeout_retries() {
     let conn = NeverConnector::new();
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "stub", "stub", None, None, "test",
-        )))
-        .timeout_config(timeout::Config::new().with_api_timeouts(
-            Api::new().with_call_attempt_timeout(TriState::Set(Duration::new(123, 0))),
-        ))
+        .http_connector(conn.clone())
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .timeout_config(
+            TimeoutConfig::builder()
+                .operation_attempt_timeout(Duration::new(123, 0))
+                .build(),
+        )
+        .retry_config(RetryConfig::standard())
         .sleep_impl(Arc::new(InstantSleep))
         .build();
-    let client = aws_sdk_dynamodb::Client::from_conf_conn(
-        aws_sdk_dynamodb::Config::new(&conf),
-        conn.clone(),
-    );
+    let client = aws_sdk_dynamodb::Client::from_conf(aws_sdk_dynamodb::Config::new(&conf));
     let resp = client
         .list_tables()
         .send()
@@ -60,21 +60,19 @@ async fn api_call_timeout_retries() {
 #[tokio::test]
 async fn no_retries_on_operation_timeout() {
     let conn = NeverConnector::new();
-    let conf =
-        SdkConfig::builder()
-            .region(Region::new("us-east-2"))
-            .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-                "stub", "stub", None, None, "test",
-            )))
-            .timeout_config(timeout::Config::new().with_api_timeouts(
-                Api::new().with_call_timeout(TriState::Set(Duration::new(123, 0))),
-            ))
-            .sleep_impl(Arc::new(InstantSleep))
-            .build();
-    let client = aws_sdk_dynamodb::Client::from_conf_conn(
-        aws_sdk_dynamodb::Config::new(&conf),
-        conn.clone(),
-    );
+    let conf = SdkConfig::builder()
+        .region(Region::new("us-east-2"))
+        .http_connector(conn.clone())
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .timeout_config(
+            TimeoutConfig::builder()
+                .operation_timeout(Duration::new(123, 0))
+                .build(),
+        )
+        .retry_config(RetryConfig::standard())
+        .sleep_impl(Arc::new(InstantSleep))
+        .build();
+    let client = aws_sdk_dynamodb::Client::from_conf(aws_sdk_dynamodb::Config::new(&conf));
     let resp = client
         .list_tables()
         .send()

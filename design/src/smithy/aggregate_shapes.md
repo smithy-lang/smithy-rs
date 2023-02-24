@@ -28,10 +28,10 @@ Smithy `structure` becomes a `struct` in Rust. Backwards compatibility & usabili
   2. All structs are marked `#[non_exhaustive]`
   3. All structs derive `Debug` & `PartialEq`. Structs **do not** derive `Eq` because a `float` member may be added in the future.
   4. Struct fields are public. Public struct fields allow for [split borrows](https://doc.rust-lang.org/nomicon/borrow-splitting.html). When working with output objects this significantly improves ergonomics, especially with optional fields.
-    ```rust,ignore
-     let out = dynamo::ListTablesOutput::new();
-     out.some_field.unwrap(); // <- partial move, impossible with an accessor
-    ```
+      ```rust
+      let out = dynamo::ListTablesOutput::new();
+      out.some_field.unwrap(); // <- partial move, impossible with an accessor
+      ```
   5. Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method `SomeStruct::builder()`
   6. Structures manually implement debug: In order to support the [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait), a `Debug` implementation for structures is manually generated.
 
@@ -52,27 +52,27 @@ long ReadIOs
 long WriteIOs
 ```
 **Rust Output**:
-```rust,ignore
+```rust
 /// <p>Contains I/O usage metrics for a command that was invoked.</p>
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
-pub struct IOUsage {
+pub struct IoUsage {
     /// <p>The number of read I/O requests that the command made.</p>
     pub read_i_os: i64,
     /// <p>The number of write I/O requests that the command made.</p>
     pub write_i_os: i64,
 }
-impl std::fmt::Debug for IOUsage {
+impl std::fmt::Debug for IoUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut formatter = f.debug_struct("IOUsage");
+        let mut formatter = f.debug_struct("IoUsage");
         formatter.field("read_i_os", &self.read_i_os);
         formatter.field("write_i_os", &self.write_i_os);
         formatter.finish()
     }
 }
-/// See [`IOUsage`](crate::model::IOUsage)
+/// See [`IoUsage`](crate::model::IoUsage)
 pub mod io_usage {
-    /// A builder for [`IOUsage`](crate::model::IOUsage)
+    /// A builder for [`IoUsage`](crate::model::IoUsage)
     #[non_exhaustive]
     #[derive(Debug, Clone, Default)]
     pub struct Builder {
@@ -85,8 +85,9 @@ pub mod io_usage {
             self.read_i_os = Some(inp);
             self
         }
-        pub fn set_read_i_os(mut self, inp: i64) -> Self {
-            self.read_i_os = Some(inp);
+         /// <p>The number of read I/O requests that the command made.</p>
+        pub fn set_read_i_os(mut self, inp: Option<i64>) -> Self {
+            self.read_i_os = inp;
             self
         }
         /// <p>The number of write I/O requests that the command made.</p>
@@ -94,21 +95,22 @@ pub mod io_usage {
             self.write_i_os = Some(inp);
             self
         }
-        pub fn set_write_i_os(mut self, inp: i64) -> Self {
-            self.write_i_os = Some(inp);
+        /// <p>The number of write I/O requests that the command made.</p>
+        pub fn set_write_i_os(mut self, inp: Option<i64>) -> Self {
+            self.write_i_os = inp;
             self
         }
-        /// Consumes the builder and constructs a [`IOUsage`](crate::model::IOUsage)
-        pub fn build(self) -> crate::model::IOUsage {
-            crate::model::IOUsage {
+        /// Consumes the builder and constructs a [`IoUsage`](crate::model::IoUsage)
+        pub fn build(self) -> crate::model::IoUsage {
+            crate::model::IoUsage {
                 read_i_os: self.read_i_os.unwrap_or_default(),
                 write_i_os: self.write_i_os.unwrap_or_default(),
             }
         }
     }
 }
-impl IOUsage {
-    /// Creates a new builder-style object to manufacture [`IOUsage`](crate::model::IOUsage)
+impl IoUsage {
+    /// Creates a new builder-style object to manufacture [`IoUsage`](crate::model::IoUsage)
     pub fn builder() -> crate::model::io_usage::Builder {
         crate::model::io_usage::Builder::default()
     }
@@ -118,12 +120,12 @@ impl IOUsage {
 ## Union
 Smithy `Union` is modeled as `enum` in Rust.
 
-    1. Generated `enum`s must be marked `#[non_exhaustive]`.
-    2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
-    1. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
-    2. When union members contain references to other shapes, we generate a wrapping variant (see below).
-    3. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
-    4. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
+1. Generated `enum`s must be marked `#[non_exhaustive]`.
+2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
+3. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
+4. When union members contain references to other shapes, we generate a wrapping variant (see below).
+5. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
+6. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
 
 ### Generated Union Example
 The union generated for a simplified `dynamodb::AttributeValue`
@@ -149,7 +151,7 @@ list BoolList {
 }
 ```
 **Rust**:
-```rust,ignore
+```rust
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {

@@ -3,26 +3,60 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::Arc;
-
-use crate::{bounds, erase, retry, Client, TriState, MISSING_SLEEP_IMPL_RECOMMENDATION};
+use crate::{bounds, erase, retry, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use aws_smithy_types::timeout;
+use aws_smithy_types::timeout::{OperationTimeoutConfig, TimeoutConfig};
+use std::sync::Arc;
+
+#[derive(Clone, Debug)]
+struct MaybeRequiresSleep<I> {
+    requires_sleep: bool,
+    implementation: I,
+}
+
+impl<I> MaybeRequiresSleep<I> {
+    fn new(requires_sleep: bool, implementation: I) -> Self {
+        Self {
+            requires_sleep,
+            implementation,
+        }
+    }
+}
 
 /// A builder that provides more customization options when constructing a [`Client`].
 ///
 /// To start, call [`Builder::new`]. Then, chain the method calls to configure the `Builder`.
 /// When configured to your liking, call [`Builder::build`]. The individual methods have additional
 /// documentation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Builder<C = (), M = (), R = retry::Standard> {
-    connector: C,
+    connector: MaybeRequiresSleep<C>,
     middleware: M,
-    retry_policy: R,
-    timeout_config: timeout::Config,
-    sleep_impl: TriState<Arc<dyn AsyncSleep>>,
+    retry_policy: MaybeRequiresSleep<R>,
+    operation_timeout_config: Option<OperationTimeoutConfig>,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+}
+
+impl<C, M> Default for Builder<C, M>
+where
+    C: Default,
+    M: Default,
+{
+    fn default() -> Self {
+        let default_retry_config = retry::Config::default();
+        Self {
+            connector: MaybeRequiresSleep::new(false, Default::default()),
+            middleware: Default::default(),
+            retry_policy: MaybeRequiresSleep::new(
+                default_retry_config.has_retry(),
+                retry::Standard::new(default_retry_config),
+            ),
+            operation_timeout_config: None,
+            sleep_impl: default_async_sleep(),
+        }
+    }
 }
 
 // It'd be nice to include R where R: Default here, but then the caller ends up always having to
@@ -46,6 +80,83 @@ where
     }
 }
 
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::erase::DynConnector;
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::http_connector::ConnectorSettings;
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::hyper_ext::Adapter as HyperAdapter;
+
+/// Max idle connections is not standardized across SDKs. Java V1 and V2 use 50, and Go V2 uses 100.
+/// The number below was chosen arbitrarily between those two reference points, and should allow
+/// for 14 separate SDK clients in a Lambda where the max file handles is 1024.
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 70;
+
+/// Returns default HTTP client settings for hyper.
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+fn default_hyper_builder() -> hyper::client::Builder {
+    let mut builder = hyper::client::Builder::default();
+    builder.pool_max_idle_per_host(DEFAULT_MAX_IDLE_CONNECTIONS);
+    builder
+}
+
+#[cfg(feature = "rustls")]
+impl<M, R> Builder<(), M, R> {
+    /// Connect to the service over HTTPS using Rustls using dynamic dispatch.
+    pub fn rustls_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
+        self.connector(DynConnector::new(
+            HyperAdapter::builder()
+                .hyper_builder(default_hyper_builder())
+                .connector_settings(connector_settings)
+                .build(crate::conns::https()),
+        ))
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl<M, R> Builder<(), M, R> {
+    /// Connect to the service over HTTPS using the native TLS library on your
+    /// platform using dynamic dispatch.
+    pub fn native_tls_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
+        self.connector(DynConnector::new(
+            HyperAdapter::builder()
+                .hyper_builder(default_hyper_builder())
+                .connector_settings(connector_settings)
+                .build(crate::conns::native_tls()),
+        ))
+    }
+}
+
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+impl<M, R> Builder<(), M, R> {
+    /// Create a Smithy client builder with an HTTPS connector and the [standard retry
+    /// policy](crate::retry::Standard) over the default middleware implementation.
+    ///
+    /// For convenience, this constructor type-erases the concrete TLS connector backend used using
+    /// dynamic dispatch. This comes at a slight runtime performance cost. See
+    /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
+    /// [`Builder::rustls_connector`] or [`Builder::native_tls_connector`] instead.
+    pub fn dyn_https_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
+        #[cfg(feature = "rustls")]
+        let with_https = |b: Builder<_, M, R>| b.rustls_connector(connector_settings);
+        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
+        #[cfg(not(feature = "rustls"))]
+        let with_https = |b: Builder<_, M, R>| b.native_tls_connector(connector_settings);
+
+        with_https(self)
+    }
+}
+
 impl<M, R> Builder<(), M, R> {
     /// Specify the connector for the eventual client to use.
     ///
@@ -57,10 +168,10 @@ impl<M, R> Builder<(), M, R> {
     /// [`Builder::connector_fn`].
     pub fn connector<C>(self, connector: C) -> Builder<C, M, R> {
         Builder {
-            connector,
-            retry_policy: self.retry_policy,
+            connector: MaybeRequiresSleep::new(false, connector),
             middleware: self.middleware,
-            timeout_config: self.timeout_config,
+            retry_policy: self.retry_policy,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -115,7 +226,7 @@ impl<C, R> Builder<C, (), R> {
         Builder {
             connector: self.connector,
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             middleware,
             sleep_impl: self.sleep_impl,
         }
@@ -129,7 +240,7 @@ impl<C, R> Builder<C, (), R> {
     /// use aws_smithy_client::never::NeverConnector;
     /// use aws_smithy_http::body::SdkBody;
     /// let my_connector = DynConnector::new(
-    ///     // Your own connector here or use `dyn_https()`
+    ///     // Your own connector here or use `dyn_https_connector()`
     ///     # NeverConnector::new()
     /// );
     /// let client = Builder::new()
@@ -165,8 +276,8 @@ impl<C, M> Builder<C, M, retry::Standard> {
     pub fn retry_policy<R>(self, retry_policy: R) -> Builder<C, M, R> {
         Builder {
             connector: self.connector,
-            retry_policy,
-            timeout_config: self.timeout_config,
+            retry_policy: MaybeRequiresSleep::new(false, retry_policy),
+            operation_timeout_config: self.operation_timeout_config,
             middleware: self.middleware,
             sleep_impl: self.sleep_impl,
         }
@@ -174,30 +285,49 @@ impl<C, M> Builder<C, M, retry::Standard> {
 }
 
 impl<C, M> Builder<C, M> {
-    /// Set the standard retry policy's configuration.
-    pub fn set_retry_config(&mut self, config: retry::Config) {
-        self.retry_policy.with_config(config);
-    }
-
-    /// Set a timeout config for the builder
-    pub fn set_timeout_config(&mut self, timeout_config: timeout::Config) {
-        self.timeout_config = timeout_config;
-    }
-
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) {
-        self.sleep_impl = async_sleep.into();
-    }
-
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn sleep_impl(mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> Self {
-        self.set_sleep_impl(async_sleep);
+    /// Set the standard retry policy's configuration. When `config` is `None`,
+    /// the default retry policy will be used.
+    pub fn set_retry_config(&mut self, config: Option<retry::Config>) -> &mut Self {
+        let config = config.unwrap_or_default();
+        self.retry_policy =
+            MaybeRequiresSleep::new(config.has_retry(), retry::Standard::new(config));
         self
     }
 
-    /// Sets the sleep implementation to [`default_async_sleep`].
-    pub fn default_async_sleep(mut self) -> Self {
-        self.sleep_impl = TriState::or_unset(default_async_sleep());
+    /// Set the standard retry policy's configuration.
+    pub fn retry_config(mut self, config: retry::Config) -> Self {
+        self.set_retry_config(Some(config));
+        self
+    }
+
+    /// Set operation timeout config for the client. If `operation_timeout_config` is
+    /// `None`, timeouts will be disabled.
+    pub fn set_operation_timeout_config(
+        &mut self,
+        operation_timeout_config: Option<OperationTimeoutConfig>,
+    ) -> &mut Self {
+        self.operation_timeout_config = operation_timeout_config;
+        self
+    }
+
+    /// Set operation timeout config for the client.
+    pub fn operation_timeout_config(
+        mut self,
+        operation_timeout_config: OperationTimeoutConfig,
+    ) -> Self {
+        self.operation_timeout_config = Some(operation_timeout_config);
+        self
+    }
+
+    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+        self.sleep_impl = async_sleep;
+        self
+    }
+
+    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    pub fn sleep_impl(mut self, async_sleep: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(async_sleep));
         self
     }
 }
@@ -209,10 +339,13 @@ impl<C, M, R> Builder<C, M, R> {
         F: FnOnce(C) -> C2,
     {
         Builder {
-            connector: map(self.connector),
+            connector: MaybeRequiresSleep::new(
+                self.connector.requires_sleep,
+                map(self.connector.implementation),
+            ),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -226,35 +359,38 @@ impl<C, M, R> Builder<C, M, R> {
             connector: self.connector,
             middleware: map(self.middleware),
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
 
     /// Build a Smithy service [`Client`].
     pub fn build(self) -> Client<C, M, R> {
-        if matches!(self.sleep_impl, TriState::Unset) {
-            if self.timeout_config.has_timeouts() {
-                tracing::warn!(
-                    "One or more timeouts were set, but no `sleep_impl` was passed into the \
-                    builder. Timeouts and retry both require a sleep implementation. No timeouts \
-                    will occur with the current configuration. {}",
-                    MISSING_SLEEP_IMPL_RECOMMENDATION
-                );
-            } else {
-                tracing::warn!(
-                    "Retries require a `sleep_impl`, but none was passed into the builder. \
-                    No retries will occur with the current configuration. {}",
-                    MISSING_SLEEP_IMPL_RECOMMENDATION
-                );
+        let operation_timeout_config = self
+            .operation_timeout_config
+            .unwrap_or_else(|| TimeoutConfig::disabled().into());
+        if self.sleep_impl.is_none() {
+            const ADDITIONAL_HELP: &str =
+                "Either disable retry by setting max attempts to one, or pass in a `sleep_impl`. \
+                If you're not using Tokio, then an implementation of the `AsyncSleep` trait from \
+                the `aws-smithy-async` crate is required for your async runtime. If you are using \
+                Tokio, then make sure the `rt-tokio` feature is enabled to have its sleep \
+                implementation set automatically.";
+            if self.connector.requires_sleep {
+                panic!("Socket-level retries for the default connector require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
+            }
+            if self.retry_policy.requires_sleep {
+                panic!("Retries require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
+            }
+            if operation_timeout_config.has_timeouts() {
+                panic!("Operation timeouts require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
             }
         }
-
         Client {
-            connector: self.connector,
-            retry_policy: self.retry_policy,
+            connector: self.connector.implementation,
+            retry_policy: self.retry_policy.implementation,
             middleware: self.middleware,
-            timeout_config: self.timeout_config,
+            operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -296,8 +432,7 @@ mod tests {
     use super::*;
     use crate::never::NeverConnector;
     use aws_smithy_async::rt::sleep::Sleep;
-    use aws_smithy_types::timeout;
-    use aws_smithy_types::tristate::TriState;
+    use std::panic::{self, AssertUnwindSafe};
     use std::time::Duration;
 
     #[derive(Clone, Debug)]
@@ -308,54 +443,102 @@ mod tests {
         }
     }
 
-    const TIMEOUTS_WITHOUT_SLEEP_MSG: &str =
-        "One or more timeouts were set, but no `sleep_impl` was passed into the builder";
-    const RETRIES_WITHOUT_SLEEP_MSG: &str =
-        "Retries require a `sleep_impl`, but none was passed into the builder.";
-    const RECOMMENDATION_MSG: &str =
-        "consider using the `aws-config` crate to load a shared config";
-
     #[test]
-    #[tracing_test::traced_test]
-    fn sleep_impl_given_no_warns() {
-        let _client = Builder::new()
+    fn defaults_dont_panic() {
+        let builder = Builder::new()
             .connector(NeverConnector::new())
-            .middleware(tower::layer::util::Identity::new())
-            .sleep_impl(Some(Arc::new(StubSleep)))
-            .build();
+            .middleware(tower::layer::util::Identity::new());
 
-        assert!(!logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
-        assert!(!logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
-        assert!(!logs_contain(RECOMMENDATION_MSG));
+        let _ = builder.build();
     }
 
     #[test]
-    #[tracing_test::traced_test]
-    fn timeout_missing_sleep_impl_warn() {
+    fn defaults_panic_if_default_tokio_sleep_not_available() {
         let mut builder = Builder::new()
             .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new());
-        let http_timeout_config =
-            timeout::Http::new().with_connect_timeout(TriState::Set(Duration::from_secs(1)));
-        let timeout_config = timeout::Config::new().with_http_timeouts(http_timeout_config);
-        builder.set_timeout_config(timeout_config);
-        builder.build();
+        builder.set_sleep_impl(None);
 
-        assert!(logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
-        assert!(!logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
-        assert!(logs_contain(RECOMMENDATION_MSG));
+        let result = panic::catch_unwind(AssertUnwindSafe(move || {
+            let _ = builder.build();
+        }));
+        assert!(result.is_err());
     }
 
     #[test]
-    #[tracing_test::traced_test]
-    fn retry_missing_sleep_impl_warn() {
-        Builder::new()
+    fn timeouts_without_sleep_panics() {
+        let mut builder = Builder::new()
+            .connector(NeverConnector::new())
+            .middleware(tower::layer::util::Identity::new());
+        builder.set_sleep_impl(None);
+
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .build();
+        assert!(timeout_config.has_timeouts());
+        builder.set_operation_timeout_config(Some(timeout_config.into()));
+
+        let result = panic::catch_unwind(AssertUnwindSafe(move || {
+            let _ = builder.build();
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn retry_without_sleep_panics() {
+        let mut builder = Builder::new()
+            .connector(NeverConnector::new())
+            .middleware(tower::layer::util::Identity::new());
+        builder.set_sleep_impl(None);
+
+        let retry_config = retry::Config::default();
+        assert!(retry_config.has_retry());
+        builder.set_retry_config(Some(retry_config));
+
+        let result = panic::catch_unwind(AssertUnwindSafe(move || {
+            let _ = builder.build();
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn custom_retry_policy_without_sleep_doesnt_panic() {
+        let mut builder = Builder::new()
             .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new())
-            .build();
+            // Using standard retry here as a shortcut in the test; someone setting
+            // a custom retry policy would manually implement the required traits
+            .retry_policy(retry::Standard::default());
+        builder.set_sleep_impl(None);
+        let _ = builder.build();
+    }
 
-        assert!(!logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
-        assert!(logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
-        assert!(logs_contain(RECOMMENDATION_MSG));
+    #[test]
+    fn no_panics_when_sleep_given() {
+        let mut builder = Builder::new()
+            .connector(NeverConnector::new())
+            .middleware(tower::layer::util::Identity::new());
+
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .build();
+        assert!(timeout_config.has_timeouts());
+        builder.set_operation_timeout_config(Some(timeout_config.into()));
+
+        let retry_config = retry::Config::default();
+        assert!(retry_config.has_retry());
+        builder.set_retry_config(Some(retry_config));
+
+        let _ = builder.build();
+    }
+
+    #[test]
+    fn builder_connection_helpers_are_dyn() {
+        #[cfg(feature = "rustls")]
+        let _builder: Builder<DynConnector, (), _> =
+            Builder::new().rustls_connector(Default::default());
+        #[cfg(feature = "native-tls")]
+        let _builder: Builder<DynConnector, (), _> =
+            Builder::new().native_tls_connector(Default::default());
     }
 }

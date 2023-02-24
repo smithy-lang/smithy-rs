@@ -6,11 +6,12 @@
 use crate::SendOperationError;
 use aws_smithy_http::middleware::{AsyncMapRequest, MapRequest};
 use aws_smithy_http::operation;
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
+use tracing::{debug_span, Instrument};
 
 #[derive(Debug)]
 pub struct AsyncMapRequestLayer<M> {
@@ -61,10 +62,13 @@ where
     }
 
     fn call(&mut self, req: operation::Request) -> Self::Future {
+        let mapper_name = self.mapper.name();
         let mut inner = self.inner.clone();
         let future = self.mapper.apply(req);
         Box::pin(async move {
+            let span = debug_span!("async_map_request", name = mapper_name);
             let mapped_request = future
+                .instrument(span)
                 .await
                 .map_err(|e| SendOperationError::RequestConstructionError(e.into()))?;
             inner.call(mapped_request).await
@@ -97,10 +101,15 @@ where
     }
 }
 
-#[pin_project(project = EnumProj)]
-pub enum MapRequestFuture<F, E> {
-    Inner(#[pin] F),
-    Ready(Option<E>),
+pin_project! {
+    #[project = EnumProj]
+    pub enum MapRequestFuture<F, E> {
+        Inner {
+            #[pin]
+            inner: F
+        },
+        Ready { inner: Option<E> },
+    }
 }
 
 impl<O, F, E> Future for MapRequestFuture<F, E>
@@ -111,14 +120,14 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
-            EnumProj::Ready(e) => Poll::Ready(Err(e.take().unwrap())),
-            EnumProj::Inner(f) => f.poll(cx),
+            EnumProj::Inner { inner: f } => f.poll(cx),
+            EnumProj::Ready { inner: e } => Poll::Ready(Err(e.take().unwrap())),
         }
     }
 }
 
-#[derive(Clone)]
 /// Tower service for [`MapRequest`](aws_smithy_http::middleware::MapRequest)
+#[derive(Clone)]
 pub struct MapRequestService<S, M> {
     inner: S,
     mapper: M,
@@ -138,13 +147,16 @@ where
     }
 
     fn call(&mut self, req: operation::Request) -> Self::Future {
-        match self
-            .mapper
-            .apply(req)
+        let span = debug_span!("map_request", name = self.mapper.name());
+        let mapper = &self.mapper;
+        match span
+            .in_scope(|| mapper.apply(req))
             .map_err(|e| SendOperationError::RequestConstructionError(e.into()))
         {
-            Err(e) => MapRequestFuture::Ready(Some(e)),
-            Ok(req) => MapRequestFuture::Inner(self.inner.call(req)),
+            Err(e) => MapRequestFuture::Ready { inner: Some(e) },
+            Ok(req) => MapRequestFuture::Inner {
+                inner: self.inner.call(req),
+            },
         }
     }
 }

@@ -46,13 +46,16 @@ use tower::{
     Service, ServiceExt,
 };
 
-/// How routes are stored inside a [`Router`](super::Router).
+/// A HTTP [`Service`] representing a single route.
+///
+/// The construction of [`Route`] from a named HTTP [`Service`] `S`, erases the type of `S`.
 pub struct Route<B = Body> {
     service: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
 }
 
 impl<B> Route<B> {
-    pub(super) fn new<T>(svc: T) -> Self
+    /// Constructs a new [`Route`] from a well-formed HTTP service which is cloneable.
+    pub fn new<T>(svc: T) -> Self
     where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
@@ -60,10 +63,6 @@ impl<B> Route<B> {
         Self {
             service: BoxCloneService::new(svc),
         }
-    }
-
-    pub(super) fn from_box_clone_service(svc: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>) -> Self {
-        Self { service: svc }
     }
 }
 

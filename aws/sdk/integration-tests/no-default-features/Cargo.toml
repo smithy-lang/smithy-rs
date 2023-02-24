@@ -1,0 +1,21 @@
+[package]
+name = "no-default-features"
+version = "0.1.0"
+authors = ["Zelda Hessler <zhessler@amazon.com>"]
+description = """
+These tests ensure that things will fail (or not fail) as expected
+when default features are disabled for all SDK and runtime crates.
+"""
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
+futures = "0.3.25"
+tokio = { version = "1.8.4", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

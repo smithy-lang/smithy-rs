@@ -9,7 +9,9 @@ extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy") }
+plugins {
+    id("software.amazon.smithy")
+}
 
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
@@ -36,10 +38,12 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
-)
+val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
+    listOf(
+        CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        CodegenTest("com.aws.example.python#PokemonService", "pokemon-service-server-sdk"),
+    )
+}
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

@@ -5,17 +5,20 @@
 
 //! Type-erased variants of [`Client`] and friends.
 
+use std::fmt;
+
+use tower::{Layer, Service, ServiceExt};
+
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
+use boxclone::*;
+
+use crate::{bounds, retry, Client};
+
 // These types are technically public in that they're reachable from the public trait impls on
 // DynMiddleware, but no-one should ever look at them or use them.
 #[doc(hidden)]
 pub mod boxclone;
-use boxclone::*;
-
-use crate::{bounds, retry, Client};
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
-use std::fmt;
-use tower::{Layer, Service, ServiceExt};
 
 /// A [`Client`] whose connector and middleware types have been erased.
 ///
@@ -56,7 +59,7 @@ where
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -96,7 +99,7 @@ where
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }

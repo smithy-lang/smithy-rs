@@ -32,3 +32,12 @@ Smithy based service (pending protocol support), including those outside of AWS.
 
 In the future, we may add `serde` support behind a feature gate. However, we would only support this for operation `Input`
 and `Output` structs with the aim of making SDK-related tests easier to set up and run.
+
+## I want to add new request building behavior. Should I add that functionality to the `make_operation` codegen or write a request-altering middleware?
+
+The main question to ask yourself in this case is _"is this new behavior relevant to all services or is it only relevant to some services?"_
+
+- **If the behavior is relevant to all services:** Behavior like this should be defined as a middleware. Behavior like this is often AWS-specific and may not be relevant to non-AWS smithy clients. Middlewares are defined outside of codegen. One example of behavior that should be defined as a middleware is request signing because all requests to AWS services must be signed.
+- **If the behavior is only relevant to some services/depends on service model specifics:** Behavior like this should be defined within `make_operation`. Avoid defining AWS-specific behavior within `make_operation`. One example of behavior that should be defined in `make_operation` is checksum validation because only some AWS services have APIs that support checksum validation.
+
+_"Wait a second"_ I hear you say, _"checksum validation is part of the AWS smithy spec, not the core smithy spec. Why is that behavior defined in `make_operation`?"_ The answer is that that feature only applies to some operations and we don't want to codegen a middleware that only supports a subset of operations for a service.

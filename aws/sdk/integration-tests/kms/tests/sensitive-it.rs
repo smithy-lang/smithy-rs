@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_http::retry::AwsErrorRetryPolicy;
+use aws_http::retry::AwsResponseRetryClassifier;
 use aws_sdk_kms as kms;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{self, Parts};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use bytes::Bytes;
 use kms::error::CreateAliasError;
@@ -19,12 +19,17 @@ use kms::types::Blob;
 
 #[test]
 fn validate_sensitive_trait() {
+    let builder = GenerateRandomOutput::builder().plaintext(Blob::new("some output"));
+    assert_eq!(
+        format!("{:?}", builder),
+        "Builder { plaintext: \"*** Sensitive Data Redacted ***\", _request_id: None }"
+    );
     let output = GenerateRandomOutput::builder()
         .plaintext(Blob::new("some output"))
         .build();
     assert_eq!(
         format!("{:?}", output),
-        "GenerateRandomOutput { plaintext: \"*** Sensitive Data Redacted ***\" }"
+        "GenerateRandomOutput { plaintext: \"*** Sensitive Data Redacted ***\", _request_id: None }"
     );
 }
 
@@ -55,7 +60,12 @@ async fn client_is_debug() {
 async fn client_is_clone() {
     let conf = kms::Config::builder().build();
     let client = kms::Client::from_conf(conf);
-    let _ = client.clone();
+
+    fn is_clone(it: impl Clone) {
+        drop(it)
+    }
+
+    is_clone(client);
 }
 
 #[test]
@@ -65,7 +75,7 @@ fn types_are_debug() {
     assert_debug::<kms::client::fluent_builders::CreateAlias>();
 }
 
-async fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
+async fn create_alias_op() -> Parts<CreateAlias, AwsResponseRetryClassifier> {
     let conf = kms::Config::builder().build();
     let (_, parts) = CreateAlias::builder()
         .build()
@@ -87,14 +97,13 @@ async fn errors_are_retryable() {
             br#"{ "code": "LimitExceededException" }"#,
         ))
         .unwrap();
-    let err = op
-        .response_handler
-        .parse(&http_response)
-        .map_err(|e| SdkError::ServiceError {
-            err: e,
-            raw: operation::Response::new(http_response.map(SdkBody::from)),
-        });
-    let retry_kind = op.retry_policy.classify(err.as_ref());
+    let err = op.response_handler.parse(&http_response).map_err(|e| {
+        SdkError::service_error(
+            e,
+            operation::Response::new(http_response.map(SdkBody::from)),
+        )
+    });
+    let retry_kind = op.retry_classifier.classify_retry(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
 
@@ -105,13 +114,12 @@ async fn unmodeled_errors_are_retryable() {
         .status(400)
         .body(Bytes::from_static(br#"{ "code": "ThrottlingException" }"#))
         .unwrap();
-    let err = op
-        .response_handler
-        .parse(&http_response)
-        .map_err(|e| SdkError::ServiceError {
-            err: e,
-            raw: operation::Response::new(http_response.map(SdkBody::from)),
-        });
-    let retry_kind = op.retry_policy.classify(err.as_ref());
+    let err = op.response_handler.parse(&http_response).map_err(|e| {
+        SdkError::service_error(
+            e,
+            operation::Response::new(http_response.map(SdkBody::from)),
+        )
+    });
+    let retry_kind = op.retry_classifier.classify_retry(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }

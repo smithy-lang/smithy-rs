@@ -10,16 +10,28 @@ import org.gradle.kotlin.dsl.register
 import java.io.File
 
 /**
- * This file contains common functionality shared across the buildscripts for the `codegen-test` and `codegen-server-test`
- * modules.
+ * This file contains common functionality shared across the build scripts for the
+ * `codegen-client-test` and `codegen-server-test` modules.
  */
 
-data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
+data class CodegenTest(
+    val service: String,
+    val module: String,
+    val extraConfig: String? = null,
+    val imports: List<String> = emptyList(),
+)
+
+fun generateImports(imports: List<String>): String = if (imports.isEmpty()) {
+    ""
+} else {
+    "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
+}
 
 private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
     val projections = tests.joinToString(",\n") {
         """
         "${it.module}": {
+            ${generateImports(it.imports)}
             "plugins": {
                 "$pluginName": {
                     "runtimeConfig": {
@@ -31,8 +43,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                     "moduleDescription": "test",
                     "moduleAuthors": ["protocoltest@example.com"]
                     ${it.extraConfig ?: ""}
-             }
-           }
+                }
+            }
         }
         """.trimIndent()
     }
@@ -49,8 +61,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
 enum class Cargo(val toString: String) {
     CHECK("cargoCheck"),
     TEST("cargoTest"),
-    DOCS("cargoDocs"),
-    CLIPPY("cargoClippy");
+    DOCS("cargoDoc"),
+    CLIPPY("cargoClippy"),
 }
 
 private fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
@@ -74,7 +86,9 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
         allTests
     }
     require(ret.isNotEmpty()) {
-        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map { it.module }}`)"
+        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map {
+            it.module
+        }}`)"
     }
     return ret
 }
@@ -90,9 +104,9 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         when (it) {
             "check" -> Cargo.CHECK
             "test" -> Cargo.TEST
-            "docs" -> Cargo.DOCS
+            "doc" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
-            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
+            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `doc`, `clippy`)")
         }
     }
 
@@ -103,7 +117,9 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         AllCargoCommands
     }
     require(ret.isNotEmpty()) {
-        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map { it.toString }}`)"
+        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map {
+            it.toString
+        }}`)"
     }
     return ret
 }
@@ -111,12 +127,13 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
 fun Project.registerGenerateSmithyBuildTask(
     rootProject: Project,
     pluginName: String,
-    allCodegenTests: List<CodegenTest>
+    allCodegenTests: List<CodegenTest>,
 ) {
     val properties = PropertyRetriever(rootProject, this)
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        allCodegenTests.flatMap { it.imports }.forEach { inputs.file(project.projectDir.resolve(it)) }
 
         doFirst {
             project.projectDir.resolve("smithy-build.json")
@@ -124,8 +141,8 @@ fun Project.registerGenerateSmithyBuildTask(
                     generateSmithyBuild(
                         rootProject.projectDir.absolutePath,
                         pluginName,
-                        codegenTests(properties, allCodegenTests)
-                    )
+                        codegenTests(properties, allCodegenTests),
+                    ),
                 )
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
@@ -144,7 +161,7 @@ fun Project.registerGenerateCargoWorkspaceTask(
     rootProject: Project,
     pluginName: String,
     allCodegenTests: List<CodegenTest>,
-    workingDirUnderBuildDir: String
+    workingDirUnderBuildDir: String,
 ) {
     val properties = PropertyRetriever(rootProject, this)
     project.tasks.register("generateCargoWorkspace") {
@@ -157,7 +174,7 @@ fun Project.registerGenerateCargoWorkspaceTask(
 }
 
 fun Project.registerGenerateCargoConfigTomlTask(
-    outputDir: File
+    outputDir: File,
 ) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
@@ -168,7 +185,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
                     """
                     [build]
                     rustflags = ["--deny", "warnings"]
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
         }
     }
@@ -192,7 +209,8 @@ fun Project.registerModifyMtimeTask() {
             if (!project.extra.has(previousBuildHashesKey)) {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
-                @Suppress("UNCHECKED_CAST") val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
+                @Suppress("UNCHECKED_CAST")
+                val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }
@@ -212,29 +230,36 @@ fun Project.registerModifyMtimeTask() {
 
 fun Project.registerCargoCommandsTasks(
     outputDir: File,
-    defaultRustDocFlags: String
+    defaultRustDocFlags: String,
 ) {
+    val dependentTasks =
+        listOfNotNull(
+            "assemble",
+            "generateCargoConfigToml",
+            this.tasks.findByName("modifyMtime")?.let { "modifyMtime" },
+        )
+
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "check", "--lib", "--tests", "--benches")
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "test")
+        commandLine("cargo", "test", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         commandLine("cargo", "clippy")
     }

@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 /**
  * Indicates that a member should have their resource ID prefix stripped
  */
-class TrimResourceId() : AnnotationTrait(ID, Node.objectNode()) {
+class TrimResourceId : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID: ShapeId = ShapeId.from("aws.api.internal#trimResourceId")
     }

@@ -34,13 +34,16 @@
 
 use crate::body::BoxBody;
 
-#[doc(hidden)]
 pub type Response<T = BoxBody> = http::Response<T>;
 
-/// Trait for generating responses.
-///
-/// Types that implement `IntoResponse` can be returned from handlers.
-pub trait IntoResponse {
-    /// Create a response.
-    fn into_response(self) -> Response;
+/// A protocol aware function taking `self` to [`http::Response`].
+pub trait IntoResponse<Protocol> {
+    /// Performs a conversion into a [`http::Response`].
+    fn into_response(self) -> http::Response<BoxBody>;
+}
+
+impl<P> IntoResponse<P> for std::convert::Infallible {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self {}
+    }
 }

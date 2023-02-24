@@ -15,7 +15,7 @@ version = "0.0.3"
 
 tasks.jar {
     from("./") {
-        include("inlineable/src/*.rs")
+        include("inlineable/src/")
         include("inlineable/Cargo.toml")
     }
 }
@@ -45,7 +45,7 @@ tasks.register("fixRuntimeCrateVersions") {
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteRuntimeCrateVersion(properties, line)
             }
         }
     }
@@ -53,7 +53,7 @@ tasks.register("fixRuntimeCrateVersions") {
 
 tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the runtime crates"
-    toolPath = rootProject.projectDir.resolve("tools/publisher")
+    toolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
     dependsOn("fixRuntimeCrateVersions")

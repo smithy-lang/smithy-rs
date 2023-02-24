@@ -1,6 +1,6 @@
 # RFC: How Cargo "features" should be used in the SDK and runtime crates
 
-> Status: RFC
+> Status: Accepted
 
 ## Some background on features
 

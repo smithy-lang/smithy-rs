@@ -36,8 +36,8 @@ impl From<EscapeError> for InvalidJsonCredentials {
     }
 }
 
-impl From<aws_smithy_json::deserialize::Error> for InvalidJsonCredentials {
-    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
+impl From<aws_smithy_json::deserialize::error::DeserializeError> for InvalidJsonCredentials {
+    fn from(err: aws_smithy_json::deserialize::error::DeserializeError) -> Self {
         InvalidJsonCredentials::JsonError(err.into())
     }
 }
@@ -137,7 +137,7 @@ pub(crate) fn parse_json_credentials(
              "SecretAccessKey" : "secret",
              "Token" : "token",
              "Expiration" : "....",
-             "LastUpdated" : "2009-11-23T0:00:00Z"
+             "LastUpdated" : "2009-11-23T00:00:00Z"
             */
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Code") => {
                 code = Some(value.to_unescaped()?);

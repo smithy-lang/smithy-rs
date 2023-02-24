@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
+
 use http::Request;
 use regex::Regex;
 
@@ -83,7 +85,7 @@ pub struct RequestSpec {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum Match {
+pub(crate) enum Match {
     /// The request matches the URI pattern spec.
     Yes,
     /// The request matches the URI pattern spec, but the wrong HTTP method was used. `405 Method
@@ -104,13 +106,13 @@ impl From<&PathSpec> for Regex {
                 .0
                 .iter()
                 .map(|segment_spec| match segment_spec {
-                    PathSegment::Literal(literal) => literal,
+                    PathSegment::Literal(literal) => Cow::Owned(regex::escape(literal)),
                     // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
                     // `*` instead of `+` because the empty string `""` can be bound to a label.
-                    PathSegment::Label => "[^/]*",
-                    PathSegment::Greedy => ".*",
+                    PathSegment::Label => Cow::Borrowed("[^/]*"),
+                    PathSegment::Greedy => Cow::Borrowed(".*"),
                 })
-                .fold(String::new(), |a, b| a + sep + b)
+                .fold(String::new(), |a, b| a + sep + &b)
         };
 
         Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
@@ -156,11 +158,11 @@ impl RequestSpec {
     /// updates the spec to define the behavior, update our implementation.
     ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
-    pub(super) fn rank(&self) -> usize {
+    pub(crate) fn rank(&self) -> usize {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
-    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
+    pub(crate) fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
         }
@@ -179,13 +181,18 @@ impl RequestSpec {
 
         match req.uri().query() {
             Some(query) => {
-                // We can't use `HashMap<&str, &str>` because a query string key can appear more
+                // We can't use `HashMap<Cow<str>, Cow<str>>` because a query string key can appear more
                 // than once e.g. `/?foo=bar&foo=baz`. We _could_ use a multiset e.g. the `hashbag`
                 // crate.
-                let res = serde_urlencoded::from_str::<Vec<(&str, &str)>>(query);
+                // We must deserialize into `Cow<str>`s because `serde_urlencoded` might need to
+                // return an owned allocated `String` if it has to percent-decode a slice of the query string.
+                let res = serde_urlencoded::from_str::<Vec<(Cow<str>, Cow<str>)>>(query);
 
                 match res {
-                    Err(_) => Match::No,
+                    Err(error) => {
+                        tracing::debug!(query, %error, "failed to deserialize query string");
+                        Match::No
+                    }
                     Ok(query_map) => {
                         for query_segment in self.uri_spec.path_and_query.query_segments.0.iter() {
                             match query_segment {
@@ -243,8 +250,9 @@ impl RequestSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::super::rest_tests::req;
     use super::*;
+    use crate::proto::test_helpers::req;
+
     use http::Method;
 
     #[test]
@@ -365,6 +373,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn encoded_query_string() {
+        let request_spec =
+            RequestSpec::from_parts(Method::DELETE, Vec::new(), vec![QuerySegment::Key("foo".to_owned())]);
+
+        assert_eq!(
+            Match::Yes,
+            request_spec.matches(&req(&Method::DELETE, "/?foo=hello%20world", None))
+        );
+    }
+
     fn ab_spec() -> RequestSpec {
         RequestSpec::from_parts(
             Method::GET,
@@ -468,5 +487,23 @@ mod tests {
         for (method, uri) in &hits {
             assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
+    }
+
+    #[test]
+    fn unsanitary_path() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("ReDosLiteral")),
+                PathSegment::Label,
+                PathSegment::Literal(String::from("(a+)+")),
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            Match::Yes,
+            spec.matches(&req(&Method::GET, "/ReDosLiteral/abc/(a+)+", None))
+        );
     }
 }

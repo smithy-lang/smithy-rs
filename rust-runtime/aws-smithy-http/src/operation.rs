@@ -5,12 +5,11 @@
 
 use crate::body::SdkBody;
 use crate::property_bag::{PropertyBag, SharedPropertyBag};
-use aws_smithy_types::date_time::DateTimeFormatError;
-use http::uri::InvalidUri;
+use crate::retry::DefaultResponseRetryClassifier;
 use std::borrow::Cow;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
+
+pub mod error;
 
 #[derive(Clone, Debug)]
 pub struct Metadata {
@@ -42,130 +41,13 @@ impl Metadata {
 #[derive(Clone, Debug)]
 pub struct Parts<H, R> {
     pub response_handler: H,
-    pub retry_policy: R,
+    pub retry_classifier: R,
     pub metadata: Option<Metadata>,
 }
 
-/// An error occurred attempting to build an `Operation` from an input
-///
-/// These are almost always due to user error caused by limitations of specific fields due to
-/// protocol serialization (e.g. fields that can only be a subset ASCII because they are serialized
-/// as the name of an HTTP header)
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum BuildError {
-    /// A field contained an invalid value
-    InvalidField {
-        field: &'static str,
-        details: String,
-    },
-    /// A field was missing
-    MissingField {
-        field: &'static str,
-        details: &'static str,
-    },
-    /// The serializer could not serialize the input
-    SerializationError(SerializationError),
-
-    /// The serializer did not produce a valid URI
-    ///
-    /// This typically indicates that a field contained invalid characters.
-    InvalidUri {
-        uri: String,
-        err: InvalidUri,
-        message: Cow<'static, str>,
-    },
-
-    /// An error occurred request construction
-    Other(Box<dyn Error + Send + Sync + 'static>),
-}
-
-impl From<SerializationError> for BuildError {
-    fn from(err: SerializationError) -> Self {
-        BuildError::SerializationError(err)
-    }
-}
-
-impl From<DateTimeFormatError> for BuildError {
-    fn from(err: DateTimeFormatError) -> Self {
-        BuildError::from(SerializationError::from(err))
-    }
-}
-
-impl Display for BuildError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BuildError::InvalidField { field, details } => write!(
-                f,
-                "Invalid field in input: {} (Details: {})",
-                field, details
-            ),
-            BuildError::MissingField { field, details } => {
-                write!(f, "{} was missing. {}", field, details)
-            }
-            BuildError::SerializationError(inner) => {
-                write!(f, "failed to serialize input: {}", inner)
-            }
-            BuildError::Other(inner) => write!(f, "error during request construction: {}", inner),
-            BuildError::InvalidUri { uri, err, message } => {
-                write!(
-                    f,
-                    "generated URI `{}` was not a valid URI ({}): {}",
-                    uri, err, message
-                )
-            }
-        }
-    }
-}
-
-impl Error for BuildError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            BuildError::SerializationError(inner) => Some(inner as _),
-            BuildError::Other(inner) => Some(inner.as_ref()),
-            _ => None,
-        }
-    }
-}
-
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum SerializationError {
-    #[non_exhaustive]
-    CannotSerializeUnknownVariant { union: &'static str },
-    #[non_exhaustive]
-    DateTimeFormatError { cause: DateTimeFormatError },
-}
-
-impl SerializationError {
-    pub fn unknown_variant(union: &'static str) -> Self {
-        Self::CannotSerializeUnknownVariant { union }
-    }
-}
-
-impl Display for SerializationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CannotSerializeUnknownVariant { union } => write!(
-                f,
-                "Cannot serialize `{}::Unknown`. Unknown union variants cannot be serialized. \
-                This can occur when round-tripping a response from the server that was not \
-                recognized by the SDK. Consider upgrading to the latest version of the SDK.",
-                union
-            ),
-            Self::DateTimeFormatError { cause } => write!(f, "{}", cause),
-        }
-    }
-}
-
-impl Error for SerializationError {}
-
-impl From<DateTimeFormatError> for SerializationError {
-    fn from(err: DateTimeFormatError) -> SerializationError {
-        SerializationError::DateTimeFormatError { cause: err }
-    }
-}
-
+// Generics:
+// - H: Response handler
+// - R: Implementation of `ClassifyRetry`
 #[derive(Debug)]
 pub struct Operation<H, R> {
     request: Request,
@@ -188,24 +70,34 @@ impl<H, R> Operation<H, R> {
         self.request.properties()
     }
 
+    /// Gives mutable access to the underlying HTTP request.
+    pub fn request_mut(&mut self) -> &mut http::Request<SdkBody> {
+        self.request.http_mut()
+    }
+
+    /// Gives readonly access to the underlying HTTP request.
+    pub fn request(&self) -> &http::Request<SdkBody> {
+        self.request.http()
+    }
+
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.parts.metadata = Some(metadata);
         self
     }
 
-    pub fn with_retry_policy<R2>(self, retry_policy: R2) -> Operation<H, R2> {
+    pub fn with_retry_classifier<R2>(self, retry_classifier: R2) -> Operation<H, R2> {
         Operation {
             request: self.request,
             parts: Parts {
                 response_handler: self.parts.response_handler,
-                retry_policy,
+                retry_classifier,
                 metadata: self.parts.metadata,
             },
         }
     }
 
-    pub fn retry_policy(&self) -> &R {
-        &self.parts.retry_policy
+    pub fn retry_classifier(&self) -> &R {
+        &self.parts.retry_classifier
     }
 
     pub fn try_clone(&self) -> Option<Self>
@@ -222,12 +114,15 @@ impl<H, R> Operation<H, R> {
 }
 
 impl<H> Operation<H, ()> {
-    pub fn new(request: Request, response_handler: H) -> Self {
+    pub fn new(
+        request: Request,
+        response_handler: H,
+    ) -> Operation<H, DefaultResponseRetryClassifier> {
         Operation {
             request,
             parts: Parts {
                 response_handler,
-                retry_policy: (),
+                retry_classifier: DefaultResponseRetryClassifier::new(),
                 metadata: None,
             },
         }
@@ -369,6 +264,16 @@ impl Response {
     /// Consumes the operation `Request` and returns the underlying HTTP response and properties.
     pub fn into_parts(self) -> (http::Response<SdkBody>, SharedPropertyBag) {
         (self.inner, self.properties)
+    }
+
+    /// Return mutable references to the response and property bag contained within this `operation::Response`
+    pub fn parts_mut(
+        &mut self,
+    ) -> (
+        &mut http::Response<SdkBody>,
+        impl DerefMut<Target = PropertyBag> + '_,
+    ) {
+        (&mut self.inner, self.properties.acquire_mut())
     }
 
     /// Creates a new operation `Response` from an HTTP response and property bag.

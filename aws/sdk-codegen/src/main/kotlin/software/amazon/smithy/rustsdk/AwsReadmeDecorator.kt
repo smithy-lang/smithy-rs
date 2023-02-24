@@ -9,12 +9,12 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.rustlang.raw
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
-import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -25,24 +25,43 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 /**
  * Generates a README.md for each service crate for display on crates.io.
  */
-class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class AwsReadmeDecorator : ClientCodegenDecorator {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
-    private val logger: Logger = Logger.getLogger(javaClass.name)
-
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
-        mapOf("package" to mapOf("readme" to "README.md"))
+        if (generateReadme(codegenContext)) {
+            mapOf("package" to mapOf("readme" to "README.md"))
+        } else {
+            emptyMap()
+        }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        rustCrate.withFile("README.md") { writer ->
+        if (generateReadme(codegenContext)) {
+            AwsSdkReadmeGenerator().generateReadme(codegenContext, rustCrate)
+        }
+    }
+
+    private fun generateReadme(codegenContext: ClientCodegenContext) =
+        SdkSettings.from(codegenContext.settings).generateReadme
+}
+
+internal class AwsSdkReadmeGenerator {
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+
+    internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
+            ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
+        rustCrate.withFile("README.md") {
             val description = normalizeDescription(
                 codegenContext.moduleName,
-                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: ""
+                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
             )
             val moduleName = codegenContext.settings.moduleName
+            val snakeCaseModuleName = moduleName.replace('-', '_')
+            val shortModuleName = moduleName.removePrefix("aws-sdk-")
 
-            writer.raw(
+            raw(
                 """
                 # $moduleName
 
@@ -62,10 +81,29 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
                     ```toml
                     [dependencies]
-                    aws-config = "${codegenContext.settings.moduleVersion}"
+                    aws-config = "$awsConfigVersion"
                     $moduleName = "${codegenContext.settings.moduleVersion}"
                     tokio = { version = "1", features = ["full"] }
                     ```
+
+                    Then in code, a client can be created with the following:
+
+                    ```rust
+                    use $snakeCaseModuleName as $shortModuleName;
+
+                    #[tokio::main]
+                    async fn main() -> Result<(), $shortModuleName::Error> {
+                        let config = aws_config::load_from_env().await;
+                        let client = $shortModuleName::Client::new(&config);
+
+                        // ... make some calls with the client
+
+                        Ok(())
+                    }
+                    ```
+
+                    See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
+                    for information on what calls can be made, and the inputs and outputs for each of those calls.
 
                     ## Using the SDK
 
@@ -83,7 +121,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                     ## License
 
                     This project is licensed under the Apache-2.0 License.
-                    """.trimIndent()
+                    """.trimIndent(),
             )
         }
     }
@@ -146,7 +184,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 span.append(surround)
                 span.appendChildren(tag.childNodesCopy())
                 span.append(surround)
-            }
+            },
         )
     }
 
@@ -160,8 +198,8 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                         "[$text]($link)"
                     } else {
                         text
-                    }
-                )
+                    },
+                ),
             )
         }
     }
@@ -175,7 +213,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none() { it.isList() } }
+            .filter { list -> list.parents().none { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

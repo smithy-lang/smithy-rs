@@ -7,14 +7,14 @@ package software.amazon.smithy.rustsdk.customize.glacier
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
-class AccountIdAutofill() : OperationCustomization() {
+class AccountIdAutofill : OperationCustomization() {
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = false
     override fun section(section: OperationSection): Writable {
@@ -25,7 +25,7 @@ class AccountIdAutofill() : OperationCustomization() {
                     if ${section.input}.account_id.as_deref().unwrap_or_default().is_empty() {
                         ${section.input}.account_id = Some("-".to_owned());
                     }
-                    """
+                    """,
                 )
             }
             else -> emptySection
@@ -37,7 +37,9 @@ class AccountIdAutofill() : OperationCustomization() {
             val input = operation.inputShape(model)
             return if (input.memberNames.contains("accountId")) {
                 AccountIdAutofill()
-            } else null
+            } else {
+                null
+            }
         }
     }
 }

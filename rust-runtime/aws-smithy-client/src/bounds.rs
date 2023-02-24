@@ -7,7 +7,7 @@
 //! required for `call` and friends.
 //!
 //! The short-hands will one day be true [trait aliases], but for now they are traits with blanket
-//! implementations. Also, due to [compiler limitations], the bounds repeat a nubmer of associated
+//! implementations. Also, due to [compiler limitations], the bounds repeat a number of associated
 //! types with bounds so that those bounds [do not need to be repeated] at the call site. It's a
 //! bit of a mess to define, but _should_ be invisible to callers.
 //!
@@ -15,8 +15,14 @@
 //! [compiler limitations]: https://github.com/rust-lang/rust/issues/20671
 //! [do not need to be repeated]: https://github.com/rust-lang/rust/issues/20671#issuecomment-529752828
 
-use crate::*;
-use aws_smithy_http::result::ConnectorError;
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation::{self, Operation};
+use aws_smithy_http::response::ParseHttpResponse;
+use aws_smithy_http::result::{ConnectorError, SdkError, SdkSuccess};
+use aws_smithy_http::retry::ClassifyRetry;
+use tower::{Layer, Service};
 
 /// A service that has parsed a raw Smithy response.
 pub type Parsed<S, O, Retry> =
@@ -62,14 +68,25 @@ where
     type Future = T::Future;
 }
 
-/// A Smithy middleware service that adjusts [`aws_smithy_http::operation::Request`]s.
+impl<T, E, F> From<T> for HttpConnector
+where
+    E: Into<ConnectorError> + Send + Sync + 'static,
+    F: Send + 'static,
+    T: SmithyConnector<Error = E, Future = F, Response = http::Response<SdkBody>>,
+{
+    fn from(smithy_connector: T) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(smithy_connector)))
+    }
+}
+
+/// A Smithy middleware service that adjusts [`aws_smithy_http::operation::Request`](operation::Request)s.
 ///
 /// This trait has a blanket implementation for all compatible types, and should never be
 /// implemented.
 pub trait SmithyMiddlewareService:
     Service<
-    aws_smithy_http::operation::Request,
-    Response = aws_smithy_http::operation::Response,
+    operation::Request,
+    Response = operation::Response,
     Error = aws_smithy_http_tower::SendOperationError,
     Future = <Self as SmithyMiddlewareService>::Future,
 >
@@ -83,8 +100,8 @@ pub trait SmithyMiddlewareService:
 impl<T> SmithyMiddlewareService for T
 where
     T: Service<
-        aws_smithy_http::operation::Request,
-        Response = aws_smithy_http::operation::Response,
+        operation::Request,
+        Response = operation::Response,
         Error = aws_smithy_http_tower::SendOperationError,
     >,
     T::Future: Send + 'static,
@@ -130,20 +147,20 @@ pub trait SmithyRetryPolicy<O, T, E, Retry>:
     /// Forwarding type to `E` for bound inference.
     ///
     /// See module-level docs for details.
-    type E: Error;
+    type E: std::error::Error;
 
     /// Forwarding type to `Retry` for bound inference.
     ///
     /// See module-level docs for details.
-    type Retry: ClassifyResponse<SdkSuccess<T>, SdkError<Self::E>>;
+    type Retry: ClassifyRetry<SdkSuccess<T>, SdkError<Self::E>>;
 }
 
 impl<R, O, T, E, Retry> SmithyRetryPolicy<O, T, E, Retry> for R
 where
     R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
     O: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-    E: Error,
-    Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+    E: std::error::Error,
+    Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
 {
     type O = O;
     type E = E;

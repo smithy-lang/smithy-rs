@@ -5,6 +5,7 @@
 
 //! DateTime type for representing Smithy timestamps.
 
+use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
 use std::convert::TryFrom;
@@ -46,7 +47,7 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 /// The [`aws-smithy-types-convert`](https://crates.io/crates/aws-smithy-types-convert) crate
 /// can be used for conversions to/from other libraries, such as
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
     seconds: i64,
     subsecond_nanos: u32,
@@ -209,7 +210,7 @@ impl DateTime {
             Format::DateTime => format::rfc3339::read(s)?,
             Format::HttpDate => format::http_date::read(s)?,
             Format::EpochSeconds => {
-                let split_point = s.find(delim).unwrap_or_else(|| s.len());
+                let split_point = s.find(delim).unwrap_or(s.len());
                 let (s, rest) = s.split_at(split_point);
                 (Self::from_str(s, format)?, rest)
             }
@@ -219,9 +220,7 @@ impl DateTime {
         } else if next.starts_with(delim) {
             Ok((inst, &next[1..]))
         } else {
-            Err(DateTimeParseError::Invalid(
-                "didn't find expected delimiter".into(),
-            ))
+            Err(DateTimeParseErrorKind::Invalid("didn't find expected delimiter".into()).into())
         }
     }
 
@@ -526,6 +525,8 @@ mod test {
         assert!(DateTime::from_nanos(10_000_000_000_000_000_000_999_999_999_i128).is_err());
     }
 
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {
         // Check agreement

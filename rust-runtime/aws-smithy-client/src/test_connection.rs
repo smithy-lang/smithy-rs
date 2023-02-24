@@ -7,21 +7,21 @@
 // TODO(docs)
 #![allow(missing_docs)]
 
-use http::header::{HeaderName, CONTENT_TYPE};
-use http::Request;
-
-use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
 use std::future::Ready;
-
 use std::ops::Deref;
-
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
+use http::header::{HeaderName, CONTENT_TYPE};
+use http::Request;
 use tokio::sync::oneshot;
+
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
+use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+
+#[doc(inline)]
+pub use crate::never;
 
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
@@ -40,13 +40,26 @@ pub struct CaptureRequestReceiver {
 }
 
 impl CaptureRequestReceiver {
+    /// Expect that a request was sent. Returns the captured request.
+    ///
+    /// # Panics
+    /// If no request was received
+    #[track_caller]
     pub fn expect_request(mut self) -> http::Request<SdkBody> {
         self.receiver.try_recv().expect("no request was received")
     }
-}
 
-#[doc(inline)]
-pub use crate::never;
+    /// Expect that no request was captured. Panics if a request was received.
+    ///
+    /// # Panics
+    /// If a request was received
+    #[track_caller]
+    pub fn expect_no_request(mut self) {
+        self.receiver
+            .try_recv()
+            .expect_err("expected no request to be received!");
+    }
+}
 
 impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
     type Response = http::Response<SdkBody>;
@@ -79,7 +92,10 @@ impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
 /// Example:
 /// ```rust,compile_fail
 /// let (server, request) = capture_request(None);
-/// let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
+/// let conf = aws_sdk_sts::Config::builder()
+///     .http_connector(server)
+///     .build();
+/// let client = aws_sdk_sts::Client::from_conf(conf);
 /// let _ = client.assume_role_with_saml().send().await;
 /// // web identity should be unsigned
 /// assert_eq!(
@@ -116,6 +132,7 @@ pub struct ValidateRequest {
 impl ValidateRequest {
     pub fn assert_matches(&self, ignore_headers: &[HeaderName]) {
         let (actual, expected) = (&self.actual, &self.expected);
+        assert_eq!(actual.uri(), expected.uri());
         for (name, value) in expected.headers() {
             if !ignore_headers.contains(name) {
                 let actual_header = actual
@@ -146,7 +163,6 @@ impl ValidateRequest {
             (Ok(actual), Ok(expected)) => assert_ok(validate_body(actual, expected, media_type)),
             _ => assert_eq!(actual.body().bytes(), expected.body().bytes()),
         };
-        assert_eq!(actual.uri(), expected.uri());
     }
 }
 
@@ -201,6 +217,7 @@ impl<B> TestConnection<B> {
         self.requests.lock().unwrap()
     }
 
+    #[track_caller]
     pub fn assert_requests_match(&self, ignore_headers: &[HeaderName]) {
         for req in self.requests().iter() {
             req.assert_matches(ignore_headers)
@@ -256,12 +273,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use hyper::service::Service;
+
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::result::ConnectorError;
+
     use crate::bounds::SmithyConnector;
     use crate::test_connection::{capture_request, never::NeverService, TestConnection};
     use crate::Client;
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::result::ConnectorError;
-    use hyper::service::Service;
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
@@ -277,6 +296,7 @@ mod tests {
         T: SmithyConnector,
     {
     }
+
     fn quacks_like_a_connector<T>(_: &T)
     where
         T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>

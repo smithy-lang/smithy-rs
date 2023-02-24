@@ -3,18 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::canary::{CanaryError, Clients};
+use crate::canary::CanaryError;
 use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
+use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
-use s3::error::{GetObjectError, GetObjectErrorKind};
-use s3::types::{ByteStream, SdkError};
+use aws_sdk_s3::presigning::config::PresigningConfig;
+use s3::types::ByteStream;
+use std::time::Duration;
 use uuid::Uuid;
 
 const METADATA_TEST_VALUE: &str = "some   value";
 
-mk_canary!("s3", |clients: &Clients, env: &CanaryEnv| s3_canary(
-    clients.s3.clone(),
+mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| s3_canary(
+    s3::Client::new(sdk_config),
     env.s3_bucket_name.clone()
 ));
 
@@ -34,18 +36,12 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
                 CanaryError(format!("Expected object {} to not exist in S3", test_key)).into(),
             );
         }
-        Err(SdkError::ServiceError {
-            err:
-                GetObjectError {
-                    kind: GetObjectErrorKind::NoSuchKey { .. },
-                    ..
-                },
-            ..
-        }) => {
-            // good
-        }
         Err(err) => {
-            Err(err).context("unexpected s3::GetObject failure")?;
+            let err = err.into_service_error();
+            // If we get anything other than "No such key", we have a problem
+            if !err.is_no_such_key() {
+                return Err(err).context("unexpected s3::GetObject failure");
+            }
         }
     }
 
@@ -68,6 +64,23 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .send()
         .await
         .context("s3::GetObject[2]")?;
+
+    // repeat the test with a presigned url
+    let uri = client
+        .get_object()
+        .bucket(&s3_bucket_name)
+        .key(&test_key)
+        .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
+        .await
+        .unwrap();
+    let response = reqwest::get(uri.uri().to_string())
+        .await
+        .context("s3::presigned")?
+        .text()
+        .await?;
+    if response != "test" {
+        return Err(CanaryError(format!("presigned URL returned bad data: {:?}", response)).into());
+    }
 
     let mut result = Ok(());
     match output.metadata() {

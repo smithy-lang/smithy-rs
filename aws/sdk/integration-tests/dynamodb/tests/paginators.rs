@@ -3,21 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::collections::HashMap;
+use std::iter::FromIterator;
+
+use tokio_stream::StreamExt;
+
+use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::model::AttributeValue;
 use aws_sdk_dynamodb::{Client, Config};
+use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_client::test_connection::{capture_request, TestConnection};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
 use aws_types::region::Region;
-use aws_types::Credentials;
-use std::collections::HashMap;
-use std::iter::FromIterator;
-use tokio_stream::StreamExt;
 
-fn stub_config() -> Config {
+fn stub_config(conn: impl Into<HttpConnector>) -> Config {
     Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::new("akid", "secret", None, None, "test"))
+        .credentials_provider(Credentials::for_tests())
+        .http_connector(conn)
         .build()
 }
 
@@ -25,7 +29,7 @@ fn stub_config() -> Config {
 #[tokio::test]
 async fn paginators_pass_args() {
     let (conn, request) = capture_request(None);
-    let client = Client::from_conf_conn(stub_config(), conn);
+    let client = Client::from_conf(stub_config(conn));
     let mut paginator = client
         .scan()
         .table_name("test-table")
@@ -88,7 +92,7 @@ async fn paginators_loop_until_completion() {
             ),
         ),
     ]);
-    let client = Client::from_conf_conn(stub_config(), conn.clone());
+    let client = Client::from_conf(stub_config(conn.clone()));
     let mut paginator = client
         .scan()
         .table_name("test-table")
@@ -150,7 +154,7 @@ async fn paginators_handle_errors() {
                         }"#,
         ),
     )]);
-    let client = Client::from_conf_conn(stub_config(), conn.clone());
+    let client = Client::from_conf(stub_config(conn.clone()));
     let mut rows = client
         .scan()
         .table_name("test-table")
@@ -171,7 +175,7 @@ async fn paginators_handle_errors() {
 }
 
 #[tokio::test]
-async fn paginators_error_on_repeated_token() {
+async fn paginators_stop_on_duplicate_token_by_default() {
     let response = r#"{
         "Count": 1,
         "Items": [{
@@ -196,7 +200,7 @@ async fn paginators_error_on_repeated_token() {
             mk_response(response),
         ),
     ]);
-    let client = Client::from_conf_conn(stub_config(), conn.clone());
+    let client = Client::from_conf(stub_config(conn.clone()));
     let mut rows = client
         .scan()
         .table_name("test-table")
@@ -212,11 +216,80 @@ async fn paginators_error_on_repeated_token() {
             .get("PostedBy"),
         Some(&AttributeValue::S("joe@example.com".to_string()))
     );
-    let err = rows.try_next().await.expect_err("failure");
-    assert!(
-        format!("{}", err).contains("next token did not change"),
-        "{}",
-        err
+    assert_eq!(
+        rows.try_next()
+            .await
+            .expect("no error")
+            .expect("not EOS")
+            .get("PostedBy"),
+        Some(&AttributeValue::S("joe@example.com".to_string()))
     );
-    assert_eq!(rows.try_next().await.expect("ok"), None);
+    assert_eq!(None, rows.try_next().await.expect("success"));
+}
+
+#[tokio::test]
+async fn paginators_can_continue_on_duplicate_token() {
+    let response = r#"{
+        "Count": 1,
+        "Items": [{
+            "PostedBy": {
+                "S": "joe@example.com"
+            }
+        }],
+        "LastEvaluatedKey": {
+            "PostedBy": { "S": "joe@example.com" }
+        }
+    }"#;
+    // send the same response twice with the same pagination token
+    let conn = TestConnection::new(vec![
+        (
+            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
+            mk_response(response),
+        ),
+        (
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
+            ),
+            mk_response(response),
+        ),
+        (
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
+            ),
+            mk_response(response),
+        ),
+    ]);
+    let client = Client::from_conf(stub_config(conn.clone()));
+    let mut rows = client
+        .scan()
+        .table_name("test-table")
+        .into_paginator()
+        .stop_on_duplicate_token(false)
+        .page_size(32)
+        .items()
+        .send();
+    assert_eq!(
+        rows.try_next()
+            .await
+            .expect("no error")
+            .expect("not EOS")
+            .get("PostedBy"),
+        Some(&AttributeValue::S("joe@example.com".to_string()))
+    );
+    assert_eq!(
+        rows.try_next()
+            .await
+            .expect("no error")
+            .expect("not EOS")
+            .get("PostedBy"),
+        Some(&AttributeValue::S("joe@example.com".to_string()))
+    );
+    assert_eq!(
+        rows.try_next()
+            .await
+            .expect("no error")
+            .expect("not EOS")
+            .get("PostedBy"),
+        Some(&AttributeValue::S("joe@example.com".to_string()))
+    );
 }

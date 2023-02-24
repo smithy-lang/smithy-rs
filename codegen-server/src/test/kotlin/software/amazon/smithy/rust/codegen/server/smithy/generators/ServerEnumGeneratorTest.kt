@@ -8,13 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerEnumGeneratorTest {
     private val model = """
@@ -36,49 +35,53 @@ class ServerEnumGeneratorTest {
         string InstanceType
     """.asSmithyModel()
 
+    private val codegenContext = serverTestCodegenContext(model)
+    private val writer = RustWriter.forModule("model")
+    private val shape = model.lookup<StringShape>("test#InstanceType")
+
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        val provider = serverTestSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val shape = model.lookup<StringShape>("test#InstanceType")
-        val generator = ServerEnumGenerator(model, provider, writer, shape, shape.expectTrait(), TestRuntimeConfig)
-        generator.render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.compileAndTest(
             """
             use std::str::FromStr;
             assert_eq!(InstanceType::try_from("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::from_str("t2.nano").unwrap(), InstanceType::T2Nano);
-            assert_eq!(InstanceType::try_from("unknown").unwrap_err(), InstanceTypeUnknownVariantError("unknown".to_string()));
-            """
+            assert_eq!(InstanceType::try_from("unknown").unwrap_err(), crate::model::instance_type::ConstraintViolation(String::from("unknown")));
+            """,
         )
     }
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        val provider = serverTestSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val shape = model.lookup<StringShape>("test#InstanceType")
-        val generator = ServerEnumGenerator(model, provider, writer, shape, shape.expectTrait(), TestRuntimeConfig)
-        generator.render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.compileAndTest(
             """
-            // check no unknown
+            // Check no `Unknown` variant.
             let instance = InstanceType::T2Micro;
             match instance {
                 InstanceType::T2Micro => (),
                 InstanceType::T2Nano => (),
             }
-            """
+            """,
         )
     }
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        val provider = serverTestSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val shape = model.lookup<StringShape>("test#InstanceType")
-        val generator = ServerEnumGenerator(model, provider, writer, shape, shape.expectTrait(), TestRuntimeConfig)
-        generator.render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }

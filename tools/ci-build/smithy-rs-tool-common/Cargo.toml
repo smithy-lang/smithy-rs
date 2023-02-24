@@ -1,0 +1,32 @@
+[package]
+name = "smithy-rs-tool-common"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[features]
+async-shell = ["tokio"]
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+lazy_static = "1"
+regex = "1.6.0"
+reqwest = "0.11.10"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.20.1", features = ["rt", "macros"], optional = true }
+toml = { version = "0.5.8", features = ["preserve_order"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3.3.0"

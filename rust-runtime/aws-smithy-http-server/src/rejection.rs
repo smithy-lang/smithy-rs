@@ -9,13 +9,11 @@
 //! handle requests and responses that return `Result<T, E>` throughout the framework. These
 //! include functions to deserialize incoming requests and serialize outgoing responses.
 //!
-//! All types end with `Rejection`. There are three types:
+//! All types end with `Rejection`. There are two types:
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
-//! 1. [`RequestExtensionNotFoundRejection`]s are used when the framework fails to deserialize from
-//!    the request's extensions a particular [`crate::Extension`] that was expected to be found.
-//! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
+//! 2. [`ResponseRejection`]s are used when the framework fails to serialize the operation
 //!    output into a response.
 //!
 //! They are called _rejection_ types and not _error_ types to signal that the input was _rejected_
@@ -43,31 +41,12 @@
 
 use strum_macros::Display;
 
-/// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
-/// extensions]. Contains one variant for each way the extractor can fail.
-///
-/// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
-#[derive(Debug, Display)]
-pub enum RequestExtensionNotFoundRejection {
-    /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
-    /// did not find it.
-    /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
-    /// registers the particular extension in their service to incoming requests.
-    MissingExtension(String),
-    // Used when the request extensions have already been taken by another extractor.
-    ExtensionsAlreadyExtracted,
-}
-
-impl std::error::Error for RequestExtensionNotFoundRejection {}
+use crate::response::IntoResponse;
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
 #[derive(Debug, Display)]
 pub enum ResponseRejection {
-    /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
-    /// it to `None`.
-    MissingHttpStatusCode,
-
     /// Used when the service implementer provides an integer outside the 100-999 range for a
     /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,
@@ -93,13 +72,12 @@ pub enum ResponseRejection {
 
 impl std::error::Error for ResponseRejection {}
 
-convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
-/// that is passed as the first argument to operation handlers. To deserialize into the service's
-/// registered state, a different rejection type is used, [`RequestExtensionNotFoundRejection`].
+/// that is passed as the first argument to operation handlers.
 ///
 /// This type allows us to easily keep track of all the possible errors that can occur in the
 /// lifecycle of an incoming HTTP request.
@@ -125,20 +103,12 @@ convert_to_response_rejection!(http::Error, Http);
 // The variants are _roughly_ sorted in the order in which the HTTP request is processed.
 #[derive(Debug, Display)]
 pub enum RequestRejection {
-    /// Used when attempting to take the request's body, and it has already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    BodyAlreadyExtracted,
-
     /// Used when failing to convert non-streaming requests into a byte slab with
     /// `hyper::body::to_bytes`.
     HttpBody(crate::Error),
 
-    // These are used when checking the `Content-Type` header.
-    MissingRestJson1ContentType,
-    MissingAwsJson10ContentType,
-    MissingAwsJson11ContentType,
-    MissingRestXmlContentType,
-    MimeParse,
+    /// Used when checking the `Content-Type` header.
+    MissingContentType(MissingContentTypeReason),
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
     /// the modeled input it should represent.
@@ -146,10 +116,6 @@ pub enum RequestRejection {
     /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
     /// input it should represent.
     XmlDeserialize(crate::Error),
-
-    /// Used when attempting to take the request's headers, and they have already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    HeadersAlreadyExtracted,
 
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.
@@ -181,15 +147,24 @@ pub enum RequestRejection {
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1243): In theory, we could get rid of this
-    // error, but it would be a lot of effort for comparatively low benefit.
-    /// Used when consuming the input struct builder.
-    Build(crate::Error),
+    /// Used when consuming the input struct builder, and constraint violations occur.
+    // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
+    // directly in the code-generated SDK instead of in this crate.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1703): this will hold a type that can be
+    // rendered into a protocol-specific response later on.
+    ConstraintViolation(String),
+}
 
-    /// Used by the server when the enum variant sent by a client is not known.
-    /// Unlike the rejections above, the inner type is code generated,
-    /// with each enum having its own generated error type.
-    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
+#[derive(Debug, Display)]
+pub enum MissingContentTypeReason {
+    HeadersTakenByAnotherExtractor,
+    NoContentTypeHeader,
+    ToStrError(http::header::ToStrError),
+    MimeParseError(mime::FromStrError),
+    UnexpectedMimeType {
+        expected_mime: Option<mime::Mime>,
+        found_mime: Option<mime::Mime>,
+    },
 }
 
 impl std::error::Error for RequestRejection {}
@@ -213,15 +188,20 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
+impl From<MissingContentTypeReason> for RequestRejection {
+    fn from(e: MissingContentTypeReason) -> Self {
+        Self::MissingContentType(e)
+    }
+}
+
 // These converters are solely to make code-generation simpler. They convert from a specific error
 // type (from a runtime/third-party crate or the standard library) into a variant of the
 // [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
 // type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
 // bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
-convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
-convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
-convert_to_request_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeserialize);
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
@@ -248,3 +228,43 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
+
+// Useful in general, but it also required in order to accept Lambda HTTP requests using
+// `Router<lambda_http::Body>` since `lambda_http::Error` is a type alias for `Box<dyn Error + ..>`.
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
+
+pub mod any_rejections {
+    //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
+    //! [`IntoResponse`].
+
+    use super::IntoResponse;
+
+    macro_rules! any_rejection {
+        ($name:ident, $($var:ident),+) => (
+            pub enum $name<$($var),*> {
+                $($var ($var),)*
+            }
+
+            impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
+            where
+                $($var: IntoResponse<P>,)*
+            {
+                #[allow(non_snake_case)]
+                fn into_response(self) -> http::Response<crate::body::BoxBody> {
+                    match self {
+                        $($name::$var ($var) => $var.into_response(),)*
+                    }
+                }
+            }
+        )
+    }
+
+    // any_rejection!(One, A);
+    any_rejection!(Two, A, B);
+    any_rejection!(Three, A, B, C);
+    any_rejection!(Four, A, B, C, D);
+    any_rejection!(Five, A, B, C, D, E);
+    any_rejection!(Six, A, B, C, D, E, F);
+    any_rejection!(Seven, A, B, C, D, E, F, G);
+    any_rejection!(Eight, A, B, C, D, E, F, G, H);
+}

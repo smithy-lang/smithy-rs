@@ -5,6 +5,7 @@
 
 package aws.sdk
 
+import CrateSet
 import org.gradle.api.Project
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
@@ -13,9 +14,23 @@ import software.amazon.smithy.model.traits.TitleTrait
 import java.io.File
 import kotlin.streams.toList
 
-class AwsServices(private val project: Project, services: List<AwsService>) {
+data class RootTest(
+    val path: File,
+    val manifestName: String,
+)
+
+class AwsServices(
+    private val project: Project,
+    services: List<AwsService>,
+    val endpointsConfigPath: File,
+    val defaultConfigPath: File,
+) {
     val services: List<AwsService>
     val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
+
+    init {
+        this.services = services.sortedBy { it.module }
+    }
 
     val allModules: Set<String> by lazy {
         (
@@ -23,31 +38,46 @@ class AwsServices(private val project: Project, services: List<AwsService>) {
                 CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
                 CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
                 examples
+            // Root tests should not be included since they can't be part of the root Cargo workspace
+            // in order to test differences in Cargo features.
             ).toSortedSet()
     }
 
     val examples: List<String> by lazy {
         project.projectDir.resolve("examples")
             .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-            .filter { file ->
-                val cargoToml = File(file, "Cargo.toml")
-                if (cargoToml.exists()) {
-                    val usedModules = cargoToml.readLines()
-                        .map { line -> line.substringBefore('=').trim() }
-                        .filter { line -> line.startsWith("aws-sdk-") }
-                        .map { line -> line.substringAfter("aws-sdk-") }
-                        .toSet()
-                    moduleNames.containsAll(usedModules)
-                } else {
-                    false
-                }
-            }
+            .filter { file -> manifestCompatibleWithGeneratedServices(file) }
             .map { "examples/${it.name}" }
     }
 
-    init {
-        this.services = services.sortedBy { it.module }
+    /**
+     * Tests in `aws/sdk/integration-tests` that are not named after a service module, and therefore,
+     * are not included in a service's `tests/` directory. These are to be included at the SDK root
+     * `tests/` directory for inclusion in CI.
+     */
+    val rootTests: List<RootTest> by lazy {
+        project.projectDir.resolve("integration-tests")
+            .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
+            .filter { file -> !moduleNames.contains(file.name) && manifestCompatibleWithGeneratedServices(file) }
+            .map { file -> RootTest(file, "tests/${file.name}") }
     }
+
+    /**
+     * Returns true if the Cargo manifest in the given path is compatible with the set of generated services.
+     */
+    private fun manifestCompatibleWithGeneratedServices(path: File) =
+        File(path, "Cargo.toml").let { cargoToml ->
+            if (cargoToml.exists()) {
+                val usedModules = cargoToml.readLines()
+                    .map { line -> line.substringBefore('=').trim() }
+                    .filter { line -> line.startsWith("aws-sdk-") }
+                    .map { line -> line.substringAfter("aws-sdk-") }
+                    .toSet()
+                moduleNames.containsAll(usedModules)
+            } else {
+                false
+            }
+        }
 }
 
 /**
@@ -56,8 +86,9 @@ class AwsServices(private val project: Project, services: List<AwsService>) {
  * Since this function parses all models, it is relatively expensive to call. The result should be cached in a property
  * during build.
  */
-fun Project.discoverServices(serviceMembership: Membership): AwsServices {
-    val models = project.file("aws-models")
+fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membership): AwsServices {
+    val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
+    logger.info("Using model path: $models")
     val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
@@ -90,23 +121,28 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
                     module = sdkId,
                     moduleDescription = "AWS SDK for $title",
                     modelFile = file,
-                    extraFiles = extras,
-                    humanName = title
+                    // Order is important for the versions.toml model hash calculation
+                    extraFiles = extras.sorted(),
+                    humanName = title,
                 )
             }
         }
     val baseModules = baseServices.map { it.module }.toSet()
+    logger.info("Discovered base service modules to generate: $baseModules")
 
-    // validate the full exclusion list hits
-    serviceMembership.exclusions.forEach { disabledService ->
-        check(baseModules.contains(disabledService)) {
-            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-            baseModules.joinToString(
-                "\n "
-            )
-            }"
+    // validate the full exclusion list hits if the models directory is set
+    if (awsModelsPath != null) {
+        serviceMembership.exclusions.forEach { disabledService ->
+            check(baseModules.contains(disabledService)) {
+                "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
+                    baseModules.joinToString(
+                        "\n ",
+                    )
+                }"
+            }
         }
     }
+
     // validate inclusion list hits
     serviceMembership.inclusions.forEach { service ->
         check(baseModules.contains(service)) { "Service $service was in explicit inclusion list but not generated!" }
@@ -115,7 +151,12 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
         this,
         baseServices.filter {
             serviceMembership.isMember(it.module)
-        }
+        }.also { services ->
+            val moduleNames = services.map { it.module }
+            logger.info("Final service module list: $moduleNames")
+        },
+        models.resolve("sdk-endpoints.json"),
+        models.resolve("sdk-default-configuration.json"),
     )
 }
 
@@ -128,10 +169,11 @@ data class AwsService(
     val modelFile: File,
     val extraConfig: String? = null,
     val extraFiles: List<File>,
-    val humanName: String
+    val humanName: String,
 ) {
-    fun files(): List<File> = listOf(modelFile) + extraFiles
+    fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
+
     /**
      * Generate a link to the examples for a given service
      */
@@ -164,7 +206,9 @@ fun parseMembership(rawList: String): Membership {
     }
 
     val conflictingMembers = inclusions.intersect(exclusions)
-    require(conflictingMembers.isEmpty()) { "$conflictingMembers specified both for inclusion and exclusion in $rawList" }
+    require(conflictingMembers.isEmpty()) {
+        "$conflictingMembers specified both for inclusion and exclusion in $rawList"
+    }
 
     return Membership(inclusions, exclusions)
 }

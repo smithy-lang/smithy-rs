@@ -6,16 +6,17 @@
 //! Load a region from an AWS profile
 
 use crate::meta::region::{future, ProvideRegion};
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::ProfileSet;
 use crate::provider_config::ProviderConfig;
-use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
-
-use super::ProfileSet;
 
 /// Load a region from a profile file
 ///
 /// This provider will attempt to load AWS shared configuration, then read the `region` property
 /// from the active profile.
+///
+#[doc = include_str!("location_of_profile_files.md")]
 ///
 /// # Examples
 ///
@@ -36,9 +37,7 @@ use super::ProfileSet;
 /// This provider is part of the [default region provider chain](crate::default_provider::region).
 #[derive(Debug, Default)]
 pub struct ProfileFileRegionProvider {
-    fs: Fs,
-    env: Env,
-    profile_override: Option<String>,
+    provider_config: ProviderConfig,
 }
 
 /// Builder for [ProfileFileRegionProvider]
@@ -46,6 +45,7 @@ pub struct ProfileFileRegionProvider {
 pub struct Builder {
     config: Option<ProviderConfig>,
     profile_override: Option<String>,
+    profile_files: Option<ProfileFiles>,
 }
 
 impl Builder {
@@ -55,19 +55,26 @@ impl Builder {
         self
     }
 
-    /// Override the profile name used by the [ProfileFileRegionProvider]
+    /// Override the profile name used by the [`ProfileFileRegionProvider`]
     pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
         self.profile_override = Some(profile_name.into());
         self
     }
 
+    /// Set the profile file that should be used by the [`ProfileFileRegionProvider`]
+    pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
+        self.profile_files = Some(profile_files);
+        self
+    }
+
     /// Build a [ProfileFileRegionProvider] from this builder
     pub fn build(self) -> ProfileFileRegionProvider {
-        let conf = self.config.unwrap_or_default();
+        let conf = self
+            .config
+            .unwrap_or_default()
+            .with_profile_config(self.profile_files, self.profile_override);
         ProfileFileRegionProvider {
-            env: conf.env(),
-            fs: conf.fs(),
-            profile_override: self.profile_override,
+            provider_config: conf,
         }
     }
 }
@@ -78,9 +85,7 @@ impl ProfileFileRegionProvider {
     /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [`Builder`].
     pub fn new() -> Self {
         Self {
-            fs: Fs::real(),
-            env: Env::real(),
-            profile_override: None,
+            provider_config: ProviderConfig::default(),
         }
     }
 
@@ -90,24 +95,18 @@ impl ProfileFileRegionProvider {
     }
 
     async fn region(&self) -> Option<Region> {
-        let profile_set = super::parser::load(&self.fs, &self.env)
-            .await
-            .map_err(|err| tracing::warn!(err = %err, "failed to parse profile"))
-            .ok()?;
+        let profile_set = self.provider_config.profile().await?;
 
-        resolve_profile_chain_for_region(&profile_set, self.profile_override.as_deref())
+        resolve_profile_chain_for_region(profile_set)
     }
 }
 
-fn resolve_profile_chain_for_region(
-    profile_set: &'_ ProfileSet,
-    profile_override: Option<&str>,
-) -> Option<Region> {
+fn resolve_profile_chain_for_region(profile_set: &'_ ProfileSet) -> Option<Region> {
     if profile_set.is_empty() {
         return None;
     }
 
-    let mut selected_profile = profile_override.unwrap_or_else(|| profile_set.selected_profile());
+    let mut selected_profile = profile_set.selected_profile();
     let mut visited_profiles = vec![];
 
     loop {

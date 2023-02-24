@@ -22,17 +22,24 @@ Controlling service generation
 
 You can use gradle properties to opt/out of generating specific services:
 ```bash
-# generate only s3,ec2,sts
+# Generate only s3,ec2,sts
 ./gradlew -Paws.services=+s3,+ec2,+sts :aws:sdk:assemble
 
-# generate a complete SDK for release
-./gradlew -Paws.fullsdk=true :aws:sdk:assemble
+# Generate all AWS services using models from the aws-sdk-rust repo
+./gradlew \
+  -Paws.sdk.models.path=../aws-sdk-rust/aws-models \
+  :aws:sdk:assemble
+
+# Generate only S3 from using the model from the aws-sdk-rust repo
+./gradlew \
+  -Paws.sdk.models.path=../aws-sdk-rust/aws-models \
+  -Paws.services=+s3 \
+  :aws:sdk:assemble
 ```
 
 The generation logic is as follows:
-1. If `aws.services` is specified, generate an SDK based on the inclusion/exclusion list.
-2. Otherwise, if `aws.fullsdk` is specified generate an SDK based on `aws.services.fullsdk`.
-3. Otherwise, generate an SDK based on `aws.services.smoketest`
+1. If `aws.sdk.models.path` is specified, take models from that path. Otherwise take them from the local `aws-models` directory.
+2. Reference the `aws.services` property to determine which models to include/exclude, based on the service module names.
 
 Debugging with IntelliJ
 -----------------------

@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::profile::parser::parse::{RawProfileSet, WHITESPACE};
+use crate::profile::profile_file::ProfileFileKind;
+use crate::profile::{Profile, ProfileSet, Property};
 use std::borrow::Cow;
 use std::collections::HashMap;
-
-use crate::profile::parser::parse::{RawProfileSet, WHITESPACE};
-use crate::profile::parser::source::FileKind;
-use crate::profile::{Profile, ProfileSet, Property};
 
 const DEFAULT: &str = "default";
 const PROFILE_PREFIX: &str = "profile";
@@ -38,7 +37,7 @@ impl ProfileName<'_> {
     /// 1. `name` must ALWAYS be a valid identifier
     /// 2. For Config files, the profile must either be `default` or it must have a profile prefix
     /// 3. For credentials files, the profile name MUST NOT have a profile prefix
-    fn valid_for(self, kind: FileKind) -> Result<Self, String> {
+    fn valid_for(self, kind: ProfileFileKind) -> Result<Self, String> {
         if validate_identifier(self.name).is_err() {
             return Err(format!(
                 "profile `{}` ignored because `{}` was not a valid identifier",
@@ -46,17 +45,17 @@ impl ProfileName<'_> {
             ));
         }
         match (self.name, kind, self.has_profile_prefix) {
-            (_, FileKind::Config, true) => Ok(self),
-            (DEFAULT, FileKind::Config, false) => Ok(self),
-            (_not_default, FileKind::Config, false) => Err(format!(
+            (_, ProfileFileKind::Config, true) => Ok(self),
+            (DEFAULT, ProfileFileKind::Config, false) => Ok(self),
+            (_not_default, ProfileFileKind::Config, false) => Err(format!(
                 "profile `{}` ignored because config profiles must be of the form `[profile <name>]`",
                 self.name
             )),
-            (_, FileKind::Credentials, true) => Err(format!(
+            (_, ProfileFileKind::Credentials, true) => Err(format!(
                 "profile `{}` ignored because credential profiles must NOT begin with `profile`",
                 self.name
             )),
-            (_, FileKind::Credentials, false) => Ok(self),
+            (_, ProfileFileKind::Credentials, false) => Ok(self),
         }
     }
 }
@@ -68,7 +67,11 @@ impl ProfileName<'_> {
 /// - Profile names are validated (see `validate_profile_name`)
 /// - A profile named `profile default` takes priority over a profile named `default`.
 /// - Profiles with identical names are merged
-pub(super) fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet<'_>, kind: FileKind) {
+pub(super) fn merge_in(
+    base: &mut ProfileSet,
+    raw_profile_set: RawProfileSet<'_>,
+    kind: ProfileFileKind,
+) {
     // parse / validate profile names
     let validated_profiles = raw_profile_set
         .into_iter()
@@ -80,8 +83,8 @@ pub(super) fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet<'_>
     let valid_profiles = validated_profiles
         .filter_map(|(name, profile)| match name {
             Ok(profile_name) => Some((profile_name, profile)),
-            Err(e) => {
-                tracing::warn!("{}", e);
+            Err(err_str) => {
+                tracing::warn!("{}", err_str);
                 None
             }
         })
@@ -137,7 +140,7 @@ fn validate_identifier(input: &str) -> Result<&str, ()> {
                     .iter()
                     .any(|c| *c == ch)
         })
-        .then(|| input)
+        .then_some(input)
         .ok_or(())
 }
 
@@ -148,11 +151,11 @@ mod tests {
     use tracing_test::traced_test;
 
     use crate::profile::parser::parse::RawProfileSet;
-    use crate::profile::parser::source::FileKind;
     use crate::profile::ProfileSet;
 
     use super::{merge_in, ProfileName};
     use crate::profile::parser::normalize::validate_identifier;
+    use crate::profile::profile_file::ProfileFileKind;
 
     #[test]
     fn profile_name_parsing() {
@@ -219,7 +222,7 @@ mod tests {
             out
         });
         let mut base = ProfileSet::empty();
-        merge_in(&mut base, profile, FileKind::Config);
+        merge_in(&mut base, profile, ProfileFileKind::Config);
         assert!(base
             .get_profile("default")
             .expect("contains default profile")
@@ -235,7 +238,7 @@ mod tests {
     fn invalid_profile_generates_warning() {
         let mut profile: RawProfileSet<'_> = HashMap::new();
         profile.insert("foo", HashMap::new());
-        merge_in(&mut ProfileSet::empty(), profile, FileKind::Config);
+        merge_in(&mut ProfileSet::empty(), profile, ProfileFileKind::Config);
         assert!(logs_contain("profile `foo` ignored"));
     }
 }

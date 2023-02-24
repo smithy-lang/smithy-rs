@@ -16,7 +16,7 @@ private fun runCli(
     execActionFactory: ExecActionFactory,
     objectFactory: ObjectFactory,
     commandLine: List<String>,
-    workingDirectory: File? = null
+    workingDirectory: File? = null,
 ) {
     execActionFactory.newExecAction().let { action ->
         objectFactory
@@ -65,14 +65,14 @@ abstract class ExecRustBuildTool : DefaultTask() {
                 getExecActionFactory(),
                 getObjectFactory(),
                 listOf(binaryName!!) + arguments!!,
-                workingDirectory = null
+                workingDirectory = null,
             )
         } else {
             runCli(
                 getExecActionFactory(),
                 getObjectFactory(),
                 listOf("cargo", "run", "--bin", binaryName!!, "--") + arguments!!,
-                workingDirectory = toolPath
+                workingDirectory = toolPath,
             )
         }
     }
@@ -101,12 +101,13 @@ abstract class RequireRustBuildTool : DefaultTask() {
         if (System.getenv()["SMITHY_RS_DOCKER_BUILD_IMAGE"] != "1") {
             val command = mutableListOf("cargo")
             command.add("install")
+            command.add("--locked")
             command.add("--path")
             command.add(toolPath!!.absolutePath)
             runCli(
                 getExecActionFactory(),
                 getObjectFactory(),
-                command
+                command,
             )
         }
     }

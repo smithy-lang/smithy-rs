@@ -1,20 +1,25 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
 name = "transcribestreaming"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [dev-dependencies]
-async-stream = "0.3"
+async-stream = "0.3.0"
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-bytes = "1"
-futures-core = "0.3"
-hound = "3.4"
-http = "0.2.3"
-serde_json = "1"
-tokio = { version = "1", features = ["full", "test-util"] }
-tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
+bytes = "1.0.0"
+futures-core = "0.3.14"
+hound = "3.4.0"
+http = "0.2.0"
+serde_json = "1.0.0"
+tokio = { version = "1.8.4", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

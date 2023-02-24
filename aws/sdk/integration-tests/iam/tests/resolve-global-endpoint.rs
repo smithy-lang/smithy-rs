@@ -3,37 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_endpoint::get_endpoint_resolver;
-use aws_sdk_iam::Region;
-use http::Uri;
+use aws_sdk_iam::{Credentials, Region};
+use aws_smithy_client::test_connection::capture_request;
 
+// this test is ignored because pseudoregions have been removed. This test should be re-enabled
+// once FIPS support is added in aws-config
 #[tokio::test]
+#[ignore]
 async fn correct_endpoint_resolver() {
-    let conf = aws_sdk_iam::Config::builder().build();
-    let operation = aws_sdk_iam::operation::ListRoles::builder()
-        .build()
-        .unwrap()
-        .make_operation(&conf)
-        .await
-        .expect("valid operation");
-    let props = operation.properties();
-    let resolver = get_endpoint_resolver(&props).expect("operation should have endpoint resolver");
-    // test regular endpoint
-    {
-        let ep = resolver
-            .resolve_endpoint(&Region::new("us-east-1"))
-            .expect("valid endpoint");
-        let mut uri = Uri::from_static("/");
-        ep.set_endpoint(&mut uri, None);
-        assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/"));
-    }
-    // test fips endpoint
-    {
-        let ep = resolver
-            .resolve_endpoint(&Region::new("iam-fips"))
-            .expect("valid endpoint");
-        let mut uri = Uri::from_static("/");
-        ep.set_endpoint(&mut uri, None);
-        assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/"));
-    }
+    let (conn, request) = capture_request(None);
+    let conf = aws_sdk_iam::Config::builder()
+        .region(Region::from_static("iam-fips"))
+        .credentials_provider(Credentials::for_tests())
+        .http_connector(conn)
+        .build();
+    let client = aws_sdk_iam::Client::from_conf(conf);
+    let _ = client.list_roles().send().await;
+    let req = request.expect_request();
+    assert_eq!(&req.uri().to_string(), "https://iam-fips.amazonaws.com/");
 }

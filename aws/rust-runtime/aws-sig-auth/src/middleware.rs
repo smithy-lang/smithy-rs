@@ -3,19 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::signer::{
-    OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
-};
-use aws_sigv4::http_request::SignableBody;
-use aws_smithy_http::middleware::MapRequest;
-use aws_smithy_http::operation::Request;
-use aws_smithy_http::property_bag::PropertyBag;
-use aws_types::region::SigningRegion;
-use aws_types::Credentials;
-use aws_types::SigningService;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
+
+use aws_smithy_http::middleware::MapRequest;
+use aws_smithy_http::operation::Request;
+use aws_smithy_http::property_bag::PropertyBag;
+
+use aws_credential_types::Credentials;
+use aws_sigv4::http_request::SignableBody;
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
+
+use crate::signer::{
+    OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
+};
 
 /// Container for the request signature for use in the property bag.
 #[non_exhaustive]
@@ -61,50 +64,63 @@ impl SigV4SigningStage {
 }
 
 #[derive(Debug)]
-pub enum SigningStageError {
+enum SigningStageErrorKind {
     MissingCredentials,
     MissingSigningRegion,
     MissingSigningService,
     MissingSigningConfig,
-    InvalidBodyType,
     SigningFailure(SigningError),
+}
+
+#[derive(Debug)]
+pub struct SigningStageError {
+    kind: SigningStageErrorKind,
 }
 
 impl Display for SigningStageError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SigningStageError::MissingCredentials => {
-                write!(f, "No credentials in the property bag")
+        use SigningStageErrorKind::*;
+        match self.kind {
+            MissingCredentials => {
+                write!(f, "no credentials in the property bag")
             }
-            SigningStageError::MissingSigningRegion => {
-                write!(f, "No signing region in the property bag")
+            MissingSigningRegion => {
+                write!(f, "no signing region in the property bag")
             }
-            SigningStageError::MissingSigningService => {
-                write!(f, "No signing service in the property bag")
+            MissingSigningService => {
+                write!(f, "no signing service in the property bag")
             }
-            SigningStageError::MissingSigningConfig => {
-                write!(f, "No signing configuration in the property bag")
+            MissingSigningConfig => {
+                write!(f, "no signing configuration in the property bag")
             }
-            SigningStageError::InvalidBodyType => write!(
-                f,
-                "The request body could not be signed by this configuration"
-            ),
-            SigningStageError::SigningFailure(_) => write!(f, "Signing failed"),
+            SigningFailure(_) => write!(f, "signing failed"),
         }
-    }
-}
-
-impl From<SigningError> for SigningStageError {
-    fn from(error: SigningError) -> Self {
-        Self::SigningFailure(error)
     }
 }
 
 impl Error for SigningStageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self {
-            SigningStageError::SigningFailure(err) => Some(err.as_ref()),
-            _ => None,
+        use SigningStageErrorKind as ErrorKind;
+        match &self.kind {
+            ErrorKind::SigningFailure(err) => Some(err),
+            ErrorKind::MissingCredentials
+            | ErrorKind::MissingSigningRegion
+            | ErrorKind::MissingSigningService
+            | ErrorKind::MissingSigningConfig => None,
+        }
+    }
+}
+
+impl From<SigningStageErrorKind> for SigningStageError {
+    fn from(kind: SigningStageErrorKind) -> Self {
+        Self { kind }
+    }
+}
+
+impl From<SigningError> for SigningStageError {
+    fn from(error: SigningError) -> Self {
+        Self {
+            kind: SigningStageErrorKind::SigningFailure(error),
         }
     }
 }
@@ -115,17 +131,17 @@ fn signing_config(
 ) -> Result<(&OperationSigningConfig, RequestConfig, Credentials), SigningStageError> {
     let operation_config = config
         .get::<OperationSigningConfig>()
-        .ok_or(SigningStageError::MissingSigningConfig)?;
+        .ok_or(SigningStageErrorKind::MissingSigningConfig)?;
     let credentials = config
         .get::<Credentials>()
-        .ok_or(SigningStageError::MissingCredentials)?
+        .ok_or(SigningStageErrorKind::MissingCredentials)?
         .clone();
     let region = config
         .get::<SigningRegion>()
-        .ok_or(SigningStageError::MissingSigningRegion)?;
+        .ok_or(SigningStageErrorKind::MissingSigningRegion)?;
     let signing_service = config
         .get::<SigningService>()
-        .ok_or(SigningStageError::MissingSigningService)?;
+        .ok_or(SigningStageErrorKind::MissingSigningService)?;
     let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
@@ -142,11 +158,15 @@ fn signing_config(
 impl MapRequest for SigV4SigningStage {
     type Error = SigningStageError;
 
+    fn name(&self) -> &'static str {
+        "sigv4_sign_request"
+    }
+
     fn apply(&self, req: Request) -> Result<Request, Self::Error> {
         req.augment(|mut req, config| {
             let operation_config = config
                 .get::<OperationSigningConfig>()
-                .ok_or(SigningStageError::MissingSigningConfig)?;
+                .ok_or(SigningStageErrorKind::MissingSigningConfig)?;
             let (operation_config, request_config, creds) =
                 match &operation_config.signing_requirements {
                     SigningRequirements::Disabled => return Ok(req),
@@ -160,7 +180,7 @@ impl MapRequest for SigV4SigningStage {
             let signature = self
                 .signer
                 .sign(operation_config, &request_config, &creds, &mut req)
-                .map_err(|err| SigningStageError::SigningFailure(err))?;
+                .map_err(SigningStageErrorKind::SigningFailure)?;
             config.insert(signature);
             Ok(req)
         })
@@ -169,20 +189,23 @@ impl MapRequest for SigV4SigningStage {
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{SigV4SigningStage, Signature, SigningStageError};
-    use crate::signer::{OperationSigningConfig, SigV4Signer};
-    use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-    use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage};
+    use std::convert::Infallible;
+    use std::time::{Duration, UNIX_EPOCH};
+
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::middleware::MapRequest;
     use aws_smithy_http::operation;
-    use aws_types::region::{Region, SigningRegion};
-    use aws_types::Credentials;
-    use aws_types::SigningService;
     use http::header::AUTHORIZATION;
-    use std::convert::Infallible;
-    use std::sync::Arc;
-    use std::time::{Duration, UNIX_EPOCH};
+
+    use aws_credential_types::Credentials;
+    use aws_endpoint::AwsAuthStage;
+    use aws_types::region::{Region, SigningRegion};
+    use aws_types::SigningService;
+
+    use crate::middleware::{
+        SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
+    };
+    use crate::signer::{OperationSigningConfig, SigV4Signer};
 
     #[test]
     fn places_signature_in_property_bag() {
@@ -197,7 +220,7 @@ mod test {
                 properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
                 properties.insert(SigningService::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
-                properties.insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+                properties.insert(Credentials::for_tests());
                 properties.insert(SigningRegion::from(region));
                 Result::<_, Infallible>::Ok(req)
             })
@@ -214,25 +237,26 @@ mod test {
     // check that the endpoint middleware followed by signing middleware produce the expected result
     #[test]
     fn endpoint_plus_signer() {
-        let provider = Arc::new(aws_endpoint::partition::endpoint::Metadata {
-            uri_template: "kinesis.{region}.amazonaws.com",
-            protocol: Protocol::Https,
-            credential_scope: Default::default(),
-            signature_versions: SignatureVersion::V4,
-        });
-        let req = http::Request::new(SdkBody::from(""));
-        let region = Region::new("us-east-1");
+        use aws_smithy_types::endpoint::Endpoint;
+        let endpoint = Endpoint::builder()
+            .url("https://kinesis.us-east-1.amazonaws.com")
+            .build();
+        let req = http::Request::builder()
+            .uri("https://kinesis.us-east-1.amazonaws.com")
+            .body(SdkBody::from(""))
+            .unwrap();
+        let region = SigningRegion::from_static("us-east-1");
         let req = operation::Request::new(req)
             .augment(|req, conf| {
                 conf.insert(region.clone());
                 conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
                 conf.insert(SigningService::from_static("kinesis"));
-                set_endpoint_resolver(conf, provider);
+                conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)
             })
             .expect("succeeds");
 
-        let endpoint = AwsEndpointStage;
+        let endpoint = AwsAuthStage;
         let signer = SigV4SigningStage::new(SigV4Signer::new());
         let mut req = endpoint.apply(req).expect("add endpoint should succeed");
         let mut errs = vec![signer
@@ -246,13 +270,15 @@ mod test {
                 .apply(req.try_clone().expect("can clone"))
                 .expect_err("no cred provider"),
         );
-        req.properties_mut()
-            .insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+        req.properties_mut().insert(Credentials::for_tests());
         let req = signer.apply(req).expect("signing succeeded");
         // make sure we got the correct error types in any order
         assert!(errs.iter().all(|el| matches!(
             el,
-            SigningStageError::MissingCredentials | SigningStageError::MissingSigningConfig
+            SigningStageError {
+                kind: SigningStageErrorKind::MissingCredentials
+                    | SigningStageErrorKind::MissingSigningConfig
+            }
         )));
 
         let (req, _) = req.into_parts();
@@ -265,7 +291,9 @@ mod test {
         let auth_header = req
             .headers()
             .get(AUTHORIZATION)
-            .expect("auth header must be present");
-        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=af71a409f0229dfd6e88409cd1b11f5c2803868d6869888e53bbf9ee12a97ea0");
+            .expect("auth header must be present")
+            .to_str()
+            .unwrap();
+        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=228edaefb06378ac8d050252ea18a219da66117dd72759f4d1d60f02ebc3db64");
     }
 }

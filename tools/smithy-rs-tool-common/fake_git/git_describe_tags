@@ -1,6 +1,0 @@
-#!/bin/bash
-if [[ "$1" != "describe" || "$2" != "--tags" ]]; then
-    echo "wrong arguments" >&2
-    exit 1
-fi
-echo "some-tag"

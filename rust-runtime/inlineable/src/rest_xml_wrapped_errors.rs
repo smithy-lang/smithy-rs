@@ -3,51 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_xml::decode::{try_data, Document, ScopedDecoder, XmlError};
+use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
+use aws_smithy_xml::decode::{try_data, Document, ScopedDecoder, XmlDecodeError};
 use std::convert::TryFrom;
 
 #[allow(unused)]
-pub fn body_is_error(body: &[u8]) -> Result<bool, XmlError> {
+pub fn body_is_error(body: &[u8]) -> Result<bool, XmlDecodeError> {
     let mut doc = Document::try_from(body)?;
     let scoped = doc.root_element()?;
     Ok(scoped.start_el().matches("ErrorResponse"))
 }
 
-pub fn parse_generic_error(body: &[u8]) -> Result<aws_smithy_types::Error, XmlError> {
+pub fn parse_error_metadata(body: &[u8]) -> Result<ErrorMetadataBuilder, XmlDecodeError> {
     let mut doc = Document::try_from(body)?;
     let mut root = doc.root_element()?;
-    let mut err_builder = aws_smithy_types::Error::builder();
+    let mut err_builder = ErrorMetadata::builder();
     while let Some(mut tag) = root.next_tag() {
-        match tag.start_el().local() {
-            "Error" => {
-                while let Some(mut error_field) = tag.next_tag() {
-                    match error_field.start_el().local() {
-                        "Code" => {
-                            err_builder.code(try_data(&mut error_field)?);
-                        }
-                        "Message" => {
-                            err_builder.message(try_data(&mut error_field)?);
-                        }
-                        _ => {}
+        if tag.start_el().local() == "Error" {
+            while let Some(mut error_field) = tag.next_tag() {
+                match error_field.start_el().local() {
+                    "Code" => {
+                        err_builder = err_builder.code(try_data(&mut error_field)?);
                     }
+                    "Message" => {
+                        err_builder = err_builder.message(try_data(&mut error_field)?);
+                    }
+                    _ => {}
                 }
             }
-            "RequestId" => {
-                err_builder.request_id(try_data(&mut tag)?);
-            }
-            _ => {}
         }
     }
-    Ok(err_builder.build())
+    Ok(err_builder)
 }
 
 #[allow(unused)]
-pub fn error_scope<'a, 'b>(doc: &'a mut Document<'b>) -> Result<ScopedDecoder<'b, 'a>, XmlError> {
+pub fn error_scope<'a, 'b>(
+    doc: &'a mut Document<'b>,
+) -> Result<ScopedDecoder<'b, 'a>, XmlDecodeError> {
     let root = doc
         .next_start_element()
-        .ok_or_else(|| XmlError::custom("no root found searching for an Error"))?;
+        .ok_or_else(|| XmlDecodeError::custom("no root found searching for an Error"))?;
     if !root.matches("ErrorResponse") {
-        return Err(XmlError::custom("expected ErrorResponse as root"));
+        return Err(XmlDecodeError::custom("expected ErrorResponse as root"));
     }
 
     while let Some(el) = doc.next_start_element() {
@@ -56,12 +53,14 @@ pub fn error_scope<'a, 'b>(doc: &'a mut Document<'b>) -> Result<ScopedDecoder<'b
         }
         // otherwise, ignore it
     }
-    Err(XmlError::custom("No Error found inside of ErrorResponse"))
+    Err(XmlDecodeError::custom(
+        "no error found inside of ErrorResponse",
+    ))
 }
 
 #[cfg(test)]
 mod test {
-    use super::{body_is_error, parse_generic_error};
+    use super::{body_is_error, parse_error_metadata};
     use crate::rest_xml_wrapped_errors::error_scope;
     use aws_smithy_xml::decode::Document;
     use std::convert::TryFrom;
@@ -79,8 +78,7 @@ mod test {
     <RequestId>foo-id</RequestId>
 </ErrorResponse>"#;
         assert!(body_is_error(xml).unwrap());
-        let parsed = parse_generic_error(xml).expect("valid xml");
-        assert_eq!(parsed.request_id(), Some("foo-id"));
+        let parsed = parse_error_metadata(xml).expect("valid xml").build();
         assert_eq!(parsed.message(), Some("Hi"));
         assert_eq!(parsed.code(), Some("InvalidGreeting"));
     }

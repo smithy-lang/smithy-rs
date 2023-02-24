@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_config::SdkConfig;
 use canary::{get_canaries_to_run, CanaryEnv};
 use lambda_runtime::{Context as LambdaContext, Error};
 use serde_json::{json, Value};
@@ -29,7 +30,7 @@ macro_rules! canary_module {
         #[cfg(not(feature = $version))]
         mod $name {
             pub(crate) fn mk_canary(
-                _clients: &crate::canary::Clients,
+                _clients: &aws_config::SdkConfig,
                 _env: &crate::canary::CanaryEnv,
             ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
                 tracing::warn!(concat!(
@@ -54,16 +55,15 @@ async fn main() -> Result<(), Error> {
         .with(EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .with(
-            TeXRayLayer::new()
-                // by default, all metadata fields will be printed. If this is too noisy,
-                // filter only the fields you care about
-                //.only_show_fields(&["name", "operation", "service"]),
+            TeXRayLayer::new(), // by default, all metadata fields will be printed. If this is too noisy,
+                                // filter only the fields you care about
+                                //.only_show_fields(&["name", "operation", "service"]),
         );
     tracing::subscriber::set_global_default(subscriber).unwrap();
     let local = env::args().any(|arg| arg == "--local");
     let main_handler = LambdaMain::new().await;
     if local {
-        let result = lambda_main(main_handler.clients)
+        let result = lambda_main(main_handler.sdk_config)
             .instrument(tracing_texray::examine(info_span!("run_canaries")))
             .await?;
         if result
@@ -89,13 +89,13 @@ async fn main() -> Result<(), Error> {
 // Enables us to keep the clients alive between successive Lambda executions.
 // Not because we need to for this use-case, but to demonstrate how to.
 struct LambdaMain {
-    clients: canary::Clients,
+    sdk_config: SdkConfig,
 }
 
 impl LambdaMain {
     async fn new() -> Self {
         Self {
-            clients: canary::Clients::initialize().await,
+            sdk_config: aws_config::load_from_env().await,
         }
     }
 }
@@ -105,17 +105,17 @@ impl lambda_runtime::Handler<Value, Value> for LambdaMain {
     type Fut = Pin<Box<dyn Future<Output = Result<Value, Error>>>>;
 
     fn call(&self, _: Value, _: LambdaContext) -> Self::Fut {
-        Box::pin(lambda_main(self.clients.clone()))
+        Box::pin(lambda_main(self.sdk_config.clone()))
     }
 }
 
-async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
+async fn lambda_main(sdk_config: SdkConfig) -> Result<Value, Error> {
     // Load necessary parameters from environment variables
     let env = CanaryEnv::from_env();
     info!("Env: {:#?}", env);
 
     // Get list of canaries to run and spawn them
-    let canaries = get_canaries_to_run(clients, env);
+    let canaries = get_canaries_to_run(sdk_config, env);
     let join_handles = canaries
         .into_iter()
         .map(|(name, future)| (name, tokio::spawn(future)))

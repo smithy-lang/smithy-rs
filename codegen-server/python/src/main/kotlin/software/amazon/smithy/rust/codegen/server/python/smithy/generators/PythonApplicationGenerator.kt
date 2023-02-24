@@ -6,14 +6,26 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
+import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
  * Generates a Python compatible application and server that can be configured from Python.
@@ -21,7 +33,6 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * Example:
  *     from pool import DatabasePool
  *     from my_library import App, OperationInput, OperationOutput
-
  *     @dataclass
  *     class Context:
  *         db = DatabasePool()
@@ -49,40 +60,180 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smithy_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
+    private val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val service = codegenContext.serviceShape
+    private val serviceName = service.id.name.toPascalCase()
+    private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
-            "tower" to PythonServerCargoDependency.Tower.asType(),
-            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-            "hyper" to PythonServerCargoDependency.Hyper.asType()
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
+            "hyper" to PythonServerCargoDependency.Hyper.toType(),
+            "HashMap" to RuntimeType.HashMap,
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
+            "http" to RuntimeType.Http,
         )
 
     fun render(writer: RustWriter) {
+        renderPyApplicationRustDocs(writer)
+        renderAppStruct(writer)
+        renderAppDefault(writer)
+        renderAppClone(writer)
+        renderPyAppTrait(writer)
+        renderPyMethods(writer)
+    }
+
+    fun renderAppStruct(writer: RustWriter) {
         writer.rustTemplate(
             """
-            ##[#{pyo3}::pyclass(extends = #{SmithyPython}::PyApp)]
-            ##[derive(Debug, Clone)]
-            pub struct App { }
+            ##[#{pyo3}::pyclass]
+            ##[derive(Debug)]
+            /// :generic Ctx:
+            /// :extends typing.Generic\[Ctx\]:
+            /// :rtype None:
+            pub struct App {
+                handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
+                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
+                context: Option<#{pyo3}::PyObject>,
+                workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
+            }
             """,
-            *codegenScope
+            *codegenScope,
         )
+    }
 
-        renderPyMethods(writer)
+    private fun renderAppClone(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl Clone for App {
+                fn clone(&self) -> Self {
+                    Self {
+                        handlers: self.handlers.clone(),
+                        middlewares: self.middlewares.clone(),
+                        context: self.context.clone(),
+                        workers: #{parking_lot}::Mutex::new(vec![]),
+                    }
+                }
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun renderAppDefault(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl Default for App {
+                fn default() -> Self {
+                    Self {
+                        handlers: Default::default(),
+                        middlewares: vec![],
+                        context: None,
+                        workers: #{parking_lot}::Mutex::new(vec![]),
+                    }
+                }
+            }
+            """,
+            "Protocol" to protocol.markerStruct(),
+            *codegenScope,
+        )
+    }
+
+    private fun renderPyAppTrait(writer: RustWriter) {
+        writer.rustBlockTemplate(
+            """
+            impl #{SmithyPython}::PyApp for App
+            """,
+            *codegenScope,
+        ) {
+            rustTemplate(
+                """
+                fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
+                    &self.workers
+                }
+                fn context(&self) -> &Option<#{pyo3}::PyObject> {
+                    &self.context
+                }
+                fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
+                    &mut self.handlers
+                }
+                """,
+                *codegenScope,
+            )
+
+            rustBlockTemplate(
+                """
+                fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
+                    #{tower}::util::BoxCloneService<
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
+                        std::convert::Infallible
+                    >
+                >
+                """,
+                *codegenScope,
+            ) {
+                rustTemplate(
+                    """
+                    let builder = crate::service::$serviceName::builder_without_plugins();
+                    """,
+                    *codegenScope,
+                )
+                for (operation in operations) {
+                    val operationName = symbolProvider.toSymbol(operation).name
+                    val name = operationName.toSnakeCase()
+                    rustTemplate(
+                        """
+                        let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                        let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
+                        let builder = builder.$name(move |input, state| {
+                            #{pyo3_asyncio}::tokio::scope(${name}_locals.clone(), crate::python_operation_adaptor::$name(input, state, handler.clone()))
+                        });
+                        """,
+                        *codegenScope,
+                    )
+                }
+                rustTemplate(
+                    """
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
+
+                    {
+                        use #{tower}::Layer;
+                        #{tracing}::trace!("adding middlewares to rust python router");
+                        let mut middlewares = self.middlewares.clone();
+                        // Reverse the middlewares, so they run with same order as they defined
+                        middlewares.reverse();
+                        for handler in middlewares {
+                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
+                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+                        }
+                    }
+                    Ok(service)
+                    """,
+                    "Protocol" to protocol.markerStruct(),
+                    *codegenScope,
+                )
+            }
+        }
     }
 
     private fun renderPyMethods(writer: RustWriter) {
@@ -91,61 +242,218 @@ class PythonApplicationGenerator(
             ##[#{pyo3}::pymethods]
             impl App
             """,
-            *codegenScope
+            *codegenScope,
         ) {
-            rustBlockTemplate(
+            val middlewareRequest = PythonType.Opaque("Request", "crate::middleware")
+            val middlewareResponse = PythonType.Opaque("Response", "crate::middleware")
+            val middlewareNext = PythonType.Callable(listOf(middlewareRequest), PythonType.Awaitable(middlewareResponse))
+            val middlewareFunc = PythonType.Callable(listOf(middlewareRequest, middlewareNext), PythonType.Awaitable(middlewareResponse))
+            val tlsConfig = PythonType.Opaque("TlsConfig", "crate::tls")
+
+            rustTemplate(
                 """
-                /// Override the `router()` function of #{SmithyPython}::PyApp allowing to dynamically
-                /// codegenerate the routes.
-                pub fn router(self_: #{pyo3}::PyRef<'_, Self>) -> Option<#{pyo3}::PyObject>
-                """,
-                *codegenScope
-            ) {
-                rustTemplate(
-                    """
-                    let router = crate::operation_registry::OperationRegistryBuilder::default();
-                    let sup = self_.as_ref();
-                    """,
-                    *codegenScope
-                )
-                for (operation in operations) {
-                    val operationName = symbolProvider.toSymbol(operation).name
-                    val name = operationName.toSnakeCase()
-                    rustTemplate(
-                        """
-                        let locals = sup.locals.clone();
-                        let handler = sup.handlers.get("$name").expect("Python handler for `{$name}` not found").clone();
-                        let router = router.$name(move |input, state| {
-                            #{pyo3_asyncio}::tokio::scope(locals.clone(), crate::operation_handler::$name(input, state, handler))
-                        });
-                        """,
-                        *codegenScope
-                    )
+                /// Create a new [App].
+                ##[new]
+                pub fn new() -> Self {
+                    Self::default()
                 }
-                rustTemplate(
-                    """
-                    let router: #{SmithyServer}::Router = router.build().expect("Unable to build operation registry").into();
-                    use #{pyo3}::IntoPy;
-                    Some(#{SmithyPython}::PyRouter(router).into_py(self_.py()))
-                    """,
-                    *codegenScope
-                )
-            }
+
+                /// Register a context object that will be shared between handlers.
+                ///
+                /// :param context Ctx:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, context)")]
+                pub fn context(&mut self, context: #{pyo3}::PyObject) {
+                   self.context = Some(context);
+                }
+
+                /// Register a Python function to be executed inside a Tower middleware layer.
+                ///
+                /// :param func ${middlewareFunc.renderAsDocstring()}:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, func)")]
+                pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
+                    #{tracing}::trace!(
+                        name = &handler.name,
+                        is_coroutine = handler.is_coroutine,
+                        "registering middleware function",
+                    );
+                    self.middlewares.push(handler);
+                    Ok(())
+                }
+
+                /// Main entrypoint: start the server on multiple workers.
+                ///
+                /// :param address ${PythonType.Optional(PythonType.Str).renderAsDocstring()}:
+                /// :param port ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                /// :param backlog ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                /// :param workers ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                /// :param tls ${PythonType.Optional(tlsConfig).renderAsDocstring()}:
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None)")]
+                pub fn run(
+                    &mut self,
+                    py: #{pyo3}::Python,
+                    address: Option<String>,
+                    port: Option<i32>,
+                    backlog: Option<i32>,
+                    workers: Option<usize>,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
+                ) -> #{pyo3}::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.run_server(py, address, port, backlog, workers, tls)
+                }
+
+                /// Lambda entrypoint: start the server on Lambda.
+                ///
+                /// :rtype ${PythonType.None.renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self)")]
+                pub fn run_lambda(
+                    &mut self,
+                    py: #{pyo3}::Python,
+                ) -> #{pyo3}::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.run_lambda_handler(py)
+                }
+
+                /// Build the service and start a single worker.
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None)")]
+                pub fn start_worker(
+                    &mut self,
+                    py: pyo3::Python,
+                    socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
+                    worker_number: isize,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
+                ) -> pyo3::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    let event_loop = self.configure_python_event_loop(py)?;
+                    let service = self.build_and_configure_service(py, event_loop)?;
+                    self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
+                }
+                """,
+                *codegenScope,
+            )
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val name = operationName.toSnakeCase()
+
+                val input = PythonType.Opaque("${operationName}Input", "crate::input")
+                val output = PythonType.Opaque("${operationName}Output", "crate::output")
+                val context = PythonType.Opaque("Ctx")
+                val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
+                val handler = PythonType.Union(
+                    listOf(
+                        PythonType.Callable(
+                            listOf(input, context),
+                            returnType,
+                        ),
+                        PythonType.Callable(
+                            listOf(input),
+                            returnType,
+                        ),
+                    ),
+                )
+
                 rustTemplate(
                     """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
-                    pub fn $name(self_: #{pyo3}::PyRefMut<'_, Self>, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                        let mut sup = self_.into_super();
-                        #{pyo3}::Python::with_gil(|py| sup.register_operation(py, "$name", func))
+                    ///
+                    /// :param func ${handler.renderAsDocstring()}:
+                    /// :rtype ${PythonType.None.renderAsDocstring()}:
+                    ##[pyo3(text_signature = "(${'$'}self, func)")]
+                    pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                        use #{SmithyPython}::PyApp;
+                        self.register_operation(py, "$name", func)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
+    }
+
+    private fun renderPyApplicationRustDocs(writer: RustWriter) {
+        writer.rust(
+            """
+            ##[allow(clippy::tabs_in_doc_comments)]
+            /// Main Python application, used to register operations and context and start multiple
+            /// workers on the same shared socket.
+            ///
+            /// Operations can be registered using the application object as a decorator (`@app.operation_name`).
+            ///
+            /// Here's a full example to get you started:
+            ///
+            /// ```python
+            """.trimIndent(),
+        )
+        writer.rust(
+            """
+            /// from $libName import ${InputModule.name}
+            /// from $libName import ${OutputModule.name}
+            """.trimIndent(),
+        )
+        if (operations.any { it.errors.isNotEmpty() }) {
+            writer.rust("""/// from $libName import ${ErrorModule.name}""".trimIndent())
+        }
+        writer.rust(
+            """
+            /// from $libName import middleware
+            /// from $libName import App
+            ///
+            /// @dataclass
+            /// class Context:
+            ///     counter: int = 0
+            ///
+            /// app = App()
+            /// app.context(Context())
+            ///
+            /// @app.request_middleware
+            /// def request_middleware(request: middleware::Request):
+            ///     if request.get_header("x-amzn-id") != "secret":
+            ///         raise middleware.MiddlewareException("Unsupported `x-amz-id` header", 401)
+            ///
+            """.trimIndent(),
+        )
+        writer.operationImplementationStubs(operations)
+        writer.rust(
+            """
+            ///
+            /// app.run()
+            /// ```
+            ///
+            /// Any of operations above can be written as well prepending the `async` keyword and
+            /// the Python application will automatically handle it and schedule it on the event loop for you.
+            """.trimIndent(),
+        )
+    }
+
+    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) = rust(
+        operations.joinToString("\n///\n") {
+            val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
+            val ret = if (!operationDocumentation.isNullOrBlank()) {
+                operationDocumentation.replace("#", "##").prependIndent("/// ## ") + "\n"
+            } else {
+                ""
+            }
+            ret +
+                """
+                /// ${it.signature()}:
+                ///     raise NotImplementedError
+                """.trimIndent()
+        },
+    )
+
+    /**
+     * Returns the function signature for an operation handler implementation. Used in the documentation.
+     */
+    private fun OperationShape.signature(): String {
+        val inputSymbol = symbolProvider.toSymbol(inputShape(model))
+        val outputSymbol = symbolProvider.toSymbol(outputShape(model))
+        val inputT = "${InputModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputModule.name}::${outputSymbol.name}"
+        val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
+        return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }
 }

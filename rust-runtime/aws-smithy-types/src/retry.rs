@@ -5,11 +5,11 @@
 
 //! This module defines types that describe when to retry given a response.
 
-use std::borrow::Cow;
-use std::fmt::{Display, Formatter};
-use std::num::ParseIntError;
+use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
+
+const VALID_RETRY_MODES: &[RetryMode] = &[RetryMode::Standard];
 
 /// Type of error that occurred when making a request.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -93,26 +93,8 @@ pub enum RetryMode {
     Adaptive,
 }
 
-const VALID_RETRY_MODES: &[RetryMode] = &[RetryMode::Standard];
-
-/// Failure to parse a `RetryMode` from string.
-#[derive(Debug)]
-pub struct RetryModeParseErr(String);
-
-impl Display for RetryModeParseErr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "error parsing string '{}' as RetryMode, valid options are: {:#?}",
-            self.0, VALID_RETRY_MODES
-        )
-    }
-}
-
-impl std::error::Error for RetryModeParseErr {}
-
 impl FromStr for RetryMode {
-    type Err = RetryModeParseErr;
+    type Err = RetryModeParseError;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
@@ -123,10 +105,36 @@ impl FromStr for RetryMode {
         // } else if string.eq_ignore_ascii_case("adaptive") {
         //     Ok(RetryMode::Adaptive)
         } else {
-            Err(RetryModeParseErr(string.to_owned()))
+            Err(RetryModeParseError::new(string))
         }
     }
 }
+
+/// Failure to parse a `RetryMode` from string.
+#[derive(Debug)]
+pub struct RetryModeParseError {
+    message: String,
+}
+
+impl RetryModeParseError {
+    pub(super) fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for RetryModeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "error parsing string '{}' as RetryMode, valid options are: {:#?}",
+            self.message, VALID_RETRY_MODES
+        )
+    }
+}
+
+impl std::error::Error for RetryModeParseError {}
 
 /// Builder for [`RetryConfig`].
 #[non_exhaustive]
@@ -134,6 +142,7 @@ impl FromStr for RetryMode {
 pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
+    initial_backoff: Option<Duration>,
 }
 
 impl RetryConfigBuilder {
@@ -148,12 +157,6 @@ impl RetryConfigBuilder {
         self
     }
 
-    /// Sets the max attempts. This value must be greater than zero.
-    pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
-        self.max_attempts = max_attempts;
-        self
-    }
-
     /// Sets the retry mode.
     pub fn mode(mut self, mode: RetryMode) -> Self {
         self.set_mode(Some(mode));
@@ -161,8 +164,26 @@ impl RetryConfigBuilder {
     }
 
     /// Sets the max attempts. This value must be greater than zero.
+    pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Sets the max attempts. This value must be greater than zero.
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
         self.set_max_attempts(Some(max_attempts));
+        self
+    }
+
+    /// Set the initial_backoff duration. This duration should be non-zero.
+    pub fn set_initial_backoff(&mut self, initial_backoff: Option<Duration>) -> &mut Self {
+        self.initial_backoff = initial_backoff;
+        self
+    }
+
+    /// Set the initial_backoff duration. This duration should be non-zero.
+    pub fn initial_backoff(mut self, initial_backoff: Duration) -> Self {
+        self.set_initial_backoff(Some(initial_backoff));
         self
     }
 
@@ -186,6 +207,7 @@ impl RetryConfigBuilder {
         Self {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
+            initial_backoff: self.initial_backoff.or(other.initial_backoff),
         }
     }
 
@@ -194,6 +216,9 @@ impl RetryConfigBuilder {
         RetryConfig {
             mode: self.mode.unwrap_or(RetryMode::Standard),
             max_attempts: self.max_attempts.unwrap_or(3),
+            initial_backoff: self
+                .initial_backoff
+                .unwrap_or_else(|| Duration::from_secs(1)),
         }
     }
 }
@@ -204,28 +229,56 @@ impl RetryConfigBuilder {
 pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,
+    initial_backoff: Duration,
 }
 
 impl RetryConfig {
     /// Creates a default `RetryConfig` with `RetryMode::Standard` and max attempts of three.
-    pub fn new() -> Self {
-        Default::default()
+    pub fn standard() -> Self {
+        Self {
+            mode: RetryMode::Standard,
+            max_attempts: 3,
+            initial_backoff: Duration::from_secs(1),
+        }
     }
 
     /// Creates a `RetryConfig` that has retries disabled.
     pub fn disabled() -> Self {
-        Self::default().with_max_attempts(1)
+        Self::standard().with_max_attempts(1)
     }
 
-    /// Changes the retry mode.
+    /// Set this config's [retry mode](RetryMode).
     pub fn with_retry_mode(mut self, retry_mode: RetryMode) -> Self {
         self.mode = retry_mode;
         self
     }
 
-    /// Changes the max attempts. This value must be greater than zero.
+    /// Set the maximum number of times a request should be tried, including the initial attempt.
+    /// This value must be greater than zero.
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Set the multiplier used when calculating backoff times as part of an
+    /// [exponential backoff with jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)
+    /// strategy. Most services should work fine with the default duration of 1 second, but if you
+    /// find that your requests are taking too long due to excessive retry backoff, try lowering
+    /// this value.
+    ///
+    /// ## Example
+    ///
+    /// *For a request that gets retried 3 times, when initial_backoff is 1 seconds:*
+    /// - the first retry will occur after 0 to 1 seconds
+    /// - the second retry will occur after 0 to 2 seconds
+    /// - the third retry will occur after 0 to 4 seconds
+    ///
+    /// *For a request that gets retried 3 times, when initial_backoff is 30 milliseconds:*
+    /// - the first retry will occur after 0 to 30 milliseconds
+    /// - the second retry will occur after 0 to 60 milliseconds
+    /// - the third retry will occur after 0 to 120 milliseconds
+    pub fn with_initial_backoff(mut self, initial_backoff: Duration) -> Self {
+        self.initial_backoff = initial_backoff;
         self
     }
 
@@ -238,79 +291,15 @@ impl RetryConfig {
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
-}
 
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            mode: RetryMode::Standard,
-            max_attempts: 3,
-        }
+    /// Returns the backoff multiplier duration.
+    pub fn initial_backoff(&self) -> Duration {
+        self.initial_backoff
     }
-}
 
-/// Failure to parse retry config from profile file or environment variable.
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum RetryConfigErr {
-    /// The configured retry mode wasn't recognized.
-    InvalidRetryMode {
-        /// Cause of the error.
-        source: RetryModeParseErr,
-        /// Where the invalid retry mode value originated from.
-        set_by: Cow<'static, str>,
-    },
-    /// Max attempts must be greater than zero.
-    MaxAttemptsMustNotBeZero {
-        /// Where the invalid max attempts value originated from.
-        set_by: Cow<'static, str>,
-    },
-    /// The max attempts value couldn't be parsed to an integer.
-    FailedToParseMaxAttempts {
-        /// Cause of the error.
-        source: ParseIntError,
-        /// Where the invalid max attempts value originated from.
-        set_by: Cow<'static, str>,
-    },
-    /// The adaptive retry mode hasn't been implemented yet.
-    AdaptiveModeIsNotSupported {
-        /// Where the invalid retry mode value originated from.
-        set_by: Cow<'static, str>,
-    },
-}
-
-impl Display for RetryConfigErr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        use RetryConfigErr::*;
-        match self {
-            InvalidRetryMode { set_by, source } => {
-                write!(f, "invalid configuration set by {}: {}", set_by, source)
-            }
-            MaxAttemptsMustNotBeZero { set_by } => {
-                write!(f, "invalid configuration set by {}: It is invalid to set max attempts to 0. Unset it or set it to an integer greater than or equal to one.", set_by)
-            }
-            FailedToParseMaxAttempts { set_by, source } => {
-                write!(
-                    f,
-                    "failed to parse max attempts set by {}: {}",
-                    set_by, source
-                )
-            }
-            AdaptiveModeIsNotSupported { set_by } => {
-                write!(f, "invalid configuration set by {}: Setting retry mode to 'adaptive' is not yet supported. Unset it or set it to 'standard' mode.", set_by)
-            }
-        }
-    }
-}
-
-impl std::error::Error for RetryConfigErr {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use RetryConfigErr::*;
-        match self {
-            InvalidRetryMode { source, .. } => Some(source),
-            FailedToParseMaxAttempts { source, .. } => Some(source),
-            _ => None,
-        }
+    /// Returns true if retry is enabled with this config
+    pub fn has_retry(&self) -> bool {
+        self.max_attempts > 1
     }
 }
 

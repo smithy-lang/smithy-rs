@@ -3,18 +3,21 @@ name = "lambda"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [dev-dependencies]
-async-stream = "0.3"
+async-stream = "0.3.0"
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda" }
-base64 = "0.13"
-bytes = "1"
-futures-core = "0.3"
-http = "0.2.3"
-serde_json = "1"
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-tokio = { version = "1", features = ["full", "test-util"] }
-tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
+base64 = "0.13.0"
+bytes = "1.0.0"
+futures-core = "0.3.14"
+http = "0.2.0"
+serde_json = "1.0.0"
+tokio = { version = "1.8.4", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

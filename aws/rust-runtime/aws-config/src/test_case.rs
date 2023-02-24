@@ -5,16 +5,16 @@
 
 use crate::provider_config::ProviderConfig;
 
+use aws_credential_types::provider::{self, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::HttpSettings;
-use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 
 use serde::Deserialize;
 
 use crate::connector::default_connector;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
@@ -38,8 +38,8 @@ struct Credentials {
 ///
 /// Comparing equality on real credentials works, but it's a pain because the Debug implementation
 /// hides the actual keys
-impl From<&aws_types::Credentials> for Credentials {
-    fn from(credentials: &aws_types::Credentials) -> Self {
+impl From<&aws_credential_types::Credentials> for Credentials {
+    fn from(credentials: &aws_credential_types::Credentials) -> Self {
         Self {
             access_key_id: credentials.access_key_id().into(),
             secret_access_key: credentials.secret_access_key().into(),
@@ -51,8 +51,8 @@ impl From<&aws_types::Credentials> for Credentials {
     }
 }
 
-impl From<aws_types::Credentials> for Credentials {
-    fn from(credentials: aws_types::Credentials) -> Self {
+impl From<aws_credential_types::Credentials> for Credentials {
+    fn from(credentials: aws_credential_types::Credentials) -> Self {
         (&credentials).into()
     }
 }
@@ -65,11 +65,10 @@ impl From<aws_types::Credentials> for Credentials {
 /// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](aws_smithy_client::dvr)
 /// - a `test-case.json` file defining the expected output of the test
 pub(crate) struct TestEnvironment {
-    env: Env,
-    fs: Fs,
-    network_traffic: NetworkTraffic,
     metadata: Metadata,
     base_dir: PathBuf,
+    connector: ReplayingConnection,
+    provider_config: ProviderConfig,
 }
 
 /// Connector which expects no traffic
@@ -78,7 +77,7 @@ pub(crate) fn no_traffic_connector() -> DynConnector {
 }
 
 #[derive(Debug)]
-struct InstantSleep;
+pub(crate) struct InstantSleep;
 impl AsyncSleep for InstantSleep {
     fn sleep(&self, _duration: Duration) -> Sleep {
         Sleep::new(std::future::ready(()))
@@ -95,18 +94,18 @@ impl<T> GenericTestResult<T>
 where
     T: PartialEq + Debug,
 {
+    #[track_caller]
     pub(crate) fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
         match (result, &self) {
             (Ok(actual), GenericTestResult::Ok(expected)) => {
                 assert_eq!(expected, &actual.into(), "incorrect result was returned")
             }
             (Err(err), GenericTestResult::ErrorContains(substr)) => {
+                let message = format!("{}", DisplayErrorContext(&err));
                 assert!(
-                    format!("{}", err).contains(substr),
-                    "`{}` did not contain `{}`",
-                    err,
-                    substr
-                )
+                    message.contains(substr),
+                    "`{message}` did not contain `{substr}`"
+                );
             }
             (Err(actual_error), GenericTestResult::Ok(expected_creds)) => panic!(
                 "expected credentials ({:?}) but an error was returned: {}",
@@ -131,7 +130,7 @@ pub(crate) struct Metadata {
 }
 
 impl TestEnvironment {
-    pub(crate) fn from_dir(dir: impl AsRef<Path>) -> Result<TestEnvironment, Box<dyn Error>> {
+    pub(crate) async fn from_dir(dir: impl AsRef<Path>) -> Result<TestEnvironment, Box<dyn Error>> {
         let dir = dir.as_ref();
         let env = std::fs::read_to_string(dir.join("env.json"))
             .map_err(|e| format!("failed to load env: {}", e))?;
@@ -147,27 +146,32 @@ impl TestEnvironment {
             &std::fs::read_to_string(dir.join("test-case.json"))
                 .map_err(|e| format!("failed to load test case: {}", e))?,
         )?;
+        let connector = ReplayingConnection::new(network_traffic.events().clone());
+        let provider_config = ProviderConfig::empty()
+            .with_fs(fs.clone())
+            .with_env(env.clone())
+            .with_http_connector(DynConnector::new(connector.clone()))
+            .with_sleep(TokioSleep::new())
+            .load_default_region()
+            .await;
         Ok(TestEnvironment {
             base_dir: dir.into(),
-            env,
-            fs,
-            network_traffic,
             metadata,
+            connector,
+            provider_config,
         })
     }
 
-    pub(crate) async fn provider_config(&self) -> (ReplayingConnection, ProviderConfig) {
-        let connector = ReplayingConnection::new(self.network_traffic.events().clone());
-        (
-            connector.clone(),
-            ProviderConfig::empty()
-                .with_fs(self.fs.clone())
-                .with_env(self.env.clone())
-                .with_http_connector(DynConnector::new(connector.clone()))
-                .with_sleep(TokioSleep::new())
-                .load_default_region()
-                .await,
-        )
+    pub(crate) fn with_provider_config<F>(mut self, provider_config_builder: F) -> Self
+    where
+        F: Fn(ProviderConfig) -> ProviderConfig,
+    {
+        self.provider_config = provider_config_builder(self.provider_config.clone());
+        self
+    }
+
+    pub(crate) fn provider_config(&self) -> &ProviderConfig {
+        &self.provider_config
     }
 
     #[allow(unused)]
@@ -182,11 +186,13 @@ impl TestEnvironment {
         P: ProvideCredentials,
     {
         // swap out the connector generated from `http-traffic.json` for a real connector:
-        let settings = HttpSettings::default();
-        let (_test_connector, config) = self.provider_config().await;
-        let live_connector = default_connector(&settings, config.sleep()).unwrap();
+        let live_connector =
+            default_connector(&Default::default(), self.provider_config.sleep()).unwrap();
         let live_connector = RecordingConnection::new(live_connector);
-        let config = config.with_http_connector(DynConnector::new(live_connector.clone()));
+        let config = self
+            .provider_config
+            .clone()
+            .with_http_connector(DynConnector::new(live_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -207,9 +213,11 @@ impl TestEnvironment {
         F: Future<Output = P>,
         P: ProvideCredentials,
     {
-        let (connector, config) = self.provider_config().await;
-        let recording_connector = RecordingConnection::new(connector);
-        let config = config.with_http_connector(DynConnector::new(recording_connector.clone()));
+        let recording_connector = RecordingConnection::new(self.connector.clone());
+        let config = self
+            .provider_config
+            .clone()
+            .with_http_connector(DynConnector::new(recording_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -230,14 +238,15 @@ impl TestEnvironment {
         F: Future<Output = P>,
         P: ProvideCredentials,
     {
-        let (connector, conf) = self.provider_config().await;
-        let provider = make_provider(conf).await;
+        let provider = make_provider(self.provider_config.clone()).await;
         let result = provider.provide_credentials().await;
         tokio::time::pause();
         self.log_info();
         self.check_results(result);
         // todo: validate bodies
-        match connector
+        match self
+            .connector
+            .clone()
             .validate(
                 &["CONTENT-TYPE", "x-aws-ec2-metadata-token"],
                 |_expected, _actual| Ok(()),
@@ -249,7 +258,8 @@ impl TestEnvironment {
         }
     }
 
-    fn check_results(&self, result: credentials::Result) {
+    #[track_caller]
+    fn check_results(&self, result: provider::Result) {
         self.metadata.result.assert_matches(result);
     }
 }

@@ -6,7 +6,7 @@
 package aws.sdk
 
 import org.gradle.api.Project
-import software.amazon.smithy.utils.CodeWriter
+import software.amazon.smithy.utils.SimpleCodeWriter
 import java.io.File
 
 /**
@@ -17,13 +17,13 @@ import java.io.File
  */
 fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
     val project = this
-    val writer = CodeWriter()
+    val writer = SimpleCodeWriter()
     with(writer) {
         write("# AWS SDK for Rust")
         write(
             "The AWS SDK for Rust contains one crate for each AWS service, as well as ${cratesIo("aws-config")} " +
                 "${docsRs("aws-config")}, a crate implementing configuration loading such as credential providers. " +
-                "For usage documentation see the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)."
+                "For usage documentation see the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html).",
         )
 
         writer.write("## AWS Services")
@@ -34,7 +34,7 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
         awsServices.services.sortedBy { it.humanName }.forEach {
             val items = listOfNotNull(cratesIo(it), docsRs(it), examplesLink(it, project)).joinToString(" ")
             writer.write(
-                "| ${it.humanName} | $items |"
+                "| ${it.humanName} | $items |",
             )
         }
     }
@@ -44,7 +44,9 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
 /**
  * Generate a link to the examples for a given service
  */
-private fun examplesLink(service: AwsService, project: Project) = service.examplesUri(project)?.let { "([examples]($it))" }
+private fun examplesLink(service: AwsService, project: Project) = service.examplesUri(project)?.let {
+    "([examples]($it))"
+}
 
 /**
  * Generate a link to the docs

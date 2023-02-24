@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::query_writer::QueryWriter;
-use super::{Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::date_time::{format_date, format_date_time};
+use crate::http_request::error::CanonicalRequestError;
+use crate::http_request::settings::UriPathNormalizationMode;
 use crate::http_request::sign::SignableRequest;
+use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
+use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::sign::sha256_hex_string;
-use http::header::{HeaderName, HOST};
+use aws_smithy_http::query_writer::QueryWriter;
+use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -40,6 +43,7 @@ pub(crate) mod param {
 pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
 
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
+const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
 
 #[derive(Debug, PartialEq)]
 pub(super) struct HeaderValues<'a> {
@@ -123,14 +127,18 @@ impl<'a> CanonicalRequest<'a> {
     pub(super) fn from<'b>(
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
-    ) -> Result<CanonicalRequest<'b>, Error> {
+    ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
+        let path = match params.settings.uri_path_normalization_mode {
+            UriPathNormalizationMode::Enabled => normalize_uri_path(path),
+            UriPathNormalizationMode::Disabled => Cow::Borrowed(path),
+        };
         let path = match params.settings.percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
-            PercentEncodingMode::Double => Cow::Owned(percent_encode_path(path)),
-            PercentEncodingMode::Single => Cow::Borrowed(path),
+            PercentEncodingMode::Double => Cow::Owned(percent_encode_path(&path)),
+            PercentEncodingMode::Single => path,
         };
         let payload_hash = Self::payload_hash(req.body());
 
@@ -181,7 +189,7 @@ impl<'a> CanonicalRequest<'a> {
         params: &SigningParams<'_>,
         payload_hash: &str,
         date_time: &str,
-    ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), Error> {
+    ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), CanonicalRequestError> {
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone and
         // normalize the headers from the original request and add:
@@ -195,7 +203,7 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(value),
+                normalize_header_value(value)?,
             );
         }
 
@@ -217,7 +225,7 @@ impl<'a> CanonicalRequest<'a> {
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
-        for (name, _) in &canonical_headers {
+        for name in canonical_headers.keys() {
             if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
                 if excluded_headers.contains(name) {
                     continue;
@@ -243,10 +251,15 @@ impl<'a> CanonicalRequest<'a> {
         // - compute a hash
         // - use the precomputed hash
         // - use `UnsignedPayload`
+        // - use `UnsignedPayload` for streaming requests
+        // - use `StreamingUnsignedPayloadTrailer` for streaming requests with trailers
         match body {
             SignableBody::Bytes(data) => Cow::Owned(sha256_hex_string(data)),
             SignableBody::Precomputed(digest) => Cow::Borrowed(digest.as_str()),
             SignableBody::UnsignedPayload => Cow::Borrowed(UNSIGNED_PAYLOAD),
+            SignableBody::StreamingUnsignedPayloadTrailer => {
+                Cow::Borrowed(STREAMING_UNSIGNED_PAYLOAD_TRAILER)
+            }
         }
     }
 
@@ -315,6 +328,19 @@ impl<'a> CanonicalRequest<'a> {
         canonical_headers.insert(x_amz_date, date_header.clone());
         date_header
     }
+
+    fn header_values_for(&self, key: impl AsHeaderName) -> String {
+        let values: Vec<&str> = self
+            .headers
+            .get_all(key)
+            .into_iter()
+            .map(|value| {
+                std::str::from_utf8(value.as_bytes())
+                    .expect("SDK request header values are valid UTF-8")
+            })
+            .collect();
+        values.join(",")
+    }
 }
 
 impl<'a> fmt::Display for CanonicalRequest<'a> {
@@ -324,15 +350,8 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         writeln!(f, "{}", self.params.as_deref().unwrap_or(""))?;
         // write out _all_ the headers
         for header in &self.values.signed_headers().headers {
-            // a missing header is a bug, so we should panic.
-            let value = &self.headers[&header.0];
             write!(f, "{}:", header.0.as_str())?;
-            writeln!(
-                f,
-                "{}",
-                std::str::from_utf8(value.as_bytes())
-                    .expect("SDK request header values are valid UTF-8")
-            )?;
+            writeln!(f, "{}", self.header_values_for(&header.0))?;
         }
         writeln!(f)?;
         // write out the signed headers
@@ -367,11 +386,17 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
     &bytes[starting_index..ending_index]
 }
 
-/// Works just like [trim_all] but acts on HeaderValues instead of bytes
-fn normalize_header_value(header_value: &HeaderValue) -> HeaderValue {
+/// Works just like [trim_all] but acts on HeaderValues instead of bytes.
+/// Will ensure that the underlying bytes are valid UTF-8.
+fn normalize_header_value(
+    header_value: &HeaderValue,
+) -> Result<HeaderValue, CanonicalRequestError> {
     let trimmed_value = trim_all(header_value.as_bytes());
-    // This can't fail because we started with a valid HeaderValue and then only trimmed spaces
-    HeaderValue::from_bytes(&trimmed_value).unwrap()
+    HeaderValue::from_str(
+        std::str::from_utf8(&trimmed_value)
+            .map_err(CanonicalRequestError::invalid_utf8_in_header_value)?,
+    )
+    .map_err(CanonicalRequestError::from)
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -494,17 +519,17 @@ mod tests {
     use crate::http_request::canonical_request::{
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
-    use crate::http_request::query_writer::QueryWriter;
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
         PayloadChecksumKind, SignableBody, SignableRequest, SigningSettings,
     };
     use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
-    use http::HeaderValue;
+    use aws_smithy_http::query_writer::QueryWriter;
     use http::Uri;
+    use http::{header::HeaderName, HeaderValue};
     use pretty_assertions::assert_eq;
-    use proptest::proptest;
+    use proptest::{prelude::*, proptest};
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
@@ -517,6 +542,35 @@ mod tests {
             time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }
+    }
+
+    #[test]
+    fn test_repeated_header() {
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.headers_mut().append(
+            "x-amz-object-attributes",
+            HeaderValue::from_static("Checksum"),
+        );
+        req.headers_mut().append(
+            "x-amz-object-attributes",
+            HeaderValue::from_static("ObjectSize"),
+        );
+        let req = SignableRequest::from(&req);
+        let settings = SigningSettings {
+            payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            ..Default::default()
+        };
+        let signing_params = signing_params(settings);
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
+        assert_eq!(
+            creq.values.signed_headers().to_string(),
+            "host;x-amz-content-sha256;x-amz-date;x-amz-object-attributes"
+        );
+        assert_eq!(
+            creq.header_values_for("x-amz-object-attributes"),
+            "Checksum,ObjectSize",
+        );
     }
 
     #[test]
@@ -591,7 +645,7 @@ mod tests {
             region: "us-east-1",
             service: "iam",
         };
-        assert_eq!(format!("{}\n", scope.to_string()), expected);
+        assert_eq!(format!("{}\n", scope), expected);
     }
 
     #[test]
@@ -701,6 +755,47 @@ mod tests {
         );
     }
 
+    proptest! {
+       #[test]
+       fn presigning_header_exclusion_with_explicit_exclusion_list_specified(
+           excluded_headers in prop::collection::vec("[a-z]{1,20}", 1..10),
+       ) {
+            let mut request_builder = http::Request::builder()
+                .uri("https://some-endpoint.some-region.amazonaws.com")
+                .header("content-type", "application/xml")
+                .header("content-length", "0");
+            for key in &excluded_headers {
+                request_builder = request_builder.header(key, "value");
+            }
+            let request = request_builder.body("").unwrap();
+
+            let request = SignableRequest::from(&request);
+
+            let settings = SigningSettings {
+                signature_location: SignatureLocation::QueryParams,
+                expires_in: Some(Duration::from_secs(30)),
+                excluded_headers: Some(
+                    excluded_headers
+                        .into_iter()
+                        .map(|header_string| {
+                            HeaderName::from_static(Box::leak(header_string.into_boxed_str()))
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+
+            let signing_params = signing_params(settings);
+            let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
+
+            let values = canonical.values.into_query_params().unwrap();
+            assert_eq!(
+                "content-length;content-type;host",
+                values.signed_headers.as_str()
+            );
+        }
+    }
+
     #[test]
     fn test_trim_all_handles_spaces_correctly() {
         // Can't compare a byte array to a Cow so we convert both to slices before comparing
@@ -732,9 +827,9 @@ mod tests {
         }
 
         #[test]
-        fn test_normalize_header_value_doesnt_panic(v in (".*")) {
+        fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
             if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                let _ = normalize_header_value(&header_value);
+                assert!(normalize_header_value(&header_value).is_ok());
             }
         }
 
@@ -742,5 +837,11 @@ mod tests {
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
+    }
+
+    #[test]
+    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
+        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
+        assert!(normalize_header_value(&header_value).is_err());
     }
 }
