@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.DocManipulator
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -60,6 +61,7 @@ class FluentClientGenerator(
         client = RuntimeType.smithyClient(codegenContext.runtimeConfig),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
+    private val abridgeDocs: Boolean = false,
     private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
@@ -180,6 +182,7 @@ class FluentClientGenerator(
                     symbolProvider,
                     operation,
                     model,
+                    abridgeDocs,
                 ).joinToString("\n") { "///   - $it" }
 
                 val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
@@ -189,7 +192,7 @@ class FluentClientGenerator(
                 }
 
                 val outputFieldsBody =
-                    generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
+                    generateShapeMemberDocs(writer, symbolProvider, output, model, abridgeDocs).joinToString("\n") {
                         "///   - $it"
                     }
 
@@ -368,6 +371,7 @@ private fun generateOperationShapeDocs(
     symbolProvider: RustSymbolProvider,
     operation: OperationShape,
     model: Model,
+    abridgeDocs: Boolean,
 ): List<String> {
     val input = operation.inputShape(model)
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
@@ -379,7 +383,7 @@ private fun generateOperationShapeDocs(
 
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
-            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+            true -> maybeAbridgeDoc(abridgeDocs, writer.escape(docTrait.value))
             else -> "(undocumented)"
         }
 
@@ -398,6 +402,7 @@ private fun generateShapeMemberDocs(
     symbolProvider: SymbolProvider,
     shape: StructureShape,
     model: Model,
+    abridgeDocs: Boolean,
 ): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
@@ -405,12 +410,20 @@ private fun generateShapeMemberDocs(
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
-            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+            true -> maybeAbridgeDoc(abridgeDocs, writer.escape(docTrait.value))
             else -> "(undocumented)"
         }
 
         "[`$name($member)`](${docLink("$structName::$name")}): $docs"
     }
+}
+
+private fun maybeAbridgeDoc(abridge: Boolean, input: String): String {
+    val value = normalizeHtml(input).replace("\n", " ")
+    if (!abridge) {
+        return value
+    }
+    return DocManipulator.truncateDocsAfterFirstPeriod(value)
 }
 
 private fun OperationShape.fluentBuilderModule(

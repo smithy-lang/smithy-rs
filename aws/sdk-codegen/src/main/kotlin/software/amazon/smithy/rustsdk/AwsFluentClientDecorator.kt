@@ -35,6 +35,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
+/** Set of services that require abridging the docs to keep file sizes lower */
+private val servicesRequiringAbridgedClientDocs = setOf(
+    ShapeId.from("com.amazonaws.ec2#AmazonEC2"),
+)
+
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClient = RuntimeType.smithyClient(runtimeConfig)
     private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
@@ -98,6 +103,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             codegenContext,
             reexportSmithyClientBuilder = false,
             generics = generics,
+            abridgeDocs = servicesRequiringAbridgedClientDocs.contains(codegenContext.serviceShape.id),
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(codegenContext, runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
