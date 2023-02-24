@@ -167,9 +167,10 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
             throw CodegenException(
-                "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
-                    scope.map { it.first }
-                }",
+                """
+                Rust block template expected `$keyName` but was not present in template.
+                Hint: Template contains: ${scope.map { "`${it.first}`" }}
+                """.trimIndent(),
             )
         }
         "#{${keyName.lowercase()}$templateType}"
