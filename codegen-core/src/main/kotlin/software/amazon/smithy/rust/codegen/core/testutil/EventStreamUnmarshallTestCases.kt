@@ -22,14 +22,12 @@ object EventStreamUnmarshallTestCases {
         codegenContext: CodegenContext,
         optionalBuilderInputs: Boolean = false,
     ) {
-        val crateName = codegenContext.moduleUseName()
-
         rust(
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
             use aws_smithy_types::{Blob, DateTime};
-            use $crateName::error::TestStreamError;
-            use $crateName::model::*;
+            use crate::error::TestStreamError;
+            use crate::model::*;
 
             fn msg(
                 message_type: &'static str,
