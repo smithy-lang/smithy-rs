@@ -9,8 +9,9 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
@@ -95,17 +96,18 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val generics = AwsClientGenerics(types)
         FluentClientGenerator(
             codegenContext,
-            generics,
+            reexportSmithyClientBuilder = false,
+            generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(runtimeConfig),
+                AwsPresignedFluentBuilderMethod(codegenContext, runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(CustomizableOperationGenerator.CustomizeModule) {
+        rustCrate.withModule(codegenContext.featureGatedCustomizeModule()) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
-        rustCrate.withModule(FluentClientGenerator.clientModule) {
+        rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(types).render(this)
         }
         val awsSmithyClient = "aws-smithy-client"

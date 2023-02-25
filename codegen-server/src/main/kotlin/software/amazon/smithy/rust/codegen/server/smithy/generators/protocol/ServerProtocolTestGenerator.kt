@@ -344,8 +344,8 @@ class ServerProtocolTestGenerator(
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
-            !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
-            )
+                !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
+                )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -415,22 +415,22 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             .body(${
-            if (body != null) {
-                // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
-                // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
-                //
-                // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
-                // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
-                // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
-                // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                //
-                // We also escape to avoid interactions with templating in the case where the body contains `#`.
-                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+                if (body != null) {
+                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+                    //
+                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+                    //
+                    // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                    val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
-            } else {
-                "#{SmithyHttpServer}::body::Body::empty()"
-            }
+                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
+                } else {
+                    "#{SmithyHttpServer}::body::Body::empty()"
+                }
             }).unwrap();
             """,
             *codegenScope,
@@ -643,7 +643,7 @@ class ServerProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.rust(
                     "#T(&body, ${
-                    rustWriter.escape(body).dq()
+                        rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
@@ -779,80 +779,11 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
 
-            // See https://github.com/awslabs/smithy-rs/issues/1969
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShortOverride_case0", TestType.MalformedRequest),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShortOverride_case1", TestType.MalformedRequest),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeIntegerOverride_case0",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeIntegerOverride_case1",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeLongOverride_case0",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeLongOverride_case1",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxShortOverride", TestType.MalformedRequest),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeMaxIntegerOverride",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxLongOverride", TestType.MalformedRequest),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinShortOverride", TestType.MalformedRequest),
-            FailingTest(
-                MalformedRangeValidation,
-                "RestJsonMalformedRangeMinIntegerOverride",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinLongOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case1", TestType.MalformedRequest),
+            // Tests involving floating point shapes and the `@range` trait; see https://github.com/awslabs/smithy-rs/issues/2007
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMaxStringOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMinStringOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxByteOverride", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByteOverride", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloatOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case1", TestType.MalformedRequest),
-            FailingTest(
-                RestJsonValidation,
-                "RestJsonMalformedPatternMapValueOverride_case0",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(
-                RestJsonValidation,
-                "RestJsonMalformedPatternMapValueOverride_case1",
-                TestType.MalformedRequest,
-            ),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternStringOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternStringOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case2", TestType.MalformedRequest),
 
             // Some tests for the S3 service (restXml).
             FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", TestType.Response),

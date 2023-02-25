@@ -60,8 +60,6 @@ class EventStreamUnmarshallerGenerator(
     codegenContext: CodegenContext,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
 ) {
     private val crateName = codegenContext.moduleUseName()
     private val model = codegenContext.model
@@ -213,7 +211,7 @@ class EventStreamUnmarshallerGenerator(
             }
 
             else -> {
-                rust("let mut builder = #T::default();", builderSymbol(unionStruct))
+                rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(unionStruct))
                 val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
                 if (payloadMember != null) {
                     renderUnmarshallEventPayload(payloadMember)
@@ -359,7 +357,7 @@ class EventStreamUnmarshallerGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                             if (parser != null) {
-                                rust("let mut builder = #T::default();", builderSymbol(target))
+                                rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                                 rustTemplate(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
@@ -380,12 +378,8 @@ class EventStreamUnmarshallerGenerator(
                         CodegenTarget.SERVER -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
-                            val mut = if (parser != null) {
-                                " mut"
-                            } else {
-                                ""
-                            }
-                            rust("let$mut builder = #T::default();", builderSymbol(target))
+                            val mut = if (parser != null) { " mut" } else { "" }
+                            rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                             if (parser != null) {
                                 rustTemplate(
                                     """

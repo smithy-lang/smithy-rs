@@ -31,80 +31,96 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImp
 class ErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val writer: RustWriter,
     private val shape: StructureShape,
     private val error: ErrorTrait,
     private val implCustomizations: List<ErrorImplCustomization>,
 ) {
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
+    private val symbol = symbolProvider.toSymbol(shape)
 
-    fun render() {
-        val symbol = symbolProvider.toSymbol(shape)
+    fun renderStruct(writer: RustWriter) {
+        writer.apply {
+            StructureGenerator(
+                model, symbolProvider, this, shape,
+                listOf(
+                    object : StructureCustomization() {
+                        override fun section(section: StructureSection): Writable = writable {
+                            when (section) {
+                                is StructureSection.AdditionalFields -> {
+                                    rust("pub(crate) meta: #T,", errorMetadata(runtimeConfig))
+                                }
 
-        StructureGenerator(
-            model, symbolProvider, writer, shape,
-            listOf(object : StructureCustomization() {
-                override fun section(section: StructureSection): Writable = writable {
-                    when (section) {
-                        is StructureSection.AdditionalFields -> {
-                            rust("pub(crate) meta: #T,", errorMetadata(runtimeConfig))
-                        }
-                        is StructureSection.AdditionalDebugFields -> {
-                            rust("""${section.formatterName}.field("meta", &self.meta);""")
-                        }
-                    }
-                }
-            },
-            ),
-        ).render()
+                                is StructureSection.AdditionalDebugFields -> {
+                                    rust("""${section.formatterName}.field("meta", &self.meta);""")
+                                }
 
-        BuilderGenerator(
-            model, symbolProvider, shape,
-            listOf(
-                object : BuilderCustomization() {
-                    override fun section(section: BuilderSection): Writable = writable {
-                        when (section) {
-                            is BuilderSection.AdditionalFields -> {
-                                rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
-                            }
-
-                            is BuilderSection.AdditionalMethods -> {
-                                rustTemplate(
-                                    """
-                                    /// Sets error metadata
-                                    pub fn meta(mut self, meta: #{error_metadata}) -> Self {
-                                        self.meta = Some(meta);
-                                        self
-                                    }
-
-                                    /// Sets error metadata
-                                    pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
-                                        self.meta = meta;
-                                        self
-                                    }
-                                    """,
-                                    "error_metadata" to errorMetadata(runtimeConfig),
-                                )
-                            }
-
-                            is BuilderSection.AdditionalFieldsInBuild -> {
-                                rust("meta: self.meta.unwrap_or_default(),")
+                                else -> {}
                             }
                         }
-                    }
-                },
-            ),
-        ).let { builderGen ->
-            writer.implBlock(symbol) {
-                builderGen.renderConvenienceMethod(this)
+                    },
+                ),
+            ).render()
+
+            ErrorImplGenerator(
+                model,
+                symbolProvider,
+                this,
+                shape,
+                error,
+                implCustomizations,
+            ).render(CodegenTarget.CLIENT)
+
+            rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorMetadataTrait(runtimeConfig)) {
+                rust("fn meta(&self) -> &#T { &self.meta }", errorMetadata(runtimeConfig))
             }
-            builderGen.render(writer)
+
+            implBlock(symbol) {
+                BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
+            }
         }
+    }
 
-        ErrorImplGenerator(model, symbolProvider, writer, shape, error, implCustomizations).render(CodegenTarget.CLIENT)
+    fun renderBuilder(writer: RustWriter) {
+        writer.apply {
+            BuilderGenerator(
+                model, symbolProvider, shape,
+                listOf(
+                    object : BuilderCustomization() {
+                        override fun section(section: BuilderSection): Writable = writable {
+                            when (section) {
+                                is BuilderSection.AdditionalFields -> {
+                                    rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
+                                }
 
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorMetadataTrait(runtimeConfig)) {
-            rust("fn meta(&self) -> &#T { &self.meta }", errorMetadata(runtimeConfig))
+                                is BuilderSection.AdditionalMethods -> {
+                                    rustTemplate(
+                                        """
+                                        /// Sets error metadata
+                                        pub fn meta(mut self, meta: #{error_metadata}) -> Self {
+                                            self.meta = Some(meta);
+                                            self
+                                        }
+
+                                        /// Sets error metadata
+                                        pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
+                                            self.meta = meta;
+                                            self
+                                        }
+                                        """,
+                                        "error_metadata" to errorMetadata(runtimeConfig),
+                                    )
+                                }
+
+                                is BuilderSection.AdditionalFieldsInBuild -> {
+                                    rust("meta: self.meta.unwrap_or_default(),")
+                                }
+
+                                else -> {}
+                            }
+                        }
+                    },
+                ),
+            ).render(this)
         }
     }
 }

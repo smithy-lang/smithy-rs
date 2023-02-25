@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -29,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -48,7 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
     protocol: Protocol,
 ) : ClientProtocolGenerator(
     codegenContext,
@@ -318,7 +318,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
-        rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+        rust("let mut output = #T::default();", symbolProvider.symbolForBuilder(outputShape))
         // avoid non-usage warnings for response
         rust("let _ = response;")
         if (outputShape.id == operationShape.output.get()) {
@@ -350,7 +350,9 @@ class HttpBoundProtocolTraitImplGenerator(
 
         val err = if (BuilderGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
             ".map_err(${format(errorSymbol)}::unhandled)?"
-        } else ""
+        } else {
+            ""
+        }
 
         writeCustomizations(customizations, OperationSection.MutateOutput(customizations, operationShape))
 

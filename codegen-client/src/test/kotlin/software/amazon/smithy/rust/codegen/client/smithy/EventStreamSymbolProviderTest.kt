@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.testutil.ClientTestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.testutil.TestClientRustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
@@ -46,7 +47,11 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(
+            TestRuntimeConfig,
+            SymbolVisitor(testClientRustSettings(), model, service, TestClientRustSymbolProviderConfig),
+            CodegenTarget.CLIENT,
+        )
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
@@ -82,7 +87,11 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, ClientTestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(
+            TestRuntimeConfig,
+            SymbolVisitor(testClientRustSettings(), model, service, TestClientRustSymbolProviderConfig),
+            CodegenTarget.CLIENT,
+        )
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape

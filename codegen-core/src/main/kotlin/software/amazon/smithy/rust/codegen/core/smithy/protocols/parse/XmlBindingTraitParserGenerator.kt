@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -71,7 +70,6 @@ data class OperationWrapperContext(
 class XmlBindingTraitParserGenerator(
     codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
-    private val builderSymbol: (shape: StructureShape) -> Symbol,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
@@ -131,7 +129,9 @@ class XmlBindingTraitParserGenerator(
      */
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
+        check(shape is UnionShape || shape is StructureShape) {
+            "payload parser should only be used on structures & unions"
+        }
         val fnName = symbolProvider.deserializeFunctionName(member)
         return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlock(
@@ -188,7 +188,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(outputShape),
+                symbolProvider.symbolForBuilder(outputShape),
                 xmlDecodeError,
             ) {
                 rustTemplate(
@@ -221,7 +221,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(errorShape),
+                symbolProvider.symbolForBuilder(errorShape),
                 xmlDecodeError,
             ) {
                 val members = errorShape.errorXmlMembers()
@@ -255,7 +255,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(inputShape),
+                symbolProvider.symbolForBuilder(inputShape),
                 xmlDecodeError,
             ) {
                 rustTemplate(
@@ -456,7 +456,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.case(member: MemberShape, inner: Writable) {
         rustBlock(
             "s if ${
-            member.xmlName().matchExpression("s")
+                member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => ",
         ) {
             inner()

@@ -49,7 +49,9 @@ class Route53Decorator : ClientCodegenDecorator {
             operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
             baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
-        } else baseCustomizations
+        } else {
+            baseCustomizations
+        }
     }
 
     private fun isResourceId(shape: Shape): Boolean {

@@ -111,18 +111,20 @@ object TestWorkspace {
         }
     }
 
-    fun testProject(debugMode: Boolean = false): TestWriterDelegator =
-        testProject(ModelAssembler().assemble().unwrap(), debugMode)
+    fun testProject(
+        model: Model = ModelAssembler().assemble().unwrap(),
+        codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
+    ): TestWriterDelegator = testProject(testSymbolProvider(model), codegenConfig)
 
-    fun testProject(model: Model, debugMode: Boolean = false): TestWriterDelegator =
-        testProject(testSymbolProvider(model), debugMode)
-
-    fun testProject(symbolProvider: RustSymbolProvider, debugMode: Boolean = false): TestWriterDelegator {
+    fun testProject(
+        symbolProvider: RustSymbolProvider,
+        codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
+    ): TestWriterDelegator {
         val subprojectDir = subproject()
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            CoreCodegenConfig(debugMode = debugMode),
+            codegenConfig,
         ).apply {
             lib {
                 // If the test fails before the crate is finalized, we'll end up with a broken crate.
@@ -229,11 +231,13 @@ fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (Cargo
         val writtenOut = this.toString()
         val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
         throw CodegenException(
-            "found invalid dependencies. ${invalidDeps.map { it.first }}\nHint: the following lines may be the problem.\n${
-            badLines.joinToString(
-                separator = "\n",
-                prefix = "   ",
-            )
+            "found invalid dependencies. ${invalidDeps.map {
+                it.first
+            }}\nHint: the following lines may be the problem.\n${
+                badLines.joinToString(
+                    separator = "\n",
+                    prefix = "   ",
+                )
             }",
         )
     }

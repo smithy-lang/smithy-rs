@@ -7,24 +7,17 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
-import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
@@ -41,13 +34,9 @@ internal class BuilderGeneratorTest {
             rust("##![allow(deprecated)]")
             StructureGenerator(model, provider, this, inner, emptyList()).render()
             StructureGenerator(model, provider, this, struct, emptyList()).render()
-            BuilderGenerator(model, provider, struct, emptyList()).also { builderGen ->
-                builderGen.render(this)
-                implBlock(provider.toSymbol(struct)) {
-                    builderGen.renderConvenienceMethod(this)
-                }
+            implBlock(provider.toSymbol(struct)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, struct)
             }
-
             unitTest("generate_builders") {
                 rust(
                     """
@@ -58,43 +47,28 @@ internal class BuilderGeneratorTest {
                 )
             }
         }
+        project.withModule(provider.moduleForBuilder(struct)) {
+            BuilderGenerator(model, provider, struct, emptyList()).render(this)
+        }
         project.compileAndTest()
     }
 
     @Test
     fun `generate fallible builders`() {
         val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
-        val provider =
-            object : RustSymbolProvider {
-                override fun config(): SymbolVisitorConfig {
-                    return baseProvider.config()
-                }
-
-                override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-                    return baseProvider.toEnumVariantName(definition)
-                }
-
-                override fun toSymbol(shape: Shape?): Symbol {
-                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
-                }
-
-                override fun symbolForOperationError(operation: OperationShape): Symbol = PANIC()
-                override fun symbolForEventStreamError(eventStream: UnionShape): Symbol = PANIC()
-
-                override fun toMemberName(shape: MemberShape?): String {
-                    return baseProvider.toMemberName(shape)
-                }
+        val provider = object : WrappingSymbolProvider(baseProvider) {
+            override fun toSymbol(shape: Shape): Symbol {
+                return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
             }
+        }
         val project = TestWorkspace.testProject(provider)
+
         project.moduleFor(StructureGeneratorTest.struct) {
             AllowDeprecated.render(this)
             StructureGenerator(model, provider, this, inner, emptyList()).render()
             StructureGenerator(model, provider, this, struct, emptyList()).render()
-            BuilderGenerator(model, provider, struct, emptyList()).also { builderGenerator ->
-                builderGenerator.render(this)
-                implBlock(provider.toSymbol(struct)) {
-                    builderGenerator.renderConvenienceMethod(this)
-                }
+            implBlock(provider.toSymbol(struct)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, struct)
             }
             unitTest("generate_fallible_builders") {
                 rust(
@@ -106,6 +80,9 @@ internal class BuilderGeneratorTest {
                 )
             }
         }
+        project.withModule(provider.moduleForBuilder(struct)) {
+            BuilderGenerator(model, provider, struct, emptyList()).render(this)
+        }
         project.compileAndTest()
     }
 
@@ -115,11 +92,8 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(credentials) {
             StructureGenerator(model, provider, this, credentials, emptyList()).render()
-            BuilderGenerator(model, provider, credentials, emptyList()).also { builderGen ->
-                builderGen.render(this)
-                implBlock(provider.toSymbol(credentials)) {
-                    builderGen.renderConvenienceMethod(this)
-                }
+            implBlock(provider.toSymbol(credentials)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, credentials)
             }
             unitTest("sensitive_fields") {
                 rust(
@@ -133,6 +107,9 @@ internal class BuilderGeneratorTest {
                 )
             }
         }
+        project.withModule(provider.moduleForBuilder(credentials)) {
+            BuilderGenerator(model, provider, credentials, emptyList()).render(this)
+        }
         project.compileAndTest()
     }
 
@@ -142,11 +119,8 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(secretStructure) {
             StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
-            BuilderGenerator(model, provider, secretStructure, emptyList()).also { builderGen ->
-                builderGen.render(this)
-                implBlock(provider.toSymbol(secretStructure)) {
-                    builderGen.renderConvenienceMethod(this)
-                }
+            implBlock(provider.toSymbol(secretStructure)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, secretStructure)
             }
             unitTest("sensitive_struct") {
                 rust(
@@ -157,6 +131,9 @@ internal class BuilderGeneratorTest {
                     """,
                 )
             }
+        }
+        project.withModule(provider.moduleForBuilder(secretStructure)) {
+            BuilderGenerator(model, provider, secretStructure, emptyList()).render(this)
         }
         project.compileAndTest()
     }

@@ -157,7 +157,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
                         let mut root = writer.start_el(${xmlIndex.payloadShapeName(member).dq()})${
-                        target.xmlNamespace(root = true).apply()
+                            target.xmlNamespace(root = true).apply()
                         };
                         """,
                         *codegenScope,

@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -20,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -94,9 +92,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.toString())
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(codegenContext.symbolProvider)
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol)
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =

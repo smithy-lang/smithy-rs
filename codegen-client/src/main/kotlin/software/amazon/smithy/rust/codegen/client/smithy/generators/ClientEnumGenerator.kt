@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -14,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
@@ -86,7 +87,7 @@ data class InfallibleEnumType(
     }
 
     private fun unknownVariantValue(context: EnumGeneratorContext): RuntimeType {
-        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Types) {
+        return RuntimeType.forInlineFun(UnknownVariantValue, unknownVariantModule) {
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
@@ -166,5 +167,10 @@ data class InfallibleEnumType(
     }
 }
 
-class ClientEnumGenerator(codegenContext: CodegenContext, shape: StringShape) :
-    EnumGenerator(codegenContext.model, codegenContext.symbolProvider, shape, InfallibleEnumType(RustModule.Types))
+class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringShape) :
+    EnumGenerator(
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        shape,
+        InfallibleEnumType(codegenContext.featureGatedPrimitivesModule()),
+    )

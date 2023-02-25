@@ -25,10 +25,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -41,7 +41,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  */
 class ConstrainedNumberGenerator(
     val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
+    private val writer: RustWriter,
     val shape: NumberShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
@@ -132,7 +133,7 @@ class ConstrainedNumberGenerator(
 
         writer.renderTryFrom(unconstrainedTypeName, name, constraintViolation, constraintsInfo)
 
-        writer.withInlineModule(constraintViolation.module()) {
+        inlineModuleCreator(constraintViolation) {
             rust(
                 """
                 ##[derive(Debug, PartialEq)]

@@ -51,8 +51,11 @@ class EnumGeneratorTest {
 
         private val enumTrait = testModel.lookup<StringShape>("test#EnumWithUnknown").expectTrait<EnumTrait>()
 
-        private fun model(name: String): EnumMemberModel =
-            EnumMemberModel(enumTrait.values.first { it.name.orNull() == name }, symbolProvider)
+        private fun model(name: String): EnumMemberModel = EnumMemberModel(
+            testModel.lookup("test#EnumWithUnknown"),
+            enumTrait.values.first { it.name.orNull() == name },
+            symbolProvider,
+        )
 
         @Test
         fun `it converts enum names to PascalCase and renames any named Unknown to UnknownValue`() {

@@ -41,7 +41,6 @@ class ServerResponseBindingGenerator(
             codegenContext,
             codegenContext.symbolProvider,
             operationShape,
-            ::builderSymbol,
             listOf(
                 ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(
                     codegenContext,

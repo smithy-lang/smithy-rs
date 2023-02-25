@@ -6,16 +6,13 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -46,9 +43,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(codegenContext.symbolProvider)
-        return RestXmlParserGenerator(codegenContext, restXmlErrors, ::builderSymbol)
+        return RestXmlParserGenerator(codegenContext, restXmlErrors)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
