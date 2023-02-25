@@ -13,15 +13,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
 object EventStreamUnmarshallTestCases {
     fun RustWriter.writeUnmarshallTestCases(
         testCase: EventStreamTestModels.TestCase,
-        generator: String,
-        codegenContext: CodegenContext,
         optionalBuilderInputs: Boolean = false,
     ) {
+        val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
+
         rust(
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
