@@ -92,7 +92,10 @@ class ProtocolTestGenerator(
             val additionalAttributes = listOf(
                 Attribute(allow("unreachable_code", "unused_variables")),
             )
-            writer.withInlineModule(RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)) {
+            writer.withInlineModule(
+                RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes),
+                null,
+            ) {
                 renderAllTestCases(allTests)
             }
         }

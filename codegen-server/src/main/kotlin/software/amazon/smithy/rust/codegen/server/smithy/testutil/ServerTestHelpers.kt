@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -109,6 +110,7 @@ fun serverTestCodegenContext(
     return ServerCodegenContext(
         model,
         serverSymbolProviders.symbolProvider,
+        TestModuleDocProvider,
         service,
         protocol,
         settings,

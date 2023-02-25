@@ -309,6 +309,7 @@ class ConstraintsMemberShapeTest {
             context.fileManifest,
             codegenContext.symbolProvider,
             settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
         )
 
         // We cannot write to the lib anymore as the RustWriter overwrites it, so writing code directly to check.rs

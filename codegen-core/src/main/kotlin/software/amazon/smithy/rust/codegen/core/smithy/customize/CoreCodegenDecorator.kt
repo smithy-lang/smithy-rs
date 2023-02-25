@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -47,6 +48,14 @@ interface CoreCodegenDecorator<CodegenContext> {
      * Hook to add additional modules to the generated crate.
      */
     fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {}
+
+    /**
+     * Customize the documentation provider for module documentation.
+     */
+    fun moduleDocumentationCustomization(
+        codegenContext: CodegenContext,
+        baseModuleDocProvider: ModuleDocProvider,
+    ): ModuleDocProvider = baseModuleDocProvider
 
     /**
      * Hook to customize the generated `Cargo.toml` file.
@@ -117,6 +126,13 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
         combineCustomizations(model) { decorator, otherModel ->
             decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
         }
+
+    final override fun moduleDocumentationCustomization(
+        codegenContext: CodegenContext,
+        baseModuleDocProvider: ModuleDocProvider,
+    ): ModuleDocProvider = combineCustomizations(baseModuleDocProvider) { decorator, base ->
+        decorator.moduleDocumentationCustomization(codegenContext, base)
+    }
 
     final override fun libRsCustomizations(
         codegenContext: CodegenContext,

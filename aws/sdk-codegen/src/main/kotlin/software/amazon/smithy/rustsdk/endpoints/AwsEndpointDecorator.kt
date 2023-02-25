@@ -15,9 +15,9 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -109,7 +109,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
             println("not generating a resolver for ${codegenContext.serviceShape}")
             return
         }
-        rustCrate.withModule(EndpointsModule) {
+        rustCrate.withModule(ClientRustModule.Endpoint) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1784) cleanup task
             rustTemplate(
                 """

@@ -182,6 +182,7 @@ class ConstrainedShapeSymbolProvider(
                 visibility = Visibility.publicIf(!pubCrateServerBuilder, Visibility.PUBCRATE),
                 parent = defaultModule,
                 inline = true,
+                documentationOverride = "",
             )
             val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), innerModule)

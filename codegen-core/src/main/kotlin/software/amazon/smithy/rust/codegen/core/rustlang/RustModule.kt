@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
@@ -29,11 +30,11 @@ sealed class RustModule {
     data class LeafModule(
         val name: String,
         val rustMetadata: RustMetadata,
-        val documentation: String? = null,
         val parent: RustModule = LibRs,
         val inline: Boolean = false,
         /* module is a cfg(test) module */
         val tests: Boolean = false,
+        val documentationOverride: String? = null,
     ) : RustModule() {
 
         init {
@@ -62,30 +63,36 @@ sealed class RustModule {
         fun new(
             name: String,
             visibility: Visibility,
-            documentation: String? = null,
             inline: Boolean = false,
             parent: RustModule = LibRs,
             additionalAttributes: List<Attribute> = listOf(),
+            documentationOverride: String? = null,
         ): LeafModule {
             return LeafModule(
                 RustReservedWords.escapeIfNeeded(name),
                 RustMetadata(visibility = visibility, additionalAttributes = additionalAttributes),
-                documentation,
                 inline = inline,
                 parent = parent,
+                documentationOverride = documentationOverride,
             )
         }
 
         /** Creates a new public module */
-        fun public(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PUBLIC, documentation = documentation, inline = false, parent = parent)
+        fun public(name: String, parent: RustModule = LibRs, documentationOverride: String? = null): LeafModule =
+            new(
+                name,
+                visibility = Visibility.PUBLIC,
+                inline = false,
+                parent = parent,
+                documentationOverride = documentationOverride,
+            )
 
         /** Creates a new private module */
-        fun private(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PRIVATE, documentation = documentation, inline = false, parent = parent)
+        fun private(name: String, parent: RustModule = LibRs): LeafModule =
+            new(name, visibility = Visibility.PRIVATE, inline = false, parent = parent)
 
-        fun pubCrate(name: String, documentation: String? = null, parent: RustModule): LeafModule =
-            new(name, visibility = Visibility.PUBCRATE, documentation = documentation, inline = false, parent = parent)
+        fun pubCrate(name: String, parent: RustModule): LeafModule =
+            new(name, visibility = Visibility.PUBCRATE, inline = false, parent = parent)
 
         fun inlineTests(
             name: String = "test",
@@ -98,17 +105,6 @@ sealed class RustModule {
             additionalAttributes = additionalAttributes,
             parent = parent,
         ).cfgTest()
-
-        /**
-         * Helper method to generate the `operation` Rust module.
-         * Its visibility depends on the generation context (client or server).
-         */
-        fun operation(visibility: Visibility): RustModule =
-            new(
-                "operation",
-                visibility = visibility,
-                documentation = "All operations that this crate can perform.",
-            )
     }
 
     fun isInline(): Boolean = when (this) {
@@ -142,10 +138,10 @@ sealed class RustModule {
      * pub mod my_module_name
      * ```
      */
-    fun renderModStatement(writer: RustWriter) {
+    fun renderModStatement(writer: RustWriter, moduleDocProvider: ModuleDocProvider) {
         when (this) {
             is LeafModule -> {
-                documentation?.let { docs -> writer.docs(docs) }
+                ModuleDocProvider.writeDocs(moduleDocProvider, this, writer)
                 rustMetadata.render(writer)
                 writer.write("mod $name;")
             }
