@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
@@ -26,10 +24,6 @@ class ClientEventStreamUnmarshallerGeneratorTest {
             IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
         ) { codegenContext, rustCrate ->
             val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
-
-            // val streamShape : UnionShape= codegenContext.model.expectShape(ShapeId.from("TestStream")) as UnionShape
-
-            val operationShape = codegenContext.model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
 
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
