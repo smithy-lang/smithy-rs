@@ -13,19 +13,16 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamMarshallTestCases.writeMarshallTestCases
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
-import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import java.util.stream.Stream
 
 class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        clientIntegrationTest(testCase.model) { codegenContext, rustCrate ->
-            val crateName = codegenContext.moduleUseName()
-            val generator = "$crateName::event_stream_serde::TestStreamMarshaller"
-
-            rustCrate.integrationTest("marshall") {
-                writeMarshallTestCases(testCase, generator, codegenContext)
+        clientIntegrationTest(testCase.model) { _, rustCrate ->
+            rustCrate.testModule {
+                writeMarshallTestCases(testCase, optionalBuilderInputs = false)
             }
         }
     }

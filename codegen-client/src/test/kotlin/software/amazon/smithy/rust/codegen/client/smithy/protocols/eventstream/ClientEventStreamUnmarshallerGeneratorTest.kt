@@ -22,12 +22,12 @@ class ClientEventStreamUnmarshallerGeneratorTest {
         clientIntegrationTest(
             testCase.model,
             IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
-        ) { codegenContext, rustCrate ->
+        ) { _, rustCrate ->
             val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
 
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
-                writeUnmarshallTestCases(testCase, generator, codegenContext)
+                writeUnmarshallTestCases(testCase, optionalBuilderInputs = false)
 
                 unitTest(
                     "unknown_message",
