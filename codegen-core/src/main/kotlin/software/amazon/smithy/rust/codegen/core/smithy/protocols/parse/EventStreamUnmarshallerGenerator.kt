@@ -21,7 +21,6 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -31,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -98,14 +96,12 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderUnmarshaller(unmarshallerType: RuntimeType, unionSymbol: Symbol) {
         val unmarshallerTypeName = unmarshallerType.name
-        rustTemplate(
+        rust(
             """
-            /// unmarshaller
             ##[non_exhaustive]
             ##[derive(Debug)]
             pub struct $unmarshallerTypeName;
 
-            #{AllowClippyNewWithoutDefault}
             impl $unmarshallerTypeName {
                 /// Creates a new $unmarshallerTypeName
                 pub fn new() -> Self {
@@ -113,7 +109,6 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             """,
-            "AllowClippyNewWithoutDefault" to writable { Attribute.AllowClippyNewWithoutDefault.render(this) },
         )
 
         rustBlockTemplate(
