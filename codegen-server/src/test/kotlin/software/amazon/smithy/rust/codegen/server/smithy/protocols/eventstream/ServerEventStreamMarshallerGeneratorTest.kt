@@ -12,7 +12,7 @@ import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamMarshallTestCases.writeMarshallTestCases
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
-import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.util.stream.Stream
 
@@ -24,7 +24,7 @@ class ServerEventStreamMarshallerGeneratorTest {
             val crateName = codegenContext.moduleUseName()
             val generator = "$crateName::event_stream_serde::TestStreamMarshaller"
 
-            rustCrate.integrationTest("marshall") {
+            rustCrate.testModule {
                 writeMarshallTestCases(testCase.eventStreamTestCase, generator, codegenContext)
             }
         }
