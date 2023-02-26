@@ -49,8 +49,8 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
     new(
         "event_stream_serde",
-        visibility = Visibility.PUBLIC,
-        documentation = "Event streams serialization and deserialization",
+        visibility = Visibility.PRIVATE,
+        documentation = "Event stream serialization and deserialization",
         inline = false,
         parent = RustModule.LibRs,
     )
