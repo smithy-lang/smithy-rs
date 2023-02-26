@@ -20,12 +20,9 @@ class ServerEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: TestCase) {
-        serverIntegrationTest(testCase.eventStreamTestCase.model) { codegenContext, rustCrate ->
-            val crateName = codegenContext.moduleUseName()
-            val generator = "$crateName::event_stream_serde::TestStreamMarshaller"
-
+        serverIntegrationTest(testCase.eventStreamTestCase.model) { _, rustCrate ->
             rustCrate.testModule {
-                writeMarshallTestCases(testCase.eventStreamTestCase, generator, codegenContext)
+                writeMarshallTestCases(testCase.eventStreamTestCase, optionalBuilderInputs = true)
             }
         }
     }
