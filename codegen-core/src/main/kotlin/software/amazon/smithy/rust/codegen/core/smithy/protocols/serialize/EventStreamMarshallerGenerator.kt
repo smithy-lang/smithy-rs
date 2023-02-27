@@ -75,7 +75,6 @@ open class EventStreamMarshallerGenerator(
     private fun RustWriter.renderMarshaller(marshallerType: RuntimeType, unionSymbol: Symbol) {
         rust(
             """
-            /// Event stream Marshaller
             ##[non_exhaustive]
             ##[derive(Debug)]
             pub struct ${marshallerType.name};
