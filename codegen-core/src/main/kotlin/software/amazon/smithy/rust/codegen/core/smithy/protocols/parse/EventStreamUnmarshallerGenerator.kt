@@ -102,7 +102,6 @@ class EventStreamUnmarshallerGenerator(
             pub struct $unmarshallerTypeName;
 
             impl $unmarshallerTypeName {
-                /// Creates a new $unmarshallerTypeName
                 pub fn new() -> Self {
                     $unmarshallerTypeName
                 }
