@@ -271,7 +271,7 @@ object EventStreamUnmarshallTestCases {
     }
 }
 
-fun conditionalBuilderInput(
+internal fun conditionalBuilderInput(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
     conditional: Boolean,
     vararg ctx: Pair<String, Any>,
