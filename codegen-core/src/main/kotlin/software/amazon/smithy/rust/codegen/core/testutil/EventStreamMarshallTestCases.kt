@@ -26,7 +26,8 @@ object EventStreamMarshallTestCases {
         fun builderInput(
             @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}")
             input: String,
-        ): Writable = conditionalBuilderInput(input, conditional = optionalBuilderInputs)
+            vararg ctx: Pair<String, Any>,
+        ): Writable = conditionalBuilderInput(input, conditional = optionalBuilderInputs, ctx = ctx)
 
         rustTemplate(
             """
@@ -92,35 +93,39 @@ object EventStreamMarshallTestCases {
             )
         }
 
-//        unitTest( "message_with_struct") {
-//            rustTemplate(
-//                """
-//            let event = TestStream::MessageWithStruct(
-//                MessageWithStruct::builder().some_struct(
-//                    TestStruct::builder()
-//                        .some_string(#{StringInput})
-//                        .some_int(#{IntInput})
-//                        .build()
-//                ).build()
-//            );
-//            let result = $generator::new().marshall(event);
-//            assert!(result.is_ok(), "expected ok, got: {:?}", result);
-//            let message = result.unwrap();
-//            let headers = headers_to_map(message.headers());
-//            assert_eq!(&str_header("event"), *headers.get(":message-type").unwrap());
-//            assert_eq!(&str_header("MessageWithStruct"), *headers.get(":event-type").unwrap());
-//            assert_eq!(&str_header(${testCase.requestContentType.dq()}), *headers.get(":content-type").unwrap());
-//
-//            validate_body(
-//                message.payload(),
-//                ${testCase.validTestStruct.dq()},
-//                MediaType::from(${testCase.mediaType.dq()})
-//            ).unwrap();
-//            """,
-//                "IntInput" to builderInput("5"),
-//                "StringInput" to builderInput("\"hello\""),
-//            )
-//        }
+        unitTest("message_with_struct") {
+            rustTemplate(
+                """
+                let event = TestStream::MessageWithStruct(
+                    MessageWithStruct::builder().some_struct(#{StructInput}).build()
+                );
+                let result = $generator::new().marshall(event);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                let message = result.unwrap();
+                let headers = headers_to_map(message.headers());
+                assert_eq!(&str_header("event"), *headers.get(":message-type").unwrap());
+                assert_eq!(&str_header("MessageWithStruct"), *headers.get(":event-type").unwrap());
+                assert_eq!(&str_header(${testCase.requestContentType.dq()}), *headers.get(":content-type").unwrap());
+
+                validate_body(
+                    message.payload(),
+                    ${testCase.validTestStruct.dq()},
+                    MediaType::from(${testCase.mediaType.dq()})
+                ).unwrap();
+                """,
+                "StructInput" to
+                    builderInput(
+                        """
+                        TestStruct::builder()
+                            .some_string(#{StringInput})
+                            .some_int(#{IntInput})
+                            .build()
+                        """,
+                        "IntInput" to builderInput("5"),
+                        "StringInput" to builderInput("\"hello\""),
+                    ),
+            )
+        }
 
         unitTest("message_with_union") {
             rustTemplate(
