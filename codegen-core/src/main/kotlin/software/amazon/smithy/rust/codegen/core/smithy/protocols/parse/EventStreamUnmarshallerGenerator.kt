@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -45,12 +44,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
-    new(
-        "event_stream_serde",
-        visibility = Visibility.PRIVATE,
-        inline = false,
-        parent = RustModule.LibRs,
-    )
+    private("event_stream_serde")
 
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
@@ -58,7 +52,6 @@ class EventStreamUnmarshallerGenerator(
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
 ) {
-    private val crateName = codegenContext.moduleUseName()
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
@@ -425,6 +418,6 @@ class EventStreamUnmarshallerGenerator(
 
     private fun UnionShape.eventStreamUnmarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("$crateName::event_stream_serde::${symbol.name.toPascalCase()}Unmarshaller")
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Unmarshaller")
     }
 }

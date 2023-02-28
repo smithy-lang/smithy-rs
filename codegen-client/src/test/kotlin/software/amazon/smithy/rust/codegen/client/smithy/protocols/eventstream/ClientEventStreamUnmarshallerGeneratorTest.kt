@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
-    fun `test event stream unmarshaller generator`(testCase: EventStreamTestModels.TestCase) {
+    fun test(testCase: EventStreamTestModels.TestCase) {
         clientIntegrationTest(
             testCase.model,
             IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
