@@ -116,7 +116,7 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
  * This enables conditionally wrapping a block in a prefix/suffix, e.g.
  *
  * ```
- * writer.withBlock("Some(", ")", conditional = symbol.isOptional()) {
+ * writer.conditionalBlock("Some(", ")", conditional = symbol.isOptional()) {
  *      write("symbolValue")
  * }
  * ```

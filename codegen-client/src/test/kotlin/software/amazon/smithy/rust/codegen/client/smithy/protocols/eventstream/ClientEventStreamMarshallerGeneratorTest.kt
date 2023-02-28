@@ -5,43 +5,30 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
+import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.EventStreamMarshallTestCases.writeMarshallTestCases
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
-import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
-import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
-import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import java.util.stream.Stream
 
 class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        EventStreamTestTools.setupTestCase(
-            testCase,
-            object : ClientEventStreamBaseRequirements() {
-                override fun renderGenerator(
-                    codegenContext: ClientCodegenContext,
-                    project: TestEventStreamProject,
-                    protocol: Protocol,
-                ): RuntimeType = EventStreamMarshallerGenerator(
-                    project.model,
-                    CodegenTarget.CLIENT,
-                    TestRuntimeConfig,
-                    project.symbolProvider,
-                    project.streamShape,
-                    protocol.structuredDataSerializer(project.operationShape),
-                    testCase.requestContentType,
-                ).render()
-            },
-            CodegenTarget.CLIENT,
-            EventStreamTestVariety.Marshall,
-        ).compileAndTest()
+        clientIntegrationTest(testCase.model) { _, rustCrate ->
+            rustCrate.testModule {
+                writeMarshallTestCases(testCase, optionalBuilderInputs = false)
+            }
+        }
     }
+}
+
+class TestCasesProvider : ArgumentsProvider {
+    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+        EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
 }
