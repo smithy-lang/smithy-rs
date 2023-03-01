@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
@@ -237,4 +238,29 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
             }
         }
     }
+}
+
+class ServerRpcV2Protocol(
+    codegenContext: CodegenContext,
+) : RpcV2(codegenContext), ServerProtocol {
+    val runtimeConfig = codegenContext.runtimeConfig
+
+    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2", "rpc_v2", runtimeConfig)
+
+    override fun routerType() = restRouterType(runtimeConfig)
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        requestSpecModule.resolve("RequestSpec")
+
+    override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
+
+    // TODO(): Implement
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
