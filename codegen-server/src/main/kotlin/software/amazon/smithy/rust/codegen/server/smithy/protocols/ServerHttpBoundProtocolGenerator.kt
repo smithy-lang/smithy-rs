@@ -82,7 +82,7 @@ import java.util.logging.Logger
 /**
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
- * See `ServerRestJson.kt` for more info.
+ * See [ServerRestJsonFactory] for more info.
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
@@ -91,13 +91,7 @@ class ServerHttpBoundProtocolGenerator(
     codegenContext,
     protocol,
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
-) {
-    // Define suffixes for operation input / output / error wrappers
-    companion object {
-        const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
-        const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
-    }
-}
+)
 
 /*
  * Generate all operation input parsers and output serializers for streaming and
@@ -161,7 +155,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
