@@ -6,17 +6,18 @@ use smithy.protocols#rpcv2
 
 @rpcv2(format: ["cbor"])
 service SimpleService {
-    operations: [
-        Operation
-    ]
+    version: "SomeVersion",
+    // operations: [
+    //     Operation
+    // ]
 }
 
-@http(uri: "/operation", method: "POST")
-operation Operation {
-    input: OperationInputOutput
-    output: OperationInputOutput
-}
-
-structure OperationInputOutput {
-    message: String
-}
+// @http(uri: "/operation", method: "POST")
+// operation Operation {
+//     input: OperationInputOutput
+//     output: OperationInputOutput
+// }
+//
+// structure OperationInputOutput {
+//     message: String
+// }

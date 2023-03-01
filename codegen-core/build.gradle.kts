@@ -29,6 +29,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocols-traits:$smithyVersion")
 }
 
 fun gitCommitHash(): String {
