@@ -76,9 +76,7 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(ClientRustModule.client) {
-            renderFluentClient(this)
-        }
+        renderFluentClient(crate)
 
         operations.forEach { operation ->
             crate.withModule(operation.fluentBuilderModule(codegenContext, symbolProvider)) {
@@ -89,139 +87,146 @@ class FluentClientGenerator(
         CustomizableOperationGenerator(codegenContext, generics).render(crate)
     }
 
-    private fun renderFluentClient(writer: RustWriter) {
-        if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
-            writer.rustTemplate(
+    private fun renderFluentClient(crate: RustCrate) {
+        crate.withModule(ClientRustModule.client) {
+            if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
+                rustTemplate(
+                    """
+                    ##[doc(inline)]
+                    pub use #{client}::Builder;
+                    """,
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
+                )
+            }
+            rustTemplate(
                 """
-                ##[doc(inline)]
-                pub use #{client}::Builder;
+                ##[derive(Debug)]
+                pub(crate) struct Handle#{generics_decl:W} {
+                    pub(crate) client: #{client}::Client#{smithy_inst:W},
+                    pub(crate) conf: crate::Config,
+                }
+
+                #{client_docs:W}
+                ##[derive(std::fmt::Debug)]
+                pub struct Client#{generics_decl:W} {
+                    handle: std::sync::Arc<Handle${generics.inst}>
+                }
+
+                impl${generics.inst} std::clone::Clone for Client${generics.inst} {
+                    fn clone(&self) -> Self {
+                        Self { handle: self.handle.clone() }
+                    }
+                }
+
+                impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
+                    fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
+                        Self::with_config(client, crate::Config::builder().build())
+                    }
+                }
+
+                impl${generics.inst} Client${generics.inst} {
+                    /// Creates a client with the given service configuration.
+                    pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
+                        Self {
+                            handle: std::sync::Arc::new(Handle {
+                                client,
+                                conf,
+                            })
+                        }
+                    }
+
+                    /// Returns the client's configuration.
+                    pub fn conf(&self) -> &crate::Config {
+                        &self.handle.conf
+                    }
+                }
                 """,
+                "generics_decl" to generics.decl,
+                "smithy_inst" to generics.smithyInst,
                 "client" to RuntimeType.smithyClient(runtimeConfig),
+                "client_docs" to writable
+                    {
+                        customizations.forEach {
+                            it.section(
+                                FluentClientSection.FluentClientDocs(
+                                    serviceShape,
+                                ),
+                            )(this)
+                        }
+                    },
             )
         }
-        writer.rustTemplate(
-            """
-            ##[derive(Debug)]
-            pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client#{smithy_inst:W},
-                pub(crate) conf: crate::Config,
-            }
 
-            #{client_docs:W}
-            ##[derive(std::fmt::Debug)]
-            pub struct Client#{generics_decl:W} {
-                handle: std::sync::Arc<Handle${generics.inst}>
-            }
+        operations.forEach { operation ->
+            val name = symbolProvider.toSymbol(operation).name
+            val fnName = clientOperationFnName(operation, symbolProvider)
 
-            impl${generics.inst} std::clone::Clone for Client${generics.inst} {
-                fn clone(&self) -> Self {
-                    Self { handle: self.handle.clone() }
-                }
-            }
-
-            impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
-                fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
-                    Self::with_config(client, crate::Config::builder().build())
-                }
-            }
-
-            impl${generics.inst} Client${generics.inst} {
-                /// Creates a client with the given service configuration.
-                pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
-                    Self {
-                        handle: std::sync::Arc::new(Handle {
-                            client,
-                            conf,
-                        })
-                    }
-                }
-
-                /// Returns the client's configuration.
-                pub fn conf(&self) -> &crate::Config {
-                    &self.handle.conf
-                }
-            }
-            """,
-            "generics_decl" to generics.decl,
-            "smithy_inst" to generics.smithyInst,
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "client_docs" to writable
-                {
-                    customizations.forEach {
-                        it.section(
-                            FluentClientSection.FluentClientDocs(
-                                serviceShape,
-                            ),
-                        )(this)
-                    }
-                },
-        )
-        writer.rustBlockTemplate(
-            "impl${generics.inst} Client${generics.inst} #{bounds:W}",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "bounds" to generics.bounds,
-        ) {
-            operations.forEach { operation ->
-                val name = symbolProvider.toSymbol(operation).name
-                val fullPath = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
-                val maybePaginated = if (operation.isPaginated(model)) {
-                    "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
-                } else {
-                    ""
-                }
-
-                val output = operation.outputShape(model)
-                val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = symbolProvider.symbolForOperationError(operation)
-
-                val inputFieldsBody = generateOperationShapeDocs(
-                    writer,
-                    codegenContext,
-                    symbolProvider,
-                    operation,
-                    model,
-                ).joinToString("\n") { "///   - $it" }
-
-                val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
-                    "The fluent builder is configurable:"
-                } else {
-                    "The fluent builder takes no input, just [`send`]($fullPath::send) it."
-                }
-
-                val outputFieldsBody =
-                    generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
-                        "///   - $it"
+            val privateModule = RustModule.private(fnName, parent = ClientRustModule.client)
+            crate.withModule(privateModule) {
+                rustBlockTemplate(
+                    "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
+                    "bounds" to generics.bounds,
+                ) {
+                    val fullPath = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
+                    val maybePaginated = if (operation.isPaginated(model)) {
+                        "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
+                    } else {
+                        ""
                     }
 
-                var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
-                if (outputFieldsBody.isNotEmpty()) {
-                    outputFieldsHead += " with field(s):"
-                }
+                    val output = operation.outputShape(model)
+                    val operationOk = symbolProvider.toSymbol(output)
+                    val operationErr = symbolProvider.symbolForOperationError(operation)
 
-                writer.rustTemplate(
-                    """
-                    /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
-                    ///
-                    /// - $inputFieldsHead
-                    $inputFieldsBody
-                    /// - $outputFieldsHead
-                    $outputFieldsBody
-                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    """,
-                )
+                    val inputFieldsBody = generateOperationShapeDocs(
+                        this,
+                        codegenContext,
+                        symbolProvider,
+                        operation,
+                        model,
+                    ).joinToString("\n") { "///   - $it" }
 
-                // Write a deprecation notice if this operation is deprecated.
-                writer.deprecatedShape(operation)
-
-                writer.rustTemplate(
-                    """
-                    pub fn #{fnName}(&self) -> #{FluentBuilder}${generics.inst} {
-                        #{FluentBuilder}::new(self.handle.clone())
+                    val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
+                        "The fluent builder is configurable:"
+                    } else {
+                        "The fluent builder takes no input, just [`send`]($fullPath::send) it."
                     }
-                    """,
-                    "fnName" to writable { rust(clientOperationFnName(operation, symbolProvider)) },
-                    "FluentBuilder" to operation.fluentBuilderType(codegenContext, symbolProvider),
-                )
+
+                    val outputFieldsBody =
+                        generateShapeMemberDocs(this, symbolProvider, output, model).joinToString("\n") {
+                            "///   - $it"
+                        }
+
+                    var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
+                    if (outputFieldsBody.isNotEmpty()) {
+                        outputFieldsHead += " with field(s):"
+                    }
+
+                    rustTemplate(
+                        """
+                        /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
+                        ///
+                        /// - $inputFieldsHead
+                        $inputFieldsBody
+                        /// - $outputFieldsHead
+                        $outputFieldsBody
+                        /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
+                        """,
+                    )
+
+                    // Write a deprecation notice if this operation is deprecated.
+                    deprecatedShape(operation)
+
+                    rustTemplate(
+                        """
+                        pub fn $fnName(&self) -> #{FluentBuilder}${generics.inst} {
+                            #{FluentBuilder}::new(self.handle.clone())
+                        }
+                        """,
+                        "FluentBuilder" to operation.fluentBuilderType(codegenContext, symbolProvider),
+                    )
+                }
             }
         }
     }
