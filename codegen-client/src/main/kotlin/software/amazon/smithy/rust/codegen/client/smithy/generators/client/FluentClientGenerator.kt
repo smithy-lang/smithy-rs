@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -65,6 +66,11 @@ class FluentClientGenerator(
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+        fun clientOperationModuleName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
+            RustReservedWords.escapeIfNeeded(
+                symbolProvider.toSymbol(operationShape).name.toSnakeCase(),
+                EscapeFor.ModuleName,
+            )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -160,8 +166,9 @@ class FluentClientGenerator(
         operations.forEach { operation ->
             val name = symbolProvider.toSymbol(operation).name
             val fnName = clientOperationFnName(operation, symbolProvider)
+            val moduleName = clientOperationModuleName(operation, symbolProvider)
 
-            val privateModule = RustModule.private(fnName, parent = ClientRustModule.client)
+            val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
                 rustBlockTemplate(
                     "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",

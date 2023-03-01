@@ -36,7 +36,7 @@ fun OperationShape.isPaginated(model: Model) =
         .findMemberWithTrait<IdempotencyTokenTrait>(model) == null
 
 class PaginatorGenerator private constructor(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
     retryClassifier: RuntimeType,
@@ -111,7 +111,7 @@ class PaginatorGenerator private constructor(
 
     /** Generate the paginator struct & impl **/
     private fun generate() = writable {
-        val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
+        val outputTokenLens = NestedAccessorGenerator(codegenContext).generateBorrowingAccessor(
             outputShape,
             paginationInfo.outputTokenMemberPath,
         )
@@ -266,7 +266,7 @@ class PaginatorGenerator private constructor(
                 }
 
                 """,
-                "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
+                "extract_items" to NestedAccessorGenerator(codegenContext).generateOwnedAccessor(
                     outputShape,
                     paginationInfo.itemsMemberPath,
                 ),
