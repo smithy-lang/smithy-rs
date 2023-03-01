@@ -1,0 +1,13 @@
+[package]
+name = "rpcv2-service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Local paths
+aws-smithy-http-server = { path = "../../" }
+hyper = "0.14.24"
+rpcv2-server-sdk = { path = "../rpcv2-server-sdk/", package = "rpcv2" }
+tokio = "1.25.0"

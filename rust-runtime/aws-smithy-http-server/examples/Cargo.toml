@@ -4,6 +4,7 @@ members = [
     "pokemon-service",
     "pokemon-service-server-sdk",
     "pokemon-service-client",
+    "rpcv2-service",
 ]
 
 [profile.release]

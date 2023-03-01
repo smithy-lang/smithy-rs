@@ -2,6 +2,7 @@ $version: "2.0"
 
 namespace com.amazonaws.simple
 
+use smithy.framework#ValidationException
 use smithy.protocols#rpcv2
 
 @rpcv2(format: ["cbor"])
@@ -10,12 +11,19 @@ service RpcV2Service {
     operations: [RpcV2Operation],
 }
 
-@http(uri: "/operation", method: "POST")
+@http(uri: "/operation/{message}", method: "GET")
 operation RpcV2Operation {
-    input: OperationInputOutput
-    output: OperationInputOutput
+    input: OperationInput
+    output: OperationOutput
+    errors: [ValidationException]
 }
 
-structure OperationInputOutput {
+structure OperationInput {
+    @required
+    @httpLabel
+    message: String
+}
+
+structure OperationOutput {
     message: String
 }
