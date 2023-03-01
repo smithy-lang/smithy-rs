@@ -2,22 +2,21 @@ $version: "2.0"
 
 namespace com.amazonaws.simple
 
-use smithy.protocols#rpcv2
+use aws.protocols#restJson1
 
-@rpcv2(format: ["cbor"])
+@restJson1
 service SimpleService {
-    version: "SomeVersion",
-    // operations: [
-    //     Operation
-    // ]
+    operations: [
+        Operation
+    ]
 }
 
-// @http(uri: "/operation", method: "POST")
-// operation Operation {
-//     input: OperationInputOutput
-//     output: OperationInputOutput
-// }
-//
-// structure OperationInputOutput {
-//     message: String
-// }
+@http(uri: "/operation", method: "POST")
+operation Operation {
+    input: OperationInputOutput
+    output: OperationInputOutput
+}
+
+structure OperationInputOutput {
+    message: String
+}
