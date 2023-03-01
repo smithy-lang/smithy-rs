@@ -26,6 +26,7 @@ use crate::proto::aws_json_10::AwsJson1_0;
 use crate::proto::aws_json_11::AwsJson1_1;
 use crate::proto::rest_json_1::RestJson1;
 use crate::proto::rest_xml::RestXml;
+use crate::proto::rpc_v2::RpcV2;
 use crate::response::IntoResponse;
 use http::StatusCode;
 
@@ -93,6 +94,33 @@ impl IntoResponse<RestJson1> for InternalFailureException {
 impl IntoResponse<RestXml> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+    }
+}
+
+impl IntoResponse<RpcV2> for InternalFailureException {
+    // TODO(rpcv2): Implement this properly
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        IntoResponse::<RestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+    }
+}
+
+impl IntoResponse<RpcV2> for RuntimeError {
+    // TODO(rpcv2): Implement this properly
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
+            .status(self.status_code())
+            .header("Content-Type", "application/json")
+            .header("X-Amzn-Errortype", self.name())
+            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+
+        let body = match self {
+            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
+            _ => crate::body::to_boxed("{}"),
+        };
+
+        res
+            .body(body)
+            .expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
 }
 
