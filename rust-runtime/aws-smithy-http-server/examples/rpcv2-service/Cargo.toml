@@ -9,5 +9,6 @@ edition = "2021"
 # Local paths
 aws-smithy-http-server = { path = "../../" }
 hyper = "0.14.24"
-rpcv2-server-sdk = { path = "../rpcv2-server-sdk/", package = "rpcv2" }
 tokio = "1.25.0"
+rpcv2-server-sdk = { path = "../rpcv2-server-sdk/", package = "rpcv2" }
+rpcv2-pokemon-client = { path = "../rpcv2-pokemon-client/" }
