@@ -68,6 +68,7 @@ class PythonServerUnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.AllowIrrefutableLetPatterns.render(this)
                 }
+                renderNewVariants(writer, model, symbolProvider, member, variantName, funcNamePart, unionSymbol)
                 renderAsVariant(writer, model, symbolProvider, member, variantName, funcNamePart, unionSymbol)
                 rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)
                 rust("/// :rtype bool:")
@@ -96,6 +97,52 @@ class PythonServerUnionGenerator(
                 }
                 """,
             )
+        }
+    }
+
+    private fun renderNewVariants(
+        writer: RustWriter,
+        model: Model,
+        symbolProvider: SymbolProvider,
+        member: MemberShape,
+        variantName: String,
+        funcNamePart: String,
+        unionSymbol: Symbol,
+    ) {
+        if (member.isTargetUnit()) {
+            writer.rust("##[staticmethod]")
+            writer.rust(
+                "/// Creates a new union instance of [`$variantName`](#T::$variantName)",
+                unionSymbol,
+            )
+            writer.rust("/// :rtype ${unionSymbol.name}:")
+            writer.rustBlock("pub fn new_$funcNamePart() -> Self") {
+                writer.rustTemplate(
+                    """
+                    Self(${unionSymbol.name}::$variantName
+                    """,
+                    *codegenScope,
+                )
+            }
+        } else {
+            val memberSymbol = symbolProvider.toSymbol(member)
+            val memberType = memberSymbol.rustType().pythonType()
+            val targetSymbol = symbolProvider.toSymbol(model.expectShape(member.target))
+            writer.rust("##[staticmethod]")
+            writer.rust(
+                "/// Creates a new union instance of [`$variantName`](#T::$variantName)",
+                unionSymbol,
+            )
+            writer.rust("/// :param data: ${memberType.renderAsDocstring()}:")
+            writer.rust("/// :rtype ${unionSymbol.name}:")
+            writer.rustBlock("pub fn new_$funcNamePart(data: ${memberSymbol.rustType().render()}) -> Self") {
+                writer.rustTemplate(
+                    """
+                    Self(${unionSymbol.name}::$variantName(data))
+                    """,
+                    *codegenScope,
+                )
+            }
         }
     }
 

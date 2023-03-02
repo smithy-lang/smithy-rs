@@ -59,7 +59,6 @@ structure GetUnionOutput {
 
 union MyUnion {
     integer: Integer
-    @length(min: 1, max: 100)
     string: String
     something: FlavorText
 }
