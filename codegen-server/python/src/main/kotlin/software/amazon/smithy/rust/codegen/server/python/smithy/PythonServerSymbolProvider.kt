@@ -20,12 +20,15 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -47,9 +50,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 class PythonServerSymbolVisitor(
     settings: ServerRustSettings,
     model: Model,
-    serviceShape: ServiceShape?,
+    private val serviceShape: ServiceShape?,
     config: RustSymbolProviderConfig,
 ) : SymbolVisitor(settings, model, serviceShape, config) {
+
     private val runtimeConfig = config.runtimeConfig
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -71,6 +75,10 @@ class PythonServerSymbolVisitor(
         // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
             PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
+            // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
+            // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
+        } else if (target is UnionShape) {
+            symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
         } else {
             initial
         }
@@ -98,6 +106,7 @@ class PythonServerSymbolVisitor(
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
 class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider) : SymbolMetadataProvider(base) {
+
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {

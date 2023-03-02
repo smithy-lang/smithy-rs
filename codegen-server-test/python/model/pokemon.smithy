@@ -11,6 +11,8 @@ use com.aws.example#Storage
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
+use com.aws.example#FlavorText
+
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -22,7 +24,8 @@ service PokemonService {
         GetServerStatistics,
         DoNothing,
         CheckHealth,
-        StreamPokemonRadio
+        StreamPokemonRadio,
+        GetUnion
     ],
 }
 
@@ -41,3 +44,22 @@ structure StreamPokemonRadioOutput {
 
 @streaming
 blob StreamingBlob
+
+@readonly
+@http(uri: "/union", method: "GET")
+operation GetUnion {
+    output: GetUnionOutput,
+}
+
+@output
+structure GetUnionOutput {
+    @required
+    data: MyUnion
+}
+
+union MyUnion {
+    integer: Integer
+    @length(min: 1, max: 100)
+    string: String
+    something: FlavorText
+}

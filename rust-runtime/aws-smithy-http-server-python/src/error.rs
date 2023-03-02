@@ -28,6 +28,7 @@ pub enum PyError {
 }
 
 create_exception!(smithy, PyException, BasePyException);
+create_exception!(smithy, PyUnionVariantException, BasePyException);
 
 impl From<PyError> for PyErr {
     fn from(other: PyError) -> PyErr {
