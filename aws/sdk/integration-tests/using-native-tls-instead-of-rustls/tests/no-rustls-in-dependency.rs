@@ -11,11 +11,7 @@ async fn list_buckets() -> Result<(), aws_sdk_s3::Error> {
     let sdk_config = aws_config::load_from_env().await;
     let client = aws_sdk_s3::Client::new(&sdk_config);
 
-    let resp = client.list_buckets().send().await?;
-
-    for bucket in resp.buckets().unwrap_or_default() {
-        println!("bucket: {:?}", bucket.name().unwrap_or_default())
-    }
+    let _resp = client.list_buckets().send().await?;
 
     Ok(())
 }
