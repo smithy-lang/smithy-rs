@@ -8,10 +8,8 @@
 /// any other. Activating and deactivating `features` in your app's `Cargo.toml` is all that's needed.
 
 async fn list_buckets() -> Result<(), aws_sdk_s3::Error> {
-    let shared_config = aws_config::load_from_env().await;
-
-    let s3_config = aws_sdk_s3::Config::from(&shared_config);
-    let client = aws_sdk_s3::Client::from_conf(s3_config);
+    let sdk_config = aws_config::load_from_env().await;
+    let client = aws_sdk_s3::Client::new(&sdk_config);
 
     let resp = client.list_buckets().send().await?;
 
