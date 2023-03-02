@@ -4,6 +4,16 @@
  */
 
 //! Python wrapped types from aws-smithy-types and aws-smithy-http.
+//!
+//! ## `Deref` hacks for Json serializer
+//! [aws_smithy_json::serialize::JsonValueWriter] expects references to the types
+//! from [aws_smithy_types] (for example [aws_smithy_json::serialize::JsonValueWriter::document()]
+//! expects `&aws_smithy_types::Document`). In order to make
+//! [aws_smithy_json::serialize::JsonValueWriter] happy, we implement `Deref` traits for
+//! Python types to their Rust counterparts (for example
+//! `impl Deref<Target=aws_smithy_types::Document> for Document` and that allows `&Document` to
+//! get coerced to `&aws_smithy_types::Document`). This is a hack, we should ideally handle this
+//! in `JsonSerializerGenerator.kt` but it's not easy to do it with our current Kotlin structure.
 
 use std::{
     collections::HashMap,
@@ -285,15 +295,11 @@ impl From<aws_smithy_types::DateTime> for DateTime {
     }
 }
 
-impl From<DateTime> for aws_smithy_types::DateTime {
-    fn from(other: DateTime) -> aws_smithy_types::DateTime {
-        other.0
-    }
-}
+impl Deref for DateTime {
+    type Target = aws_smithy_types::DateTime;
 
-impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
-    fn from(other: &'date DateTime) -> &'date aws_smithy_types::DateTime {
-        &other.0
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -550,10 +556,6 @@ impl FromPyObject<'_> for Document {
     }
 }
 
-// TODO(PythonSerialization): Get rid of this hack.
-// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
-// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
-// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
 impl Deref for Document {
     type Target = aws_smithy_types::Document;
 
