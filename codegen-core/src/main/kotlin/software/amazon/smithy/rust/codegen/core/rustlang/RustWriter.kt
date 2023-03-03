@@ -304,8 +304,8 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
 /** Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
-fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
-    return docs(text, newlinePrefix = "//! ", args = args)
+fun RustWriter.containerDocs(text: String, vararg args: Any, trimStart: Boolean = true): RustWriter {
+    return docs(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 }
 
 /**
@@ -316,7 +316,12 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Tabs are replaced with spaces
  *    - Empty newlines are removed
  */
-fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+fun <T : AbstractCodeWriter<T>> T.docs(
+    text: String,
+    vararg args: Any,
+    newlinePrefix: String = "/// ",
+    trimStart: Boolean = true,
+): T {
     // Because writing docs relies on the newline prefix, ensure that there was a new line written
     // before we write the docs
     this.ensureNewline()
@@ -324,8 +329,10 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
         .joinToString("\n") {
-            // Rustdoc warns on tabs in documentation
-            it.trimStart().replace("\t", "  ")
+            when (trimStart) {
+                true -> it.trimStart()
+                else -> it
+            }.replace("\t", "  ") // Rustdoc warns on tabs in documentation
         }
     write(cleaned, *args)
     popState()

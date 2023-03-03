@@ -12,12 +12,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.ModuleDocumentation -> if (section.subsection == LibRsSection.CrateOrganization) {
+            is LibRsSection.ModuleDoc -> if (section.subsection is ModuleDocSection.CrateOrganization) {
                 when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
                     true -> crateLayout()
                     else -> oldCrateLayout()
