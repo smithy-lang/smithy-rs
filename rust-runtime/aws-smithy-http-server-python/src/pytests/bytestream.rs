@@ -49,7 +49,7 @@ fn consuming_stream_on_python_synchronously_with_loop() -> PyResult<()> {
 total = []
 for chunk in bytestream:
     total.append(chunk)
-    
+
 assert total == [b"hello", b" ", b"world"]
 "#
         );
@@ -68,16 +68,13 @@ fn consuming_stream_on_python_asynchronously() -> PyResult<()> {
             r#"
 import asyncio
 
-async def anext(ait):
-    return await ait.__anext__()
-
 async def main(bytestream):
-    assert await anext(bytestream) == b"hello"
-    assert await anext(bytestream) == b" "
-    assert await anext(bytestream) == b"world"
+    assert await bytestream.__anext__() == b"hello"
+    assert await bytestream.__anext__() == b" "
+    assert await bytestream.__anext__() == b"world"
 
     try:
-        await anext(bytestream)
+        await bytestream.__anext__()
         assert False, "iteration should stop by now"
     except StopAsyncIteration:
         pass
