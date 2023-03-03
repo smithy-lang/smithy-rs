@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
+import java.util.logging.Logger
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.
@@ -55,6 +56,7 @@ class PythonServerSymbolVisitor(
 ) : SymbolVisitor(settings, model, serviceShape, config) {
 
     private val runtimeConfig = config.runtimeConfig
+    private val logger = Logger.getLogger(javaClass.name)
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = shape.accept(this)

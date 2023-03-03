@@ -34,10 +34,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -85,7 +89,7 @@ class PythonServerCodegenVisitor(
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
             codegenDecorator: ServerCodegenDecorator,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, codegenDecorator)
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             settings,
@@ -183,7 +187,23 @@ class PythonServerCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         logger.info("[python-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
-            PythonServerUnionGenerator(model, settings.runtimeConfig, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            PythonServerUnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+        }
+
+        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+                model,
+                codegenContext.symbolProvider,
+            )
+        ) {
+            logger.info("[python-server-codegen] Generating an unconstrained type for union shape $shape")
+            rustCrate.withModule(ServerRustModule.UnconstrainedModule) modelsModuleWriter@{
+                UnconstrainedUnionGenerator(
+                    codegenContext,
+                    rustCrate.createInlineModuleCreator(),
+                    this@modelsModuleWriter,
+                    shape,
+                ).render()
+            }
         }
 
         if (shape.isEventStream()) {

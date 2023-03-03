@@ -208,15 +208,6 @@ class PythonServerModuleGenerator(
         )
     }
 
-    private fun RustWriter.renderPyUnionException() {
-        rustTemplate(
-            """
-            m.add_class::<#{SmithyPython}::error::PyUnionVariantException>()?;
-            """,
-            *codegenScope,
-        )
-    }
-
     // Render Python application type.
     private fun RustWriter.renderPyApplicationType() {
         rustTemplate(

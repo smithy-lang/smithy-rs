@@ -531,7 +531,7 @@ class ServerBuilderGenerator(
                         // 2b. If the member is `@required` and has no `@default` value, the user must set a value;
                         // otherwise, we fail with a `ConstraintViolation::Missing*` variant.
                         serverBuilderConstraintViolations.forMember(member)?.also {
-                            rust(".ok_or(ConstraintViolation::${it.name()})?")
+                            rust(".ok_or(ConstraintViolation::${it.name()})?.into()")
                         }
                     }
                 }

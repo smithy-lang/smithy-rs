@@ -12,6 +12,7 @@ use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
 use com.aws.example#FlavorText
+use smithy.framework#ValidationException
 
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
@@ -46,19 +47,38 @@ structure StreamPokemonRadioOutput {
 blob StreamingBlob
 
 @readonly
-@http(uri: "/union", method: "GET")
+@http(uri: "/union", method: "POST")
 operation GetUnion {
+    input: GetUnionInput,
     output: GetUnionOutput,
+    errors: [ValidationException]
 }
 
+@input
+structure GetUnionInput {
+    @required
+    data: MyUnion
+}
 @output
 structure GetUnionOutput {
     @required
     data: MyUnion
 }
 
+structure ConstrainedStuff {
+    @length(min: 1, max: 100)
+    inner: String
+}
+
+union InnerUnion {
+    a: Integer
+    b: ConstrainedStuff
+}
+
 union MyUnion {
     integer: Integer
     string: String
     something: FlavorText
+    string2: String
+    inner: InnerUnion
 }

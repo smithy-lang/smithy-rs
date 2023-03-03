@@ -50,3 +50,6 @@ target/
 
 # IDEs
 .idea/
+
+# tools
+.tool-versions
