@@ -60,6 +60,11 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
+        if request.headers().contains_key("x-amz-target") || request.headers().contains_key("x-amzn-target") {
+            // TODO(rpcv2): Use right variant for this error
+            return Err(Error::NotFound);
+        }
+
         let request_path = request.uri().path();
         let regex = Self::path_regex();
 
