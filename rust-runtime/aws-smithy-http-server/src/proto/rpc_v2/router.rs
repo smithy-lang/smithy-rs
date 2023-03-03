@@ -84,7 +84,7 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2Router<S> {
 
 #[cfg(test)]
 mod tests {
-    use http::Method;
+    use http::{HeaderMap, HeaderValue, Method};
 
     use crate::proto::test_helpers::req;
 
@@ -99,13 +99,26 @@ mod tests {
         assert_eq!("MyOperation", &captures["operation"]);
     }
 
-    #[tokio::test]
-    async fn simple_routing() {
+    #[test]
+    fn simple_routing() {
         let routes = vec!["Service.Operation"];
         let router: RpcV2Router<_> = routes.clone().into_iter().map(|op| (op, ())).collect();
+        let good_uri = "/service/Service/operation/Operation";
 
         // Request should match
-        let res = router.match_route(&req(&Method::GET, "/service/Service/operation/Operation", None));
-        assert!(res.is_ok());
+        let routing_result = router.match_route(&req(&Method::GET, good_uri, None));
+        assert!(routing_result.is_ok());
+
+        // The request would be valid if it did not have the `x-amz-target` header.
+        let mut headers = HeaderMap::new();
+        headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));
+        let invalid_request1 = req(&Method::GET, good_uri, Some(headers));
+        assert!(router.match_route(&invalid_request1).is_err());
+
+        // The request would be valid if it did not have the `x-amzn-target` header.
+        let mut headers = HeaderMap::new();
+        headers.insert("x-amzn-target", HeaderValue::from_static("Service.Operation"));
+        let invalid_request1 = req(&Method::GET, good_uri, Some(headers));
+        assert!(router.match_route(&invalid_request1).is_err());
     }
 }
