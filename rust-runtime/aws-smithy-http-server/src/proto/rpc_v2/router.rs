@@ -25,6 +25,8 @@ pub struct RpcV2Router<S> {
 }
 
 impl<S> RpcV2Router<S> {
+    const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
+
     fn path_regex() -> &'static Regex {
         // TODO(rpcv2): Does this regex need to be more sophisticated?
         static PATH_REGEX: Lazy<Regex> =
@@ -60,7 +62,11 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
-        if request.headers().contains_key("x-amz-target") || request.headers().contains_key("x-amzn-target") {
+        let request_has_forbidden_header = Self::FORBIDDEN_HEADERS
+            .into_iter()
+            .any(|forbidden_header| request.headers().contains_key(forbidden_header));
+
+        if request_has_forbidden_header {
             // TODO(rpcv2): Use right variant for this error
             return Err(Error::NotFound);
         }
