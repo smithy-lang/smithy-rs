@@ -131,7 +131,7 @@ object ClientModuleProvider : ModuleProvider {
     override fun moduleForEventStreamError(
         context: ModuleProviderContext,
         eventStream: UnionShape,
-    ): RustModule.LeafModule = ClientRustModule.Error
+    ): RustModule.LeafModule = ClientRustModule.Types.Error
 
     override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule =
         RustModule.public("builders", parent = symbol.module(), documentationOverride = "Builders")

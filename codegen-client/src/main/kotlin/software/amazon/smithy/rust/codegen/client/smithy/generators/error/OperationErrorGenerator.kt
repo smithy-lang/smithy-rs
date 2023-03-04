@@ -50,7 +50,6 @@ class OperationErrorGenerator(
     private val customizations: List<ErrorCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config.runtimeConfig
-    private val symbol = symbolProvider.toSymbol(operationOrEventStream)
     private val errorMetadata = errorMetadata(symbolProvider.config.runtimeConfig)
     private val createUnhandledError =
         RuntimeType.smithyHttp(runtimeConfig).resolve("result::CreateUnhandledError")
