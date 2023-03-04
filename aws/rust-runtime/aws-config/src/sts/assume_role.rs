@@ -8,10 +8,9 @@
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_sdk_sts::error::AssumeRoleError;
-use aws_sdk_sts::input::AssumeRoleInput;
 use aws_sdk_sts::middleware::DefaultMiddleware;
-use aws_sdk_sts::model::PolicyDescriptorType;
+use aws_sdk_sts::operation::assume_role::{AssumeRoleError, AssumeRoleInput};
+use aws_sdk_sts::types::PolicyDescriptorType;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -49,7 +48,7 @@ pub struct AssumeRoleProvider {
 struct Inner {
     sts: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     conf: aws_sdk_sts::Config,
-    op: aws_sdk_sts::input::AssumeRoleInput,
+    op: AssumeRoleInput,
 }
 
 impl AssumeRoleProvider {
