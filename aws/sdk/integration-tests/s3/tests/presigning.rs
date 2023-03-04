@@ -4,10 +4,13 @@
  */
 
 use aws_sdk_s3 as s3;
-use aws_sdk_s3::presigning::request::PresignedRequest;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use http::{HeaderMap, HeaderValue};
-use s3::presigning::config::PresigningConfig;
+use s3::config::{Credentials, Region};
+use s3::operation::get_object::GetObjectInput;
+use s3::operation::put_object::PutObjectInput;
+use s3::operation::upload_part::UploadPartInput;
+use s3::presigning::{PresignedRequest, PresigningConfig};
 use std::error::Error;
 use std::time::{Duration, SystemTime};
 
@@ -15,10 +18,10 @@ use std::time::{Duration, SystemTime};
 /// Assumes that that input has a `presigned` method on it.
 macro_rules! presign_input {
     ($input:expr) => {{
-        let creds = s3::Credentials::for_tests();
+        let creds = Credentials::for_tests();
         let config = s3::Config::builder()
             .credentials_provider(creds)
-            .region(s3::Region::new("us-east-1"))
+            .region(Region::new("us-east-1"))
             .build();
 
         let req: PresignedRequest = $input
@@ -37,7 +40,7 @@ macro_rules! presign_input {
 
 #[tokio::test]
 async fn test_presigning() -> Result<(), Box<dyn Error>> {
-    let presigned = presign_input!(s3::input::GetObjectInput::builder()
+    let presigned = presign_input!(GetObjectInput::builder()
         .bucket("test-bucket")
         .key("test-key")
         .build()?);
@@ -74,7 +77,7 @@ async fn test_presigning() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_presigning_with_payload_headers() -> Result<(), Box<dyn Error>> {
-    let presigned = presign_input!(s3::input::PutObjectInput::builder()
+    let presigned = presign_input!(PutObjectInput::builder()
         .bucket("test-bucket")
         .key("test-key")
         .content_length(12345)
@@ -117,7 +120,7 @@ async fn test_presigning_with_payload_headers() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_presigned_upload_part() -> Result<(), Box<dyn Error>> {
-    let presigned = presign_input!(s3::input::UploadPartInput::builder()
+    let presigned = presign_input!(UploadPartInput::builder()
         .content_length(12345)
         .bucket("bucket")
         .key("key")
@@ -133,7 +136,7 @@ async fn test_presigned_upload_part() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_presigning_object_lambda() -> Result<(), Box<dyn Error>> {
-    let presigned = presign_input!(s3::input::GetObjectInput::builder()
+    let presigned = presign_input!(GetObjectInput::builder()
         .bucket("arn:aws:s3-object-lambda:us-west-2:123456789012:accesspoint:my-banner-ap-name")
         .key("test2.txt")
         .build()
