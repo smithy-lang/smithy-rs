@@ -1,0 +1,33 @@
+launch_template_name = "smithy_rs_benchmark_launch_template"
+version_Description = "Template for c7.2xlarge instance. Change the instance type if AWS stops offering c7."
+
+[[template_tags]]
+key = "smithy-rs"
+value = ""
+
+[launch_template_data]
+image_id = "ami-05bfbece1ed5beb54"
+ebs_optimized = true
+user_data = ""
+instance_type = "C7g2Xlarge"
+
+[launch_template_data.iam_instance_profile]
+    name = "smithy_rs_compilation_benchmark_role"
+
+[launch_template_data.block_device_mappings]
+
+[launch_template_data.network_interfaces]
+
+[launch_template_data.network_interfaces]
+
+
+[[tag_specifications]]
+resource_type = "Instance"
+key = "smithy-rs"
+value = "
+
+# ebs
+[volumes]
+device_name = "/dev/xvda"
+volume_type = "gp2"
+size = 100
