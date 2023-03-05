@@ -240,6 +240,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
+        // serde types. Gated behind `CfgUnstable`.
+        val Serde = CargoDependency.Serde.toType()
+        val SerdeSerialize = Serde.resolve("Serialize")
+        val SerdeDeserialize = Serde.resolve("Deserialize")
+
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()

@@ -42,4 +42,32 @@ class CargoTomlGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `check serde features`() {
+        val project = TestWorkspace.testProject()
+        /*
+        ["target.'cfg(aws_sdk_unstable)'.dependencies".serde]
+        version = "1.0"
+        features = ["derive"]
+        serde-serialize = ["aws-smithy-types/serde-serialize"]
+        serde-deserialize = ["aws-smithy-types/serde-deserialize"]
+        */
+        project.lib {
+            addDependency(CargoMetadata)
+            unitTest(
+                "smithy_codegen_serde_features",
+                """
+                let metadata = cargo_metadata::MetadataCommand::new()
+                    .exec()
+                    .expect("could not run `cargo metadata`");
+
+                let features = &metadata.root_package().expect("missing root package").features;
+
+                assert_eq!(features.get("aws-aws-smithy-types"), Some(vec!["serde-serialize", "serde-deserialize"]));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }

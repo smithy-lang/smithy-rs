@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -134,6 +133,7 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
+        SensitiveWarning.addDoc(writer, shape)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
@@ -144,10 +144,13 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+        RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        SensitiveWarning.addDoc(writer, shape)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
+                SensitiveWarning.addDoc(writer, shape)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }

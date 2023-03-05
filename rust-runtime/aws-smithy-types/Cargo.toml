@@ -40,5 +40,5 @@ name = "base64"
 harness = false
 
 [features]
-"serialize" = []
-"deserialize" = []
+serde-serialize = []
+serde-deserialize = []

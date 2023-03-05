@@ -74,6 +74,8 @@ class CargoTomlGenerator(
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
+            "target.'cfg(aws_sdk_unstable)'.dependencies" to dependencies.filter { it.scope == DependencyScope.CfgUnstable }
+                .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
 
