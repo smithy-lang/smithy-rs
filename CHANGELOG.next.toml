@@ -227,3 +227,15 @@ match client.some_operation().send().await {
 references = ["smithy-rs#2398"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`SdkError` variants can now be constructed for easier unit testing."
+references = ["smithy-rs#2428", "smithy-rs#2208"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`SdkError` variants can now be constructed for easier unit testing."
+references = ["smithy-rs#2428", "smithy-rs#2208"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
