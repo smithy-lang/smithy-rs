@@ -195,7 +195,7 @@ class FluentClientGenerator(
                     ).joinToString("\n") { "///   - $it" }
 
                     val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
-                        "The fluent builder is configurable:"
+                        "The fluent builder is configurable:\n"
                     } else {
                         "The fluent builder takes no input, just [`send`]($fullPath::send) it."
                     }
@@ -207,17 +207,15 @@ class FluentClientGenerator(
 
                     var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
                     if (outputFieldsBody.isNotEmpty()) {
-                        outputFieldsHead += " with field(s):"
+                        outputFieldsHead += " with field(s):\n"
                     }
 
                     rustTemplate(
                         """
                         /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                         ///
-                        /// - $inputFieldsHead
-                        $inputFieldsBody
-                        /// - $outputFieldsHead
-                        $outputFieldsBody
+                        /// - $inputFieldsHead$inputFieldsBody
+                        /// - $outputFieldsHead$outputFieldsBody
                         /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                         """,
                     )
