@@ -20,8 +20,17 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
+/**
+ * Similar to [Writable], but provides the function name that is being generated as an argument.
+ */
 typealias ProtocolFnWritable = RustWriter.(String) -> Unit
 
+/**
+ * Utilities for generating protocol serialization/deserialization functions, and common support functions.
+ *
+ * This class should be used for generating all inline functions from a protocol code generator, as it is
+ * responsible for correctly organizing and code splitting those functions into smaller modules.
+ */
 class ProtocolFunctions(
     private val codegenContext: CodegenContext,
 ) {
@@ -39,12 +48,38 @@ class ProtocolFunctions(
         Deserialize,
     }
 
+    /**
+     * Generate a serialize function for a protocol, and return a runtime type that references it
+     *
+     * Example:
+     * ```
+     * // Generate the function
+     * val serializeFn = ProtocolFunctions(codegenContext).serializeFn(myStruct) { fnName ->
+     *     rust("fn $fnName(...) { ... }")
+     * }
+     * // Call the generated function
+     * rust("#T(...)", serializeFn)
+     * ```
+     */
     fun serializeFn(
         shape: Shape,
         fnNameSuffix: String? = null,
         block: ProtocolFnWritable,
     ): RuntimeType = serDeFn(FnType.Serialize, shape, serDeModule, block, fnNameSuffix)
 
+    /**
+     * Generate a deserialize function for a protocol, and return a runtime type that references it
+     *
+     * Example:
+     * ```
+     * // Generate the function
+     * val deserializeFn = ProtocolFunctions(codegenContext).deserializeFn(myStruct) { fnName ->
+     *     rust("fn $fnName(...) { ... }")
+     * }
+     * // Call the generated function
+     * rust("#T(...)", deserializeFn)
+     * ```
+     */
     fun deserializeFn(
         shape: Shape,
         fnNameSuffix: String? = null,
