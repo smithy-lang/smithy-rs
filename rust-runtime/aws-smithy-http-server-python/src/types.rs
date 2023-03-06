@@ -30,7 +30,7 @@ use pyo3::{
     iter::IterNextOutput,
     prelude::*,
 };
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 use tokio_stream::StreamExt;
 
 use crate::PyError;
@@ -104,7 +104,7 @@ impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
 
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);
 
 #[pyclass]
@@ -386,7 +386,16 @@ impl Default for ByteStream {
     }
 }
 
-/// ByteStream Abstractions.
+impl From<Blob> for ByteStream {
+    fn from(other: Blob) -> Self {
+        Self(Arc::new(Mutex::new(
+            aws_smithy_http::byte_stream::ByteStream::new(aws_smithy_http::body::SdkBody::from(
+                other.0.into_inner(),
+            )),
+        )))
+    }
+}
+
 #[pymethods]
 impl ByteStream {
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
@@ -408,7 +417,7 @@ impl ByteStream {
     /// :rtype ByteStream:
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
-        let byte_stream = futures::executor::block_on(async {
+        let byte_stream = Handle::current().block_on(async {
             aws_smithy_http::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))

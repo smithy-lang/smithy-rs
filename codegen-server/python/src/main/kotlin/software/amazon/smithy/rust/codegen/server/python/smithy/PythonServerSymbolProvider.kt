@@ -34,8 +34,44 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
+import software.amazon.smithy.rust.codegen.server.smithy.moduleForShape
 import java.util.logging.Logger
+
+class PythonConstrainedShapeSymbolProvider(
+    private val base: RustSymbolProvider,
+    serviceShape: ServiceShape,
+    publicConstrainedTypes: Boolean,
+) : ConstrainedShapeSymbolProvider(base, serviceShape, publicConstrainedTypes) {
+
+    override fun toSymbol(shape: Shape): Symbol {
+        val initial = super.toSymbol(shape)
+        if (shape !is MemberShape) {
+            return initial
+        }
+        val target = model.expectShape(shape.target)
+        val container = model.expectShape(shape.container)
+
+        // We are only targeting non-synthetic inputs and outputs.
+        if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
+            return initial
+        }
+
+        return if (target is BlobShape && shape.isStreaming(model)) {
+            // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
+            // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
+            // become a ByteStream.
+            PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
+        } else if (target is UnionShape) {
+            // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
+            // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
+            symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
+        } else {
+            initial
+        }
+    }
+}
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.
@@ -72,14 +108,14 @@ class PythonServerSymbolVisitor(
             return initial
         }
 
-        // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
-        // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
-        // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
+            // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
+            // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
+            // become a ByteStream.
             PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
+        } else if (target is UnionShape) {
             // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
             // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
-        } else if (target is UnionShape) {
             symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
         } else {
             initial

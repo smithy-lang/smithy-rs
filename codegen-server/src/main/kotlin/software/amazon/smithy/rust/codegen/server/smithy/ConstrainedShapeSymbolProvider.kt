@@ -59,7 +59,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructu
  * whose associated types are `pub(crate)` and thus not exposed to the end
  * user.
  */
-class ConstrainedShapeSymbolProvider(
+open class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val serviceShape: ServiceShape,
     private val publicConstrainedTypes: Boolean,

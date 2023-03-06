@@ -101,6 +101,8 @@ class PythonServerCodegenVisitor(
             ::baseSymbolProviderFactory,
         )
 
+        val constrainedShapeSymbolProvider = PythonConstrainedShapeSymbolProvider(serverSymbolProviders.symbolProvider, service, true)
+
         // Override `codegenContext` which carries the various symbol providers.
         codegenContext =
             ServerCodegenContext(

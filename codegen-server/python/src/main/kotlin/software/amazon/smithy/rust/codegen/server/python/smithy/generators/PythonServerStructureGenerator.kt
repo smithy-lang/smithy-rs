@@ -9,18 +9,29 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
+import software.amazon.smithy.rust.codegen.core.rustlang.asRef
+import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
+import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
@@ -70,7 +81,43 @@ class PythonServerStructureGenerator(
         // Above, we manually add dependency since we can't use a `RuntimeType` below
         Attribute("pyo3(get, set)").render(writer)
         writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
-        super.renderStructureMember(writer, member, memberName, memberSymbol)
+        val memberType = memberSymbol.rustType()
+        val target = model.expectShape(member.target)
+        if (target is UnionShape) {
+            writer.write("##[allow(missing_docs)]")
+            memberSymbol.expectRustMetadata().render(writer)
+            writer.write("$memberName: ${memberSymbol.namespace}::Py${memberType.name},")
+        } else {
+            super.renderStructureMember(writer, member, memberName, memberSymbol)
+        }
+    }
+
+    override fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderMemberDoc(member, memberSymbol)
+        writer.deprecatedShape(member)
+        var memberType = memberSymbol.rustType()
+        val target = model.expectShape(member.target)
+        memberType = if (target is UnionShape) {
+            symbolBuilder(shape, RustType.Opaque("Py${memberType.name}", memberType.namespace)).locatedIn(symbolProvider.moduleForShape(shape)).build().rustType()
+        } else {
+            memberType
+        }
+        var returnType = when {
+            memberType.isCopy() -> memberType
+            memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+            memberType.isDeref() -> memberType.asDeref().asRef()
+            else -> memberType.asRef()
+        }
+
+        writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+            when {
+                memberType.isCopy() -> rust("self.$memberName")
+                memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
+                else -> rust("&self.$memberName")
+            }
+        }
     }
 
     private fun renderPyO3Methods() {
@@ -100,9 +147,14 @@ class PythonServerStructureGenerator(
 
     private fun renderStructSignatureMembers(): Writable =
         writable {
-            forEachMember(members) { _, memberName, memberSymbol ->
+            forEachMember(members) { member, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()
-                rust("$memberName: ${memberType.render()},")
+                val target = model.expectShape(member.target)
+                if (target is UnionShape) {
+                    rust("$memberName: ${memberType.namespace}::Py${memberType.name},")
+                } else {
+                    rust("$memberName: ${memberType.render()},")
+                }
             }
         }
 

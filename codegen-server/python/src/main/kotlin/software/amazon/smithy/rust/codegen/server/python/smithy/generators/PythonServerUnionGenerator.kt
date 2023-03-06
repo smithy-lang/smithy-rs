@@ -54,6 +54,16 @@ class PythonServerUnionGenerator(
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
         writer.rust("struct Py${unionSymbol.name}(pub ${unionSymbol.name});")
+        writer.rustBlockTemplate("impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for ${unionSymbol.name}", "pyo3" to pyo3) {
+            rustBlockTemplate("fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject", "pyo3" to pyo3) {
+                rustBlock("match self") {
+                    sortedMembers.forEach { member ->
+                        val variantName = symbolProvider.toMemberName(member)
+                        rust("${unionSymbol.name}::$variantName(variant) => variant.into_py(py),")
+                    }
+                }
+            }
+        }
         Attribute(pyo3.resolve("pymethods")).render(writer)
         writer.rustBlock("impl Py${unionSymbol.name}") {
             sortedMembers.forEach { member ->

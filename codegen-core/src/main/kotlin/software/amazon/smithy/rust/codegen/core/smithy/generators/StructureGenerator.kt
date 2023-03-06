@@ -71,7 +71,7 @@ open class StructureGenerator(
 
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
@@ -124,31 +124,35 @@ open class StructureGenerator(
         }
     }
 
-    private fun renderStructureImpl() {
+    open fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderMemberDoc(member, memberSymbol)
+        writer.deprecatedShape(member)
+        val memberType = memberSymbol.rustType()
+        val returnType = when {
+            memberType.isCopy() -> memberType
+            memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+            memberType.isDeref() -> memberType.asDeref().asRef()
+            else -> memberType.asRef()
+        }
+        writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+            when {
+                memberType.isCopy() -> rust("self.$memberName")
+                memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
+                else -> rust("&self.$memberName")
+            }
+        }
+    }
+
+    fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
         }
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
-                writer.deprecatedShape(member)
-                val memberType = memberSymbol.rustType()
-                val returnType = when {
-                    memberType.isCopy() -> memberType
-                    memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
-                    memberType.isDeref() -> memberType.asDeref().asRef()
-                    else -> memberType.asRef()
-                }
-                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
-                    when {
-                        memberType.isCopy() -> rust("self.$memberName")
-                        memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
-                        memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                        memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
-                        else -> rust("&self.$memberName")
-                    }
-                }
+                renderMemberImpl(writer, member, memberName, memberSymbol)
             }
         }
     }
@@ -193,7 +197,7 @@ open class StructureGenerator(
         }
     }
 
-    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+    protected fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
         documentShape(
             member,
             model,
