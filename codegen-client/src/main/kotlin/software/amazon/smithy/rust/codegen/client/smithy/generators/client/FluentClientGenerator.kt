@@ -28,12 +28,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
@@ -242,12 +242,7 @@ class FluentClientGenerator(
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
-        rust(
-            """
-            /// Fluent builder constructing a request to `${operationSymbol.name}`.
-            ///
-            """,
-        )
+        docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
 
         val builderName = operation.fluentBuilderType(codegenContext, symbolProvider).name
         documentShape(operation, model, autoSuppressMissingDocs = false)
