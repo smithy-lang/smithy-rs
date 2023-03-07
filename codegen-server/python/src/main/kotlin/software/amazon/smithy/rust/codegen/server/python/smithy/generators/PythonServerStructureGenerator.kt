@@ -27,11 +27,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
@@ -83,25 +80,25 @@ class PythonServerStructureGenerator(
         writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
         val memberType = memberSymbol.rustType()
         val target = model.expectShape(member.target)
-        if (target is UnionShape) {
-            writer.write("##[allow(missing_docs)]")
-            memberSymbol.expectRustMetadata().render(writer)
-            writer.write("$memberName: ${memberSymbol.namespace}::Py${memberType.name},")
-        } else {
-            super.renderStructureMember(writer, member, memberName, memberSymbol)
-        }
+        // if (target is UnionShape) {
+        //     writer.write("##[allow(missing_docs)]")
+        //     memberSymbol.expectRustMetadata().render(writer)
+        //     writer.write("$memberName: ${memberSymbol.namespace}::Py${memberType.name},")
+        // } else {
+        super.renderStructureMember(writer, member, memberName, memberSymbol)
+        // }
     }
 
     override fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         var memberType = memberSymbol.rustType()
-        val target = model.expectShape(member.target)
-        memberType = if (target is UnionShape) {
-            symbolBuilder(shape, RustType.Opaque("Py${memberType.name}", memberType.namespace)).locatedIn(symbolProvider.moduleForShape(shape)).build().rustType()
-        } else {
-            memberType
-        }
+        // val target = model.expectShape(member.target)
+        // memberType = if (target is UnionShape) {
+        //     symbolBuilder(shape, RustType.Opaque("Py${memberType.name}", memberType.namespace)).locatedIn(symbolProvider.moduleForShape(shape)).build().rustType()
+        // } else {
+        //     memberType
+        // }
         var returnType = when {
             memberType.isCopy() -> memberType
             memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()

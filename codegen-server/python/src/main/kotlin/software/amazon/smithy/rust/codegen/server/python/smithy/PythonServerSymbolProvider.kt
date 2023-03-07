@@ -36,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
-import software.amazon.smithy.rust.codegen.server.smithy.moduleForShape
 import java.util.logging.Logger
 
 class PythonConstrainedShapeSymbolProvider(
@@ -47,6 +46,7 @@ class PythonConstrainedShapeSymbolProvider(
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
+
         if (shape !is MemberShape) {
             return initial
         }
@@ -63,10 +63,10 @@ class PythonConstrainedShapeSymbolProvider(
             // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
             // become a ByteStream.
             PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
-        } else if (target is UnionShape) {
+            // } else if (target is UnionShape) {
             // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
             // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
-            symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
+            // symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
         } else {
             initial
         }
