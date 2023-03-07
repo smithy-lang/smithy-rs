@@ -217,3 +217,14 @@ impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S
             .boxed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ServerRequestId;
+    use http::HeaderValue;
+
+    #[test]
+    fn test_request_id_parsed_by_header_value() {
+        assert!(HeaderValue::from_str(&ServerRequestId::new().id.to_string()).is_ok());
+    }
+}
