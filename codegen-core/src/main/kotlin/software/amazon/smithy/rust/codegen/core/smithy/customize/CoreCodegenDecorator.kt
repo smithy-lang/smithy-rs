@@ -99,7 +99,7 @@ interface CoreCodegenDecorator<CodegenContext> {
     /**
      * Hook for customizing symbols by inserting an additional symbol provider.
      */
-    fun symbolProvider(base: RustSymbolProvider, model: Model): RustSymbolProvider = base
+    fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider = base
 }
 
 /**
@@ -156,9 +156,9 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
     final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> =
         addCustomizations { decorator -> decorator.extraSections(codegenContext) }
 
-    final override fun symbolProvider(base: RustSymbolProvider, model: Model): RustSymbolProvider =
+    final override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider =
         combineCustomizations(base) { decorator, otherProvider ->
-            decorator.symbolProvider(otherProvider, model)
+            decorator.symbolProvider(otherProvider)
         }
 
     /**

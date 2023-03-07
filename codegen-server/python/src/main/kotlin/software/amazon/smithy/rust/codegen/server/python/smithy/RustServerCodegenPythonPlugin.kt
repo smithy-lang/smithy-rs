@@ -100,6 +100,6 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it) }
                 // Allows decorators to inject a custom symbol provider
-                .let { codegenDecorator.symbolProvider(it, model) }
+                .let { codegenDecorator.symbolProvider(it) }
     }
 }
