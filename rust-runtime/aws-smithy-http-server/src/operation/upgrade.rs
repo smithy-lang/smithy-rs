@@ -247,13 +247,9 @@ where
     // The modified Layer applies correctly to `Upgrade<P, Op, Exts, S>`
     Pl::Layer: Layer<Upgrade<P, Op, Exts, Pl::Service>>,
 
-    // The signature of the output is correct
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, Pl::Service>>>::Service:
-        Service<http::Request<B>, Response = http::Response<BoxBody>>,
-
     // For `Route::new` for the resulting service
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, Pl::Service>>>::Service: Service<http::Request<B>, Error = Infallible>,
-    UpgradedService<Pl, P, Op, Exts, S, L>: Clone + Send + 'static,
+    UpgradedService<Pl, P, Op, Exts, S, L>:
+        Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
     <UpgradedService<Pl, P, Op, Exts, S, L> as Service<http::Request<B>>>::Future: Send + 'static,
 {
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
