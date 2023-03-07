@@ -190,7 +190,7 @@ impl<S> Layer<S> for ServerRequestIdResponseProviderLayer {
 impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S>
 where
     S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
-    S::Future: std::marker::Send + 'static
+    S::Future: std::marker::Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
