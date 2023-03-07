@@ -188,13 +188,13 @@ impl<S> Layer<S> for ServerRequestIdResponseProviderLayer {
 }
 
 impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S>
-    where
-        S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
-        S::Future: std::marker::Send + 'static
+where
+    S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
+    S::Future: std::marker::Send + 'static
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn Send + std::future::Future<Output=Result<Self::Response, Self::Error>>>>;
+    type Future = std::pin::Pin<Box<dyn Send + std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -203,11 +203,12 @@ impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
         let request_id = req.extensions().get::<ServerRequestId>();
         if request_id.is_none() {
-            return Box::pin(self.inner.call(req))
+            return Box::pin(self.inner.call(req));
         }
         let request_id = request_id.unwrap().to_owned();
         let header_key = self.header_key.clone();
-        self.inner.call(req)
+        self.inner
+            .call(req)
             .map_ok(move |mut res| -> Self::Response {
                 if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
                     res.headers_mut().insert(header_key, value);
