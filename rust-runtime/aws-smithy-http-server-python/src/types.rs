@@ -4,6 +4,16 @@
  */
 
 //! Python wrapped types from aws-smithy-types and aws-smithy-http.
+//!
+//! ## `Deref` hacks for Json serializer
+//! [aws_smithy_json::serialize::JsonValueWriter] expects references to the types
+//! from [aws_smithy_types] (for example [aws_smithy_json::serialize::JsonValueWriter::document()]
+//! expects `&aws_smithy_types::Document`). In order to make
+//! [aws_smithy_json::serialize::JsonValueWriter] happy, we implement `Deref` traits for
+//! Python types to their Rust counterparts (for example
+//! `impl Deref<Target=aws_smithy_types::Document> for Document` and that allows `&Document` to
+//! get coerced to `&aws_smithy_types::Document`). This is a hack, we should ideally handle this
+//! in `JsonSerializerGenerator.kt` but it's not easy to do it with our current Kotlin structure.
 
 use std::{
     collections::HashMap,
@@ -16,10 +26,9 @@ use std::{
 
 use bytes::Bytes;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
+    exceptions::{PyRuntimeError, PyStopAsyncIteration, PyTypeError},
     iter::IterNextOutput,
     prelude::*,
-    pyclass::IterANextOutput,
 };
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -285,15 +294,11 @@ impl From<aws_smithy_types::DateTime> for DateTime {
     }
 }
 
-impl From<DateTime> for aws_smithy_types::DateTime {
-    fn from(other: DateTime) -> aws_smithy_types::DateTime {
-        other.0
-    }
-}
+impl Deref for DateTime {
+    type Target = aws_smithy_types::DateTime;
 
-impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
-    fn from(other: &'date DateTime) -> &'date aws_smithy_types::DateTime {
-        &other.0
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -353,12 +358,13 @@ impl futures::stream::Stream for ByteStream {
 /// Return a new data chunk from the stream.
 async fn yield_data_chunk(
     body: Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>,
-) -> PyResult<Bytes> {
+) -> PyResult<Option<Bytes>> {
     let mut stream = body.lock().await;
-    match stream.next().await {
-        Some(bytes) => bytes.map_err(|e| PyRuntimeError::new_err(e.to_string())),
-        None => Err(PyStopIteration::new_err("stream exhausted")),
-    }
+    stream
+        .next()
+        .await
+        .transpose()
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }
 
 impl ByteStream {
@@ -444,14 +450,9 @@ impl ByteStream {
         let body = slf.0.clone();
         let data_chunk = futures::executor::block_on(yield_data_chunk(body));
         match data_chunk {
-            Ok(data_chunk) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
-            Err(e) => {
-                if e.is_instance_of::<PyStopIteration>(slf.py()) {
-                    Ok(IterNextOutput::Return(slf.py().None()))
-                } else {
-                    Err(e)
-                }
-            }
+            Ok(Some(data_chunk)) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
+            Ok(None) => Ok(IterNextOutput::Return(slf.py().None())),
+            Err(e) => Err(e),
         }
     }
 
@@ -463,29 +464,30 @@ impl ByteStream {
     }
 
     /// Return an awaitable resulting in a next value of the iterator or raise a StopAsyncIteration
-    /// exception when the iteration is over. PyO3 allows to raise the correct exception using the enum
-    /// [IterANextOutput](pyo3::pyclass::IterANextOutput).
+    /// exception when the iteration is over.
     ///
     /// To get the next value of the iterator, the `Arc` inner stream is cloned and the Rust call
     /// to `next()` is converted into an awaitable Python coroutine.
     ///
     /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__anext__.>`
-    pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<IterANextOutput<Py<PyAny>, PyObject>> {
+    ///
+    /// About the return type, we cannot use `IterANextOutput` because we don't know if we
+    /// have a next value or not until we call the `next` on the underlying stream which is
+    /// an async operation and it's awaited on the Python side. So we're returning
+    /// `StopAsyncIteration` inside the returned future lazily.
+    /// The reason for the extra `Option` wrapper is that PyO3 expects `__anext__` to return
+    /// either `Option<PyObject>` or `IterANextOutput` and fails to compile otherwise, so we're
+    /// using extra `Option` just to make PyO3 happy.
+    pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
         let body = slf.0.clone();
-        let data_chunk = pyo3_asyncio::tokio::local_future_into_py(slf.py(), async move {
+        let fut = pyo3_asyncio::tokio::future_into_py(slf.py(), async move {
             let data = yield_data_chunk(body).await?;
-            Ok(Python::with_gil(|py| data.into_py(py)))
-        });
-        match data_chunk {
-            Ok(data_chunk) => Ok(IterANextOutput::Yield(data_chunk.into_py(slf.py()))),
-            Err(e) => {
-                if e.is_instance_of::<PyStopIteration>(slf.py()) {
-                    Ok(IterANextOutput::Return(slf.py().None()))
-                } else {
-                    Err(e)
-                }
+            match data {
+                Some(data) => Ok(Python::with_gil(|py| data.into_py(py))),
+                None => Err(PyStopAsyncIteration::new_err("stream exhausted")),
             }
-        }
+        })?;
+        Ok(Some(fut.into()))
     }
 }
 
@@ -550,10 +552,6 @@ impl FromPyObject<'_> for Document {
     }
 }
 
-// TODO(PythonSerialization): Get rid of this hack.
-// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
-// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
-// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
 impl Deref for Document {
     type Target = aws_smithy_types::Document;
 
