@@ -590,7 +590,7 @@ class JsonParserGenerator(
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(
-                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
+                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?.into()",
                 *codegenScope,
             )
         }

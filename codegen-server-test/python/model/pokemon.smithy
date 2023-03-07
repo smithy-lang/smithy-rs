@@ -66,7 +66,7 @@ structure GetUnionOutput {
 }
 
 structure ConstrainedStuff {
-    @length(min: 1, max: 100)
+    //@length(min: 1, max: 100)
     inner: String
 }
 

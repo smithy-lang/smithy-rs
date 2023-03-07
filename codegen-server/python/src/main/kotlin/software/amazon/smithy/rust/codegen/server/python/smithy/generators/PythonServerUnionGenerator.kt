@@ -53,7 +53,7 @@ class PythonServerUnionGenerator(
         writer.rust("""##[pyo3::pyclass(name = "${unionSymbol.name}")]""")
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
-        writer.rust("struct Py${unionSymbol.name}(pub ${unionSymbol.name});")
+        writer.rust("struct PyUnionMarker${unionSymbol.name}(pub ${unionSymbol.name});")
         writer.rustBlockTemplate("impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for ${unionSymbol.name}", "pyo3" to pyo3) {
             rustBlockTemplate("fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject", "pyo3" to pyo3) {
                 rustBlock("match self") {
@@ -65,7 +65,7 @@ class PythonServerUnionGenerator(
             }
         }
         Attribute(pyo3.resolve("pymethods")).render(writer)
-        writer.rustBlock("impl Py${unionSymbol.name}") {
+        writer.rustBlock("impl PyUnionMarker${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = symbolProvider.toMemberName(member)
@@ -112,26 +112,17 @@ class PythonServerUnionGenerator(
             }
         } else {
             val memberSymbol = symbolProvider.toSymbol(member)
-            val memberType = memberSymbol.rustType().pythonType()
-            val rustType = memberSymbol.rustType()
-            val targetShape = model.expectShape(member.target)
-            val targetType: Pair<String, RustType> = when (targetShape) {
-                is UnionShape -> {
-                    "data.0" to RustType.Opaque(name = "Py${rustType.render(fullyQualified = false)}", namespace = rustType.namespace)
-                }
-                else -> {
-                    "data" to memberSymbol.rustType()
-                }
-            }
+            val pythonType = memberSymbol.rustType().pythonType()
+            val targetType = memberSymbol.rustType()
             Attribute("staticmethod").render(writer)
             writer.rust(
                 "/// Creates a new union instance of [`$variantName`](#T::$variantName)",
                 unionSymbol,
             )
-            writer.rust("/// :param data: ${memberType.renderAsDocstring()}:")
+            writer.rust("/// :param data: ${pythonType.renderAsDocstring()}:")
             writer.rust("/// :rtype ${unionSymbol.name}:")
-            writer.rustBlock("pub fn $funcNamePart(data: ${targetType.second.render()}) -> Self") {
-                rust("Self(${unionSymbol.name}::$variantName(${targetType.first}))")
+            writer.rustBlock("pub fn $funcNamePart(data: ${targetType.render()}) -> Self") {
+                rust("Self(${unionSymbol.name}::$variantName(data))")
             }
         }
     }
@@ -161,25 +152,16 @@ class PythonServerUnionGenerator(
             }
         } else {
             val memberSymbol = symbolProvider.toSymbol(member)
-            val memberType = memberSymbol.rustType().pythonType()
+            val pythonType = memberSymbol.rustType().pythonType()
             val targetSymbol = symbolProvider.toSymbol(model.expectShape(member.target))
             val rustType = memberSymbol.rustType()
-            val targetShape = model.expectShape(member.target)
-            val outputType = when (targetShape) {
-                is UnionShape -> {
-                    RustType.Opaque(name = "Py${rustType.render(fullyQualified = false)}", namespace = rustType.namespace)
-                }
-                else -> {
-                    memberSymbol.rustType()
-                }
-            }
             writer.rust(
                 "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.",
                 unionSymbol,
                 targetSymbol,
             )
-            writer.rust("/// :rtype ${memberType.renderAsDocstring()}:")
-            writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<${outputType.render()}>", "pyo3" to pyo3) {
+            writer.rust("/// :rtype ${pythonType.renderAsDocstring()}:")
+            writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<${rustType.render()}>", "pyo3" to pyo3) {
                 rustTemplate(
                     """
                     match self.0.as_$funcNamePart() {
@@ -196,7 +178,7 @@ class PythonServerUnionGenerator(
     }
 
     private fun renderPyUnionDeref() {
-        writer.rustBlock("impl std::ops::Deref for Py${unionSymbol.name}") {
+        writer.rustBlock("impl std::ops::Deref for PyUnionMarker${unionSymbol.name}") {
             rust(
                 """
                 type Target = ${unionSymbol.name};
@@ -210,11 +192,11 @@ class PythonServerUnionGenerator(
     }
 
     private fun renderPyUnionFrom() {
-        writer.rustBlock("impl From<${unionSymbol.name}> for Py${unionSymbol.name}") {
+        writer.rustBlock("impl From<${unionSymbol.name}> for PyUnionMarker${unionSymbol.name}") {
             rust(
                 """
                 fn from(other: ${unionSymbol.name}) -> Self {
-                    Py${unionSymbol.name}(other)
+                    PyUnionMarker${unionSymbol.name}(other)
                 }
                 """,
             )

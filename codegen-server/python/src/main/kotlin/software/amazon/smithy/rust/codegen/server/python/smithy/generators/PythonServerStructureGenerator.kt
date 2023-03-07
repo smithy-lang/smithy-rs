@@ -78,27 +78,13 @@ class PythonServerStructureGenerator(
         // Above, we manually add dependency since we can't use a `RuntimeType` below
         Attribute("pyo3(get, set)").render(writer)
         writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
-        val memberType = memberSymbol.rustType()
-        val target = model.expectShape(member.target)
-        // if (target is UnionShape) {
-        //     writer.write("##[allow(missing_docs)]")
-        //     memberSymbol.expectRustMetadata().render(writer)
-        //     writer.write("$memberName: ${memberSymbol.namespace}::Py${memberType.name},")
-        // } else {
         super.renderStructureMember(writer, member, memberName, memberSymbol)
-        // }
     }
 
     override fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         var memberType = memberSymbol.rustType()
-        // val target = model.expectShape(member.target)
-        // memberType = if (target is UnionShape) {
-        //     symbolBuilder(shape, RustType.Opaque("Py${memberType.name}", memberType.namespace)).locatedIn(symbolProvider.moduleForShape(shape)).build().rustType()
-        // } else {
-        //     memberType
-        // }
         var returnType = when {
             memberType.isCopy() -> memberType
             memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
@@ -145,20 +131,41 @@ class PythonServerStructureGenerator(
     private fun renderStructSignatureMembers(): Writable =
         writable {
             forEachMember(members) { member, memberName, memberSymbol ->
-                val memberType = memberSymbol.rustType()
-                val target = model.expectShape(member.target)
-                if (target is UnionShape) {
-                    rust("$memberName: ${memberType.namespace}::Py${memberType.name},")
-                } else {
-                    rust("$memberName: ${memberType.render()},")
+                val rustType = memberSymbol.rustType()
+                val targetShape = model.expectShape(member.target)
+                val targetType = when (targetShape) {
+                    is UnionShape -> {
+                        if (rustType.name.startsWith("PyUnionMarker")) {
+                            memberSymbol.rustType()
+                        } else {
+                            RustType.Opaque(name = "PyUnionMarker${rustType.render(fullyQualified = false)}", namespace = rustType.namespace)
+                        }
+                    }
+                    else -> {
+                        memberSymbol.rustType()
+                    }
                 }
+                rust("$memberName: ${targetType.render()},")
             }
         }
 
     private fun renderStructBodyMembers(): Writable =
         writable {
-            forEachMember(members) { _, memberName, _ ->
-                rust("$memberName,")
+            forEachMember(members) { member, memberName, memberSymbol ->
+                val rustType = memberSymbol.rustType()
+                val targetShape = model.expectShape(member.target)
+                when (targetShape) {
+                    is UnionShape -> {
+                        if (rustType.name.startsWith("PyUnionMarker")) {
+                            rust("$memberName,")
+                        } else {
+                            rust("$memberName: $memberName.0,")
+                        }
+                    }
+                    else -> {
+                        rust("$memberName,")
+                    }
+                }
             }
         }
 

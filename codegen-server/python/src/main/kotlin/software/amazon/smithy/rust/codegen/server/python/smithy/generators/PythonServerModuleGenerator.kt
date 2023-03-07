@@ -71,7 +71,7 @@ class PythonServerModuleGenerator(
                 when (shape) {
                     is UnionShape -> rustTemplate(
                         """
-                        $moduleType.add_class::<crate::$moduleType::Py${shape.id.name}>()?;
+                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name}>()?;
                         """,
                         *codegenScope,
                     )

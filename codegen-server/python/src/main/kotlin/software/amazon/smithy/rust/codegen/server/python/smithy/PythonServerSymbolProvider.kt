@@ -29,10 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -50,23 +47,17 @@ class PythonConstrainedShapeSymbolProvider(
         if (shape !is MemberShape) {
             return initial
         }
+
         val target = model.expectShape(shape.target)
-        val container = model.expectShape(shape.container)
-
-        // We are only targeting non-synthetic inputs and outputs.
-        if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
-            return initial
-        }
-
         return if (target is BlobShape && shape.isStreaming(model)) {
             // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
             // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
             // become a ByteStream.
             PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
-            // } else if (target is UnionShape) {
+        } else if (target is UnionShape) {
             // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
             // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
-            // symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
+            symbolBuilder(shape, RustType.Opaque("PyUnionMarker${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
         } else {
             initial
         }
@@ -100,14 +91,8 @@ class PythonServerSymbolVisitor(
         if (shape !is MemberShape) {
             return initial
         }
+
         val target = model.expectShape(shape.target)
-        val container = model.expectShape(shape.container)
-
-        // We are only targeting non-synthetic inputs and outputs.
-        if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
-            return initial
-        }
-
         return if (target is BlobShape && shape.isStreaming(model)) {
             // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
             // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
@@ -116,7 +101,7 @@ class PythonServerSymbolVisitor(
         } else if (target is UnionShape) {
             // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
             // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
-            symbolBuilder(shape, RustType.Opaque("Py${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
+            symbolBuilder(shape, RustType.Opaque("PyUnionMarker${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
         } else {
             initial
         }
