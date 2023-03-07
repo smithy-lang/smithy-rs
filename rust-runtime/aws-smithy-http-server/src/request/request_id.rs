@@ -54,7 +54,7 @@ use std::{
 
 use futures_util::{FutureExt, TryFutureExt};
 use http::request::Parts;
-use http::{HeaderName, HeaderValue, Response};
+use http::{header::HeaderName, HeaderValue, Response};
 use thiserror::Error;
 use tower::{Layer, Service};
 use uuid::Uuid;
