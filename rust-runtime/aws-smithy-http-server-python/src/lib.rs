@@ -26,7 +26,7 @@ pub mod types;
 mod util;
 
 #[doc(inline)]
-pub use error::{PyError, PyMiddlewareException, PyUnionVariantException};
+pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
 pub use logging::{py_tracing_event, PyTracingHandler};
 #[doc(inline)]

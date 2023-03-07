@@ -386,16 +386,6 @@ impl Default for ByteStream {
     }
 }
 
-impl From<Blob> for ByteStream {
-    fn from(other: Blob) -> Self {
-        Self(Arc::new(Mutex::new(
-            aws_smithy_http::byte_stream::ByteStream::new(aws_smithy_http::body::SdkBody::from(
-                other.0.into_inner(),
-            )),
-        )))
-    }
-}
-
 #[pymethods]
 impl ByteStream {
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
