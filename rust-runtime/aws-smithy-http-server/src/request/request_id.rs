@@ -203,7 +203,8 @@ where
     fn call(&mut self, req: http::Request<Body>) -> Self::Future {
         let request_id = req.extensions().get::<ServerRequestId>()
             .expect("You must add `ServerRequestIdProviderLayer` to provide a request ID for the response. \
-                    If you believe you have correctly configured your service, please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+                    If you believe you have correctly configured your service, please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            .to_owned();
         let header_key = self.header_key.clone();
         self.inner
             .call(req)
