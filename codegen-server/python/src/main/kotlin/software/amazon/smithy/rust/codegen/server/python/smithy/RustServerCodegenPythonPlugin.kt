@@ -74,8 +74,8 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
-            codegenDecorator: ServerCodegenDecorator,
             constrainedTypes: Boolean = true,
+            codegenDecorator: ServerCodegenDecorator,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
