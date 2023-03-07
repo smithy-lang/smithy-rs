@@ -124,35 +124,31 @@ open class StructureGenerator(
         }
     }
 
-    open fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
-        writer.renderMemberDoc(member, memberSymbol)
-        writer.deprecatedShape(member)
-        val memberType = memberSymbol.rustType()
-        val returnType = when {
-            memberType.isCopy() -> memberType
-            memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
-            memberType.isDeref() -> memberType.asDeref().asRef()
-            else -> memberType.asRef()
-        }
-        writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
-            when {
-                memberType.isCopy() -> rust("self.$memberName")
-                memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
-                memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
-                else -> rust("&self.$memberName")
-            }
-        }
-    }
-
-    fun renderStructureImpl() {
+    private fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
         }
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                renderMemberImpl(writer, member, memberName, memberSymbol)
+                writer.renderMemberDoc(member, memberSymbol)
+                writer.deprecatedShape(member)
+                val memberType = memberSymbol.rustType()
+                val returnType = when {
+                    memberType.isCopy() -> memberType
+                    memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    memberType.isDeref() -> memberType.asDeref().asRef()
+                    else -> memberType.asRef()
+                }
+                writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                    when {
+                        memberType.isCopy() -> rust("self.$memberName")
+                        memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                        memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                        memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
+                        else -> rust("&self.$memberName")
+                    }
+                }
             }
         }
     }

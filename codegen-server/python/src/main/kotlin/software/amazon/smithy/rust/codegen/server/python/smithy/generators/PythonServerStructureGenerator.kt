@@ -15,14 +15,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
-import software.amazon.smithy.rust.codegen.core.rustlang.asRef
-import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
-import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
-import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -79,28 +73,6 @@ class PythonServerStructureGenerator(
         Attribute("pyo3(get, set)").render(writer)
         writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
         super.renderStructureMember(writer, member, memberName, memberSymbol)
-    }
-
-    override fun renderMemberImpl(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
-        writer.renderMemberDoc(member, memberSymbol)
-        writer.deprecatedShape(member)
-        var memberType = memberSymbol.rustType()
-        var returnType = when {
-            memberType.isCopy() -> memberType
-            memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
-            memberType.isDeref() -> memberType.asDeref().asRef()
-            else -> memberType.asRef()
-        }
-
-        writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
-            when {
-                memberType.isCopy() -> rust("self.$memberName")
-                memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
-                memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
-                else -> rust("&self.$memberName")
-            }
-        }
     }
 
     private fun renderPyO3Methods() {
