@@ -239,3 +239,9 @@ message = "`SdkError` variants can now be constructed for easier unit testing."
 references = ["smithy-rs#2428", "smithy-rs#2208"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix `FilterByOperationName` plugin. This previous caused services with this applied to fail to compile due to mismatched bounds."
+references = ["smithy-rs#2441"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "hlbarber"
