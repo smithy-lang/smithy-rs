@@ -14,6 +14,9 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
@@ -42,19 +45,23 @@ object ServerRustModule {
 }
 
 class ServerModuleDocProvider : ModuleDocProvider {
-    override fun docs(module: RustModule.LeafModule): String? = when (module) {
-        ServerRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
-        ServerRustModule.Operation -> "All operations that this crate can perform."
-        // TODO(ServerTeam): Document this module (I don't have context)
-        ServerRustModule.OperationShape -> ""
-        ServerRustModule.Model -> "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model."
-        ServerRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
-        ServerRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
-        ServerRustModule.Types -> "Data primitives referenced by other data types."
-        ServerRustModule.Server -> "Contains the types that are re-exported from the `aws-smithy-http-server` crate."
-        ServerRustModule.UnconstrainedModule -> "Unconstrained types for constrained shapes."
-        ServerRustModule.ConstrainedModule -> "Constrained types for constrained shapes."
-        else -> TODO("Document this module: $module")
+    override fun docsWriter(module: RustModule.LeafModule): Writable? = writable {
+        docs(
+            when (module) {
+                ServerRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
+                ServerRustModule.Operation -> "All operations that this crate can perform."
+                // TODO(ServerTeam): Document this module (I don't have context)
+                ServerRustModule.OperationShape -> ""
+                ServerRustModule.Model -> "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model."
+                ServerRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
+                ServerRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
+                ServerRustModule.Types -> "Data primitives referenced by other data types."
+                ServerRustModule.Server -> "Contains the types that are re-exported from the `aws-smithy-http-server` crate."
+                ServerRustModule.UnconstrainedModule -> "Unconstrained types for constrained shapes."
+                ServerRustModule.ConstrainedModule -> "Constrained types for constrained shapes."
+                else -> TODO("Document this module: $module")
+            },
+        )
     }
 }
 

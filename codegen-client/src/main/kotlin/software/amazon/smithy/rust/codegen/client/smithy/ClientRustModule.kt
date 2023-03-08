@@ -13,9 +13,15 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
@@ -76,80 +82,84 @@ class ClientModuleDocProvider(
 ) : ModuleDocProvider {
     private val config: ClientCodegenConfig = codegenContext.settings.codegenConfig
 
-    override fun docs(module: RustModule.LeafModule): String? =
-        when (config.enableNewCrateOrganizationScheme) {
+    override fun docsWriter(module: RustModule.LeafModule): Writable? {
+        val strDoc: (String) -> Writable = { str -> writable { docs(escape(str)) } }
+        return when (config.enableNewCrateOrganizationScheme) {
             true -> when (module) {
-                ClientRustModule.client -> "Client for calling $serviceName."
+                ClientRustModule.client -> strDoc("Client for calling $serviceName.")
                 ClientRustModule.Client.customize -> customizeModuleDoc()
-                ClientRustModule.Config -> "Configuration for $serviceName."
-                ClientRustModule.Error -> "Common errors and error handling utilities."
-                ClientRustModule.Endpoint -> "Endpoint resolution functionality."
-                ClientRustModule.Operation -> "All operations that this crate can perform."
-                ClientRustModule.Meta -> "Information about this crate."
+                ClientRustModule.Config -> strDoc("Configuration for $serviceName.")
+                ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
+                ClientRustModule.Endpoint -> strDoc("Endpoint resolution functionality.")
+                ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
+                ClientRustModule.Meta -> strDoc("Information about this crate.")
                 ClientRustModule.Input -> PANIC("this module shouldn't exist in the new scheme")
                 ClientRustModule.Output -> PANIC("this module shouldn't exist in the new scheme")
-                ClientRustModule.Primitives -> "Primitives such as `Blob` or `DateTime` used by other types."
-                ClientRustModule.types -> "Data primitives referenced by other data types."
-                ClientRustModule.Types.Error -> "Error types that $serviceName can respond with."
+                ClientRustModule.Primitives -> strDoc("Primitives such as `Blob` or `DateTime` used by other types.")
+                ClientRustModule.types -> strDoc("Data primitives referenced by other data types.")
+                ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
                 ClientRustModule.Model -> PANIC("this module shouldn't exist in the new scheme")
                 else -> TODO("Document this module: $module")
             }
-            else -> when (module) {
-                ClientRustModule.client -> "Client and fluent builders for calling $serviceName."
-                ClientRustModule.Client.customize -> "Operation customization and supporting types."
-                ClientRustModule.Config -> "Configuration for $serviceName."
-                ClientRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
-                ClientRustModule.Endpoint -> "Endpoint resolution functionality."
-                ClientRustModule.Operation -> "All operations that this crate can perform."
-                ClientRustModule.Meta -> PANIC("this module shouldn't exist in the old scheme")
-                ClientRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
-                ClientRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
-                ClientRustModule.Primitives -> PANIC("this module shouldn't exist in the old scheme")
-                ClientRustModule.types -> "Data primitives referenced by other data types."
-                ClientRustModule.Types.Error -> PANIC("this module shouldn't exist in the old scheme")
-                ClientRustModule.Model -> "Data structures used by operation inputs/outputs."
-                else -> TODO("Document this module: $module")
-            }
-        }
 
-    private fun customizeModuleDoc(): String {
+            else -> strDoc(
+                when (module) {
+                    ClientRustModule.client -> "Client and fluent builders for calling $serviceName."
+                    ClientRustModule.Client.customize -> "Operation customization and supporting types."
+                    ClientRustModule.Config -> "Configuration for $serviceName."
+                    ClientRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
+                    ClientRustModule.Endpoint -> "Endpoint resolution functionality."
+                    ClientRustModule.Operation -> "All operations that this crate can perform."
+                    ClientRustModule.Meta -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
+                    ClientRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
+                    ClientRustModule.Primitives -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.types -> "Data primitives referenced by other data types."
+                    ClientRustModule.Types.Error -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.Model -> "Data structures used by operation inputs/outputs."
+                    else -> TODO("Document this module: $module")
+                },
+            )
+        }
+    }
+
+    private fun customizeModuleDoc(): Writable = writable {
         val model = codegenContext.model
-        val header = "Operation customization and supporting types."
-        return if (model.operationShapes.isEmpty()) {
-            header
-        } else {
+        docs("Operation customization and supporting types.")
+        if (model.operationShapes.isNotEmpty()) {
             val opFnName = FluentClientGenerator.clientOperationFnName(
                 model.operationShapes.first(),
                 codegenContext.symbolProvider,
             )
-            """
-            $header
+            docsTemplate(
+                """
+                The underlying HTTP requests made during an operation can be customized
+                by calling the `customize()` method on the fluent builder returned from a client
+                operation call. For example, this can be used to add an additional HTTP header:
 
-            The underlying HTTP requests made during an operation can be customized
-            by calling the `customize()` method on the fluent builder returned from a client
-            operation call. For example, this can be used to add an additional HTTP header:
+                ```no_run
+                ## async fn wrapper() -> Result<(), crate::Error> {
+                ## let client: crate::Client = unimplemented!();
+                use #{http}::header::{HeaderName, HeaderValue};
 
-            ```no_run
-            # async fn wrapper() -> Result<(), crate::Error> {
-            # let client: crate::Client = unimplemented!();
-            use http::header::{HeaderName, HeaderValue};
-
-            let result = client.$opFnName()
-                .customize()
-                .await?
-                .mutate_request(|req| {
-                    // Add `x-example-header` with value
-                    req.headers_mut()
-                        .insert(
-                            HeaderName::from_static("x-example-header"),
-                            HeaderValue::from_static("1"),
-                        );
-                })
-                .send()
-                .await;
-            # }
-            ```
-            """.trimIndent()
+                let result = client.$opFnName()
+                    .customize()
+                    .await?
+                    .mutate_request(|req| {
+                        // Add `x-example-header` with value
+                        req.headers_mut()
+                            .insert(
+                                HeaderName::from_static("x-example-header"),
+                                HeaderValue::from_static("1"),
+                            );
+                    })
+                    .send()
+                    .await;
+                ## }
+                ```
+                """.trimIndent(),
+                "http" to CargoDependency.Http.toDevDependency().toType(),
+            )
         }
     }
 }

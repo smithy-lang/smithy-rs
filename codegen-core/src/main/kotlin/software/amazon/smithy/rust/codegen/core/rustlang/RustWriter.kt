@@ -301,12 +301,22 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
     return this
 }
 
-/** Document the containing entity (e.g. module, crate, etc.)
+/**
+ * Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
 fun RustWriter.containerDocs(text: String, vararg args: Any, trimStart: Boolean = true): RustWriter {
     return docs(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 }
+
+/**
+ * Equivalent of [rustTemplate] for container docs.
+ */
+fun RustWriter.containerDocsTemplate(
+    text: String,
+    vararg args: Pair<String, Any>,
+    trimStart: Boolean = false,
+): RustWriter = docsTemplate(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 
 /**
  * Write RustDoc-style docs into the writer
@@ -337,6 +347,18 @@ fun <T : AbstractCodeWriter<T>> T.docs(
     write(cleaned, *args)
     popState()
     return this
+}
+
+/**
+ * [rustTemplate] equivalent for doc comments.
+ */
+fun <T : AbstractCodeWriter<T>> T.docsTemplate(
+    text: String,
+    vararg args: Pair<String, Any>,
+    newlinePrefix: String = "/// ",
+    trimStart: Boolean = false,
+): T = withTemplate(text, args, trim = false) { template ->
+    docs(template, newlinePrefix = newlinePrefix, trimStart = trimStart)
 }
 
 /**
@@ -400,6 +422,14 @@ fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
 fun RustWriter.raw(text: String) = writeInline(escape(text))
+
+/**
+ * [rustTemplate] equivalent for `raw()`. Note: This function won't automatically escape formatter symbols.
+ */
+fun RustWriter.rawTemplate(text: String, vararg args: Pair<String, Any>) =
+    withTemplate(text, args, trim = false) { templated ->
+        writeInline(templated)
+    }
 
 /**
  * Rustdoc doesn't support `r#` for raw identifiers.

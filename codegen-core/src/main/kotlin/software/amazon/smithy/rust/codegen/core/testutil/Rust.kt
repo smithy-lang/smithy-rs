@@ -22,9 +22,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -41,8 +43,8 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
 val TestModuleDocProvider = object : ModuleDocProvider {
-    override fun docs(module: RustModule.LeafModule): String? {
-        return "Some test documentation\n\nSome more details..."
+    override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
+        docs("Some test documentation\n\nSome more details...")
     }
 }
 
