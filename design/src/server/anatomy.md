@@ -301,7 +301,7 @@ where
 
 When we `GetPokemonService::from_handler` or `GetPokemonService::from_service`, the model service produced, `S`, will meet the constraints above.
 
-There is an associated `Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
+There is an associated `Layer`, `UpgradeLayer<P, Op>` which constructs `Upgrade` from a service.
 
 The upgrade procedure is finalized by the application of the `Layer` `L`, referenced in `Operation<S, L>`. In this way the entire upgrade procedure takes an `Operation<S, L>` and returns a HTTP service.
 
