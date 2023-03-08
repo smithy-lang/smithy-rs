@@ -119,6 +119,7 @@
 //!
 
 mod closure;
+pub mod either;
 mod filter;
 mod identity;
 mod layer;
