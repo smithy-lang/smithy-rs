@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
@@ -42,9 +41,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationE
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlNameIndex
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -62,6 +61,7 @@ class XmlBindingTraitSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val codegenTarget = codegenContext.target
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope =
         arrayOf(
             "XmlWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
@@ -69,8 +69,6 @@ class XmlBindingTraitSerializerGenerator(
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
         )
-    private val operationSerModule = RustModule.private("operation_ser")
-    private val xmlSerModule = RustModule.private("xml_ser")
 
     private val xmlIndex = XmlNameIndex.of(model)
     private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
@@ -101,7 +99,6 @@ class XmlBindingTraitSerializerGenerator(
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
-        val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
         val xmlMembers = operationShape.requestBodyMembers()
         if (xmlMembers.isEmpty()) {
@@ -109,7 +106,7 @@ class XmlBindingTraitSerializerGenerator(
         }
         val operationXmlName = xmlIndex.operationInputShapeName(operationShape)
             ?: throw CodegenException("operation must have a name if it has members")
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "op_input") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
@@ -127,7 +124,7 @@ class XmlBindingTraitSerializerGenerator(
                         """,
                         *codegenScope,
                     )
-                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "input"))
+                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "input"), fnNameSuffix = "input")
                 }
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -139,9 +136,8 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target)
-        return RuntimeType.forInlineFun(fnName, xmlSerModule) {
+        return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
             val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
             rustBlockTemplate(
                 "pub fn $fnName(input: &$t) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
@@ -178,8 +174,7 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
-        val fnName = "rest_xml_unset_payload"
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return ProtocolFunctions.crossOperationFn("rest_xml_unset_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -192,7 +187,6 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
-        val fnName = symbolProvider.serializeFunctionName(operationShape)
         val outputShape = operationShape.outputShape(model)
         val xmlMembers = operationShape.responseBodyMembers()
         if (xmlMembers.isEmpty()) {
@@ -200,7 +194,7 @@ class XmlBindingTraitSerializerGenerator(
         }
         val operationXmlName = xmlIndex.operationOutputShapeName(operationShape)
             ?: throw CodegenException("operation must have a name if it has members")
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "output") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(output: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(outputShape),
@@ -230,8 +224,7 @@ class XmlBindingTraitSerializerGenerator(
         val xmlMembers = httpBindingResolver.errorResponseBindings(shape)
             .filter { it.location == HttpLocation.DOCUMENT }
             .map { it.member }
-        val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return protocolFunctions.serializeFn(errorShape, fnNameSuffix = "error") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(error: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(errorShape),
@@ -383,10 +376,10 @@ class XmlBindingTraitSerializerGenerator(
         structureShape: StructureShape,
         members: XmlMemberIndex,
         ctx: Ctx.Element,
+        fnNameSuffix: String? = null,
     ) {
         val structureSymbol = symbolProvider.toSymbol(structureShape)
-        val fnName = symbolProvider.serializeFunctionName(structureShape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, xmlSerModule) {
+        val structureSerializer = protocolFunctions.serializeFn(structureShape, fnNameSuffix = fnNameSuffix) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
@@ -404,9 +397,8 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     private fun RustWriter.serializeUnion(unionShape: UnionShape, ctx: Ctx.Element) {
-        val fnName = symbolProvider.serializeFunctionName(unionShape)
         val unionSymbol = symbolProvider.toSymbol(unionShape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, xmlSerModule) {
+        val structureSerializer = protocolFunctions.serializeFn(unionShape) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
