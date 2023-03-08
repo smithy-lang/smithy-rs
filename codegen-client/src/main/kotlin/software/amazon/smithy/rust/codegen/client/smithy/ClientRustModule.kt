@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -70,14 +71,16 @@ object ClientRustModule {
 }
 
 class ClientModuleDocProvider(
-    private val config: ClientCodegenConfig,
+    private val codegenContext: ClientCodegenContext,
     private val serviceName: String,
 ) : ModuleDocProvider {
+    private val config: ClientCodegenConfig = codegenContext.settings.codegenConfig
+
     override fun docs(module: RustModule.LeafModule): String? =
         when (config.enableNewCrateOrganizationScheme) {
             true -> when (module) {
                 ClientRustModule.client -> "Client for calling $serviceName."
-                ClientRustModule.Client.customize -> "Operation customization and supporting types."
+                ClientRustModule.Client.customize -> customizeModuleDoc()
                 ClientRustModule.Config -> "Configuration for $serviceName."
                 ClientRustModule.Error -> "Common errors and error handling utilities."
                 ClientRustModule.Endpoint -> "Endpoint resolution functionality."
@@ -108,6 +111,47 @@ class ClientModuleDocProvider(
                 else -> TODO("Document this module: $module")
             }
         }
+
+    private fun customizeModuleDoc(): String {
+        val model = codegenContext.model
+        val header = "Operation customization and supporting types."
+        return if (model.operationShapes.isEmpty()) {
+            header
+        } else {
+            val opFnName = FluentClientGenerator.clientOperationFnName(
+                model.operationShapes.first(),
+                codegenContext.symbolProvider,
+            )
+            """
+            $header
+
+            The underlying HTTP requests made during an operation can be customized
+            by calling the `customize()` method on the fluent builder returned from a client
+            operation call. For example, this can be used to add an additional HTTP header:
+
+            ```no_run
+            # async fn wrapper() -> Result<(), crate::Error> {
+            # let client: crate::Client = unimplemented!();
+            use http::header::{HeaderName, HeaderValue};
+
+            let result = client.$opFnName()
+                .customize()
+                .await?
+                .mutate_request(|req| {
+                    // Add `x-example-header` with value
+                    req.headers_mut()
+                        .insert(
+                            HeaderName::from_static("x-example-header"),
+                            HeaderValue::from_static("1"),
+                        );
+                })
+                .send()
+                .await;
+            # }
+            ```
+            """.trimIndent()
+        }
+    }
 }
 
 object ClientModuleProvider : ModuleProvider {

@@ -115,7 +115,7 @@ class ClientCodegenVisitor(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
                 ClientModuleDocProvider(
-                    settings.codegenConfig,
+                    codegenContext,
                     service.getTrait<TitleTrait>()?.value ?: "the service",
                 ),
             ),

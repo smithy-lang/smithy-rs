@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -41,7 +42,9 @@ interface ModuleDocProvider {
             }
             try {
                 val docs = module.documentationOverride ?: provider?.docs(module)
-                docs?.also(writer::docs)
+                docs?.also { docs ->
+                    writer.docs(writer.escape(docs), trimStart = false)
+                }
             } catch (e: NotImplementedError) {
                 // Catch `TODO()` and rethrow only if its a public module
                 if (module.rustMetadata.visibility == Visibility.PUBLIC) {
