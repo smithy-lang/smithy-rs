@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -177,7 +176,6 @@ class JsonSerializerGenerator(
         "ByteSlab" to RuntimeType.ByteSlab,
     )
     private val serializerUtil = SerializerUtil(model)
-    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
@@ -401,11 +399,7 @@ class JsonSerializerGenerator(
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
                 val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
-                rustTemplate(
-                    "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
-                    "FormatType" to timestampFormatType,
-                    "ConvertInto" to typeConversionGenerator.convertViaInto(target),
-                )
+                rust("$writer.date_time(${value.asRef()}, #T)?;", timestampFormatType)
             }
 
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->
