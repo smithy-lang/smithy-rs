@@ -52,8 +52,6 @@ class ServerServiceGeneratorV2(
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
-    private val builderPluginGenericTypeName = "Plugin"
-    private val builderBodyGenericTypeName = "Body"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -126,7 +124,6 @@ class ServerServiceGeneratorV2(
                 ///     /* Set other handlers */
                 ///     .build()
                 ///     .unwrap();
-                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
                 /// ```
                 ///
                 pub fn $fieldName<HandlerType, Extensions>(self, handler: HandlerType) -> Self
@@ -137,8 +134,8 @@ class ServerServiceGeneratorV2(
                             #{Protocol},
                             crate::operation_shape::$structName,
                             Extensions,
-                            $builderBodyGenericTypeName,
-                            $builderPluginGenericTypeName,
+                            Body,
+                            Plugin,
                         >
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -157,8 +154,8 @@ class ServerServiceGeneratorV2(
                         #{Protocol},
                         crate::operation_shape::$structName,
                         Extensions,
-                        $builderBodyGenericTypeName,
-                        $builderPluginGenericTypeName,
+                        Body,
+                        Plugin,
                     >
                 {
                     self.$fieldName = Some(operation.upgrade(&self.plugin));
@@ -213,7 +210,7 @@ class ServerServiceGeneratorV2(
             ///
             /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
             /// unspecified route requested.
-            pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
+            pub fn build(self) -> Result<$serviceName<Body>, MissingOperationsError>
             {
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
@@ -300,9 +297,9 @@ class ServerServiceGeneratorV2(
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.
-            pub fn build_unchecked(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>
+            pub fn build_unchecked(self) -> $serviceName<Body>
             where
-                $builderBodyGenericTypeName: Send + 'static
+                Body: Send + 'static
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
                 $serviceName {
@@ -318,22 +315,21 @@ class ServerServiceGeneratorV2(
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
-            pub struct $builderName<$builderGenerics> {
+            pub struct $builderName<Body, Plugin> {
                 ${builderFields.joinToString(", ")},
-                plugin: $builderPluginGenericTypeName,
+                plugin: Plugin,
             }
 
-            impl<$builderGenerics> $builderName<$builderGenerics> {
+            impl<Body, Plugin> $builderName<Body, Plugin> {
                 #{Setters:W}
             }
 
-            impl<$builderGenerics> $builderName<$builderGenerics> {
+            impl<Body, Plugin> $builderName<Body, Plugin> {
                 #{BuildMethod:W}
 
                 #{BuildUncheckedMethod:W}
@@ -385,9 +381,16 @@ class ServerServiceGeneratorV2(
             """
             ///
             /// See the [root](crate) documentation for more information.
-            ##[derive(Clone)]
-            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
-                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
+            pub struct $serviceName<Body> {
+                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>,
+            }
+
+            impl<Body> Clone for $serviceName<Body> {
+                fn clone(&self) -> Self {
+                    Self {
+                        router: self.router.clone()
+                    }
+                }
             }
 
             impl $serviceName<()> {
@@ -413,59 +416,29 @@ class ServerServiceGeneratorV2(
                 }
             }
 
-            impl<S> $serviceName<S> {
+            impl<Body> $serviceName<Body> {
                 /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
                 pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-
                 /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
                 pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                     #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
-
-                /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
-                pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
-                where
-                    L: #{Tower}::Layer<S>
-                {
-                    $serviceName {
-                        router: self.router.map(|s| s.layer(layer))
-                    }
-                }
-
-                /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
-                ///
-                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
-                pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
-                where
-                    S: #{Tower}::Service<
-                        #{Http}::Request<B>,
-                        Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
-                        Error = std::convert::Infallible>,
-                    S: Clone + Send + 'static,
-                    S::Future: Send + 'static,
-                {
-                    self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::Route::new))
-                }
             }
 
-            impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
-            where
-                S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
-                RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
+            impl<Body> #{Tower}::Service<#{Http}::Request<Body>> for $serviceName<Body>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
-                type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
+                type Error = std::convert::Infallible;
+                type Future = #{SmithyHttpServer}::routing::RoutingFuture<#{SmithyHttpServer}::routing::Route<Body>, Body>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
                     self.router.poll_ready(cx)
                 }
 
-                fn call(&mut self, request: #{Http}::Request<B>) -> Self::Future {
+                fn call(&mut self, request: #{Http}::Request<Body>) -> Self::Future {
                     self.router.call(request)
                 }
             }

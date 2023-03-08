@@ -62,8 +62,12 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
-    // Apply the `PrintPlugin` defined in `plugin.rs`
-    let plugins = PluginPipeline::new().print();
+    let state_layer = AddExtensionLayer::new(Arc::new(State::default()));
+    let plugins = PluginPipeline::new()
+        // Apply a layer injecting `State`.
+        .http_layer(&state_layer)
+        // Apply the `PrintPlugin` defined in `plugin.rs`
+        .print();
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
@@ -75,9 +79,7 @@ pub async fn main() {
         .do_nothing(do_nothing)
         .check_health(check_health)
         .build()
-        .expect("failed to build an instance of PokemonService")
-        // Set up shared state and middlewares.
-        .layer(&AddExtensionLayer::new(Arc::new(State::default())));
+        .expect("failed to build an instance of PokemonService");
 
     let addr: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()

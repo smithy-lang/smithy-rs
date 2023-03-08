@@ -15,6 +15,7 @@ use pokemon_service_server_sdk::{
     error::{GetStorageError, StorageAccessNotAuthorized},
     input::{DoNothingInput, GetStorageInput},
     output::{DoNothingOutput, GetStorageOutput},
+    server::plugin::PluginPipeline,
     PokemonService,
 };
 
@@ -70,7 +71,9 @@ pub async fn do_nothing_but_log_request_ids(
 async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = PokemonService::builder_without_plugins()
+    let server_id_layer = ServerRequestIdProviderLayer::new();
+    let plugins = PluginPipeline::new().http_layer(&server_id_layer);
+    let app = PokemonService::builder_with_plugins(plugins)
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
@@ -79,8 +82,6 @@ async fn main() {
         .check_health(check_health)
         .build()
         .expect("failed to build an instance of PokemonService");
-
-    let app = app.layer(&ServerRequestIdProviderLayer::new());
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

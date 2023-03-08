@@ -29,7 +29,10 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
+    let state_layer = AddExtensionLayer::new(Arc::new(State::default()));
     let plugins = PluginPipeline::new()
+        // Apply a layer injecting `State`.
+        .http_layer(&state_layer)
         // Apply the `PrintPlugin` defined in `plugin.rs`
         .print()
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
@@ -47,9 +50,7 @@ pub async fn main() {
         .do_nothing(do_nothing)
         .check_health(check_health)
         .build()
-        .expect("failed to build an instance of PokemonService")
-        // Setup shared state and middlewares.
-        .layer(&AddExtensionLayer::new(Arc::new(State::default())));
+        .expect("failed to build an instance of PokemonService");
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
