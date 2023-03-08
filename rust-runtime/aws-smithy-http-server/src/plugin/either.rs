@@ -4,8 +4,6 @@
  */
 
 //! Contains the [`Either`] enum.
-//!
-//! See [`Either`] documentation for more details.
 
 use pin_project_lite::pin_project;
 use std::{

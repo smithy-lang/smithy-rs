@@ -119,7 +119,7 @@
 //!
 
 mod closure;
-pub mod either;
+mod either;
 mod filter;
 mod identity;
 mod layer;
@@ -129,6 +129,7 @@ mod stack;
 use crate::operation::Operation;
 
 pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
+pub use either::Either;
 pub use filter::{filter_by_operation_name, FilterByOperationName};
 pub use identity::IdentityPlugin;
 pub use layer::HttpLayer;
