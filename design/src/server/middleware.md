@@ -88,10 +88,10 @@ One of the primary goals is to provide configurability and extensibility through
 ```mermaid
 stateDiagram-v2
     state in <<fork>>
-    state "GetPokemonSpecies" as C1
-    state "GetStorage" as C2
-    state "DoNothing" as C3
-    state "..." as C4
+    state "GetPokemonSpecies" as B1
+    state "GetStorage" as B2
+    state "DoNothing" as B3
+    state "..." as B4
     direction LR
     [*] --> in : HTTP Request
     UpgradeLayer --> [*]: HTTP Response
@@ -99,32 +99,30 @@ stateDiagram-v2
         state PokemonService {
             state RoutingService {
                 in --> UpgradeLayer: HTTP Request
-                in --> C2: HTTP Request
-                in --> C3: HTTP Request
-                in --> C4: HTTP Request
-                state B {
-                    state C1 {
-                        state C {
-                            state UpgradeLayer {
-                                direction LR
-                                [*] --> Handler: Model Input
-                                Handler --> [*] : Model Output
-                                state D {
-                                    Handler
-                                }
+                in --> B2: HTTP Request
+                in --> B3: HTTP Request
+                in --> B4: HTTP Request
+                state B1 {
+                    state B {
+                        state UpgradeLayer {
+                            direction LR
+                            [*] --> Handler: Model Input
+                            Handler --> [*] : Model Output
+                            state C {
+                                Handler
                             }
                         }
                     }
-                    C2
-                    C3
-                    C4
                 }
+                B2
+                B3
+                B4
             }
         }
     }
-    C2 --> [*]: HTTP Response
-    C3 --> [*]: HTTP Response
-    C4 --> [*]: HTTP Response
+    B2 --> [*]: HTTP Response
+    B3 --> [*]: HTTP Response
+    B4 --> [*]: HTTP Response
 ```
 
 where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP structures and the `RoutingService` is responsible for routing requests to the appropriate operation.
@@ -147,25 +145,7 @@ let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
 let app = timeout_layer.layer(app);
 ```
 
-### B) Route Middleware
-
-A _single_ layer can be applied to _all_ routes inside the `Router`. This exists as a method on the output of the service builder.
-
-```rust
-// Construct `TraceLayer`.
-let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
-
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species(/* handler */)
-    /* ... */
-    .build()
-    // Apply HTTP logging after routing.
-    .layer(&trace_layer);
-```
-
-Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
-
-### C) Operation Specific HTTP Middleware
+### B) Operation Specific HTTP Middleware
 
 A "HTTP layer" can be applied to specific operations.
 
@@ -184,7 +164,7 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugi
 
 This middleware transforms the operations HTTP requests and responses.
 
-### D) Operation Specific Model Middleware
+### C) Operation Specific Model Middleware
 
 A "model layer" can be applied to specific operations.
 
@@ -210,9 +190,7 @@ In contrast to [position C](#c-operation-specific-http-middleware), this middlew
 
 ## Plugin System
 
-Suppose we want to apply a different `Layer` to every operation. In this case, position B (`PokemonService::layer`) will not suffice because it applies a single `Layer` to all routes and while position C (`Operation::layer`) would work, it'd require the customer constructs the `Layer` by hand for every operation.
-
-Consider the following middleware:
+Suppose we want to apply a different `Layer` to every operation and consider the following middleware:
 
 ```rust
 /// A [`Service`] that adds a print log.
@@ -257,7 +235,7 @@ impl<S> Layer<S> for PrintLayer {
 }
 ```
 
-The plugin system provides a way to construct then apply `Layer`s in position [C](#c-operation-specific-http-middleware) and [D](#d-operation-specific-model-middleware), using the [protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) and [operation shape](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations) as parameters.
+The plugin system provides a way to construct then apply `Layer`s in position [B](#b-operation-specific-http-middleware) and [C](#c-operation-specific-model-middleware), using the [protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) and [operation shape](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations) as parameters.
 
 An example of a `PrintPlugin` which applies a layer printing the operation name:
 
