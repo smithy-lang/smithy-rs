@@ -174,7 +174,7 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
-        return ProtocolFunctions.commonFn("rest_xml_unset_payload") { fnName ->
+        return ProtocolFunctions.crossOperationFn("rest_xml_unset_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {

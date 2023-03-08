@@ -101,7 +101,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     )
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
-        return ProtocolFunctions.commonFn("parse_http_error_metadata") { fnName ->
+        return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,

@@ -97,7 +97,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.commonFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
@@ -109,7 +109,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.commonFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {

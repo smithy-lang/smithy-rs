@@ -203,7 +203,7 @@ class JsonParserGenerator(
         )
     }
 
-    private fun orEmptyJson(): RuntimeType = ProtocolFunctions.commonFn("or_empty_doc") {
+    private fun orEmptyJson(): RuntimeType = ProtocolFunctions.crossOperationFn("or_empty_doc") {
         rust(
             """
             pub(crate) fn or_empty_doc(data: &[u8]) -> &[u8] {

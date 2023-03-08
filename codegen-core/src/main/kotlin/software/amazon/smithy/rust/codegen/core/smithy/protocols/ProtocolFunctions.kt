@@ -37,7 +37,7 @@ class ProtocolFunctions(
     companion object {
         private val serDeModule = RustModule.pubCrate("protocol_serde")
 
-        fun commonFn(fnName: String, block: ProtocolFnWritable): RuntimeType =
+        fun crossOperationFn(fnName: String, block: ProtocolFnWritable): RuntimeType =
             RuntimeType.forInlineFun(fnName, serDeModule) {
                 block(fnName)
             }
@@ -150,7 +150,7 @@ internal fun RustSymbolProvider.shapeFunctionName(serviceShape: ServiceShape?, s
     }
 }
 
-fun RustSymbolProvider.lensName(
+fun RustSymbolProvider.nestedAccessorName(
     serviceShape: ServiceShape?,
     prefix: String,
     root: Shape,

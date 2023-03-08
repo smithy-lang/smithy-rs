@@ -71,7 +71,7 @@ class AwsQueryCompatible(
         awsJson.structuredDataSerializer(operationShape)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.commonFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {

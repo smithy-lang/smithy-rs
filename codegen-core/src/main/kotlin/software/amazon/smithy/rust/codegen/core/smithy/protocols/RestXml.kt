@@ -49,7 +49,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     }
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.commonFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
@@ -59,7 +59,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.commonFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,

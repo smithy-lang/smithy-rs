@@ -232,7 +232,7 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.commonFn("rest_json_unsetpayload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_json_unsetpayload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -267,7 +267,7 @@ class JsonSerializerGenerator(
     }
 
     override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.commonFn("serialize_document") { fnName ->
+        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
