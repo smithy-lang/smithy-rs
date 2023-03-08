@@ -10,16 +10,13 @@ use crate::operation::Operation;
 use super::Plugin;
 
 /// A [`Plugin`] which appends a HTTP [`Layer`](tower::Layer) `L` to the existing `Layer` in [`Operation<S, Layer>`](Operation).
-pub struct HttpLayer<L>(pub L);
+pub struct HttpLayer<'a, L>(pub &'a L);
 
-impl<P, Op, S, ExistingLayer, NewLayer> Plugin<P, Op, S, ExistingLayer> for HttpLayer<NewLayer>
-where
-    NewLayer: Clone,
-{
+impl<'a, P, Op, S, ExistingLayer, NewLayer> Plugin<P, Op, S, ExistingLayer> for HttpLayer<'a, NewLayer> {
     type Service = S;
-    type Layer = Stack<ExistingLayer, NewLayer>;
+    type Layer = Stack<ExistingLayer, &'a NewLayer>;
 
     fn map(&self, input: Operation<S, ExistingLayer>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(self.0.clone())
+        input.layer(self.0)
     }
 }
