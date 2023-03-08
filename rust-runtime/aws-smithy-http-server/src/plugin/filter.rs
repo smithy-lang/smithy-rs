@@ -61,9 +61,9 @@ where
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
         let either_plugin = if (self.predicate)(Op::NAME) {
-            Either::A { value: &self.inner }
+            Either::Left { value: &self.inner }
         } else {
-            Either::B { value: IdentityPlugin }
+            Either::Right { value: IdentityPlugin }
         };
         either_plugin.map(input)
     }

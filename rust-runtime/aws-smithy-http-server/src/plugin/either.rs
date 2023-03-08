@@ -31,44 +31,44 @@ pin_project! {
     /// The [`Service::Response`] and [`Service::Error`] must be identical.
     #[derive(Clone, Debug)]
     #[project = EitherProj]
-    pub enum Either<A, B> {
+    pub enum Either<L, R> {
         /// One type of backing [`Service`].
-        A { #[pin] value: A },
+        Left { #[pin] value: L },
         /// The other type of backing [`Service`].
-        B { #[pin] value: B },
+        Right { #[pin] value: R },
     }
 }
 
-impl<A, B> Future for Either<A, B>
+impl<L, R> Future for Either<L, R>
 where
-    A: Future,
-    B: Future<Output = A::Output>,
+    L: Future,
+    R: Future<Output = L::Output>,
 {
-    type Output = A::Output;
+    type Output = L::Output;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
-            EitherProj::A { value } => value.poll(cx),
-            EitherProj::B { value } => value.poll(cx),
+            EitherProj::Left { value } => value.poll(cx),
+            EitherProj::Right { value } => value.poll(cx),
         }
     }
 }
 
-impl<A, B, Request> Service<Request> for Either<A, B>
+impl<L, R, Request> Service<Request> for Either<L, R>
 where
-    A: Service<Request>,
-    B: Service<Request, Response = A::Response, Error = A::Error>,
+    L: Service<Request>,
+    R: Service<Request, Response = L::Response, Error = L::Error>,
 {
-    type Response = A::Response;
-    type Error = A::Error;
-    type Future = Either<A::Future, B::Future>;
+    type Response = L::Response;
+    type Error = L::Error;
+    type Future = Either<L::Future, R::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         use self::Either::*;
 
         match self {
-            A { value } => value.poll_ready(cx),
-            B { value } => value.poll_ready(cx),
+            Left { value } => value.poll_ready(cx),
+            Right { value } => value.poll_ready(cx),
         }
     }
 
@@ -76,57 +76,57 @@ where
         use self::Either::*;
 
         match self {
-            A { value } => Either::A {
+            Left { value } => Either::Left {
                 value: value.call(request),
             },
-            B { value } => Either::B {
+            Right { value } => Either::Right {
                 value: value.call(request),
             },
         }
     }
 }
 
-impl<S, A, B> Layer<S> for Either<A, B>
+impl<S, L, R> Layer<S> for Either<L, R>
 where
-    A: Layer<S>,
-    B: Layer<S>,
+    L: Layer<S>,
+    R: Layer<S>,
 {
-    type Service = Either<A::Service, B::Service>;
+    type Service = Either<L::Service, R::Service>;
 
     fn layer(&self, inner: S) -> Self::Service {
         match self {
-            Either::A { value } => Either::A {
+            Either::Left { value } => Either::Left {
                 value: value.layer(inner),
             },
-            Either::B { value } => Either::B {
+            Either::Right { value } => Either::Right {
                 value: value.layer(inner),
             },
         }
     }
 }
 
-impl<P, Op, S, L, A, B> Plugin<P, Op, S, L> for Either<A, B>
+impl<P, Op, S, L, Le, Ri> Plugin<P, Op, S, L> for Either<Le, Ri>
 where
-    A: Plugin<P, Op, S, L>,
-    B: Plugin<P, Op, S, L>,
+    Le: Plugin<P, Op, S, L>,
+    Ri: Plugin<P, Op, S, L>,
 {
-    type Service = Either<A::Service, B::Service>;
-    type Layer = Either<A::Layer, B::Layer>;
+    type Service = Either<Le::Service, Ri::Service>;
+    type Layer = Either<Le::Layer, Ri::Layer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
         match self {
-            Either::A { value } => {
+            Either::Left { value } => {
                 let Operation { inner, layer } = value.map(input);
                 Operation {
-                    inner: Either::A { value: inner },
-                    layer: Either::A { value: layer },
+                    inner: Either::Left { value: inner },
+                    layer: Either::Left { value: layer },
                 }
             }
-            Either::B { value } => {
+            Either::Right { value } => {
                 let Operation { inner, layer } = value.map(input);
                 Operation {
-                    inner: Either::B { value: inner },
-                    layer: Either::B { value: layer },
+                    inner: Either::Right { value: inner },
+                    layer: Either::Right { value: layer },
                 }
             }
         }
