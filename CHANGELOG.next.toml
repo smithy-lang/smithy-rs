@@ -227,3 +227,15 @@ match client.some_operation().send().await {
 references = ["smithy-rs#2398"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
