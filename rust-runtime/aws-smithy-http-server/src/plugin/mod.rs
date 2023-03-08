@@ -149,3 +149,15 @@ pub trait Plugin<Protocol, Op, S, L> {
     /// Maps an [`Operation`] to another.
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
+
+impl<'a, P, Op, S, L, Pl> Plugin<P, Op, S, L> for &'a Pl
+where
+    Pl: Plugin<P, Op, S, L>,
+{
+    type Service = Pl::Service;
+    type Layer = Pl::Layer;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        <Pl as Plugin<P, Op, S, L>>::map(*self, input)
+    }
+}
