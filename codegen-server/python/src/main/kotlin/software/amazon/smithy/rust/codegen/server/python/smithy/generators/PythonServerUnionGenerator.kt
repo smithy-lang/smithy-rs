@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -44,26 +45,19 @@ class PythonServerUnionGenerator(
 
     override fun render() {
         super.render()
-        renderPyUnion()
-        renderPyUnionDeref()
-        renderPyUnionFrom()
+        renderPyUnionStruct()
+        renderPyUnionImpl()
+        renderPyObjectConverters()
     }
 
-    private fun renderPyUnion() {
+    private fun renderPyUnionStruct() {
         writer.rust("""##[pyo3::pyclass(name = "${unionSymbol.name}")]""")
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
         writer.rust("struct PyUnionMarker${unionSymbol.name}(pub ${unionSymbol.name});")
-        writer.rustBlockTemplate("impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for ${unionSymbol.name}", "pyo3" to pyo3) {
-            rustBlockTemplate("fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject", "pyo3" to pyo3) {
-                rustBlock("match self") {
-                    sortedMembers.forEach { member ->
-                        val variantName = symbolProvider.toMemberName(member)
-                        rust("${unionSymbol.name}::$variantName(variant) => variant.into_py(py),")
-                    }
-                }
-            }
-        }
+    }
+
+    private fun renderPyUnionImpl() {
         Attribute(pyo3.resolve("pymethods")).render(writer)
         writer.rustBlock("impl PyUnionMarker${unionSymbol.name}") {
             sortedMembers.forEach { member ->
@@ -87,6 +81,29 @@ class PythonServerUnionGenerator(
                 rustBlock("pub fn is_unknown(&self) -> bool") {
                     rust("matches!(self.0, Self::Unknown)")
                 }
+            }
+        }
+    }
+
+    private fun renderPyObjectConverters() {
+        writer.rustBlockTemplate("impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for ${unionSymbol.name}", "pyo3" to pyo3) {
+            rustBlockTemplate("fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject", "pyo3" to pyo3) {
+                rustBlock("match self") {
+                    sortedMembers.forEach { member ->
+                        val variantName = symbolProvider.toMemberName(member)
+                        rust("${unionSymbol.name}::$variantName(variant) => variant.into_py(py),")
+                    }
+                }
+            }
+        }
+        writer.rustBlockTemplate("impl<'source> #{pyo3}::FromPyObject<'source> for ${unionSymbol.name}", "pyo3" to pyo3) {
+            rustBlockTemplate("fn extract(obj: &'source #{pyo3}::PyAny) -> #{pyo3}::PyResult<Self>", "pyo3" to pyo3) {
+                rust(
+                    """
+                    let data: PyUnionMarker${unionSymbol.name} = obj.extract()?;
+                    Ok(data.0)
+                    """,
+                )
             }
         }
     }
@@ -163,10 +180,15 @@ class PythonServerUnionGenerator(
             )
             writer.rust("/// :rtype ${pythonType.renderAsDocstring()}:")
             writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<${rustType.render()}>", "pyo3" to pyo3) {
+                val variantType = if (rustType.isCopy()) {
+                    "*variant"
+                } else {
+                    "variant.clone()"
+                }
                 rustTemplate(
                     """
                     match self.0.as_$funcNamePart() {
-                        Ok(variant) => Ok(variant.clone().into()),
+                        Ok(variant) => Ok($variantType),
                         Err(_) => Err(#{pyo3}::exceptions::PyValueError::new_err(
                             "${unionSymbol.name} variant is not of type ${memberSymbol.rustType().pythonType().renderAsDocstring()}"
                         )),
@@ -175,32 +197,6 @@ class PythonServerUnionGenerator(
                     "pyo3" to pyo3,
                 )
             }
-        }
-    }
-
-    private fun renderPyUnionDeref() {
-        writer.rustBlock("impl std::ops::Deref for PyUnionMarker${unionSymbol.name}") {
-            rust(
-                """
-                type Target = ${unionSymbol.name};
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
-                """,
-            )
-        }
-    }
-
-    private fun renderPyUnionFrom() {
-        writer.rustBlock("impl From<${unionSymbol.name}> for PyUnionMarker${unionSymbol.name}") {
-            rust(
-                """
-                fn from(other: ${unionSymbol.name}) -> Self {
-                    PyUnionMarker${unionSymbol.name}(other)
-                }
-                """,
-            )
         }
     }
 }

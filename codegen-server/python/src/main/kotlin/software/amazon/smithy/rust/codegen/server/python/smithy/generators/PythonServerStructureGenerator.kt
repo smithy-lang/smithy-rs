@@ -9,10 +9,8 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -77,6 +75,7 @@ class PythonServerStructureGenerator(
 
     private fun renderPyO3Methods() {
         Attribute.AllowClippyNewWithoutDefault.render(writer)
+        Attribute.AllowClippyTooManyArguments.render(writer)
         Attribute(pyO3.resolve("pymethods")).render(writer)
         writer.rustTemplate(
             """
@@ -102,42 +101,16 @@ class PythonServerStructureGenerator(
 
     private fun renderStructSignatureMembers(): Writable =
         writable {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                val rustType = memberSymbol.rustType()
-                val targetShape = model.expectShape(member.target)
-                val targetType = when (targetShape) {
-                    is UnionShape -> {
-                        if (rustType.name.startsWith("PyUnionMarker")) {
-                            memberSymbol.rustType()
-                        } else {
-                            RustType.Opaque(name = "PyUnionMarker${rustType.render(fullyQualified = false)}", namespace = rustType.namespace)
-                        }
-                    }
-                    else -> {
-                        memberSymbol.rustType()
-                    }
-                }
-                rust("$memberName: ${targetType.render()},")
+            forEachMember(members) { _, memberName, memberSymbol ->
+                val memberType = memberSymbol.rustType()
+                rust("$memberName: ${memberType.render()},")
             }
         }
 
     private fun renderStructBodyMembers(): Writable =
         writable {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                val rustType = memberSymbol.rustType()
-                val targetShape = model.expectShape(member.target)
-                when (targetShape) {
-                    is UnionShape -> {
-                        if (rustType.name.startsWith("PyUnionMarker")) {
-                            rust("$memberName,")
-                        } else {
-                            rust("$memberName: $memberName.0,")
-                        }
-                    }
-                    else -> {
-                        rust("$memberName,")
-                    }
-                }
+            forEachMember(members) { _, memberName, _ ->
+                rust("$memberName,")
             }
         }
 

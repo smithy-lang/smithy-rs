@@ -104,7 +104,7 @@ impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
 
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);
 
 #[pyclass]
