@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader

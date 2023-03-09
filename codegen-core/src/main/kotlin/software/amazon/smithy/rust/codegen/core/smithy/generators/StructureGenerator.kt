@@ -193,7 +193,7 @@ open class StructureGenerator(
         }
     }
 
-    protected fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
         documentShape(
             member,
             model,
