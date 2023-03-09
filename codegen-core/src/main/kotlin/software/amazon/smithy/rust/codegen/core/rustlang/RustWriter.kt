@@ -24,6 +24,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -533,11 +534,13 @@ class RustWriter private constructor(
      */
     fun withInlineModule(
         module: RustModule.LeafModule,
+        moduleDocProvider: ModuleDocProvider?,
         moduleWriter: Writable,
     ): RustWriter {
         check(module.isInline()) {
             "Only inline modules may be used with `withInlineModule`: $module"
         }
+
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
@@ -548,7 +551,7 @@ class RustWriter private constructor(
             devDependenciesOnly = devDependenciesOnly || module.tests,
         )
         moduleWriter(innerWriter)
-        module.documentation?.let { docs -> docs(docs) }
+        ModuleDocProvider.writeDocs(moduleDocProvider, module, this)
         module.rustMetadata.render(this)
         rustBlock("mod ${module.name}") {
             writeWithNoFormatting(innerWriter.toString())

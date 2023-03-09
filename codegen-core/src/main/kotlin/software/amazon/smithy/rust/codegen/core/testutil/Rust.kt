@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -38,6 +39,12 @@ import java.io.File
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
+
+val TestModuleDocProvider = object : ModuleDocProvider {
+    override fun docs(module: RustModule.LeafModule): String? {
+        return "Some test documentation\n\nSome more details..."
+    }
+}
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -269,12 +276,8 @@ class TestWriterDelegator(
     private val fileManifest: FileManifest,
     symbolProvider: RustSymbolProvider,
     val codegenConfig: CoreCodegenConfig,
-) :
-    RustCrate(
-        fileManifest,
-        symbolProvider,
-        codegenConfig,
-    ) {
+    moduleDocProvider: ModuleDocProvider = TestModuleDocProvider,
+) : RustCrate(fileManifest, symbolProvider, codegenConfig, moduleDocProvider) {
     val baseDir: Path = fileManifest.baseDir
 
     fun printGeneratedFiles() {
@@ -289,7 +292,13 @@ class TestWriterDelegator(
  *
  * This should only be used in test code—the generated module name will be something like `tests_123`
  */
-fun RustCrate.testModule(block: Writable) = lib { withInlineModule(RustModule.inlineTests(safeName("tests")), block) }
+fun RustCrate.testModule(block: Writable) = lib {
+    withInlineModule(
+        RustModule.inlineTests(safeName("tests")),
+        TestModuleDocProvider,
+        block,
+    )
+}
 
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path ->
@@ -468,7 +477,7 @@ fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile(
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {
         val name = safeName("test")
-        withInlineModule(RustModule.inlineTests(name)) {
+        withInlineModule(RustModule.inlineTests(name), TestModuleDocProvider) {
             unitTest(name) {
                 test(this)
             }

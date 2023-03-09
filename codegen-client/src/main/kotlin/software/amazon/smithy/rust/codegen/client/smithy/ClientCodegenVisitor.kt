@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
@@ -69,7 +70,7 @@ class ClientCodegenVisitor(
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val codegenContext: ClientCodegenContext
+    private var codegenContext: ClientCodegenContext
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ClientProtocolGenerator, ClientCodegenContext>
     private val protocolGenerator: ClientProtocolGenerator
 
@@ -100,12 +101,31 @@ class ClientCodegenVisitor(
         val service = settings.getService(model)
         symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig, codegenDecorator)
 
-        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
+        codegenContext = ClientCodegenContext(
+            model,
+            symbolProvider,
+            null,
+            service,
+            protocol,
+            settings,
+            codegenDecorator,
+        )
+
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                ClientModuleDocProvider(
+                    settings.codegenConfig,
+                    service.getTrait<TitleTrait>()?.value ?: "the service",
+                ),
+            ),
+        )
 
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             codegenContext.settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }

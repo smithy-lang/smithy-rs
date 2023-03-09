@@ -175,7 +175,7 @@ class ConstrainedStringGenerator(
 
         if (testCases.isNotEmpty()) {
             val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
-            writer.withInlineModule(testModule) {
+            writer.withInlineModule(testModule, null) {
                 rustTemplate(
                     """
                     #{TestCases:W}

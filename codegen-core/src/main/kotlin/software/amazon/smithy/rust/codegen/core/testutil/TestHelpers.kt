@@ -57,11 +57,11 @@ val TestRuntimeConfig =
 private object CodegenCoreTestModules {
     // Use module paths that don't align with either server or client to make sure
     // the codegen is resilient to differences in module path.
-    val ModelsTestModule = RustModule.public("test_model", documentation = "Test models module")
-    val ErrorsTestModule = RustModule.public("test_error", documentation = "Test error module")
-    val InputsTestModule = RustModule.public("test_input", documentation = "Test input module")
-    val OutputsTestModule = RustModule.public("test_output", documentation = "Test output module")
-    val OperationsTestModule = RustModule.public("test_operation", documentation = "Test operation module")
+    val ModelsTestModule = RustModule.public("test_model")
+    val ErrorsTestModule = RustModule.public("test_error")
+    val InputsTestModule = RustModule.public("test_input")
+    val OutputsTestModule = RustModule.public("test_output")
+    val OperationsTestModule = RustModule.public("test_operation")
 
     object TestModuleProvider : ModuleProvider {
         override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule =
@@ -155,6 +155,7 @@ internal fun testCodegenContext(
 ): CodegenContext = CodegenContext(
     model,
     testSymbolProvider(model),
+    TestModuleDocProvider,
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),
