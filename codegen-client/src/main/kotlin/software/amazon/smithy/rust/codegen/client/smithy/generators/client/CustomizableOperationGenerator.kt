@@ -33,10 +33,14 @@ class CustomizableOperationGenerator(
             rustTemplate(
                 """
                 pub use #{Operation};
+                pub use #{Request};
+                pub use #{Response};
                 pub use #{ClassifyRetry};
                 pub use #{RetryKind};
                 """,
                 "Operation" to smithyHttp.resolve("operation::Operation"),
+                "Request" to smithyHttp.resolve("operation::Request"),
+                "Response" to smithyHttp.resolve("operation::Response"),
                 "ClassifyRetry" to smithyHttp.resolve("retry::ClassifyRetry"),
                 "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
