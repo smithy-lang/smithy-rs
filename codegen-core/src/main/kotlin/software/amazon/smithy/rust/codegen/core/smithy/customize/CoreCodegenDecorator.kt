@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
@@ -103,6 +104,11 @@ interface CoreCodegenDecorator<CodegenContext> {
      * Extra sections allow one decorator to influence another. This is intended to be used by querying the `rootDecorator`
      */
     fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> = listOf()
+
+    /**
+     * Hook for customizing symbols by inserting an additional symbol provider.
+     */
+    fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider = base
 }
 
 /**
@@ -165,6 +171,11 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
 
     final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> =
         addCustomizations { decorator -> decorator.extraSections(codegenContext) }
+
+    final override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider =
+        combineCustomizations(base) { decorator, otherProvider ->
+            decorator.symbolProvider(otherProvider)
+        }
 
     /**
      * Combines customizations from multiple ordered codegen decorators.

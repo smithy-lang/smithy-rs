@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
@@ -43,6 +44,11 @@ private fun testServiceShapeFor(model: Model) =
 fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
     serverTestSymbolProviders(model, serviceShape).symbolProvider
 
+private class ServerTestCodegenDecorator : ServerCodegenDecorator {
+    override val name = "test"
+    override val order: Byte = 0
+}
+
 fun serverTestSymbolProviders(
     model: Model,
     serviceShape: ServiceShape? = null,
@@ -58,6 +64,7 @@ fun serverTestSymbolProviders(
                 (serviceShape ?: testServiceShapeFor(model)).id,
             )
             ).codegenConfig.publicConstrainedTypes,
+        ServerTestCodegenDecorator(),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 
@@ -104,6 +111,7 @@ fun serverTestCodegenContext(
         service,
         ServerTestRustSymbolProviderConfig,
         settings.codegenConfig.publicConstrainedTypes,
+        ServerTestCodegenDecorator(),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 

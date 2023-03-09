@@ -239,3 +239,27 @@ message = "`SdkError` variants can now be constructed for easier unit testing."
 references = ["smithy-rs#2428", "smithy-rs#2208"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Remove unnecessary type parameter `B` from `Upgrade` service."
+references = ["smithy-rs#2436"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"
+
+[[smithy-rs]]
+message = "Fix `FilterByOperationName` plugin. This previous caused services with this applied to fail to compile due to mismatched bounds."
+references = ["smithy-rs#2441"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "hlbarber"
+
+[[aws-sdk-rust]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 
 /**
  * RustModule system.
@@ -91,8 +92,16 @@ sealed class RustModule {
         fun private(name: String, parent: RustModule = LibRs): LeafModule =
             new(name, visibility = Visibility.PRIVATE, inline = false, parent = parent)
 
-        fun pubCrate(name: String, parent: RustModule): LeafModule =
-            new(name, visibility = Visibility.PUBCRATE, inline = false, parent = parent)
+        fun pubCrate(
+            name: String,
+            parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = emptyList(),
+        ): LeafModule = new(
+            name, visibility = Visibility.PUBCRATE,
+            inline = false,
+            parent = parent,
+            additionalAttributes = additionalAttributes,
+        )
 
         fun inlineTests(
             name: String = "test",
@@ -141,6 +150,9 @@ sealed class RustModule {
     fun renderModStatement(writer: RustWriter, moduleDocProvider: ModuleDocProvider) {
         when (this) {
             is LeafModule -> {
+                if (name.startsWith("r#")) {
+                    PANIC("Something went wrong with module name escaping (module named '$name'). This is a bug.")
+                }
                 ModuleDocProvider.writeDocs(moduleDocProvider, this, writer)
                 rustMetadata.render(writer)
                 writer.write("mod $name;")

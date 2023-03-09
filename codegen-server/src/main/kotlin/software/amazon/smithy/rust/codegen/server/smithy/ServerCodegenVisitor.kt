@@ -132,6 +132,7 @@ open class ServerCodegenVisitor(
             service,
             rustSymbolProviderConfig,
             settings.codegenConfig.publicConstrainedTypes,
+            codegenDecorator,
             RustServerCodegenPlugin::baseSymbolProvider,
         )
 
