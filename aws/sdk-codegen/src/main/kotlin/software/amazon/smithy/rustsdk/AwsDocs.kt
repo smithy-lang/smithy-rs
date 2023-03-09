@@ -52,7 +52,7 @@ object AwsDocs {
 
                 ```rust,no_run
                 let sdk_config = #{aws_config}::load_from_env().await;
-                let config = $crateName::Config::from(&sdk_config).to_builder()
+                let config = $crateName::config::Builder::from(&sdk_config)
                 ## /*
                     .some_service_specific_setting("value")
                 ## */

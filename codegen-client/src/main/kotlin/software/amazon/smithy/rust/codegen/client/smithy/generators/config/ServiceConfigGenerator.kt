@@ -220,14 +220,6 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
-            docs("Converts this config back into a builder.")
-            rustBlock("pub fn to_builder(self) -> Builder") {
-                rustBlock("Builder") {
-                    customizations.forEach {
-                        it.section(ServiceConfig.BuilderBuild)(this)
-                    }
-                }
-            }
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)
             }
