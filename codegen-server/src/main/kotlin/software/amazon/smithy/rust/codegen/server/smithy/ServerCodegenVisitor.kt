@@ -240,7 +240,7 @@ open class ServerCodegenVisitor(
             }
         }
 
-        rustCrate.initializeInlineModuleWriter(true)
+        rustCrate.initializeInlineModuleWriter(codegenContext.settings.codegenConfig.debugMode)
 
         val serviceShapes = DirectedWalker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }

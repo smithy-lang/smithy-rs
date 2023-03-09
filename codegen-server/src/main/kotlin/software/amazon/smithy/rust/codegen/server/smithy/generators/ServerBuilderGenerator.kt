@@ -587,9 +587,9 @@ class ServerBuilderGenerator(
         // constrained type, but the user wants to work with the unconstrained type, so we have to
         // unwrap it.
         if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)) {
-            writer.rustTemplate(
-                ".map(|v: #{T}| v.into())",
-                "T" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
+            writer.rust(
+                ".map(|v: #T| v.into())",
+                constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
             )
         }
     }
