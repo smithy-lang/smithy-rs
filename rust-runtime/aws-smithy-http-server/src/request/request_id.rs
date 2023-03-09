@@ -51,8 +51,9 @@ use std::{
     fmt::Display,
     task::{Context, Poll},
 };
+use std::future::Future;
 
-use futures_util::{FutureExt, TryFutureExt};
+use futures_util::TryFuture;
 use http::request::Parts;
 use http::{header::HeaderName, HeaderValue, Response};
 use thiserror::Error;
@@ -187,6 +188,35 @@ impl<S> Layer<S> for ServerRequestIdResponseProviderLayer {
     }
 }
 
+pin_project_lite::pin_project! {
+    pub struct ServerRequestIdResponseFuture<Fut> {
+        request_id: ServerRequestId,
+        header_key: Option<HeaderName>,
+        #[pin]
+        fut: Fut,
+    }
+}
+
+impl<Fut> Future for ServerRequestIdResponseFuture<Fut>
+where
+    Fut: TryFuture<Ok = Response<crate::body::BoxBody>>,
+{
+    type Output = Result<Fut::Ok, Fut::Error>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        let fut = this.fut;
+        let request_id = this.request_id;
+        fut.try_poll(cx)
+            .map_ok(|mut res| {
+                if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
+                    res.headers_mut().insert(this.header_key.take().expect("Futures should not be polled after completion"), value);
+                }
+                res
+            })
+    }
+}
+
 impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S>
 where
     S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
@@ -194,7 +224,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn Send + std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future = ServerRequestIdResponseFuture<S::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -206,15 +236,11 @@ where
                     If you believe you have correctly configured your service, please file a bug report under https://github.com/awslabs/smithy-rs/issues")
             .to_owned();
         let header_key = self.header_key.clone();
-        self.inner
-            .call(req)
-            .map_ok(move |mut res| -> Self::Response {
-                if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
-                    res.headers_mut().insert(header_key, value);
-                }
-                res
-            })
-            .boxed()
+        ServerRequestIdResponseFuture {
+            request_id,
+            header_key: Some(header_key),
+            fut: self.inner.call(req),
+        }
     }
 }
 
