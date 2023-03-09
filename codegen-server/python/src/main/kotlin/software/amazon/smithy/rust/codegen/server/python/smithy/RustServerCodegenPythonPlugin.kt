@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomVa
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
