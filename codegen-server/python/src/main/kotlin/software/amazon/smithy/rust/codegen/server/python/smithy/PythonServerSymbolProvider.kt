@@ -26,11 +26,38 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import java.util.logging.Logger
+
+/* Returns the Python implementation of the ByteStream shape or the original symbol that is provided in input. */
+private fun toPythonByteStreamSymbolOrOriginal(model: Model, config: RustSymbolProviderConfig, initial: Symbol, shape: Shape): Symbol {
+    if (shape !is MemberShape) {
+        return initial
+    }
+
+    val target = model.expectShape(shape.target)
+    val container = model.expectShape(shape.container)
+
+    // We are only targeting non-synthetic inputs and outputs.
+    if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
+        return initial
+    }
+
+    // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
+    // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
+    // become a ByteStream.
+    return if (target is BlobShape && shape.isStreaming(model)) {
+        PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
+    } else {
+        initial
+    }
+}
 
 /**
  * Symbol provider that recursively replace symbols in nested shapes.
@@ -46,7 +73,7 @@ import java.util.logging.Logger
 class PythonServerSymbolVisitor(
     settings: ServerRustSettings,
     model: Model,
-    private val serviceShape: ServiceShape?,
+    serviceShape: ServiceShape?,
     config: RustSymbolProviderConfig,
 ) : SymbolVisitor(settings, model, serviceShape, config) {
 
@@ -55,24 +82,7 @@ class PythonServerSymbolVisitor(
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = shape.accept(this)
-
-        if (shape !is MemberShape) {
-            return initial
-        }
-
-        val target = model.expectShape(shape.target)
-        return if (target is BlobShape && shape.isStreaming(model)) {
-            // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
-            // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
-            // become a ByteStream.
-            PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
-            // } else if (target is UnionShape) {
-            //     // Unions are not supported directly in Pyo3, so we convert them into a newtype struct that implements
-            //     // the `pyclass` attribute by adding the `Py` prefix to the union shape name.
-            //     symbolBuilder(shape, RustType.Opaque("PyUnionMarker${initial.name}", initial.namespace)).locatedIn(moduleForShape(shape)).build()
-        } else {
-            initial
-        }
+        return toPythonByteStreamSymbolOrOriginal(model, config, initial, shape)
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
@@ -98,27 +108,14 @@ class PythonServerSymbolVisitor(
  * See `PythonServerSymbolVisitor` documentation for more info.
  */
 class PythonConstrainedShapeSymbolProvider(
-    private val base: RustSymbolProvider,
+    base: RustSymbolProvider,
     serviceShape: ServiceShape,
     publicConstrainedTypes: Boolean,
 ) : ConstrainedShapeSymbolProvider(base, serviceShape, publicConstrainedTypes) {
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
-
-        if (shape !is MemberShape) {
-            return initial
-        }
-
-        val target = model.expectShape(shape.target)
-        return if (target is BlobShape && shape.isStreaming(model)) {
-            // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
-            // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
-            // become a ByteStream.
-            PythonServerRuntimeType.byteStream(config.runtimeConfig).toSymbol()
-        } else {
-            initial
-        }
+        return toPythonByteStreamSymbolOrOriginal(model, config, initial, shape)
     }
 }
 
@@ -152,7 +149,6 @@ class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider)
 
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
     override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
-
     override fun listMeta(listShape: ListShape) = base.toSymbol(listShape).expectRustMetadata()
     override fun mapMeta(mapShape: MapShape) = base.toSymbol(mapShape).expectRustMetadata()
     override fun stringMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()

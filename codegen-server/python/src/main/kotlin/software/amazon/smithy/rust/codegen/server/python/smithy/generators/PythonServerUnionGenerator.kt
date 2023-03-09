@@ -136,7 +136,7 @@ class PythonServerUnionGenerator(
                 "/// Creates a new union instance of [`$variantName`](#T::$variantName)",
                 unionSymbol,
             )
-            writer.rust("/// :param data: ${pythonType.renderAsDocstring()}:")
+            writer.rust("/// :param data ${pythonType.renderAsDocstring()}:")
             writer.rust("/// :rtype ${unionSymbol.name}:")
             writer.rustBlock("pub fn $funcNamePart(data: ${targetType.render()}) -> Self") {
                 rust("Self(${unionSymbol.name}::$variantName(data))")
