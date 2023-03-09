@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.containerDocsTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rawTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -128,6 +129,8 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             template(asComments, escape("$description\n"))
         }
 
+        val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
+        val exampleMode = if (compileExample) "no_run" else "ignore"
         template(
             asComments,
             """
@@ -149,7 +152,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             Then in code, a client can be created with the following:
 
-            ```rust,no_run
+            ```rust,$exampleMode
             use $snakeCaseModuleName as $shortModuleName;
 
             ##[#{tokio}::main]
@@ -167,7 +170,10 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             for information on what calls can be made, and the inputs and outputs for each of those calls.${"\n"}
             """.trimIndent().trimStart(),
             "tokio" to CargoDependency.Tokio.toDevDependency().toType(),
-            "aws_config" to AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType(),
+            "aws_config" to when (compileExample) {
+                true -> AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType()
+                else -> writable { rust("aws_config") }
+            },
         )
 
         template(
