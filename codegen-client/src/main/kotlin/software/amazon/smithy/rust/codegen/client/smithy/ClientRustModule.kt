@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -86,7 +87,7 @@ class ClientModuleDocProvider(
         val strDoc: (String) -> Writable = { str -> writable { docs(escape(str)) } }
         return when (config.enableNewCrateOrganizationScheme) {
             true -> when (module) {
-                ClientRustModule.client -> strDoc("Client for calling $serviceName.")
+                ClientRustModule.client -> clientModuleDoc()
                 ClientRustModule.Client.customize -> customizeModuleDoc()
                 ClientRustModule.Config -> strDoc("Configuration for $serviceName.")
                 ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
@@ -96,7 +97,7 @@ class ClientModuleDocProvider(
                 ClientRustModule.Input -> PANIC("this module shouldn't exist in the new scheme")
                 ClientRustModule.Output -> PANIC("this module shouldn't exist in the new scheme")
                 ClientRustModule.Primitives -> strDoc("Primitives such as `Blob` or `DateTime` used by other types.")
-                ClientRustModule.types -> strDoc("Data primitives referenced by other data types.")
+                ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
                 ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
                 ClientRustModule.Model -> PANIC("this module shouldn't exist in the new scheme")
                 else -> TODO("Document this module: $module")
@@ -123,18 +124,28 @@ class ClientModuleDocProvider(
         }
     }
 
+    private fun clientModuleDoc(): Writable = writable {
+        val genericClientConstructionDocs = FluentClientDocs.clientConstructionDocs(codegenContext)
+        val writeClientConstructionDocs = codegenContext.rootDecorator
+            .clientConstructionDocs(codegenContext, genericClientConstructionDocs)
+
+        writeClientConstructionDocs(this)
+        FluentClientDocs.clientUsageDocs(codegenContext)(this)
+    }
+
     private fun customizeModuleDoc(): Writable = writable {
         val model = codegenContext.model
-        docs("Operation customization and supporting types.")
+        docs("Operation customization and supporting types.\n")
         if (model.operationShapes.isNotEmpty()) {
             val opFnName = FluentClientGenerator.clientOperationFnName(
-                model.operationShapes.first(),
+                codegenContext.serviceShape.operations.minOf { it }
+                    .let { model.expectShape(it, OperationShape::class.java) },
                 codegenContext.symbolProvider,
             )
             docsTemplate(
                 """
                 The underlying HTTP requests made during an operation can be customized
-                by calling the `customize()` method on the fluent builder returned from a client
+                by calling the `customize()` method on the builder returned from a client
                 operation call. For example, this can be used to add an additional HTTP header:
 
                 ```no_run

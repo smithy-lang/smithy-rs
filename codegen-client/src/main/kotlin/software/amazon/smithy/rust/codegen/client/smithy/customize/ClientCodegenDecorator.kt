@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustom
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -52,6 +53,11 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
     fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap = currentProtocols
 
     fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> = listOf()
+
+    /**
+     * Hook to customize client construction documentation.
+     */
+    fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable = baseDocs
 }
 
 /**
@@ -95,6 +101,11 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =
         addCustomizations { decorator -> decorator.endpointCustomizations(codegenContext) }
+
+    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable =
+        combineCustomizations(baseDocs) { decorator, customizations ->
+            decorator.clientConstructionDocs(codegenContext, customizations)
+        }
 
     companion object {
         fun fromClasspath(

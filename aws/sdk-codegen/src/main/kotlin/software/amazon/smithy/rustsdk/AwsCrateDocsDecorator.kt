@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.containerDocsTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rawTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -66,6 +68,18 @@ class AwsCrateDocsDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (generateReadme(codegenContext)) {
             AwsCrateDocGenerator(codegenContext).generateReadme(rustCrate)
+        }
+    }
+
+    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable {
+        return if (generateReadme(codegenContext)) {
+            writable {
+                val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
+                docs("Client for calling $serviceName.")
+                AwsDocs.clientConstructionDocs(codegenContext)(this)
+            }
+        } else {
+            baseDocs
         }
     }
 
