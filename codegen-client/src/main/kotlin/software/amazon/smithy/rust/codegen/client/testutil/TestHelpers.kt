@@ -56,12 +56,18 @@ val TestClientRustSymbolProviderConfig = RustSymbolProviderConfig(
     moduleProvider = OldModuleSchemeClientModuleProvider,
 )
 
+private class ClientTestCodegenDecorator : ClientCodegenDecorator {
+    override val name = "test"
+    override val order: Byte = 0
+}
+
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
         testClientRustSettings(),
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         TestClientRustSymbolProviderConfig,
+        ClientTestCodegenDecorator(),
     )
 
 fun testClientCodegenContext(

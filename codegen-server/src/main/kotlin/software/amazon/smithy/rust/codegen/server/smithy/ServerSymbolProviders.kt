@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
  * Just a handy class to centralize initialization all the symbol providers required by the server code generators, to
@@ -29,9 +30,10 @@ class ServerSymbolProviders private constructor(
             service: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-            baseSymbolProviderFactory: (settings: ServerRustSettings, model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean) -> RustSymbolProvider,
+            codegenDecorator: ServerCodegenDecorator,
+            baseSymbolProviderFactory: (settings: ServerRustSettings, model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean, codegenDecorator: ServerCodegenDecorator) -> RustSymbolProvider,
         ): ServerSymbolProviders {
-            val baseSymbolProvider = baseSymbolProviderFactory(settings, model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes)
+            val baseSymbolProvider = baseSymbolProviderFactory(settings, model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes, codegenDecorator)
             return ServerSymbolProviders(
                 symbolProvider = baseSymbolProvider,
                 constrainedShapeSymbolProvider = baseSymbolProviderFactory(
@@ -41,6 +43,7 @@ class ServerSymbolProviders private constructor(
                     rustSymbolProviderConfig,
                     publicConstrainedTypes,
                     true,
+                    codegenDecorator,
                 ),
                 unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
                     baseSymbolProviderFactory(
@@ -50,6 +53,7 @@ class ServerSymbolProviders private constructor(
                         rustSymbolProviderConfig,
                         false,
                         false,
+                        codegenDecorator,
                     ),
                     publicConstrainedTypes, service,
                 ),

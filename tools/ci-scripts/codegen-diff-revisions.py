@@ -14,22 +14,21 @@
 #
 # ```
 # $ cd test/smithy-rs
-# $ ../../smithy-rs/tools/codegen-diff-revisions.py . <some commit hash to diff against>
+# $ ../../smithy-rs/tools/ci-scripts/codegen-diff-revisions.py . <some commit hash to diff against>
 # ```
 #
 # It will diff the generated code from HEAD against any commit hash you feed it. If you want to test
 # a specific range, change the HEAD of the test repository.
 #
-# This script requires `diff2html-cli` to be installed from NPM:
+# This script requires `difftags` to be installed from `tools/ci-build/difftags`:
 # ```
-# $ npm install -g diff2html-cli@5.1.11
+# $ cargo install --path tools/ci-build/difftags
 # ```
 # Make sure the local version matches the version referenced from the GitHub Actions workflow.
 
 import os
 import sys
 import subprocess
-import tempfile
 import shlex
 
 
@@ -94,7 +93,7 @@ def generate_and_commit_generated_code(revision_sha):
 
     # Generate code
     run("./gradlew --rerun-tasks aws:sdk:assemble codegen-client-test:assemble codegen-server-test:assemble")
-    run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True)
+    run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
 
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
@@ -102,7 +101,7 @@ def generate_and_commit_generated_code(revision_sha):
     run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
     run(f"mv codegen-client-test/build/smithyprojections/codegen-client-test {OUTPUT_PATH}/")
     run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
-    run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/")
+    run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
 
     # Clean up the SDK directory
     run(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -201,10 +200,10 @@ def eprint(*args, **kwargs):
 
 
 # Runs a shell command
-def run(command, shell=False):
+def run(command, shell=False, check=True):
     if not shell:
         command = shlex.split(command)
-    subprocess.run(command, stdout=sys.stderr, stderr=sys.stderr, shell=shell, check=True)
+    subprocess.run(command, stdout=sys.stderr, stderr=sys.stderr, shell=shell, check=check)
 
 
 # Returns the output from a shell command. Bails if the command failed

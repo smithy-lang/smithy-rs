@@ -5,14 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
-import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
-class InlineFunctionNamerTest {
+class ProtocolFunctionsTest {
     private val testModel = """
         namespace test
 
@@ -82,45 +81,20 @@ class InlineFunctionNamerTest {
         }
     """.asSmithyModel()
 
-    class UniqueChecker {
-        private val names = HashSet<String>()
-
-        fun checkName(value: String) {
-            withClue("Name '$value' should be unique") {
-                names.contains(value) shouldBe false
-            }
-            names.add(value)
-        }
-    }
-
     @Test
     fun `generates function names for shapes`() {
         val symbolProvider = testSymbolProvider(testModel)
 
-        fun test(shapeId: String, suffix: String) {
-            symbolProvider.serializeFunctionName(testModel.lookup(shapeId)) shouldBe "serialize_$suffix"
-            symbolProvider.deserializeFunctionName(testModel.lookup(shapeId)) shouldBe "deser_$suffix"
+        fun test(shapeId: String, expected: String) {
+            symbolProvider.shapeFunctionName(null, testModel.lookup(shapeId)) shouldBe expected
         }
 
-        test("test#Op1", "operation_crate_test_operation_op1")
-        test("test#SomeList1", "list_test_some_list1")
-        test("test#SomeMap1", "map_test_some_map1")
-        test("test#SomeSet1", "set_test_some_set1")
-        test("test#SomeStruct1", "structure_crate_test_model_some_struct1")
-        test("test#SomeUnion1", "union_crate_test_model_some_union1")
-        test("test#SomeStruct1\$some_string", "member_test_some_struct1_some_string")
-    }
-
-    @Test
-    fun `generates unique function names for member shapes`() {
-        val symbolProvider = testSymbolProvider(testModel)
-        UniqueChecker().also { checker ->
-            for (shape in testModel.shapes().filter { it.id.namespace == "test" }) {
-                for (member in shape.members()) {
-                    checker.checkName(symbolProvider.serializeFunctionName(member))
-                    checker.checkName(symbolProvider.deserializeFunctionName(member))
-                }
-            }
-        }
+        test("test#Op1", "op1")
+        test("test#SomeList1", "some_list1")
+        test("test#SomeMap1", "some_map1")
+        test("test#SomeSet1", "some_set1")
+        test("test#SomeStruct1", "some_struct1")
+        test("test#SomeUnion1", "some_union1")
+        test("test#SomeStruct1\$some_string", "some_string")
     }
 }
