@@ -245,3 +245,9 @@ message = "Remove unnecessary type parameter `B` from `Upgrade` service."
 references = ["smithy-rs#2436"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "hlbarber"
+
+[[smithy-rs]]
+message = "Fix `FilterByOperationName` plugin. This previous caused services with this applied to fail to compile due to mismatched bounds."
+references = ["smithy-rs#2441"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "hlbarber"
