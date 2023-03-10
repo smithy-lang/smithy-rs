@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
@@ -53,6 +52,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import java.util.logging.Logger
 
@@ -114,10 +114,7 @@ class ClientCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                ClientModuleDocProvider(
-                    settings.codegenConfig,
-                    service.getTrait<TitleTrait>()?.value ?: "the service",
-                ),
+                ClientModuleDocProvider(codegenContext, service.serviceNameOrDefault("the service")),
             ),
         )
 
