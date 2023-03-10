@@ -37,6 +37,9 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                     "runtimeConfig": {
                         "relativePath": "$projectDir/rust-runtime"
                     },
+                    "codegen": {
+                        "enableNewCrateOrganizationScheme": false
+                    },
                     "service": "${it.service}",
                     "module": "${it.module}",
                     "moduleVersion": "0.0.1",
@@ -62,7 +65,7 @@ enum class Cargo(val toString: String) {
     CHECK("cargoCheck"),
     TEST("cargoTest"),
     DOCS("cargoDoc"),
-    CLIPPY("cargoClippy");
+    CLIPPY("cargoClippy"),
 }
 
 private fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
@@ -86,7 +89,9 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
         allTests
     }
     require(ret.isNotEmpty()) {
-        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map { it.module }}`)"
+        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map {
+            it.module
+        }}`)"
     }
     return ret
 }
@@ -115,7 +120,9 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         AllCargoCommands
     }
     require(ret.isNotEmpty()) {
-        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map { it.toString }}`)"
+        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map {
+            it.toString
+        }}`)"
     }
     return ret
 }
@@ -175,7 +182,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
-            outputDir.resolve(".cargo").mkdir()
+            outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """

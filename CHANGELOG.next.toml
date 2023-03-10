@@ -12,24 +12,6 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Upgrade Rust MSRV to 1.63.0"
-references = ["smithy-rs#2222"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
-author = "Nugine"
-
-[[smithy-rs]]
-message = "Upgrade Rust MSRV to 1.63.0"
-references = ["smithy-rs#2222"]
-meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
-author = "Nugine"
-
-[[aws-sdk-rust]]
-message = "Adds jitter to `LazyCredentialsCache`. This allows credentials with the same expiry to expire at slightly different times, thereby preventing thundering herds."
-references = ["smithy-rs#2335"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "ysaito1001"
-
-[[aws-sdk-rust]]
 message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
 ```rust
 // Import the trait to get the `request_id` method on outputs
@@ -193,20 +175,91 @@ references = ["smithy-rs#76", "smithy-rs#2129"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[aws-sdk-rust]]
+message = "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated."
+references = ["aws-sdk-rust#740"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "Velfi"
+
 [[smithy-rs]]
-message = "Fix inconsistent casing in services re-export."
-references = ["smithy-rs#2349"]
+message = "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated."
+references = ["aws-sdk-rust#740"]
+meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Add support for the `awsQueryCompatible` trait. This allows services to continue supporting a custom error code (via the `awsQueryError` trait) when the services migrate their protocol from `awsQuery` to `awsJson1_0` annotated with `awsQueryCompatible`.
+<details>
+<summary>Click to expand for more details...</summary>
+
+After the migration, services will include an additional header `x-amzn-query-error` in their responses whose value is in the form of `<error code>;<error type>`. An example response looks something like
+```
+HTTP/1.1 400
+x-amzn-query-error: AWS.SimpleQueueService.NonExistentQueue;Sender
+Date: Wed, 08 Sep 2021 23:46:52 GMT
+Content-Type: application/x-amz-json-1.0
+Content-Length: 163
+
+{
+    "__type": "com.amazonaws.sqs#QueueDoesNotExist",
+    "message": "some user-visible message"
+}
+```
+`<error code>` is `AWS.SimpleQueueService.NonExistentQueue` and `<error type>` is `Sender`.
+
+If an operation results in an error that causes a service to send back the response above, you can access `<error code>` and `<error type>` as follows:
+```rust
+match client.some_operation().send().await {
+    Ok(_) => { /* success */ }
+    Err(sdk_err) => {
+        let err = sdk_err.into_service_error();
+        assert_eq!(
+            error.meta().code(),
+            Some("AWS.SimpleQueueService.NonExistentQueue"),
+        );
+        assert_eq!(error.meta().extra("type"), Some("Sender"));
+    }
+}
+</details>
+```
+"""
+references = ["smithy-rs#2398"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`SdkError` variants can now be constructed for easier unit testing."
+references = ["smithy-rs#2428", "smithy-rs#2208"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`SdkError` variants can now be constructed for easier unit testing."
+references = ["smithy-rs#2428", "smithy-rs#2208"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Remove unnecessary type parameter `B` from `Upgrade` service."
+references = ["smithy-rs#2436"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"
+
+[[smithy-rs]]
+message = "Fix `FilterByOperationName` plugin. This previous caused services with this applied to fail to compile due to mismatched bounds."
+references = ["smithy-rs#2441"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "hlbarber"
 
 [[aws-sdk-rust]]
-message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
-references = ["aws-sdk-rust#736"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "Velfi"
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Fix issue where clients using native-tls connector were prevented from making HTTPS requests."
-references = ["aws-sdk-rust#736"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "Velfi"
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"

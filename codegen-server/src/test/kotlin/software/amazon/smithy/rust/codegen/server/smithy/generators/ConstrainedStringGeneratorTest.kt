@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
@@ -85,6 +86,7 @@ class ConstrainedStringGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             ConstrainedStringGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 constrainedStringShape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
@@ -144,6 +146,7 @@ class ConstrainedStringGeneratorTest {
 
         ConstrainedStringGenerator(
             codegenContext,
+            writer.createTestInlineModuleCreator(),
             writer,
             constrainedStringShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
@@ -176,12 +179,14 @@ class ConstrainedStringGeneratorTest {
             val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
             ConstrainedStringGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 constrainedStringShape,
                 validationExceptionConversionGenerator,
             ).render()
             ConstrainedStringGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 sensitiveConstrainedStringShape,
                 validationExceptionConversionGenerator,
@@ -225,6 +230,7 @@ class ConstrainedStringGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             ConstrainedStringGenerator(
                 codegenContext,
+                this.createTestInlineModuleCreator(),
                 this,
                 constrainedStringShape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),

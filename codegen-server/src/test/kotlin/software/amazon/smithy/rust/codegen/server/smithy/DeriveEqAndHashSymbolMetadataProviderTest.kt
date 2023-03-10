@@ -171,8 +171,8 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
         """.asSmithyModel(smithyVersion = "2.0")
     private val serviceShape = model.lookup<ServiceShape>("test#TestService")
     private val deriveEqAndHashSymbolMetadataProvider = serverTestSymbolProvider(model, serviceShape)
-        .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
-        .let { DeriveEqAndHashSymbolMetadataProvider(it, model) }
+        .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+        .let { DeriveEqAndHashSymbolMetadataProvider(it) }
 
     companion object {
         @JvmStatic

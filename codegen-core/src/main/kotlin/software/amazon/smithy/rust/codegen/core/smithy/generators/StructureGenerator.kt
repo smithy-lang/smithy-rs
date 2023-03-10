@@ -97,7 +97,9 @@ open class StructureGenerator(
             }.toSet().sorted()
         return if (lifetimes.isNotEmpty()) {
             "<${lifetimes.joinToString { "'$it" }}>"
-        } else ""
+        } else {
+            ""
+        }
     }
 
     /**

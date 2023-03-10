@@ -7,10 +7,10 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorSection
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -66,7 +66,12 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     ): List<BuilderCustomization> = baseCustomizations + listOf(RequestIdBuilderCustomization())
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        rustCrate.withModule(RustModule.Types) {
+        rustCrate.withModule(
+            when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+                true -> ClientRustModule.Operation
+                else -> ClientRustModule.types
+            },
+        ) {
             // Re-export RequestId in generated crate
             rust("pub use #T;", accessorTrait(codegenContext))
         }

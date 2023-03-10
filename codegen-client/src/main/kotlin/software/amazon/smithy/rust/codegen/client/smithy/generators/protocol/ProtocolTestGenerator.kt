@@ -19,6 +19,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
@@ -91,7 +92,10 @@ class ProtocolTestGenerator(
             val additionalAttributes = listOf(
                 Attribute(allow("unreachable_code", "unused_variables")),
             )
-            writer.withInlineModule(RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)) {
+            writer.withInlineModule(
+                RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes),
+                null,
+            ) {
                 renderAllTestCases(allTests)
             }
         }
@@ -168,12 +172,12 @@ class ProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
             let config = builder.build();
 
             """,
-            "Config" to RuntimeType.Config,
+            "config" to ClientRustModule.Config,
             "customParams" to customParams,
         )
         writeInline("let input =")
@@ -246,10 +250,10 @@ class ProtocolTestGenerator(
         expectedShape: StructureShape,
     ) {
         if (!protocolSupport.responseDeserialization || (
-            !protocolSupport.errorDeserialization && expectedShape.hasTrait(
+                !protocolSupport.errorDeserialization && expectedShape.hasTrait(
                     ErrorTrait::class.java,
                 )
-            )
+                )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -356,7 +360,7 @@ class ProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.write(
                     "#T(&body, ${
-                    rustWriter.escape(body).dq()
+                        rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),

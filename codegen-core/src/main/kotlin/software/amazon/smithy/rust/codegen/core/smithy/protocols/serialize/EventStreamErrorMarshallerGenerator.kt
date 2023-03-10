@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -49,7 +50,7 @@ class EventStreamErrorMarshallerGenerator(
     } else {
         symbolProvider.symbolForEventStreamError(unionShape)
     }
-    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
+    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope = arrayOf(
         "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
@@ -126,7 +127,7 @@ class EventStreamErrorMarshallerGenerator(
         }
     }
 
-    fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
+    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
         val headerMembers = eventStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
         val payloadMember = eventStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
         for (member in headerMembers) {

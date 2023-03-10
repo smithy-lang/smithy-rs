@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -21,7 +21,7 @@ class ClientEnumGeneratorTest {
     fun `matching on enum should be forward-compatible`() {
         fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
             val shape = model.lookup<StringShape>(shapeId)
-            val context = testCodegenContext(model)
+            val context = testClientCodegenContext(model)
             val project = TestWorkspace.testProject(context.symbolProvider)
             project.moduleFor(shape) {
                 ClientEnumGenerator(context, shape).render(this)
@@ -78,7 +78,7 @@ class ClientEnumGeneratorTest {
         """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#SomeEnum")
-        val context = testCodegenContext(model)
+        val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
             ClientEnumGenerator(context, shape).render(this)
@@ -110,7 +110,7 @@ class ClientEnumGeneratorTest {
         """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#SomeEnum")
-        val context = testCodegenContext(model)
+        val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
             ClientEnumGenerator(context, shape).render(this)
@@ -138,7 +138,7 @@ class ClientEnumGeneratorTest {
         """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#InstanceType")
-        val context = testCodegenContext(model)
+        val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
             rust("##![allow(deprecated)]")

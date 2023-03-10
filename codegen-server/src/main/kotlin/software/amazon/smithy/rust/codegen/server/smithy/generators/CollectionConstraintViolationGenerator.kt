@@ -6,20 +6,22 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 class CollectionConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
-    private val modelsModuleWriter: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     private val shape: CollectionShape,
     private val collectionConstraintsInfo: List<CollectionTraitInfo>,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
@@ -38,16 +40,22 @@ class CollectionConstraintViolationGenerator(
     private val constraintsInfo: List<TraitInfo> = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
-        val memberShape = model.expectShape(shape.member.target)
+        val targetShape = model.expectShape(shape.member.target)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
-        val isMemberConstrained = memberShape.canReachConstrainedShape(model, symbolProvider)
+        val isMemberConstrained = targetShape.canReachConstrainedShape(model, symbolProvider)
         val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
 
-        modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
+        inlineModuleCreator(constraintViolationSymbol) {
             val constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }.toMutableList()
             if (isMemberConstrained) {
                 constraintViolationVariants += {
+                    val memberConstraintViolationSymbol =
+                        constraintViolationSymbolProvider.toSymbol(targetShape).letIf(
+                            shape.member.hasTrait<ConstraintViolationRustBoxTrait>(),
+                        ) {
+                            it.makeRustBoxed()
+                        }
                     rustTemplate(
                         """
                         /// Constraint violation error when an element doesn't satisfy its own constraints.
@@ -56,7 +64,7 @@ class CollectionConstraintViolationGenerator(
                         ##[doc(hidden)]
                         Member(usize, #{MemberConstraintViolationSymbol})
                         """,
-                        "MemberConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(memberShape),
+                        "MemberConstraintViolationSymbol" to memberConstraintViolationSymbol,
                     )
                 }
             }
@@ -67,6 +75,7 @@ class CollectionConstraintViolationGenerator(
             //  and is for use by the framework.
             rustTemplate(
                 """
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq)]
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}

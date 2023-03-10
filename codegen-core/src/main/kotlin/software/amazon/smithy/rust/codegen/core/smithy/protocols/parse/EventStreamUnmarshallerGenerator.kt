@@ -43,13 +43,14 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
+fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule =
+    private("event_stream_serde")
+
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
     codegenContext: CodegenContext,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -62,7 +63,7 @@ class EventStreamUnmarshallerGenerator(
         symbolProvider.symbolForEventStreamError(unionShape)
     }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
+    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType.blob(runtimeConfig),
         "expect_fns" to smithyEventStream.resolve("smithy"),
@@ -86,15 +87,16 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshaller(unmarshallerType: RuntimeType, unionSymbol: Symbol) {
+        val unmarshallerTypeName = unmarshallerType.name
         rust(
             """
             ##[non_exhaustive]
             ##[derive(Debug)]
-            pub struct ${unmarshallerType.name};
+            pub struct $unmarshallerTypeName;
 
-            impl ${unmarshallerType.name} {
+            impl $unmarshallerTypeName {
                 pub fn new() -> Self {
-                    ${unmarshallerType.name}
+                    $unmarshallerTypeName
                 }
             }
             """,
@@ -156,6 +158,7 @@ class EventStreamUnmarshallerGenerator(
                         "Output" to unionSymbol,
                         *codegenScope,
                     )
+
                     false -> rustTemplate(
                         "return Err(#{Error}::unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
                         *codegenScope,
@@ -181,6 +184,7 @@ class EventStreamUnmarshallerGenerator(
                     *codegenScope,
                 )
             }
+
             payloadOnly -> {
                 withBlock("let parsed = ", ";") {
                     renderParseProtocolPayload(unionMember)
@@ -191,8 +195,9 @@ class EventStreamUnmarshallerGenerator(
                     *codegenScope,
                 )
             }
+
             else -> {
-                rust("let mut builder = #T::default();", builderSymbol(unionStruct))
+                rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(unionStruct))
                 val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
                 if (payloadMember != null) {
                     renderUnmarshallEventPayload(payloadMember)
@@ -267,6 +272,7 @@ class EventStreamUnmarshallerGenerator(
                     is BlobShape -> {
                         rustTemplate("#{Blob}::new(message.payload().as_ref())", *codegenScope)
                     }
+
                     is StringShape -> {
                         rustTemplate(
                             """
@@ -277,6 +283,7 @@ class EventStreamUnmarshallerGenerator(
                             *codegenScope,
                         )
                     }
+
                     is UnionShape, is StructureShape -> {
                         renderParseProtocolPayload(member)
                     }
@@ -314,6 +321,7 @@ class EventStreamUnmarshallerGenerator(
                     *codegenScope,
                 )
             }
+
             CodegenTarget.SERVER -> {}
         }
 
@@ -335,7 +343,7 @@ class EventStreamUnmarshallerGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                             if (parser != null) {
-                                rust("let mut builder = #T::default();", builderSymbol(target))
+                                rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                                 rustTemplate(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
@@ -352,11 +360,12 @@ class EventStreamUnmarshallerGenerator(
                                 )
                             }
                         }
+
                         CodegenTarget.SERVER -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                             val mut = if (parser != null) { " mut" } else { "" }
-                            rust("let$mut builder = #T::default();", builderSymbol(target))
+                            rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                             if (parser != null) {
                                 rustTemplate(
                                     """
@@ -393,6 +402,7 @@ class EventStreamUnmarshallerGenerator(
             CodegenTarget.CLIENT -> {
                 rustTemplate("Ok(#{UnmarshalledMessage}::Error(#{OpError}::generic(generic)))", *codegenScope)
             }
+
             CodegenTarget.SERVER -> {
                 rustTemplate(
                     """

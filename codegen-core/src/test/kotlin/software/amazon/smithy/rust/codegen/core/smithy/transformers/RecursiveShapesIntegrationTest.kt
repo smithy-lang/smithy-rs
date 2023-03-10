@@ -66,7 +66,7 @@ class RecursiveShapesIntegrationTest {
         }
         output.message shouldContain "has infinite size"
 
-        val fixedProject = check(RecursiveShapeBoxer.transform(model))
+        val fixedProject = check(RecursiveShapeBoxer().transform(model))
         fixedProject.compileAndTest()
     }
 }

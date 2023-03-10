@@ -92,7 +92,7 @@ private class TestProtocolMakeOperationGenerator(
 
 // A stubbed test protocol to do enable testing intentionally broken protocols
 private class TestProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
     protocol: Protocol,
     httpRequestBuilder: String,
     body: String,

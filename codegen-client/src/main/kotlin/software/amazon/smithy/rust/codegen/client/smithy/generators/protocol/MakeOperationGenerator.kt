@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -54,7 +55,7 @@ open class MakeOperationGenerator(
             ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
 
     private val codegenScope = arrayOf(
-        "config" to RuntimeType.Config,
+        "config" to ClientRustModule.Config,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "http" to RuntimeType.Http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,

@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 
 fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
     InlineAwsDependency.forRustFile(
-        "http_body_checksum", visibility = Visibility.PUBLIC,
+        "http_body_checksum", visibility = Visibility.PUBCRATE,
         CargoDependency.Http,
         CargoDependency.HttpBody,
         CargoDependency.smithyHttp(this),

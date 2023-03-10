@@ -222,7 +222,9 @@ fun RustType.asArgument(name: String) = Argument(
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
-    } else ""
+    } else {
+        ""
+    }
     val base = when (this) {
         is RustType.Unit -> this.name
         is RustType.Bool -> this.name
@@ -426,7 +428,7 @@ enum class AttributeKind {
     /**
      * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
      */
-    Outer
+    Outer,
 }
 
 /**
@@ -467,7 +469,10 @@ class Attribute(val inner: Writable) {
         val AllowDeadCode = Attribute(allow("dead_code"))
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
+        val AllowMissingDocs = Attribute(allow("missing_docs"))
+        val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
+        val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))

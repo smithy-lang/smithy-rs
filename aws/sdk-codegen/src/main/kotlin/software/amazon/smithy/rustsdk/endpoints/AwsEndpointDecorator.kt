@@ -15,9 +15,10 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -27,12 +28,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
@@ -91,14 +89,14 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseEndpoint(codegenContext.runtimeConfig)
-    }
-
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        rustCrate.withModule(codegenContext.featureGatedConfigModule()) {
+            rust(
+                "pub use #T::endpoint::Endpoint;",
+                CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
+            )
+        }
+
         val epTypes = EndpointTypesGenerator.fromContext(codegenContext)
         if (epTypes.defaultResolver() == null) {
             throw CodegenException(
@@ -111,7 +109,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
             println("not generating a resolver for ${codegenContext.serviceShape}")
             return
         }
-        rustCrate.withModule(EndpointsModule) {
+        rustCrate.withModule(ClientRustModule.Endpoint) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1784) cleanup task
             rustTemplate(
                 """
@@ -252,23 +250,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                 }
 
                 ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
-                ServiceConfig.ConfigStructAdditionalDocs -> emptySection
-                ServiceConfig.Extras -> emptySection
-            }
-        }
-    }
-
-    class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-        override fun section(section: LibRsSection): Writable {
-            return when (section) {
-                is LibRsSection.Body -> writable {
-                    rust(
-                        "pub use #T::endpoint::Endpoint;",
-                        CargoDependency.smithyHttp(runtimeConfig).toType(),
-                    )
-                }
-
-                else -> emptySection
+                else -> {}
             }
         }
     }

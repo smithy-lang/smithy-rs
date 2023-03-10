@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -32,8 +31,7 @@ data class RustReservedWordConfig(
 
 class RustReservedWordSymbolProvider(
     private val base: RustSymbolProvider,
-    private val model: Model,
-    private val config: RustReservedWordConfig,
+    private val reservedWordConfig: RustReservedWordConfig,
 ) : WrappingSymbolProvider(base) {
     private val internal =
         ReservedWordSymbolProvider.builder().symbolProvider(base)
@@ -46,17 +44,17 @@ class RustReservedWordSymbolProvider(
         val reservedWordReplacedName = internal.toMemberName(shape)
         val container = model.expectShape(shape.container)
         return when {
-            container is StructureShape -> when (val mapped = config.structMemberMap[baseName]) {
+            container is StructureShape -> when (val mapped = reservedWordConfig.structMemberMap[baseName]) {
                 null -> reservedWordReplacedName
                 else -> mapped
             }
 
-            container is UnionShape -> when (val mapped = config.unionMemberMap[baseName]) {
+            container is UnionShape -> when (val mapped = reservedWordConfig.unionMemberMap[baseName]) {
                 null -> reservedWordReplacedName
                 else -> mapped
             }
 
-            container is EnumShape || container.hasTrait<EnumTrait>() -> when (val mapped = config.enumMemberMap[baseName]) {
+            container is EnumShape || container.hasTrait<EnumTrait>() -> when (val mapped = reservedWordConfig.enumMemberMap[baseName]) {
                 null -> reservedWordReplacedName
                 else -> mapped
             }
@@ -97,6 +95,11 @@ class RustReservedWordSymbolProvider(
             else -> renamedSymbol
         }
     }
+}
+
+enum class EscapeFor {
+    TypeName,
+    ModuleName,
 }
 
 object RustReservedWords : ReservedWords {
@@ -167,15 +170,22 @@ object RustReservedWords : ReservedWords {
         "SelfValue" to "SelfValue_",
     )
 
-    override fun escape(word: String): String = when (val mapped = keywordEscapingMap[word]) {
-        null -> "r##$word"
-        else -> mapped
-    }
+    override fun escape(word: String): String = doEscape(word, EscapeFor.TypeName)
 
-    fun escapeIfNeeded(word: String): String = when (isReserved(word)) {
-        true -> escape(word)
-        else -> word
-    }
+    private fun doEscape(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (val mapped = keywordEscapingMap[word]) {
+            null -> when (escapeFor) {
+                EscapeFor.TypeName -> "r##$word"
+                EscapeFor.ModuleName -> "${word}_"
+            }
+            else -> mapped
+        }
+
+    fun escapeIfNeeded(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+        when (isReserved(word)) {
+            true -> doEscape(word, escapeFor)
+            else -> word
+        }
 
     override fun isReserved(word: String): Boolean = RustKeywords.contains(word) || keywordEscapingMap.contains(word)
 }

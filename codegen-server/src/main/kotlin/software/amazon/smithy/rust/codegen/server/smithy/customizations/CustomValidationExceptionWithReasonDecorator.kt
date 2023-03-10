@@ -83,7 +83,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                         fields: Some(vec![first_validation_exception_field]),
                     };
                     Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
+                        crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                             .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
                     )
                 }
@@ -256,7 +256,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
 
     override fun collectionShapeConstraintViolationImplBlock(
         collectionConstraintsInfo:
-            Collection<CollectionTraitInfo>,
+        Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ) = writable {
         val validationExceptionFields = collectionConstraintsInfo.map {
@@ -276,7 +276,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                     is CollectionTraitInfo.UniqueItems -> {
                         rust(
                             """
-                            Self::UniqueItems { duplicate_indices, .. } => 
+                            Self::UniqueItems { duplicate_indices, .. } =>
                                 crate::model::ValidationExceptionField {
                                     message: format!("${it.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
                                     name: path,

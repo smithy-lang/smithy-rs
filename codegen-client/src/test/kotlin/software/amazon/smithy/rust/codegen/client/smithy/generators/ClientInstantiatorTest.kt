@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -41,7 +41,7 @@ internal class ClientInstantiatorTest {
         string NamedEnum
     """.asSmithyModel()
 
-    private val codegenContext = testCodegenContext(model)
+    private val codegenContext = testClientCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
 
     @Test

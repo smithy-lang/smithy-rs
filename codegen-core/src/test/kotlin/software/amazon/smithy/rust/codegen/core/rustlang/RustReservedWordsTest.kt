@@ -14,13 +14,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class RustReservedWordSymbolProviderTest {
     private class TestSymbolProvider(model: Model) :
-        WrappingSymbolProvider(SymbolVisitor(model, null, TestSymbolVisitorConfig))
+        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, TestRustSymbolProviderConfig))
     private val emptyConfig = RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap())
 
     @Test
@@ -29,13 +30,13 @@ internal class RustReservedWordSymbolProviderTest {
             namespace test
             structure Self {}
         """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model, emptyConfig)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
         val symbol = provider.toSymbol(model.lookup("test#Self"))
         symbol.name shouldBe "SelfValue"
     }
 
     private fun mappingTest(config: RustReservedWordConfig, model: Model, id: String, test: (String) -> Unit) {
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model, config)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), config)
         val symbol = provider.toMemberName(model.lookup("test#Container\$$id"))
         test(symbol)
     }
@@ -131,7 +132,7 @@ internal class RustReservedWordSymbolProviderTest {
                 async: String
             }
         """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), model, emptyConfig)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -148,8 +149,8 @@ internal class RustReservedWordSymbolProviderTest {
             @enum([{ name: "dontcare", value: "dontcare" }]) string Container
         """.asSmithyModel()
         val provider = RustReservedWordSymbolProvider(
-            TestSymbolProvider(model), model,
-            config = emptyConfig.copy(
+            TestSymbolProvider(model),
+            reservedWordConfig = emptyConfig.copy(
                 enumMemberMap = mapOf(
                     "Unknown" to "UnknownValue",
                     "UnknownValue" to "UnknownValue_",

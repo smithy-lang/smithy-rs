@@ -27,13 +27,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -48,7 +48,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  */
 class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
+    private val writer: RustWriter,
     val shape: StringShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
@@ -139,7 +140,7 @@ class ConstrainedStringGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withInlineModule(constraintViolation.module()) {
+        inlineModuleCreator(constraintViolation) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
 
@@ -174,7 +175,7 @@ class ConstrainedStringGenerator(
 
         if (testCases.isNotEmpty()) {
             val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
-            writer.withInlineModule(testModule) {
+            writer.withInlineModule(testModule, null) {
                 rustTemplate(
                     """
                     #{TestCases:W}

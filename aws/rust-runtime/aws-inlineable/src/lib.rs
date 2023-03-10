@@ -24,6 +24,8 @@ pub mod no_credentials;
 
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
+// TODO(CrateReorganization): Delete the `old_presigning` module
+pub mod old_presigning;
 
 /// Special logic for extracting request IDs from S3's responses.
 pub mod s3_request_id;

@@ -8,11 +8,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.PaginatedIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPaginatorModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -20,10 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -39,25 +36,21 @@ fun OperationShape.isPaginated(model: Model) =
         .findMemberWithTrait<IdempotencyTokenTrait>(model) == null
 
 class PaginatorGenerator private constructor(
-    private val model: Model,
-    private val symbolProvider: RustSymbolProvider,
-    service: ServiceShape,
+    private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
     retryClassifier: RuntimeType,
 ) {
     companion object {
         fun paginatorType(
-            codegenContext: CodegenContext,
+            codegenContext: ClientCodegenContext,
             generics: FluentClientGenerics,
             operationShape: OperationShape,
             retryClassifier: RuntimeType,
         ): RuntimeType? {
             return if (operationShape.isPaginated(codegenContext.model)) {
                 PaginatorGenerator(
-                    codegenContext.model,
-                    codegenContext.symbolProvider,
-                    codegenContext.serviceShape,
+                    codegenContext,
                     operationShape,
                     generics,
                     retryClassifier,
@@ -68,12 +61,14 @@ class PaginatorGenerator private constructor(
         }
     }
 
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val paginatorName = "${operation.id.name.toPascalCase()}Paginator"
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val idx = PaginatedIndex.of(model)
-    private val paginationInfo =
-        idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
-    private val module = RustModule.public("paginator", "Paginators for the service")
+    private val paginationInfo = idx.getPaginationInfo(codegenContext.serviceShape, operation).orNull()
+        ?: PANIC("failed to load pagination info")
+    private val module = codegenContext.featureGatedPaginatorModule(symbolProvider, operation)
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
@@ -102,7 +97,7 @@ class PaginatorGenerator private constructor(
         "Input" to inputType,
         "Output" to outputType,
         "Error" to errorType,
-        "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
+        "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
 
         // SDK Types
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
@@ -116,7 +111,7 @@ class PaginatorGenerator private constructor(
 
     /** Generate the paginator struct & impl **/
     private fun generate() = writable {
-        val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
+        val outputTokenLens = NestedAccessorGenerator(codegenContext).generateBorrowingAccessor(
             outputShape,
             paginationInfo.outputTokenMemberPath,
         )
@@ -271,7 +266,7 @@ class PaginatorGenerator private constructor(
                 }
 
                 """,
-                "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
+                "extract_items" to NestedAccessorGenerator(codegenContext).generateOwnedAccessor(
                     outputShape,
                     paginationInfo.itemsMemberPath,
                 ),

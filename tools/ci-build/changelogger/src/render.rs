@@ -13,9 +13,10 @@ use smithy_rs_tool_common::changelog::{
     Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
+use smithy_rs_tool_common::versions_manifest::{CrateVersionMetadataMap, VersionsManifest};
 use std::env;
 use std::fmt::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
 pub const EXAMPLE_ENTRY: &str = r#"
@@ -67,6 +68,10 @@ pub struct RenderArgs {
     /// Optional path to output a release manifest file to
     #[clap(long, action)]
     pub release_manifest_output: Option<PathBuf>,
+    /// Optional path to the SDK's versions.toml file for the current release.
+    /// This is used to generate a markdown table showing crate versions.
+    #[clap(long, action)]
+    pub current_release_versions_manifest: Option<PathBuf>,
     /// Optional path to the SDK's versions.toml file for the previous release.
     /// This is used to filter out changelog entries that have `since_commit` information.
     #[clap(long, action)]
@@ -217,6 +222,16 @@ fn indented_message(message: &str) -> String {
     out
 }
 
+fn render_table_row(columns: [&str; 2], out: &mut String) {
+    let mut row = "|".to_owned();
+    for column in columns {
+        row.push_str(column);
+        row.push('|');
+    }
+    write!(out, "{row}").unwrap();
+    out.push('\n');
+}
+
 fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     let mut combined = Changelog::new();
     for source in &args.source {
@@ -231,6 +246,19 @@ fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
         combined.merge(changelog);
     }
     Ok(combined)
+}
+
+fn load_current_crate_version_metadata_map(
+    current_release_versions_manifest: Option<&Path>,
+) -> CrateVersionMetadataMap {
+    current_release_versions_manifest
+        .and_then(
+            |manifest_path| match VersionsManifest::from_file(manifest_path) {
+                Ok(manifest) => Some(manifest.crates),
+                Err(_) => None,
+            },
+        )
+        .unwrap_or_default()
 }
 
 fn update_changelogs(
@@ -250,7 +278,13 @@ fn update_changelogs(
         args.change_set,
         args.previous_release_versions_manifest.as_deref(),
     )?;
-    let (release_header, release_notes) = render(&entries, &release_metadata.title);
+    let current_crate_version_metadata_map =
+        load_current_crate_version_metadata_map(args.current_release_versions_manifest.as_deref());
+    let (release_header, release_notes) = render(
+        &entries,
+        current_crate_version_metadata_map,
+        &release_metadata.title,
+    );
     if let Some(output_path) = &args.release_manifest_output {
         let release_manifest = ReleaseManifest {
             tag_name: release_metadata.tag.clone(),
@@ -329,9 +363,94 @@ fn render_sdk_model_entries<'a>(
     }
 }
 
-/// Convert a list of changelog entries into markdown.
+fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
+    let mut external_contribs = entries
+        .iter()
+        .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
+        .filter(|author| !is_maintainer(author))
+        .collect::<Vec<_>>();
+    if external_contribs.is_empty() {
+        return;
+    }
+    external_contribs.sort();
+    external_contribs.dedup();
+    out.push_str("**Contributors**\nThank you for your contributions! ❤\n");
+    for contributor_handle in external_contribs {
+        // retrieve all contributions this author made
+        let mut contribution_references = entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .hand_authored()
+                    .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
+                    .unwrap_or(false)
+            })
+            .flat_map(|entry| {
+                entry
+                    .hand_authored()
+                    .unwrap()
+                    .references
+                    .iter()
+                    .map(to_md_link)
+            })
+            .collect::<Vec<_>>();
+        contribution_references.sort();
+        contribution_references.dedup();
+        let contribution_references = contribution_references.as_slice().join(", ");
+        out.push_str("- @");
+        out.push_str(contributor_handle);
+        if !contribution_references.is_empty() {
+            write!(out, " ({})", contribution_references)
+                // The `Write` implementation for `String` is infallible,
+                // see https://doc.rust-lang.org/src/alloc/string.rs.html#2815
+                .unwrap()
+        }
+        out.push('\n');
+    }
+    out.push('\n');
+}
+
+fn render_details(summary: &str, body: &str, out: &mut String) {
+    out.push_str("<details>");
+    out.push('\n');
+    write!(out, "<summary>{}</summary>", summary).unwrap();
+    out.push('\n');
+    // A blank line is required for the body to be rendered properly
+    out.push('\n');
+    out.push_str(body);
+    out.push_str("</details>");
+    out.push('\n');
+}
+
+fn render_crate_versions(crate_version_metadata_map: CrateVersionMetadataMap, out: &mut String) {
+    if crate_version_metadata_map.is_empty() {
+        // If the map is empty, we choose to not render anything, as opposed to
+        // rendering the <details> element with empty contents and a user toggling
+        // it only to find out there is nothing in it.
+        return;
+    }
+
+    out.push_str("**Crate Versions**");
+    out.push('\n');
+
+    let mut table = String::new();
+    render_table_row(["Crate", "Version"], &mut table);
+    render_table_row(["-", "-"], &mut table);
+    for (crate_name, version_metadata) in &crate_version_metadata_map {
+        render_table_row([crate_name, &version_metadata.version], &mut table);
+    }
+
+    render_details("Click to expand to view crate versions...", &table, out);
+    out.push('\n');
+}
+
+/// Convert a list of changelog entries and crate versions into markdown.
 /// Returns (header, body)
-fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) {
+fn render(
+    entries: &[ChangelogEntry],
+    crate_version_metadata_map: CrateVersionMetadataMap,
+    release_header: &str,
+) -> (String, String) {
     let mut header = String::new();
     header.push_str(release_header);
     header.push('\n');
@@ -349,49 +468,8 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
         entries.iter().filter_map(ChangelogEntry::aws_sdk_model),
         &mut out,
     );
-
-    let mut external_contribs = entries
-        .iter()
-        .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
-        .filter(|author| !is_maintainer(author))
-        .collect::<Vec<_>>();
-    external_contribs.sort();
-    external_contribs.dedup();
-    if !external_contribs.is_empty() {
-        out.push_str("**Contributors**\nThank you for your contributions! ❤\n");
-        for contributor_handle in external_contribs {
-            // retrieve all contributions this author made
-            let mut contribution_references = entries
-                .iter()
-                .filter(|entry| {
-                    entry
-                        .hand_authored()
-                        .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
-                        .unwrap_or(false)
-                })
-                .flat_map(|entry| {
-                    entry
-                        .hand_authored()
-                        .unwrap()
-                        .references
-                        .iter()
-                        .map(to_md_link)
-                })
-                .collect::<Vec<_>>();
-            contribution_references.sort();
-            contribution_references.dedup();
-            let contribution_references = contribution_references.as_slice().join(", ");
-            out.push_str("- @");
-            out.push_str(contributor_handle);
-            if !contribution_references.is_empty() {
-                write!(&mut out, " ({})", contribution_references)
-                    // The `Write` implementation for `String` is infallible,
-                    // see https://doc.rust-lang.org/src/alloc/string.rs.html#2815
-                    .unwrap()
-            }
-            out.push('\n');
-        }
-    }
+    render_external_contributors(entries, &mut out);
+    render_crate_versions(crate_version_metadata_map, &mut out);
 
     (header, out)
 }
@@ -399,11 +477,15 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 #[cfg(test)]
 mod test {
     use super::{date_based_release_metadata, render, Changelog, ChangelogEntries, ChangelogEntry};
-    use smithy_rs_tool_common::changelog::SdkAffected;
+    use smithy_rs_tool_common::{
+        changelog::SdkAffected,
+        package::PackageCategory,
+        versions_manifest::{CrateVersion, CrateVersionMetadataMap},
+    };
     use time::OffsetDateTime;
 
     fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
-        let (header, body) = render(entries, release_header);
+        let (header, body) = render(entries, CrateVersionMetadataMap::new(), release_header);
         format!("{header}{body}")
     }
 
@@ -494,6 +576,7 @@ v0.3.0 (January 4th, 2022)
 Thank you for your contributions! ❤
 - @another-contrib ([smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200))
 - @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
@@ -518,6 +601,7 @@ v0.1.0 (January 4th, 2022)
 **Contributors**
 Thank you for your contributions! ❤
 - @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(aws_sdk_expected, aws_sdk_rust_rendered);
@@ -592,9 +676,69 @@ author = "rcoh"
     #[test]
     fn test_empty_render() {
         let smithy_rs = Vec::<ChangelogEntry>::new();
-        let (release_title, release_notes) = render(&smithy_rs, "some header");
+        let (release_title, release_notes) =
+            render(&smithy_rs, CrateVersionMetadataMap::new(), "some header");
 
         assert_eq!(release_title, "some header\n===========\n");
         assert_eq!(release_notes, "");
+    }
+
+    #[test]
+    fn test_crate_versions() {
+        let mut crate_version_metadata_map = CrateVersionMetadataMap::new();
+        crate_version_metadata_map.insert(
+            "aws-config".to_owned(),
+            CrateVersion {
+                category: PackageCategory::AwsRuntime,
+                version: "0.54.1".to_owned(),
+                source_hash: "e93380cfbd05e68d39801cbf0113737ede552a5eceb28f4c34b090048d539df9"
+                    .to_owned(),
+                model_hash: None,
+            },
+        );
+        crate_version_metadata_map.insert(
+            "aws-sdk-accessanalyzer".to_owned(),
+            CrateVersion {
+                category: PackageCategory::AwsSdk,
+                version: "0.24.0".to_owned(),
+                source_hash: "a7728756b41b33d02f68a5865d3456802b7bc3949ec089790bc4e726c0de8539"
+                    .to_owned(),
+                model_hash: Some(
+                    "71f1f130504ebd55396c3166d9441513f97e49b281a5dd420fd7e2429860b41b".to_owned(),
+                ),
+            },
+        );
+        crate_version_metadata_map.insert(
+            "aws-smithy-async".to_owned(),
+            CrateVersion {
+                category: PackageCategory::SmithyRuntime,
+                version: "0.54.1".to_owned(),
+                source_hash: "8ced52afc783cbb0df47ee8b55260b98e9febdc95edd796ed14c43db5199b0a9"
+                    .to_owned(),
+                model_hash: None,
+            },
+        );
+        let (release_title, release_notes) = render(
+            &Vec::<ChangelogEntry>::new(),
+            crate_version_metadata_map,
+            "some header",
+        );
+
+        assert_eq!(release_title, "some header\n===========\n");
+        let expected_body = r#"
+**Crate Versions**
+<details>
+<summary>Click to expand to view crate versions...</summary>
+
+|Crate|Version|
+|-|-|
+|aws-config|0.54.1|
+|aws-sdk-accessanalyzer|0.24.0|
+|aws-smithy-async|0.54.1|
+</details>
+
+"#
+        .trim_start();
+        pretty_assertions::assert_str_eq!(release_notes, expected_body);
     }
 }

@@ -5,14 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
@@ -21,27 +20,27 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
  * fluent client builders.
  */
 class CustomizableOperationGenerator(
-    private val runtimeConfig: RuntimeConfig,
+    private val codegenContext: ClientCodegenContext,
     private val generics: FluentClientGenerics,
-    private val includeFluentClient: Boolean,
 ) {
-
-    companion object {
-        val CustomizeModule = RustModule.public("customize", "Operation customization and supporting types", parent = RustModule.operation(Visibility.PUBLIC))
-    }
-
+    private val includeFluentClient = codegenContext.settings.codegenConfig.includeFluentClient
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
     private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(CustomizeModule) {
+        crate.withModule(codegenContext.featureGatedCustomizeModule()) {
             rustTemplate(
                 """
                 pub use #{Operation};
+                pub use #{Request};
+                pub use #{Response};
                 pub use #{ClassifyRetry};
                 pub use #{RetryKind};
                 """,
                 "Operation" to smithyHttp.resolve("operation::Operation"),
+                "Request" to smithyHttp.resolve("operation::Request"),
+                "Response" to smithyHttp.resolve("operation::Response"),
                 "ClassifyRetry" to smithyHttp.resolve("retry::ClassifyRetry"),
                 "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
@@ -67,6 +66,7 @@ class CustomizableOperationGenerator(
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
             "combined_generics_decl" to combinedGenerics.declaration(),
+            "customize_module" to codegenContext.featureGatedCustomizeModule(),
         )
 
         writer.rustTemplate(
@@ -81,7 +81,7 @@ class CustomizableOperationGenerator(
 
             /// A wrapper type for [`Operation`](aws_smithy_http::operation::Operation)s that allows for
             /// customization of the operation before it is sent. A `CustomizableOperation` may be sent
-            /// by calling its [`.send()`][crate::operation::customize::CustomizableOperation::send] method.
+            /// by calling its [`.send()`][#{customize_module}::CustomizableOperation::send] method.
             ##[derive(Debug)]
             pub struct CustomizableOperation#{combined_generics_decl:W} {
                 pub(crate) handle: Arc<Handle#{handle_generics_decl:W}>,

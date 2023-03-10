@@ -81,7 +81,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                         field_list: Some(vec![first_validation_exception_field]),
                     };
                     Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
+                        crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                             .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
                     )
                 }
@@ -141,8 +141,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                         Self::Length(length) => crate::model::ValidationExceptionField {
                             message: format!("${it.validationErrorMessage()}", length, &path),
                             path,
-                        },
-                        """,
+                        },""",
                     )
                 }
                 if (isKeyConstrained(keyShape, symbolProvider)) {
@@ -210,16 +209,17 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun collectionShapeConstraintViolationImplBlock(
         collectionConstraintsInfo:
-            Collection<CollectionTraitInfo>,
+        Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ) = writable {
-        val validationExceptionFields = collectionConstraintsInfo.map { it.toTraitInfo().asValidationExceptionField }.toMutableList()
+        val validationExceptionFields = collectionConstraintsInfo.map {
+            it.toTraitInfo().asValidationExceptionField
+        }.toMutableList()
         if (isMemberConstrained) {
             validationExceptionFields += {
                 rust(
-                    """
-                    Self::Member(index, member_constraint_violation) =>
-                        member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())
+                    """Self::Member(index, member_constraint_violation) =>
+                    member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())
                     """,
                 )
             }
@@ -233,7 +233,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
             }
             """,
             "String" to RuntimeType.String,
-            "AsValidationExceptionFields" to validationExceptionFields.join("\n"),
+            "AsValidationExceptionFields" to validationExceptionFields.join(""),
         )
     }
 }
