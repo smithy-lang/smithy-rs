@@ -263,3 +263,9 @@ message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_h
 references = ["smithy-rs#2437", "aws-sdk-rust#600"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Smithy members named `send` were previously renamed to `send_value` at codegen time. These will now be called `send` in the generated code."
+references = ["smithy-rs#2382"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
+author = "jdisanti"
