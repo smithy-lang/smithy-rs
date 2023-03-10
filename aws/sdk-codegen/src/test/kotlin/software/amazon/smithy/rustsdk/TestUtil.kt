@@ -49,6 +49,7 @@ fun awsSdkIntegrationTest(
                     .withMember(
                         "awsSdk",
                         ObjectNode.builder()
+                            .withMember("generateReadme", false)
                             .withMember("integrationTestPath", "../sdk/integration-tests")
                             .build(),
                     ).build(),

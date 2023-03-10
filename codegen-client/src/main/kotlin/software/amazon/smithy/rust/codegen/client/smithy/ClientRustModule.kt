@@ -142,6 +142,7 @@ class ClientModuleDocProvider(
                     .let { model.expectShape(it, OperationShape::class.java) },
                 codegenContext.symbolProvider,
             )
+            val moduleUseName = codegenContext.moduleUseName()
             docsTemplate(
                 """
                 The underlying HTTP requests made during an operation can be customized
@@ -149,8 +150,8 @@ class ClientModuleDocProvider(
                 operation call. For example, this can be used to add an additional HTTP header:
 
                 ```no_run
-                ## async fn wrapper() -> Result<(), crate::Error> {
-                ## let client: crate::Client = unimplemented!();
+                ## async fn wrapper() -> Result<(), $moduleUseName::Error> {
+                ## let client: $moduleUseName::Client = unimplemented!();
                 use #{http}::header::{HeaderName, HeaderValue};
 
                 let result = client.$opFnName()
