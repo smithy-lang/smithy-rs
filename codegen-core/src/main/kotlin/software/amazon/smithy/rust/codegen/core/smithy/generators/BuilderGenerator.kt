@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -27,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustInline
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.shape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -206,13 +207,19 @@ class BuilderGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
+        writer.docs("This is the datatype returned when calling `Builder::build()`.")
+        writer.rustInline("pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
+        RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        SensitiveWarning.addDoc(writer, shape)
         writer.rustBlock("pub struct $builderName") {
+            // add serde
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
+                SensitiveWarning.addDoc(writer, member)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
         }
