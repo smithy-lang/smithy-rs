@@ -1,0 +1,26 @@
+[package]
+name = "smithy_orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
+aws-sigv4 = { path = "../../build/aws-sdk/sdk/aws-sigv4" }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client" }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-interceptor = { path = "../../build/aws-sdk/sdk/aws-smithy-interceptor" }
+aws-smithy-orchestrator = { path = "../../build/aws-sdk/sdk/aws-smithy-orchestrator" }
+aws-smithy-token-bucket = { path = "../../build/aws-sdk/sdk/aws-smithy-token-bucket" }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
+tokio = { version = "1.8.4", features = ["macros", "test-util", "rt-multi-thread"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
+http = "0.2.3"
+http-body = "0.4.5"

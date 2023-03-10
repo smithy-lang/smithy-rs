@@ -1,0 +1,21 @@
+[package]
+name = "aws-smithy-orchestrator"
+version = "0.0.0-smithy-rs-head"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
+description = "Smithy orchestrator is responsible for handling the sending of requests and the receiving of responses."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-interceptor = { path = "../aws-smithy-interceptor" }
+aws-smithy-token-bucket = { path = "../aws-smithy-token-bucket" }
+http = "0.2.8"
+http-body = "0.4.5"
+tower = { version = "0.4.13", features = ["util", "retry"] }
