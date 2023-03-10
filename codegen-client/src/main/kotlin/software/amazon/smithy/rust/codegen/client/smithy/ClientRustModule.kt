@@ -136,7 +136,7 @@ class ClientModuleDocProvider(
     private fun customizeModuleDoc(): Writable = writable {
         val model = codegenContext.model
         docs("Operation customization and supporting types.\n")
-        if (model.operationShapes.isNotEmpty()) {
+        if (codegenContext.serviceShape.operations.isNotEmpty()) {
             val opFnName = FluentClientGenerator.clientOperationFnName(
                 codegenContext.serviceShape.operations.minOf { it }
                     .let { model.expectShape(it, OperationShape::class.java) },
