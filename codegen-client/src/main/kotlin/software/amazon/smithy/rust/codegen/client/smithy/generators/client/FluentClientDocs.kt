@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 object FluentClientDocs {
     fun clientConstructionDocs(codegenContext: ClientCodegenContext) = writable {
         val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
-        val moduleName = codegenContext.settings.moduleName
+        val moduleUseName = codegenContext.moduleUseName()
         docsTemplate(
             """
             Client for calling $serviceName.
@@ -43,7 +43,7 @@ object FluentClientDocs {
             the [`client::Builder`](crate::client::Builder) struct:
 
             ```rust,no_run
-            let smithy_client = $moduleName::client::Builder::new()
+            let smithy_client = $moduleUseName::client::Builder::new()
                 // Use the default HTTPS connector
                 .dyn_https_connector(Default::default())
                 // Use a no-op middleware
@@ -73,13 +73,16 @@ object FluentClientDocs {
             In _most_ circumstances, you will want to use the following pattern to construct a client:
 
             ```rust,no_run
-            let smithy_client = $moduleName::client::Builder::new()
+            let smithy_client = $moduleUseName::client::Builder::new()
                 .dyn_https_connector(Default::default())
+            ##  /*
                 .middleware(/* discussed below */)
+            ##  */
+            ##  .middleware_fn(|r| r)
                 .build_dyn();
 
-            let config = $moduleName::Config::builder().build();
-            let client = $moduleName::Client::with_config(smithy_client, config);
+            let config = $moduleUseName::Config::builder().build();
+            let client = $moduleUseName::Client::with_config(smithy_client, config);
             ```
 
             _Note:_ Client construction is expensive due to connection thread pool initialization, and should be done

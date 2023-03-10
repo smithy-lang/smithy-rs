@@ -182,7 +182,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
-            outputDir.resolve(".cargo").mkdir()
+            outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """

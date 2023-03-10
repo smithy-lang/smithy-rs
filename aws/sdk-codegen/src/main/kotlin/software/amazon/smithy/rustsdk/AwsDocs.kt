@@ -51,12 +51,14 @@ object AwsDocs {
                 done as follows:
 
                 ```rust,no_run
+                ## async fn wrapper() {
                 let sdk_config = #{aws_config}::load_from_env().await;
                 let config = $crateName::config::Builder::from(&sdk_config)
                 ## /*
                     .some_service_specific_setting("value")
                 ## */
                     .build();
+                ## }
                 ```
 
                 See the [`aws-config` docs] and [`Config`] for more information on customizing configuration.
