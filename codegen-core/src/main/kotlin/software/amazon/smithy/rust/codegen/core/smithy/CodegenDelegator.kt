@@ -40,8 +40,10 @@ interface ModuleDocProvider {
                     "by the module documentationOverride. Module: $module"
             }
             try {
-                val docs = module.documentationOverride ?: provider?.docs(module)
-                docs?.also(writer::docs)
+                when {
+                    module.documentationOverride != null -> writer.docs(module.documentationOverride)
+                    else -> provider?.docsWriter(module)?.also { writeTo -> writeTo(writer) }
+                }
             } catch (e: NotImplementedError) {
                 // Catch `TODO()` and rethrow only if its a public module
                 if (module.rustMetadata.visibility == Visibility.PUBLIC) {
@@ -52,7 +54,7 @@ interface ModuleDocProvider {
     }
 
     /** Returns documentation for the given module */
-    fun docs(module: RustModule.LeafModule): String?
+    fun docsWriter(module: RustModule.LeafModule): Writable?
 }
 
 /**

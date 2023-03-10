@@ -5,9 +5,13 @@
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rustsdk.AwsSdkReadmeGenerator
+import software.amazon.smithy.model.loader.ModelAssembler
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rustsdk.AwsCrateDocGenerator
 
-class AwsReadmeDecoratorTest {
+class AwsCrateDocsDecoratorTest {
+    private val codegenContext = testClientCodegenContext(ModelAssembler().assemble().unwrap())
+
     @Test
     fun `it converts description HTML into Markdown`() {
         assertEquals(
@@ -18,7 +22,7 @@ class AwsReadmeDecoratorTest {
 
             More information [can be found here](https://example.com).
             """.trimIndent(),
-            AwsSdkReadmeGenerator().normalizeDescription(
+            AwsCrateDocGenerator(codegenContext).normalizeDescription(
                 "",
                 """
                 <fullname>Some service</fullname>
@@ -44,7 +48,7 @@ class AwsReadmeDecoratorTest {
 
             More text.
             """.trimIndent(),
-            AwsSdkReadmeGenerator().normalizeDescription(
+            AwsCrateDocGenerator(codegenContext).normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a list:
@@ -81,7 +85,7 @@ class AwsReadmeDecoratorTest {
 
             Some trailing text.
             """.trimIndent(),
-            AwsSdkReadmeGenerator().normalizeDescription(
+            AwsCrateDocGenerator(codegenContext).normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a description list:

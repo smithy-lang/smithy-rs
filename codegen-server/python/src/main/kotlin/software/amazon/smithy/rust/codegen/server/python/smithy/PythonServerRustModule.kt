@@ -6,6 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 
 object PythonServerRustModule {
@@ -15,11 +18,14 @@ object PythonServerRustModule {
 }
 
 class PythonServerModuleDocProvider(private val base: ModuleDocProvider) : ModuleDocProvider {
-    override fun docs(module: RustModule.LeafModule): String? = when (module) {
-        PythonServerRustModule.PythonModuleExport -> "Export PyO3 symbols in the shared library"
-        PythonServerRustModule.PythonServerApplication -> "Python server and application implementation."
-        // TODO(ServerTeam): Document this module (I don't have context)
-        PythonServerRustModule.PythonOperationAdapter -> ""
-        else -> base.docs(module)
+    override fun docsWriter(module: RustModule.LeafModule): Writable? {
+        val strDoc: (String) -> Writable = { str -> writable { docs(str) } }
+        return when (module) {
+            PythonServerRustModule.PythonModuleExport -> strDoc("Export PyO3 symbols in the shared library")
+            PythonServerRustModule.PythonServerApplication -> strDoc("Python server and application implementation.")
+            // TODO(ServerTeam): Document this module (I don't have context)
+            PythonServerRustModule.PythonOperationAdapter -> null
+            else -> base.docsWriter(module)
+        }
     }
 }
