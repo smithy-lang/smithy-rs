@@ -96,7 +96,7 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private const val defaultEnableNewCrateOrganizationScheme = false
+        private const val defaultEnableNewCrateOrganizationScheme = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -109,7 +109,7 @@ data class ClientCodegenConfig(
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewCrateOrganizationScheme = node.get().getBooleanMemberOrDefault("enableNewCrateOrganizationScheme", false),
+                    enableNewCrateOrganizationScheme = node.get().getBooleanMemberOrDefault("enableNewCrateOrganizationScheme", defaultEnableNewCrateOrganizationScheme),
                 )
             } else {
                 ClientCodegenConfig(
