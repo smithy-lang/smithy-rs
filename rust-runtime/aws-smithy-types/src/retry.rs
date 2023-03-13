@@ -170,7 +170,7 @@ impl RetryConfigBuilder {
     /// This prevents reusing a connection to a potentially bad host but may increase the load on
     /// the server.
     ///
-    /// This behavior can be disabled by setting [`NoReconnect`] instead.
+    /// This behavior can be disabled by setting [`ReconnectMode::NoReconnect`] instead.
     pub fn reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
         self.set_reconnect_mode(Some(reconnect_mode));
         self
@@ -182,7 +182,7 @@ impl RetryConfigBuilder {
     /// This prevents reusing a connection to a potentially bad host but may increase the load on
     /// the server.
     ///
-    /// This behavior can be disabled by setting [`NoReconnect`] instead.
+    /// This behavior can be disabled by setting [`ReconnectMode::NoReconnect`] instead.
     pub fn set_reconnect_mode(&mut self, reconnect_mode: Option<ReconnectMode>) -> &mut Self {
         self.reconnect_mode = reconnect_mode;
         self
@@ -265,7 +265,7 @@ pub struct RetryConfig {
 /// Mode for connection re-establishment
 ///
 /// By default, when a transient error is encountered, the connection in use will be poisoned. This
-/// behavior can be disabled by setting [`NoReconnect`] instead.
+/// behavior can be disabled by setting [`ReconnectMode::NoReconnect`] instead.
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum ReconnectMode {
     /// Reconnect on [`ErrorKind::TransientError`]
@@ -310,7 +310,7 @@ impl RetryConfig {
     /// This prevents reusing a connection to a potentially bad host but may increase the load on
     /// the server.
     ///
-    /// This behavior can be disabled by setting [`NoReconnect`] instead.
+    /// This behavior can be disabled by setting [`ReconnectMode::NoReconnect`] instead.
     pub fn with_reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
         self.reconnect_mode = reconnect_mode;
         self
