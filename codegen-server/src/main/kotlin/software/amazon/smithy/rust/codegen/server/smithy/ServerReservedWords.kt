@@ -9,7 +9,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 
 val ServerReservedWords = RustReservedWordConfig(
-    structMemberMap = StructureGenerator.structMemberMap,
+    structureMemberMap = StructureGenerator.structureMemberNameMap,
     unionMemberMap = emptyMap(),
     enumMemberMap = emptyMap(),
 )

@@ -88,7 +88,7 @@ class StructureGeneratorTest {
         val error = model.lookup<StructureShape>("com.test#MyError")
 
         val rustReservedWordConfig: RustReservedWordConfig = RustReservedWordConfig(
-            structMemberMap = StructureGenerator.structMemberMap,
+            structureMemberMap = StructureGenerator.structureMemberNameMap,
             enumMemberMap = emptyMap(),
             unionMemberMap = emptyMap(),
         )

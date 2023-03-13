@@ -62,7 +62,7 @@ open class StructureGenerator(
 ) {
     companion object {
         /** Reserved struct member names */
-        val structMemberMap: Map<String, String> = mapOf(
+        val structureMemberNameMap: Map<String, String> = mapOf(
             "build" to "build_value",
             "builder" to "builder_value",
             "default" to "default_value",

@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 data class RustReservedWordConfig(
     /** Map of struct member names that should get renamed */
-    val structMemberMap: Map<String, String>,
+    val structureMemberMap: Map<String, String>,
     /** Map of union member names that should get renamed */
     val unionMemberMap: Map<String, String>,
     /** Map of enum member names that should get renamed */
@@ -44,20 +44,14 @@ class RustReservedWordSymbolProvider(
         val reservedWordReplacedName = internal.toMemberName(shape)
         val container = model.expectShape(shape.container)
         return when {
-            container is StructureShape -> when (val mapped = reservedWordConfig.structMemberMap[baseName]) {
-                null -> reservedWordReplacedName
-                else -> mapped
-            }
+            container is StructureShape ->
+                reservedWordConfig.structureMemberMap.getOrDefault(baseName, reservedWordReplacedName)
 
-            container is UnionShape -> when (val mapped = reservedWordConfig.unionMemberMap[baseName]) {
-                null -> reservedWordReplacedName
-                else -> mapped
-            }
+            container is UnionShape ->
+                reservedWordConfig.unionMemberMap.getOrDefault(baseName, reservedWordReplacedName)
 
-            container is EnumShape || container.hasTrait<EnumTrait>() -> when (val mapped = reservedWordConfig.enumMemberMap[baseName]) {
-                null -> reservedWordReplacedName
-                else -> mapped
-            }
+            container is EnumShape || container.hasTrait<EnumTrait>() ->
+                reservedWordConfig.enumMemberMap.getOrDefault(baseName, reservedWordReplacedName)
 
             else -> error("unexpected container: $container")
         }

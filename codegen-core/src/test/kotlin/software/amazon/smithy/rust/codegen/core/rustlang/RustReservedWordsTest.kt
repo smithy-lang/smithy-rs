@@ -44,7 +44,7 @@ internal class RustReservedWordSymbolProviderTest {
     @Test
     fun `structs member names are mapped via config`() {
         val config = emptyConfig.copy(
-            structMemberMap = mapOf(
+            structureMemberMap = mapOf(
                 "name_to_map" to "mapped_name",
                 "NameToMap" to "MappedName",
             ),

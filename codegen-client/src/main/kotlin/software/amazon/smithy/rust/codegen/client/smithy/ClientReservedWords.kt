@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGener
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 
 val ClientReservedWords = RustReservedWordConfig(
-    structMemberMap = StructureGenerator.structMemberMap +
+    structureMemberMap = StructureGenerator.structureMemberNameMap +
         mapOf(
             "send" to "send_value",
             // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs

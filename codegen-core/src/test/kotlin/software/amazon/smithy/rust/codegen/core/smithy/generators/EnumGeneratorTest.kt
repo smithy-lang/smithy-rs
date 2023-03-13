@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 class EnumGeneratorTest {
     private val rustReservedWordConfig = RustReservedWordConfig(
         enumMemberMap = mapOf("Unknown" to "UnknownValue"),
-        structMemberMap = emptyMap(),
+        structureMemberMap = emptyMap(),
         unionMemberMap = emptyMap(),
     )
 
