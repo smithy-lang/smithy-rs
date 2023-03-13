@@ -8,33 +8,34 @@ pub mod config_bag;
 pub use crate::config_bag::ConfigBag;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_interceptor::{InterceptorContext, Interceptors};
+use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 
 pub type BoxErr = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxErr>>>>;
 
-pub trait TraceProbe: Send + Sync {
+pub trait TraceProbe: Send + Sync + Debug {
     fn dispatch_events(&self, cfg: &ConfigBag) -> BoxFallibleFut<()>;
 }
 
-pub trait RequestSerializer<In, TxReq>: Send + Sync {
+pub trait RequestSerializer<In, TxReq>: Send + Sync + Debug {
     fn serialize_request(&self, req: &mut In, cfg: &ConfigBag) -> Result<TxReq, BoxErr>;
 }
 
-pub trait ResponseDeserializer<TxRes, Out>: Send + Sync {
+pub trait ResponseDeserializer<TxRes, Out>: Send + Sync + Debug {
     fn deserialize_response(&self, res: &mut TxRes, cfg: &ConfigBag) -> Result<Out, BoxErr>;
 }
 
-pub trait Connection<TxReq, TxRes>: Send + Sync {
+pub trait Connection<TxReq, TxRes>: Send + Sync + Debug {
     fn call(&self, req: &mut TxReq, cfg: &ConfigBag) -> BoxFallibleFut<TxRes>;
 }
 
-pub trait RetryStrategy<Out>: Send + Sync {
+pub trait RetryStrategy<Out>: Send + Sync + Debug {
     fn should_retry(&self, res: &Out, cfg: &ConfigBag) -> Result<bool, BoxErr>;
 }
 
-pub trait AuthOrchestrator<Req>: Send + Sync {
+pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
     fn auth_request(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxErr>;
 }
 

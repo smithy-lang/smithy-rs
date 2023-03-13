@@ -8,235 +8,202 @@
 // and the doc comments have been updated to reflect how the config bag is used in smithy-rs.
 // Additionally, optimizations around the HTTP use case have been removed in favor or simpler code.
 
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
-use std::fmt;
-use std::hash::{BuildHasherDefault, Hasher};
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex};
+use aws_smithy_http::property_bag::PropertyBag;
+use std::any::type_name;
+use std::fmt::Debug;
+use std::ops::Deref;
+use std::sync::Arc;
 
-type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IdHasher>>;
+pub struct ConfigBag {
+    head: Layer,
+    tail: Option<FrozenConfigBag>,
+}
 
-// With TypeIds as keys, there's no need to hash them. They are already hashes
-// themselves, coming from the compiler. The IdHasher just holds the u64 of
-// the TypeId, and then returns it, instead of doing any bit fiddling.
-#[derive(Default)]
-struct IdHasher(u64);
+#[derive(Clone)]
+pub struct FrozenConfigBag(Arc<ConfigBag>);
 
-impl Hasher for IdHasher {
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
+impl Deref for FrozenConfigBag {
+    type Target = ConfigBag;
 
-    fn write(&mut self, _: &[u8]) {
-        unreachable!("TypeId calls write_u64");
-    }
-
-    #[inline]
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-/// A type-map of configuration data.
-///
-/// `ConfigBag` contains configuration use during a smithy client's request/response lifecycle.
-#[derive(Default)]
-pub struct ConfigBag {
-    // In http where this property bag is usually empty, this makes sense. We will almost always put
-    // something in the bag, so we could consider removing the layer of indirection.
-    map: AnyMap,
+enum Value<T> {
+    Set(T),
+    ExplicitlyUnset,
+}
+
+struct Layer {
+    name: &'static str,
+    props: PropertyBag,
+}
+
+impl FrozenConfigBag {
+    pub fn try_modify(self) -> Option<ConfigBag> {
+        Arc::try_unwrap(self.0).ok()
+    }
+
+    #[must_use]
+    pub fn with_open(&self, name: &'static str, next: impl Fn(&mut ConfigBag)) -> ConfigBag {
+        let new_layer = Layer {
+            name,
+            props: PropertyBag::new(),
+        };
+        let mut bag = ConfigBag {
+            head: new_layer,
+            tail: Some(self.clone()),
+        };
+        next(&mut bag);
+        bag
+    }
+
+    pub fn with(&self, name: &'static str, next: impl Fn(&mut ConfigBag)) -> Self {
+        self.with_open(name, next).close()
+    }
 }
 
 impl ConfigBag {
-    /// Create an empty `ConfigBag`.
-    #[inline]
-    pub fn new() -> ConfigBag {
+    pub fn base() -> Self {
         ConfigBag {
-            map: AnyMap::default(),
+            head: Layer {
+                name: "base",
+                props: Default::default(),
+            },
+            tail: None,
         }
     }
 
-    /// Insert a type into this `ConfigBag`.
-    ///
-    /// If a value of this type already existed, it will be returned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use aws_smithy_orchestrator::config_bag::ConfigBag;
-    /// let mut props = ConfigBag::new();
-    ///
-    /// #[derive(Debug, Eq, PartialEq)]
-    /// struct Endpoint(&'static str);
-    /// assert!(props.insert(Endpoint("dynamo.amazon.com")).is_none());
-    /// assert_eq!(
-    ///     props.insert(Endpoint("kinesis.amazon.com")),
-    ///     Some(Endpoint("dynamo.amazon.com"))
-    /// );
-    /// ```
-    pub fn insert<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {
-        self.map
-            .insert(TypeId::of::<T>(), Box::new(val))
-            .and_then(|boxed| {
-                (boxed as Box<dyn Any + 'static>)
-                    .downcast()
-                    .ok()
-                    .map(|boxed| *boxed)
-            })
+    pub fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
+        let mut source = vec![];
+        let out = self.sourced_get(&mut source);
+        println!("searching for {:?} {:#?}", type_name::<T>(), source);
+        out
     }
 
-    /// Get a reference to a type previously inserted on this `ConfigBag`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use aws_smithy_orchestrator::config_bag::ConfigBag;
-    /// let mut props = ConfigBag::new();
-    /// assert!(props.get::<i32>().is_none());
-    /// props.insert(5i32);
-    ///
-    /// assert_eq!(props.get::<i32>(), Some(&5i32));
-    /// ```
-    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
-        self.map
-            .get(&TypeId::of::<T>())
-            .and_then(|boxed| (&**boxed as &(dyn Any + 'static)).downcast_ref())
+    pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
+        self.head.props.insert(Value::Set(value));
+        self
     }
 
-    /// Get a mutable reference to a type previously inserted on this `ConfigBag`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use aws_smithy_orchestrator::config_bag::ConfigBag;
-    /// let mut props = ConfigBag::new();
-    /// props.insert(String::from("Hello"));
-    /// props.get_mut::<String>().unwrap().push_str(" World");
-    ///
-    /// assert_eq!(props.get::<String>().unwrap(), "Hello World");
-    /// ```
-    pub fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
-        self.map
-            .get_mut(&TypeId::of::<T>())
-            .and_then(|boxed| (&mut **boxed as &mut (dyn Any + 'static)).downcast_mut())
+    pub fn unset<T: Send + Sync + 'static>(&mut self) -> &mut Self {
+        self.head.props.insert(Value::<T>::ExplicitlyUnset);
+        self
     }
 
-    /// Remove a type from this `ConfigBag`.
-    ///
-    /// If a value of this type existed, it will be returned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use aws_smithy_orchestrator::config_bag::ConfigBag;
-    /// let mut props = ConfigBag::new();
-    /// props.insert(5i32);
-    /// assert_eq!(props.remove::<i32>(), Some(5i32));
-    /// assert!(props.get::<i32>().is_none());
-    /// ```
-    pub fn remove<T: Send + Sync + 'static>(&mut self) -> Option<T> {
-        self.map.remove(&TypeId::of::<T>()).and_then(|boxed| {
-            (boxed as Box<dyn Any + 'static>)
-                .downcast()
-                .ok()
-                .map(|boxed| *boxed)
-        })
+    pub fn close(self) -> FrozenConfigBag {
+        self.into()
     }
 
-    /// Clear the `ConfigBag` of all inserted extensions.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use aws_smithy_orchestrator::config_bag::ConfigBag;
-    /// let mut props = ConfigBag::new();
-    /// props.insert(5i32);
-    /// props.clear();
-    ///
-    /// assert!(props.get::<i32>().is_none());
-    #[inline]
-    pub fn clear(&mut self) {
-        self.map.clear();
+    #[must_use]
+    pub fn with(self, name: &'static str, next: impl Fn(&mut ConfigBag)) -> FrozenConfigBag {
+        self.close().with_open(name, next).close()
+    }
+
+    pub fn sourced_get<T: Send + Sync + Debug + 'static>(
+        &self,
+        source_trail: &mut Vec<SourceInfo>,
+    ) -> Option<&T> {
+        let bag = &self.head;
+        let inner_item = self
+            .tail
+            .as_ref()
+            .and_then(|bag| bag.sourced_get(source_trail));
+        let (item, source) = match bag.props.get::<Value<T>>() {
+            Some(Value::ExplicitlyUnset) => (None, SourceInfo::Unset { layer: bag.name }),
+            Some(Value::Set(v)) => (
+                Some(v),
+                SourceInfo::Set {
+                    layer: bag.name,
+                    value: format!("{:?}", v),
+                },
+            ),
+            None => (inner_item, SourceInfo::Inherit { layer: bag.name }),
+        };
+        source_trail.push(source);
+        item
     }
 }
 
-impl fmt::Debug for ConfigBag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ConfigBag").finish()
+impl Into<FrozenConfigBag> for ConfigBag {
+    fn into(self) -> FrozenConfigBag {
+        FrozenConfigBag(Arc::new(self))
     }
 }
 
-/// A wrapper of [`ConfigBag`] that can be safely shared across threads and cheaply cloned.
-///
-/// To access properties, use either `acquire` or `acquire_mut`. This can be one line for
-/// single property accesses, for example:
-/// ```rust
-/// # use aws_smithy_orchestrator::config_bag::SharedConfigBag;
-/// # let properties = SharedConfigBag::new();
-/// let my_string = properties.acquire().get::<String>();
-/// ```
-///
-/// For multiple accesses, the acquire result should be stored as a local since calling
-/// acquire repeatedly will be slower than calling it once:
-/// ```rust
-/// # use aws_smithy_orchestrator::config_bag::SharedConfigBag;
-/// # let properties = SharedConfigBag::new();
-/// let props = properties.acquire();
-/// let my_string = props.get::<String>();
-/// let my_vec = props.get::<Vec<String>>();
-/// ```
-///
-/// Use `acquire_mut` to insert properties into the bag:
-/// ```rust
-/// # use aws_smithy_orchestrator::config_bag::SharedConfigBag;
-/// # let properties = SharedConfigBag::new();
-/// properties.acquire_mut().insert("example".to_string());
-/// ```
-#[derive(Clone, Debug, Default)]
-pub struct SharedConfigBag(Arc<Mutex<ConfigBag>>);
-
-impl SharedConfigBag {
-    /// Create an empty `SharedConfigBag`.
-    pub fn new() -> Self {
-        SharedConfigBag(Arc::new(Mutex::new(ConfigBag::new())))
-    }
-
-    /// Acquire an immutable reference to the property bag.
-    pub fn acquire(&self) -> impl Deref<Target = ConfigBag> + '_ {
-        self.0.lock().unwrap()
-    }
-
-    /// Acquire a mutable reference to the property bag.
-    pub fn acquire_mut(&self) -> impl DerefMut<Target = ConfigBag> + '_ {
-        self.0.lock().unwrap()
-    }
-}
-
-impl From<ConfigBag> for SharedConfigBag {
-    fn from(bag: ConfigBag) -> Self {
-        SharedConfigBag(Arc::new(Mutex::new(bag)))
-    }
+#[derive(Debug)]
+pub enum SourceInfo {
+    Set { layer: &'static str, value: String },
+    Unset { layer: &'static str },
+    Inherit { layer: &'static str },
 }
 
 #[cfg(test)]
-#[test]
-fn test_extensions() {
-    #[derive(Debug, PartialEq)]
-    struct MyType(i32);
+mod test {
+    use super::ConfigBag;
 
-    let mut extensions = ConfigBag::new();
+    #[test]
+    fn layered_property_bag() {
+        #[derive(Debug)]
+        struct Prop1;
+        #[derive(Debug)]
+        struct Prop2;
+        let layer_a = |bag: &mut ConfigBag| {
+            bag.put(Prop1);
+        };
 
-    extensions.insert(5i32);
-    extensions.insert(MyType(10));
+        let layer_b = |bag: &mut ConfigBag| {
+            bag.put(Prop2);
+        };
 
-    assert_eq!(extensions.get(), Some(&5i32));
-    assert_eq!(extensions.get_mut(), Some(&mut 5i32));
+        #[derive(Debug)]
+        struct Prop3;
 
-    assert_eq!(extensions.remove::<i32>(), Some(5i32));
-    assert!(extensions.get::<i32>().is_none());
+        let mut base_bag = ConfigBag::base().with("a", layer_a).with_open("b", layer_b);
+        base_bag.put(Prop3);
+        let base_bag = base_bag.close();
+        assert!(base_bag.get::<Prop1>().is_some());
 
-    assert_eq!(extensions.get::<bool>(), None);
-    assert_eq!(extensions.get(), Some(&MyType(10)));
+        #[derive(Debug)]
+        struct Prop4;
+
+        let layer_c = |bag: &mut ConfigBag| {
+            bag.put(Prop4);
+            bag.unset::<Prop3>();
+        };
+
+        let final_bag = base_bag.with("c", layer_c);
+
+        assert!(final_bag.get::<Prop4>().is_some());
+        assert!(base_bag.get::<Prop4>().is_none());
+        assert!(final_bag.get::<Prop1>().is_some());
+        assert!(final_bag.get::<Prop2>().is_some());
+        // we unset prop3
+        assert!(final_bag.get::<Prop3>().is_none());
+    }
+
+    #[test]
+    fn config_bag() {
+        let bag = ConfigBag::base();
+        #[derive(Debug)]
+        struct Region(&'static str);
+        let bag = bag.with("service config", |layer| {
+            layer.put(Region("asdf"));
+        });
+
+        assert_eq!(bag.get::<Region>().unwrap().0, "asdf");
+
+        #[derive(Debug)]
+        struct SigningName(&'static str);
+        let operation_config = bag.with("operation", |layer| {
+            layer.put(SigningName("s3"));
+        });
+
+        assert!(bag.get::<SigningName>().is_none());
+        assert_eq!(operation_config.get::<SigningName>().unwrap().0, "s3");
+
+        let mut open_bag = operation_config.with_open("my_custom_info", |_bag| {});
+        open_bag.put("foo");
+    }
 }
