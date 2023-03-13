@@ -62,6 +62,7 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
     mapOf(
         // S3
         // TODO(https://github.com/awslabs/aws-sdk-rust/issues/488) Technically, all S3 operations support presigning
+        ShapeId.from("com.amazonaws.s3#HeadObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#UploadPart") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
