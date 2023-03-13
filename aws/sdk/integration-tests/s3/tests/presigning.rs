@@ -8,6 +8,7 @@ use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use http::{HeaderMap, HeaderValue};
 use s3::config::{Credentials, Region};
 use s3::operation::get_object::GetObjectInput;
+use s3::operation::head_object::HeadObjectInput;
 use s3::operation::put_object::PutObjectInput;
 use s3::operation::upload_part::UploadPartInput;
 use s3::presigning::{PresignedRequest, PresigningConfig};
@@ -148,7 +149,7 @@ async fn test_presigning_object_lambda() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_presigned_head_object() -> Result<(), Box<dyn Error>> {
-    let presigned = presign_input!(s3::input::HeadObjectInput::builder()
+    let presigned = presign_input!(HeadObjectInput::builder()
         .bucket("bucket")
         .key("key")
         .build()?);
