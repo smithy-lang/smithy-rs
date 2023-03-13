@@ -426,7 +426,7 @@ private fun OperationShape.fluentBuilderModule(
     else -> RustModule.public(
         "fluent_builders",
         parent = ClientRustModule.client,
-        documentation = """
+        documentationOverride = """
             Utilities to ergonomically construct a request to the service.
 
             Fluent builders are created through the [`Client`](crate::client::Client) by calling

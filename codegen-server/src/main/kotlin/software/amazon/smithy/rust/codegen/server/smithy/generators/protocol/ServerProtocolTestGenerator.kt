@@ -175,7 +175,7 @@ class ServerProtocolTestGenerator(
                 ),
                 inline = true,
             )
-            writer.withInlineModule(module) {
+            writer.withInlineModule(module, null) {
                 renderAllTestCases(operationShape, allTests)
             }
         }

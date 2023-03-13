@@ -139,6 +139,7 @@ open class ServerCodegenVisitor(
         codegenContext = ServerCodegenContext(
             model,
             serverSymbolProviders.symbolProvider,
+            null,
             service,
             protocol,
             settings,
@@ -151,7 +152,19 @@ open class ServerCodegenVisitor(
         // We can use a not-null assertion because [CombinedServerCodegenDecorator] returns a not null value.
         validationExceptionConversionGenerator = codegenDecorator.validationExceptionConversion(codegenContext)!!
 
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                ServerModuleDocProvider(),
+            ),
+        )
+
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 

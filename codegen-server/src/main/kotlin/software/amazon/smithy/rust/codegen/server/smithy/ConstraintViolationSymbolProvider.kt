@@ -82,7 +82,7 @@ class ConstraintViolationSymbolProvider(
             val symbol = base.toSymbol(this)
             "See [`${this.contextName(serviceShape)}`]($symbol)."
         } else {
-            null
+            ""
         }
 
         val syntheticTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>()
@@ -103,7 +103,7 @@ class ConstraintViolationSymbolProvider(
             visibility = visibility,
             parent = module,
             inline = true,
-            documentation = documentation,
+            documentationOverride = documentation,
         )
     }
 

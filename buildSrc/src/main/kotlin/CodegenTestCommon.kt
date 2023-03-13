@@ -37,6 +37,9 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                     "runtimeConfig": {
                         "relativePath": "$projectDir/rust-runtime"
                     },
+                    "codegen": {
+                        "enableNewCrateOrganizationScheme": false
+                    },
                     "service": "${it.service}",
                     "module": "${it.module}",
                     "moduleVersion": "0.0.1",
@@ -179,7 +182,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
-            outputDir.resolve(".cargo").mkdir()
+            outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """

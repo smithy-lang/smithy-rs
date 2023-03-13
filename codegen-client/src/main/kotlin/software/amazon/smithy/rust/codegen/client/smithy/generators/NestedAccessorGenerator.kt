@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.nestedAccessorN
 /** Generator for accessing nested fields through optional values **/
 class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
     private val symbolProvider = codegenContext.symbolProvider
-    private val module = RustModule.private("lens", "Generated accessors for nested fields")
+    private val module = RustModule.private("lens")
 
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item

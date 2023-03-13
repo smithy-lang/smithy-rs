@@ -15,5 +15,9 @@ object InlineAwsDependency {
         forRustFileAs(file, file, visibility, *additionalDependency)
 
     fun forRustFileAs(file: String, moduleName: String, visibility: Visibility = Visibility.PRIVATE, vararg additionalDependency: RustDependency): InlineDependency =
-        InlineDependency.Companion.forRustFile(RustModule.new(moduleName, visibility), "/aws-inlineable/src/$file.rs", *additionalDependency)
+        InlineDependency.Companion.forRustFile(
+            RustModule.new(moduleName, visibility, documentationOverride = ""),
+            "/aws-inlineable/src/$file.rs",
+            *additionalDependency,
+        )
 }
