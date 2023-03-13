@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -85,11 +86,17 @@ class StructureGeneratorTest {
         val secretStructure = model.lookup<StructureShape>("com.test#SecretStructure")
         val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
         val error = model.lookup<StructureShape>("com.test#MyError")
+
+        val rustReservedWordConfig: RustReservedWordConfig = RustReservedWordConfig(
+            structureMemberMap = StructureGenerator.structureMemberNameMap,
+            enumMemberMap = emptyMap(),
+            unionMemberMap = emptyMap(),
+        )
     }
 
     @Test
     fun `generate basic structures`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.useShapeWriter(inner) {
             StructureGenerator(model, provider, this, inner, emptyList()).render()
@@ -110,7 +117,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
 
         project.lib { Attribute.AllowDeprecated.render(this) }
@@ -140,7 +147,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, credentials, emptyList())
         generator.render()
@@ -160,7 +167,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, secretStructure, emptyList())
         generator.render()
@@ -178,7 +185,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to an inner struct`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.useShapeWriter(inner) {
             val secretGenerator = StructureGenerator(model, provider, this, secretStructure, emptyList())
@@ -219,7 +226,7 @@ class StructureGeneratorTest {
 
                nested2: Inner
         }""".asSmithyModel()
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.lib {
             Attribute.DenyMissingDocs.render(this)
@@ -234,7 +241,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `documents are optional in structs`() {
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val writer = RustWriter.forModule("lib")
         StructureGenerator(model, provider, writer, structWithDoc, emptyList()).render()
 
@@ -265,7 +272,7 @@ class StructureGeneratorTest {
             @deprecated(message: "Fly, you fools!", since: "1.2.3")
             structure Qux {}
         """.asSmithyModel()
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
         project.moduleFor(model.lookup("test#Foo")) {
@@ -298,7 +305,7 @@ class StructureGeneratorTest {
             @deprecated
             structure Bar {}
         """.asSmithyModel()
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
         project.moduleFor(model.lookup("test#Nested")) {
@@ -347,7 +354,7 @@ class StructureGeneratorTest {
                 }
                 """.asSmithyModel(),
             )
-        val provider = testSymbolProvider(testModel)
+        val provider = testSymbolProvider(testModel, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
 
         project.useShapeWriter(inner) {
@@ -407,7 +414,7 @@ class StructureGeneratorTest {
         """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         RustWriter.forModule("test").let {
             StructureGenerator(model, provider, it, struct, emptyList()).render()
             assertEquals(6, it.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
@@ -423,7 +430,7 @@ class StructureGeneratorTest {
         """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
-        val provider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         RustWriter.forModule("test").let { writer ->
             StructureGenerator(model, provider, writer, struct, emptyList()).render()
             writer.toString().shouldNotContain("#[doc(hidden)]")

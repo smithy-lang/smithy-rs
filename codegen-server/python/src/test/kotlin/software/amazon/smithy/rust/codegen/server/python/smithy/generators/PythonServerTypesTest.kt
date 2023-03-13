@@ -191,9 +191,9 @@ internal class PythonServerTypesTest {
                 use pyo3::{types::IntoPyDict, IntoPy, Python};
                 use hyper::{Body, Request, body};
                 use crate::{input, output, python_types};
-                
+
                 pyo3::prepare_freethreaded_python();
-                
+
                 let mut service = Service::builder_without_plugins()
                     .echo(|input: input::EchoInput| async {
                         Ok(Python::with_gil(|py| {
@@ -202,10 +202,10 @@ internal class PythonServerTypesTest {
                                 ("DateTime", py.get_type::<python_types::DateTime>()),
                             ].into_py_dict(py);
                             let locals = [("input", input.into_py(py))].into_py_dict(py);
-            
+
                             py.run("assert input.value.secs() == 1676298520", Some(globals), Some(locals)).unwrap();
                             py.run("output = EchoOutput(value=input.value, opt_value=DateTime.from_secs(1677771678))", Some(globals), Some(locals)).unwrap();
-                            
+
                             locals
                                 .get_item("output")
                                 .unwrap()
