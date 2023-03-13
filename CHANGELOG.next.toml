@@ -266,7 +266,7 @@ author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = "Enable presigning for S3's `HeadObject` operation."
-references = ["aws-sdk-rust#753"]
+references = ["aws-sdk-rust#753", "smithy-rs#2451"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
