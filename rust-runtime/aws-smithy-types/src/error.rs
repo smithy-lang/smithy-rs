@@ -8,11 +8,9 @@
 use std::fmt;
 
 pub mod display;
-pub mod interceptor;
 pub mod metadata;
 mod unhandled;
 
-pub use interceptor::Error;
 pub use metadata::ErrorMetadata;
 pub use unhandled::Unhandled;
 

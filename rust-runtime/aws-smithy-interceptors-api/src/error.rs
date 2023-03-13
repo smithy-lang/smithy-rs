@@ -12,19 +12,19 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// An error related to smithy interceptors.
 #[derive(Debug)]
-pub struct Error {
+pub struct InterceptorError {
     kind: ErrorKind,
-    source: BoxError,
+    source: Option<BoxError>,
 }
 
-impl Error {
+impl InterceptorError {
     /// Create a new error indicating a failure withing a read_before_execution interceptor
     pub fn read_before_execution(
         source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeExecution,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_serialization interceptor
@@ -33,7 +33,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeSerialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_before_serialization interceptor
@@ -42,7 +42,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeSerialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_serialization interceptor
@@ -51,7 +51,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterSerialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_retry_loop interceptor
@@ -60,7 +60,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeRetryLoop,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_before_attempt interceptor
@@ -69,7 +69,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeAttempt,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_signing interceptor
@@ -78,7 +78,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeSigning,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_before_signing interceptor
@@ -87,7 +87,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeSigning,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_signing interceptor
@@ -96,7 +96,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterSigning,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_transmit interceptor
@@ -105,7 +105,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeTransmit,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_before_transmit interceptor
@@ -114,7 +114,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeTransmit,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_transmit interceptor
@@ -123,7 +123,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterTransmit,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_deserialization interceptor
@@ -132,7 +132,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeDeserialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_before_deserialization interceptor
@@ -141,7 +141,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeDeserialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_deserialization interceptor
@@ -150,7 +150,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterDeserialization,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_attempt_completion interceptor
@@ -159,7 +159,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeAttemptCompletion,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_attempt interceptor
@@ -168,7 +168,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterAttempt,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a modify_before_completion interceptor
@@ -177,7 +177,7 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeCompletion,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating a failure withing a read_after_execution interceptor
@@ -186,34 +186,28 @@ impl Error {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterExecution,
-            source: source.into(),
+            source: Some(source.into()),
         }
     }
     /// Create a new error indicating that an interceptor tried to access the tx_request out of turn
-    pub fn invalid_tx_request_access(
-        source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    ) -> Self {
+    pub fn invalid_tx_request_access() -> Self {
         Self {
             kind: ErrorKind::InvalidTxRequestAccess,
-            source: source.into(),
+            source: None,
         }
     }
     /// Create a new error indicating that an interceptor tried to access the tx_response out of turn
-    pub fn invalid_tx_response_access(
-        source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    ) -> Self {
+    pub fn invalid_tx_response_access() -> Self {
         Self {
             kind: ErrorKind::InvalidTxResponseAccess,
-            source: source.into(),
+            source: None,
         }
     }
     /// Create a new error indicating that an interceptor tried to access the modeled_response out of turn
-    pub fn invalid_modeled_response_access(
-        source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    ) -> Self {
+    pub fn invalid_modeled_response_access() -> Self {
         Self {
             kind: ErrorKind::InvalidModeledResponseAccess,
-            source: source.into(),
+            source: None,
         }
     }
 }
@@ -267,7 +261,7 @@ enum ErrorKind {
     InvalidModeledResponseAccess,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for InterceptorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ErrorKind::*;
         match &self.kind {
@@ -342,8 +336,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
+impl std::error::Error for InterceptorError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.source.as_ref())
+        &self.source as _
     }
 }

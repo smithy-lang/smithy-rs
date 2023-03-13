@@ -6,7 +6,7 @@
 //! A token bucket intended for use with the standard smithy client retry policy.
 
 use super::Token;
-use crate::rate_limiting::error::Error;
+use crate::rate_limiting::error::RateLimitingError;
 use crate::rate_limiting::token;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use std::sync::Arc;
@@ -24,13 +24,16 @@ const STANDARD_RETRYABLE_ERROR_RETRY_COST: u32 = 5;
 /// the amount of requests sent by clients. Different token buckets may apply different strategies
 /// to manage the number of tokens in a bucket.
 ///
-/// related: [`Token`], [`Error`]
+/// related: [`Token`], [`RateLimitingError`]
 pub trait TokenBucket {
     /// The type of tokens this bucket dispenses.
     type Token: Token;
 
     /// Attempt to acquire a token from the bucket. This will fail if the bucket has no more tokens.
-    fn try_acquire(&self, previous_response_kind: Option<RetryKind>) -> Result<Self::Token, Error>;
+    fn try_acquire(
+        &self,
+        previous_response_kind: Option<RetryKind>,
+    ) -> Result<Self::Token, RateLimitingError>;
 
     /// Get the number of available tokens in the bucket.
     fn available(&self) -> usize;
@@ -126,7 +129,10 @@ impl Builder {
 impl TokenBucket for Standard {
     type Token = token::Standard;
 
-    fn try_acquire(&self, previous_response_kind: Option<RetryKind>) -> Result<Self::Token, Error> {
+    fn try_acquire(
+        &self,
+        previous_response_kind: Option<RetryKind>,
+    ) -> Result<Self::Token, RateLimitingError> {
         let number_of_tokens_to_acquire = match previous_response_kind {
             None => {
                 // Return an empty token because the quota layer lifecycle expects a for each
@@ -167,8 +173,8 @@ impl TokenBucket for Standard {
             .try_acquire_many_owned(number_of_tokens_to_acquire)
         {
             Ok(permit) => Ok(token::Standard::new(permit)),
-            Err(TryAcquireError::NoPermits) => Err(Error::NoTokens),
-            Err(other) => Err(Error::Bug(other.to_string())),
+            Err(TryAcquireError::NoPermits) => Err(RateLimitingError::no_tokens()),
+            Err(other) => Err(RateLimitingError::bug(other.to_string())),
         }
     }
 

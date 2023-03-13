@@ -7,8 +7,22 @@ use std::fmt;
 
 /// Errors related to a token bucket.
 #[derive(Debug)]
-pub struct Error {
+pub struct RateLimitingError {
     kind: ErrorKind,
+}
+
+impl RateLimitingError {
+    pub fn no_tokens() -> Self {
+        Self {
+            kind: ErrorKind::NoTokens,
+        }
+    }
+
+    pub fn bug(s: impl ToString) -> Self {
+        Self {
+            kind: ErrorKind::Bug(s.to_string()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -19,7 +33,7 @@ enum ErrorKind {
     Bug(String),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for RateLimitingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ErrorKind::*;
         match &self.kind {
@@ -29,4 +43,4 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for RateLimitingError {}
