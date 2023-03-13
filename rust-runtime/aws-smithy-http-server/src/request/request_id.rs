@@ -135,13 +135,14 @@ impl<S> Layer<S> for ServerRequestIdProviderLayer {
     }
 }
 
-impl<Body, S> Service<http::Request<Body>> for ServerRequestIdProvider<S>
+impl<Body, S> Service<http::Request<Body>> for ServerRequestIdProvider<ServerRequestIdResponseProvider<S>>
 where
-    S: Service<http::Request<Body>>,
+    S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
+    S::Future: std::marker::Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = S::Future;
+    type Future = ServerRequestIdResponseFuture<S::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
