@@ -269,3 +269,9 @@ message = "Enable presigning for S3's `HeadObject` operation."
 references = ["aws-sdk-rust#753"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Smithy members named `send` were previously renamed to `send_value` at codegen time. These will now be called `send` in the generated code."
+references = ["smithy-rs#2382"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
+author = "jdisanti"
