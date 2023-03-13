@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_async::rt::sleep::default_async_sleep;
-
 // This will fail due to lack of a connector when constructing the SDK Config
 #[tokio::test]
 #[should_panic(
@@ -20,8 +18,16 @@ async fn test_clients_from_sdk_config() {
     expected = "No HTTP connector was available. Enable the `rustls` or `native-tls` crate feature or set a connector to fix this."
 )]
 async fn test_clients_from_service_config() {
+    #[derive(Clone, Debug)]
+    struct StubSleep;
+    impl aws_smithy_async::rt::sleep::AsyncSleep for StubSleep {
+        fn sleep(&self, _duration: std::time::Duration) -> aws_sdk_s3::config::Sleep {
+            todo!()
+        }
+    }
+
     let config = aws_sdk_s3::Config::builder()
-        .sleep_impl(default_async_sleep().unwrap())
+        .sleep_impl(std::sync::Arc::new(StubSleep {}))
         .build();
     // This will panic due to the lack of an HTTP connector
     aws_sdk_s3::Client::from_conf(config);
