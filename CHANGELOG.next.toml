@@ -263,3 +263,9 @@ message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_h
 references = ["smithy-rs#2437", "aws-sdk-rust#600"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Enable presigning for S3's `HeadObject` operation."
+references = ["aws-sdk-rust#753"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
