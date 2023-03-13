@@ -15,8 +15,8 @@ aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-aws-smithy-interceptor = { path = "../aws-smithy-interceptor" }
-aws-smithy-token-bucket = { path = "../aws-smithy-token-bucket" }
+aws-smithy-interceptors-api = { path = "../aws-smithy-interceptors-api" }
+aws-smithy-retries = { path = "../aws-smithy-retries" }
 http = "0.2.8"
 http-body = "0.4.5"
 tower = { version = "0.4.13", features = ["util", "retry"] }

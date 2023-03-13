@@ -12,7 +12,7 @@ pub mod interceptor;
 pub mod metadata;
 mod unhandled;
 
-pub use interceptor::InterceptorError;
+pub use interceptor::Error;
 pub use metadata::ErrorMetadata;
 pub use unhandled::Unhandled;
 

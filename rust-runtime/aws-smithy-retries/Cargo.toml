@@ -1,8 +1,11 @@
 [package]
-name = "aws-smithy-token-bucket"
+name = "aws-smithy-retries"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
-description = "A token bucket trait and implementors of that trait used to control request send rates."
+description = """
+Smithy code related to retry handling and token bucket. This code defines when and how failed requests should be retried.
+It also defines the behavior used to limit the rate that requests are sent."
+"""
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"

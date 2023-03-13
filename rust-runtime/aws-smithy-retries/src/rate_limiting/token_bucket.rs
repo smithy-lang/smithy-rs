@@ -5,53 +5,38 @@
 
 //! A token bucket intended for use with the standard smithy client retry policy.
 
-use super::Error;
-use super::Token as TokenTrait;
-use super::TokenBucket as TokenBucketTrait;
+use super::Token;
+use crate::rate_limiting::error::Error;
+use crate::rate_limiting::token;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use std::sync::Arc;
-use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::TryAcquireError;
 
 /// The default number of tokens to start with
-const DEFAULT_INITIAL_RETRY_TOKENS: usize = 500;
+const STANDARD_INITIAL_RETRY_TOKENS: usize = 500;
 /// The amount of tokens to remove from the bucket when a timeout error occurs
-const DEFAULT_TIMEOUT_ERROR_RETRY_COST: u32 = 10;
+const STANDARD_TIMEOUT_ERROR_RETRY_COST: u32 = 10;
 /// The amount of tokens to remove from the bucket when a throttling error occurs
-const DEFAULT_RETRYABLE_ERROR_RETRY_COST: u32 = 5;
+const STANDARD_RETRYABLE_ERROR_RETRY_COST: u32 = 5;
 
-/// The token type of [`TokenBucket`].
-#[derive(Debug)]
-pub struct Token {
-    permit: Option<OwnedSemaphorePermit>,
-}
+/// This trait is implemented by types that act as token buckets. Token buckets are used to regulate
+/// the amount of requests sent by clients. Different token buckets may apply different strategies
+/// to manage the number of tokens in a bucket.
+///
+/// related: [`Token`], [`Error`]
+pub trait TokenBucket {
+    /// The type of tokens this bucket dispenses.
+    type Token: Token;
 
-impl Token {
-    fn new(permit: OwnedSemaphorePermit) -> Self {
-        Self {
-            permit: Some(permit),
-        }
-    }
+    /// Attempt to acquire a token from the bucket. This will fail if the bucket has no more tokens.
+    fn try_acquire(&self, previous_response_kind: Option<RetryKind>) -> Result<Self::Token, Error>;
 
-    // Return an "empty" token for times when you need to return a token but there's no "cost"
-    // associated with an action.
-    fn empty() -> Self {
-        Self { permit: None }
-    }
-}
+    /// Get the number of available tokens in the bucket.
+    fn available(&self) -> usize;
 
-impl TokenTrait for Token {
-    fn release(self) {
-        drop(self.permit)
-    }
-
-    fn forget(self) {
-        match self.permit {
-            Some(permit) => permit.forget(),
-            None => (),
-        }
-    }
+    /// Refill the bucket with the given number of tokens.
+    fn refill(&self, tokens: usize);
 }
 
 /// A token bucket implementation that uses a `tokio::sync::Semaphore` to track the number of tokens.
@@ -65,14 +50,14 @@ impl TokenTrait for Token {
 ///
 /// The number of tokens in the bucket will always be >= `0` and <= `<max_tokens>`.
 #[derive(Clone, Debug)]
-pub struct TokenBucket {
+pub struct Standard {
     inner: Arc<Semaphore>,
     max_tokens: usize,
     timeout_error_cost: u32,
     retryable_error_cost: u32,
 }
 
-impl TokenBucket {
+impl Standard {
     /// Create a new `TokenBucket` using builder methods.
     pub fn builder() -> Builder {
         Builder::default()
@@ -117,17 +102,19 @@ impl Builder {
     }
 
     /// Build this builder. Unset fields will be set to their default values.
-    pub fn build(self) -> TokenBucket {
-        let starting_tokens = self.starting_tokens.unwrap_or(DEFAULT_INITIAL_RETRY_TOKENS);
+    pub fn build(self) -> Standard {
+        let starting_tokens = self
+            .starting_tokens
+            .unwrap_or(STANDARD_INITIAL_RETRY_TOKENS);
         let max_tokens = self.max_tokens.unwrap_or(starting_tokens);
         let timeout_error_cost = self
             .timeout_error_cost
-            .unwrap_or(DEFAULT_TIMEOUT_ERROR_RETRY_COST);
+            .unwrap_or(STANDARD_TIMEOUT_ERROR_RETRY_COST);
         let retryable_error_cost = self
             .retryable_error_cost
-            .unwrap_or(DEFAULT_RETRYABLE_ERROR_RETRY_COST);
+            .unwrap_or(STANDARD_RETRYABLE_ERROR_RETRY_COST);
 
-        TokenBucket {
+        Standard {
             inner: Arc::new(Semaphore::new(starting_tokens)),
             max_tokens,
             timeout_error_cost,
@@ -136,8 +123,8 @@ impl Builder {
     }
 }
 
-impl TokenBucketTrait for TokenBucket {
-    type Token = Token;
+impl TokenBucket for Standard {
+    type Token = token::Standard;
 
     fn try_acquire(&self, previous_response_kind: Option<RetryKind>) -> Result<Self::Token, Error> {
         let number_of_tokens_to_acquire = match previous_response_kind {
@@ -145,7 +132,7 @@ impl TokenBucketTrait for TokenBucket {
                 // Return an empty token because the quota layer lifecycle expects a for each
                 // request even though the standard token bucket only requires tokens for retry
                 // attempts.
-                return Ok(Token::empty());
+                return Ok(token::Standard::empty());
             }
 
             Some(retry_kind) => match retry_kind {
@@ -179,7 +166,7 @@ impl TokenBucketTrait for TokenBucket {
             .clone()
             .try_acquire_many_owned(number_of_tokens_to_acquire)
         {
-            Ok(permit) => Ok(Token::new(permit)),
+            Ok(permit) => Ok(token::Standard::new(permit)),
             Err(TryAcquireError::NoPermits) => Err(Error::NoTokens),
             Err(other) => Err(Error::Bug(other.to_string())),
         }
@@ -201,23 +188,23 @@ impl TokenBucketTrait for TokenBucket {
 #[cfg(test)]
 mod test {
     use super::{
-        DEFAULT_INITIAL_RETRY_TOKENS, DEFAULT_RETRYABLE_ERROR_RETRY_COST,
-        DEFAULT_TIMEOUT_ERROR_RETRY_COST,
+        STANDARD_INITIAL_RETRY_TOKENS, STANDARD_RETRYABLE_ERROR_RETRY_COST,
+        STANDARD_TIMEOUT_ERROR_RETRY_COST,
     };
-    use crate::{Token, TokenBucket};
+    use crate::rate_limiting::{Token, TokenBucket};
     use aws_smithy_types::retry::{ErrorKind, RetryKind};
 
     #[test]
     fn bucket_works() {
-        let bucket = super::TokenBucket::builder().build();
-        assert_eq!(bucket.available(), DEFAULT_INITIAL_RETRY_TOKENS);
+        let bucket = super::Standard::builder().build();
+        assert_eq!(bucket.available(), STANDARD_INITIAL_RETRY_TOKENS);
 
         let token = bucket
             .try_acquire(Some(RetryKind::Error(ErrorKind::ServerError)))
             .unwrap();
         assert_eq!(
             bucket.available(),
-            DEFAULT_INITIAL_RETRY_TOKENS - DEFAULT_RETRYABLE_ERROR_RETRY_COST as usize
+            STANDARD_INITIAL_RETRY_TOKENS - STANDARD_RETRYABLE_ERROR_RETRY_COST as usize
         );
         Box::new(token).release();
 
@@ -226,15 +213,15 @@ mod test {
             .unwrap();
         assert_eq!(
             bucket.available(),
-            DEFAULT_INITIAL_RETRY_TOKENS - DEFAULT_TIMEOUT_ERROR_RETRY_COST as usize
+            STANDARD_INITIAL_RETRY_TOKENS - STANDARD_TIMEOUT_ERROR_RETRY_COST as usize
         );
         Box::new(token).forget();
         assert_eq!(
             bucket.available(),
-            DEFAULT_INITIAL_RETRY_TOKENS - DEFAULT_TIMEOUT_ERROR_RETRY_COST as usize
+            STANDARD_INITIAL_RETRY_TOKENS - STANDARD_TIMEOUT_ERROR_RETRY_COST as usize
         );
 
-        bucket.refill(DEFAULT_TIMEOUT_ERROR_RETRY_COST as usize);
-        assert_eq!(bucket.available(), DEFAULT_INITIAL_RETRY_TOKENS);
+        bucket.refill(STANDARD_TIMEOUT_ERROR_RETRY_COST as usize);
+        assert_eq!(bucket.available(), STANDARD_INITIAL_RETRY_TOKENS);
     }
 }

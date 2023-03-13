@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_types::error::InterceptorError;
+use aws_smithy_types::error::Error;
 
 /// A container for the data currently available to an interceptor.
 pub struct InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
@@ -44,7 +44,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn tx_request(&self) -> Result<&TxReq, InterceptorError> {
+    pub fn tx_request(&self) -> Result<&TxReq, Error> {
         match (
             &self.tx_request,
             self.inner_context
@@ -53,13 +53,13 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
         ) {
             (Some(req), _) => Ok(req),
             (None, Some(req)) => Ok(req),
-            (None, _) => Err(InterceptorError::InvalidTxRequestAccess),
+            (None, _) => Err(Error::InvalidTxRequestAccess),
         }
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn tx_request_mut(&mut self) -> Result<&mut TxReq, InterceptorError> {
+    pub fn tx_request_mut(&mut self) -> Result<&mut TxReq, Error> {
         match (
             &mut self.tx_request,
             self.inner_context
@@ -68,44 +68,44 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
         ) {
             (Some(req), _) => Ok(req),
             (None, Some(req)) => Ok(req),
-            (None, _) => Err(InterceptorError::InvalidTxRequestAccess),
+            (None, _) => Err(Error::InvalidTxRequestAccess),
         }
     }
 
     /// Retrieve the response to the transmittable request for the operation
     /// being invoked. This will only be available once transmission has
     /// completed.
-    pub fn tx_response(&self) -> Result<&TxRes, InterceptorError> {
+    pub fn tx_response(&self) -> Result<&TxRes, Error> {
         self.tx_response
             .as_ref()
-            .ok_or(InterceptorError::InvalidTxResponseAccess)
+            .ok_or(Error::InvalidTxResponseAccess)
     }
 
     /// Retrieve the response to the transmittable request for the operation
     /// being invoked. This will only be available once transmission has
     /// completed.
-    pub fn tx_response_mut(&mut self) -> Result<&mut TxRes, InterceptorError> {
+    pub fn tx_response_mut(&mut self) -> Result<&mut TxRes, Error> {
         self.tx_response
             .as_mut()
-            .ok_or(InterceptorError::InvalidTxResponseAccess)
+            .ok_or(Error::InvalidTxResponseAccess)
     }
 
     /// Retrieve the response to the customer. This will only be available
     /// once the [transmit_response] has been unmarshalled or the
     /// attempt/execution has failed.
-    pub fn modeled_response(&self) -> Result<&ModRes, InterceptorError> {
+    pub fn modeled_response(&self) -> Result<&ModRes, Error> {
         self.modeled_response
             .as_ref()
-            .ok_or(InterceptorError::InvalidModeledResponseAccess)
+            .ok_or(Error::InvalidModeledResponseAccess)
     }
 
     /// Retrieve the response to the customer. This will only be available
     /// once the [transmit_response] has been unmarshalled or the
     /// attempt/execution has failed.
-    pub fn modeled_response_mut(&mut self) -> Result<&mut ModRes, InterceptorError> {
+    pub fn modeled_response_mut(&mut self) -> Result<&mut ModRes, Error> {
         self.modeled_response
             .as_mut()
-            .ok_or(InterceptorError::InvalidModeledResponseAccess)
+            .ok_or(Error::InvalidModeledResponseAccess)
     }
 
     // There is no set_modeled_request method because that can only be set once, during context construction
@@ -134,13 +134,11 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
         self.modeled_response = Some(modeled_response);
     }
 
-    pub fn into_responses(self) -> Result<(ModRes, TxRes), InterceptorError> {
+    pub fn into_responses(self) -> Result<(ModRes, TxRes), Error> {
         let mod_res = self
             .modeled_response
-            .ok_or(InterceptorError::InvalidModeledResponseAccess)?;
-        let tx_res = self
-            .tx_response
-            .ok_or(InterceptorError::InvalidTxResponseAccess)?;
+            .ok_or(Error::InvalidModeledResponseAccess)?;
+        let tx_res = self.tx_response.ok_or(Error::InvalidTxResponseAccess)?;
 
         Ok((mod_res, tx_res))
     }
