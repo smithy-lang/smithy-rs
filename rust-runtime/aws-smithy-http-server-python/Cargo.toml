@@ -57,7 +57,7 @@ hyper-rustls = { version = "0.23.1", features = ["http2"] }
 
 # PyO3 Asyncio tests cannot use Cargo's default testing harness because `asyncio`
 # wants to control the main thread. So we need to use testing harness provided by `pyo3_asyncio`
-# for the async Python tests. For more detail see: 
+# for the async Python tests. For more detail see:
 # https://docs.rs/pyo3-asyncio/0.18.0/pyo3_asyncio/testing/index.html#pyo3-asyncio-testing-utilities
 [[test]]
 name = "middleware_tests"
