@@ -6,7 +6,7 @@ description = "Smithy interceptors for smithy clients"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-publish = "false"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
