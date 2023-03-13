@@ -15,9 +15,9 @@ aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client" }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-interceptor = { path = "../../build/aws-sdk/sdk/aws-smithy-interceptor" }
+aws-smithy-interceptors-api = { path = "../../build/aws-sdk/sdk/aws-smithy-interceptors-api" }
 aws-smithy-orchestrator = { path = "../../build/aws-sdk/sdk/aws-smithy-orchestrator" }
-aws-smithy-token-bucket = { path = "../../build/aws-sdk/sdk/aws-smithy-token-bucket" }
+aws-smithy-retries = { path = "../../build/aws-sdk/sdk/aws-smithy-retries" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1.8.4", features = ["macros", "test-util", "rt-multi-thread"] }
 tracing = "0.1.37"
