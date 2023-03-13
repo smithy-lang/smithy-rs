@@ -60,6 +60,15 @@ open class StructureGenerator(
     private val shape: StructureShape,
     private val customizations: List<StructureCustomization>,
 ) {
+    companion object {
+        /** Reserved struct member names */
+        val structureMemberNameMap: Map<String, String> = mapOf(
+            "build" to "build_value",
+            "builder" to "builder_value",
+            "default" to "default_value",
+        )
+    }
+
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
     private val accessorMembers: List<MemberShape> = when (errorTrait) {
