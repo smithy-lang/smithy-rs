@@ -51,9 +51,7 @@ impl DefaultResponseRetryClassifier {
                 }
             }
             Err(SdkError::ResponseError { .. }) => Err(RetryKind::Error(ErrorKind::TransientError)),
-            Err(SdkError::ConstructionFailure(_)) | Err(SdkError::InterceptorError(_)) => {
-                Err(RetryKind::UnretryableFailure)
-            }
+            Err(SdkError::ConstructionFailure(_)) => Err(RetryKind::UnretryableFailure),
         }
     }
 }

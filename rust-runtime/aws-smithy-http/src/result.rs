@@ -16,10 +16,11 @@ use crate::operation;
 use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
 use aws_smithy_types::error::ErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
+use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+type BoxError = Box<dyn Error + Send + Sync>;
 
 /// Successful SDK Result
 #[derive(Debug)]
@@ -71,7 +72,7 @@ pub mod builders {
     source_only_error_builder!(TimeoutError, TimeoutErrorBuilder, BoxError);
     source_only_error_builder!(DispatchFailure, DispatchFailureBuilder, ConnectorError);
 
-    /// Builder for [`ResponseError`](ResponseError).
+    /// Builder for [`ResponseError`](super::ResponseError).
     #[derive(Debug)]
     pub struct ResponseErrorBuilder<R> {
         source: Option<BoxError>,
@@ -126,7 +127,7 @@ pub mod builders {
         }
     }
 
-    /// Builder for [`ServiceError`](ServiceError).
+    /// Builder for [`ServiceError`](super::ServiceError).
     #[derive(Debug)]
     pub struct ServiceErrorBuilder<E, R> {
         source: Option<E>,
@@ -309,7 +310,7 @@ impl<E, R> ServiceError<E, R> {
 pub trait CreateUnhandledError {
     /// Creates an unhandled error variant with the given `source` and error metadata.
     fn create_unhandled_error(
-        source: Box<dyn std::error::Error + Send + Sync + 'static>,
+        source: Box<dyn Error + Send + Sync + 'static>,
         meta: Option<ErrorMetadata>,
     ) -> Self;
 }
@@ -420,7 +421,7 @@ impl<E, R> SdkError<E, R> {
     /// Converts this error into its error source.
     ///
     /// If there is no error source, then `Err(Self)` is returned.
-    pub fn into_source(self) -> Result<Box<dyn std::error::Error + Send + Sync + 'static>, Self>
+    pub fn into_source(self) -> Result<Box<dyn Error + Send + Sync + 'static>, Self>
     where
         E: std::error::Error + Send + Sync + 'static,
     {
@@ -447,12 +448,12 @@ impl<E, R> Display for SdkError<E, R> {
     }
 }
 
-impl<E, R> std::error::Error for SdkError<E, R>
+impl<E, R> Error for SdkError<E, R>
 where
-    E: std::error::Error + 'static,
+    E: Error + 'static,
     R: Debug,
 {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         use SdkError::*;
         match self {
             ConstructionFailure(context) => Some(context.source.as_ref()),
@@ -517,8 +518,8 @@ impl Display for ConnectorError {
     }
 }
 
-impl std::error::Error for ConnectorError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl Error for ConnectorError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.source.as_ref())
     }
 }
