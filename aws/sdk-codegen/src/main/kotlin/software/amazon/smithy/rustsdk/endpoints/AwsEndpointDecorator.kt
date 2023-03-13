@@ -168,11 +168,9 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                     /// ## Examples
                     /// ```no_run
                     /// ## fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
-                    /// use #{aws_types}::region::Region;
-                    /// use $moduleUseName::config::{Builder, Config};
-                    /// use $moduleUseName::Endpoint;
+                    /// use $moduleUseName::config::{Config, Endpoint, Region};
                     ///
-                    /// let config = $moduleUseName::Config::builder()
+                    /// let config = Config::builder()
                     ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080")?)
                     ///     .build();
                     /// ## Ok(())
