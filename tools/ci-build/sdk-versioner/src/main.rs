@@ -29,6 +29,9 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
+        /// Makes each individual crate its own workspace
+        #[clap(long)]
+        isolate_crates: bool,
     },
     /// Revise crates to use version numbers in dependencies
     UseVersionDependencies {
@@ -38,6 +41,9 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
+        /// Makes each individual crate its own workspace
+        #[clap(long)]
+        isolate_crates: bool,
     },
     /// Revise crates to use version numbers AND paths in dependencies
     UsePathAndVersionDependencies {
@@ -50,6 +56,9 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
+        /// Makes each individual crate its own workspace
+        #[clap(long)]
+        isolate_crates: bool,
     },
 }
 
@@ -59,6 +68,14 @@ impl Args {
             Self::UsePathDependencies { crate_paths, .. } => crate_paths,
             Self::UseVersionDependencies { crate_paths, .. } => crate_paths,
             Self::UsePathAndVersionDependencies { crate_paths, .. } => crate_paths,
+        }
+    }
+
+    fn isolate_crates(&self) -> bool {
+        *match self {
+            Self::UsePathDependencies { isolate_crates, .. } => isolate_crates,
+            Self::UseVersionDependencies { isolate_crates, .. } => isolate_crates,
+            Self::UsePathAndVersionDependencies { isolate_crates, .. } => isolate_crates,
         }
     }
 
@@ -103,7 +120,7 @@ fn main() -> Result<()> {
     }
 
     for manifest_path in manifest_paths {
-        update_manifest(&manifest_path, &dependency_context)?;
+        update_manifest(&manifest_path, &dependency_context, args.isolate_crates())?;
     }
 
     println!("Finished in {:?}", start_time.elapsed());
@@ -113,6 +130,7 @@ fn main() -> Result<()> {
 fn update_manifest(
     manifest_path: &Path,
     dependency_context: &DependencyContext,
+    isolate_crates: bool,
 ) -> anyhow::Result<()> {
     println!("Updating {:?}...", manifest_path);
 
@@ -136,6 +154,17 @@ fn update_manifest(
                 update_dependencies(dependencies.as_table_mut().unwrap(), dependency_context)?
                     || changed;
         }
+    }
+    if isolate_crates && !metadata.contains_key("workspace") {
+        let package_position = metadata["package"]
+            .as_table()
+            .expect("has a package")
+            .position()
+            .unwrap_or_default();
+        let mut workspace = Table::new();
+        workspace.set_position(package_position);
+        metadata.insert("workspace", Item::Table(workspace));
+        changed = true;
     }
 
     if changed {
@@ -292,12 +321,12 @@ features = ["foo", "baz"]
 "#;
 
     #[track_caller]
-    fn test_with_context(context: DependencyContext, expected: &[u8]) {
+    fn test_with_context(isolate_crates: bool, context: DependencyContext, expected: &[u8]) {
         let manifest_file = tempfile::NamedTempFile::new().unwrap();
         let manifest_path = manifest_file.into_temp_path();
         std::fs::write(&manifest_path, TEST_MANIFEST).unwrap();
 
-        update_manifest(&manifest_path, &context).expect("success");
+        update_manifest(&manifest_path, &context, isolate_crates).expect("success");
 
         let actual =
             String::from_utf8(std::fs::read(&manifest_path).expect("read tmp file")).unwrap();
@@ -308,6 +337,7 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_versions() {
         test_with_context(
+            false,
             DependencyContext {
                 sdk_path: None,
                 versions_manifest: Some(versions_toml_for(&[
@@ -343,6 +373,7 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_paths() {
         test_with_context(
+            false,
             DependencyContext {
                 sdk_path: Some(&PathBuf::from("/foo/asdf/")),
                 versions_manifest: None,
@@ -373,6 +404,7 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_versions_and_paths() {
         test_with_context(
+            false,
             DependencyContext {
                 sdk_path: Some(&PathBuf::from("/foo/asdf/")),
                 versions_manifest: Some(versions_toml_for(&[
@@ -386,6 +418,44 @@ features = ["foo", "baz"]
 [package]
 name = "test"
 version = "0.1.0"
+
+# Some comment that should be preserved
+[dependencies]
+aws-config = { version = "0.5.0", path = "/foo/asdf/aws-config" }
+aws-sdk-s3 = { version = "0.13.0", path = "/foo/asdf/s3" }
+aws-smithy-types = { version = "0.10.0", path = "/foo/asdf/aws-smithy-types" }
+aws-smithy-http = { version = "0.9.0", path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#
+        );
+    }
+
+    #[test]
+    fn update_dependencies_isolate_crates() {
+        test_with_context(
+            true,
+            DependencyContext {
+                sdk_path: Some(&PathBuf::from("/foo/asdf/")),
+                versions_manifest: Some(versions_toml_for(&[
+                    ("aws-config", "0.5.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-smithy-types", "0.10.0"),
+                    ("aws-smithy-http", "0.9.0"),
+                ])),
+            },
+            br#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[workspace]
 
 # Some comment that should be preserved
 [dependencies]
