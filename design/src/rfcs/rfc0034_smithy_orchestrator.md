@@ -2,10 +2,6 @@
 
 > status: RFC
 > applies-to: The smithy client
----
-status: RFC
-applies-to: "The smithy client"
----
 
 This RFC proposes a new process for constructing client requests and handling service responses. This new process is intended to:
 
@@ -24,6 +20,16 @@ This RFC references but is not the source of truth on:
 - Interceptors: To be described in depth in a future RFC.
 - Runtime Plugins: To be described in depth in a future RFC.
 
+## TLDR;
+
+When a smithy client communicates with a smithy service, messages are handled by an "orchestrator." The orchestrator runs in two main phases:
+1. Constructing configuration.
+	- This process is user-configurable with "runtime plugins."
+	- Configuration is stored in a typemap.
+1. Transforming a client request into a server response.
+	- This process is user-configurable with "interceptors."
+	- Interceptors are functions that are run by "hooks" in the request/response lifecycle.
+
 ## Terminology
 
 - **SDK Client**: A high-level abstraction allowing users to make requests to remote services.
@@ -36,9 +42,10 @@ This RFC references but is not the source of truth on:
 - **The request/response lifecycle**: The process by which an *SDK client* makes requests and receives responses from a *remote service*. This process is enacted and managed by the *orchestrator*.
 - **Orchestrator**: The code within an *SDK client* that handles the process of making requests and receiving responses from *remote services*. The orchestrator is configurable by modifying the *runtime plugins* it's built from. The orchestrator is responsible for calling *interceptors* at the appropriate times in the *request/response lifecycle*.
 - **Interceptor**/**Hook**: A generic extension point within the *orchestrator*. Supports "anything that someone should be able to do", NOT "anything anyone might want to do". These hooks are:
-    - Either **read-only** or **read/write**.
-    - Able to read and modify the **Input**, **Transport Request**, **Transport Response**, or **Output** messages.
+	- Either **read-only** or **read/write**.
+	- Able to read and modify the **Input**, **Transport Request**, **Transport Response**, or **Output** messages.
 - **Runtime Plugin**: Runtime plugins are similar to interceptors, but they act on configuration instead of requests and response. Both users and services may define runtime plugins. Smithy also defines several default runtime plugins used by most clients. See the F.A.Q. for a list of plugins with descriptions.
+- **ConfigBag**: A `typemap` that's equivalent to [`http::Extensions`](https://docs.rs/http/latest/http/struct.Extensions.html). Used to store configuration for the orchestrator.
 
 ## The user experience if this RFC is implemented
 
@@ -48,14 +55,14 @@ For many users, the changes described by this RFC will be invisible. Making a re
 let sdk_config = aws_config::load_from_env().await;
 let client = aws_sdk_s3::Client::new(&sdk_config);
 let res = client.get_object()
-    .bucket("a-bucket")
-    .key("a-file.txt")
-    .send()
-    .await?;
+	.bucket("a-bucket")
+	.key("a-file.txt")
+	.send()
+	.await?;
 
 match res {
-    Ok(res) => println!("success: {:?}"),
-    Err(err) => eprintln!("failure: {:?}")
+	Ok(res) => println!("success: {:?}"),
+	Err(err) => eprintln!("failure: {:?}")
 };
 ```
 
@@ -84,19 +91,19 @@ input message.
 marshaling the input message into a transport message.
 1. **Read After Serialization *(Read-Only)***: The first thing the SDK calls after marshaling the input message into a transport message.
 1. *(Retry Loop)*
-    1. **Modify Before Retry Loop *(Read/Write)***: The last thing the SDK calls before entering the retry look. Allows modifying the transport message.
-    1. **Read Before Attempt *(Read-Only)***: The first thing the SDK calls “inside” of the retry loop.
-    1. **Modify Before Signing *(Read/Write)***: Before the transport request message is signed. Allows modifying the transport message.
-    1. **Read Before Signing *(Read-Only)***: The last thing the SDK calls before signing the transport request message.
-    1. **Read After Signing (Read-Only)****: The first thing the SDK calls after signing the transport request message.
-    1. **Modify Before Transmit *(Read/Write)***: Before the transport request message is sent to the service. Allows modifying the transport message.
-    1. **Read Before Transmit *(Read-Only)***: The last thing the SDK calls before sending the transport request message.
-    1. **Read After Transmit *(Read-Only)***: The last thing the SDK calls after receiving the transport response message.
-    1. **Modify Before Deserialization *(Read/Write)***: Before the transport response message is unmarshaled. Allows modifying the transport response message.
-    1. **Read Before Deserialization *(Read-Only)***: The last thing the SDK calls before unmarshalling the transport response message into an output message.
-    1. **Read After Deserialization *(Read-Only)***: The last thing the SDK calls after unmarshaling the transport response message into an output message.
-    1. **Modify Before Attempt Completion *(Read/Write)***: Before the retry loop ends. Allows modifying the unmarshaled response (output message or error).
-    1. **Read After Attempt *(Read-Only)***: The last thing the SDK calls “inside” of the retry loop.
+	1. **Modify Before Retry Loop *(Read/Write)***: The last thing the SDK calls before entering the retry look. Allows modifying the transport message.
+	1. **Read Before Attempt *(Read-Only)***: The first thing the SDK calls “inside” of the retry loop.
+	1. **Modify Before Signing *(Read/Write)***: Before the transport request message is signed. Allows modifying the transport message.
+	1. **Read Before Signing *(Read-Only)***: The last thing the SDK calls before signing the transport request message.
+	1. **Read After Signing (Read-Only)****: The first thing the SDK calls after signing the transport request message.
+	1. **Modify Before Transmit *(Read/Write)***: Before the transport request message is sent to the service. Allows modifying the transport message.
+	1. **Read Before Transmit *(Read-Only)***: The last thing the SDK calls before sending the transport request message.
+	1. **Read After Transmit *(Read-Only)***: The last thing the SDK calls after receiving the transport response message.
+	1. **Modify Before Deserialization *(Read/Write)***: Before the transport response message is unmarshaled. Allows modifying the transport response message.
+	1. **Read Before Deserialization *(Read-Only)***: The last thing the SDK calls before unmarshalling the transport response message into an output message.
+	1. **Read After Deserialization *(Read-Only)***: The last thing the SDK calls after unmarshaling the transport response message into an output message.
+	1. **Modify Before Attempt Completion *(Read/Write)***: Before the retry loop ends. Allows modifying the unmarshaled response (output message or error).
+	1. **Read After Attempt *(Read-Only)***: The last thing the SDK calls “inside” of the retry loop.
 1. **Modify Before Execution Completion *(Read/Write)***: Before the execution ends. Allows modifying the unmarshaled response (output message or error).
 1. **Read After Execution *(Read-Only)***: After everything has happened. This is the last thing the SDK calls during operation execution.
 
@@ -123,6 +130,69 @@ The optional request and response types in the interceptor context can only be a
 
 ## How to implement this RFC
 
+### Integrating with the orchestrator
+
+Imagine we have some sort of request signer. This signer doesn't refer to any orchestrator types. All it needs is a `HeaderMap` along with two strings, and will return a signature in string form.
+
+```rust
+struct Signer;
+
+impl Signer {
+    fn sign(headers: &http::HeaderMap, signing_name: &str, signing_region: &str) -> String {
+    todo!()
+    }
+}
+```
+
+Now imagine things from the orchestrator's point of view. It requires something that implements an `AuthOrchestrator` which will be responsible for resolving the correct auth
+scheme, identity, and signer for an operation, as well as signing the request
+
+```rust
+pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
+  fn auth_request(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
+}
+
+// And it calls that `AuthOrchestrator` like so:
+fn invoke() {
+  // code omitted for brevity
+
+  // Get the request to be signed
+  let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
+  // Fetch the auth orchestrator from the bag
+  let auth_orchestrator = cfg    .get::<Box<dyn AuthOrchestrator<Req>>>()    .ok_or("missing auth orchestrator")?;
+  // Auth the request
+  auth_orchestrator.auth_request(tx_req_mut, cfg)?;
+
+  // code omitted for brevity
+}
+```
+
+The specific implementation of the `AuthOrchestrator` is what brings these two things together:
+
+```rust
+struct Sigv4AuthOrchestrator;
+
+impl AuthOrchestrator for Sigv4AuthOrchestrator {
+    fn auth_request(&self, req: &mut http::Request<SdkBody>, cfg: &ConfigBag) -> Result<(), BoxError> {
+        let signer = Signer;
+        let signing_name = cfg.get::<SigningName>().ok_or(Error::MissingSigningName)?;
+        let signing_region = cfg.get::<SigningRegion>().ok_or(Error::MissingSigningRegion)?;
+        let headers = req.headers_mut();
+
+        let signature = signer.sign(headers, signing_name, signing_region);
+        match cfg.get::<SignatureLocation>() {
+            Some(Query) => req.query.set("sig", signature),
+                Some(Header) => req.headers_mut().insert("sig", signature),
+                None => return Err(Error::MissingSignatureLocation),
+        };
+
+        Ok(())
+    }
+}
+```
+
+This intermediate code should be free from as much logic as possible. Whenever possible, we must maintain this encapsulation. Doing so will make the Orchestrator more flexible, maintainable, and understandable.
+
 ### Layered configuration, stored in type maps
 
 > **Type map**: A data structure where stored values are keyed by their type. Hence, only one value can be stored for a given type.
@@ -131,24 +201,24 @@ The optional request and response types in the interceptor context can only be a
 
 ```rust
  let conf: ConfigBag = aws_config::from_env()
-    // Configuration can be common to all smithy clients
-    .with(RetryConfig::builder().disable_retries().build())
-    // Or, protocol-specific
-    .with(HttpClient::builder().with_().build())
-    // Or, AWS-specific
-    .with(Region::from("us-east-1"))
-    // Or, service-specific
-    .with(S3Config::builder().force_path_style(false).build())
-    .await;
+	// Configuration can be common to all smithy clients
+	.with(RetryConfig::builder().disable_retries().build())
+	// Or, protocol-specific
+	.with(HttpClient::builder().with_().build())
+	// Or, AWS-specific
+	.with(Region::from("us-east-1"))
+	// Or, service-specific
+	.with(S3Config::builder().force_path_style(false).build())
+	.await;
 
 let client = aws_sdk_s3::Client::new(&conf);
 
 client.list_buckets()
-    .customize()
-    // Configuration can be set on operations as well as clients
-    .with(HttpConfig::builder().conn(some_other_conn).build())
-    .send()
-    .await;
+	.customize()
+	// Configuration can be set on operations as well as clients
+	.with(HttpConfig::builder().conn(some_other_conn).build())
+	.send()
+	.await;
 ```
 
 Setting configuration that will not be used wastes memory and can make debugging more difficult. Therefore, configuration defaults are only set when they're relevant. For example, if a smithy service doesn't support HTTP, then no HTTP client will be set.
@@ -159,26 +229,26 @@ Configuration has precedence. Configuration set on an operation will override co
 
 ```rust
 let conf: ConfigBag = aws_config::from_env()
-    .with(SomeConfig::builder()
-        .option_a(1)
-        .option_b(2)
-        .option_c(3)
-        .build()
-    )
-    .await;
+	.with(SomeConfig::builder()
+		.option_a(1)
+		.option_b(2)
+		.option_c(3)
+		.build()
+	)
+	.await;
 
 let client = aws_sdk_s3::Client::new(&conf);
 
 client.list_buckets()
-    .customize()
-    .with(SomeConfig::builder()
-        .option_a(0)
-        .option_b(Value::Inherit)
-        .option_c(Value::Unset)
-        .build()
-    )
-    .send()
-    .await;
+	.customize()
+	.with(SomeConfig::builder()
+		.option_a(0)
+		.option_b(Value::Inherit)
+		.option_c(Value::Unset)
+		.build()
+	)
+	.send()
+	.await;
 ```
 
 In the above example, when the `option_a`, `option_b`, `option_c`, values of `SomeConfig` are accessed, they'll return:
@@ -197,23 +267,46 @@ Builders are defined like this:
 
 ```rust
 struct SomeBuilder {
-    value: Value<T>,
+	value: Value<T>,
 }
 
 impl struct SomeBuilder<T> {
-    fn new() -> Self {
-        // By default, config values inherit from lower-layer configs
-        Self { value: Value::Inherit }
-    }
+	fn new() -> Self {
+		// By default, config values inherit from lower-layer configs
+		Self { value: Value::Inherit }
+	}
 
-    fn some_field(&mut self, value: impl Into<Value<T>>) -> &mut self {
-        self.value = value.into();
-        self
-    }
+	fn some_field(&mut self, value: impl Into<Value<T>>) -> &mut self {
+		self.value = value.into();
+		self
+	}
 }
 ```
 
 Because of `impl Into<Value<T>>`, users don't need to reference the `Value` enum unless they want to "unset" a value.
+
+#### Layer separation and precedence
+
+Codegen defines default sets of interceptors and runtime plugins at various "levels":
+
+1. AWS-wide defaults set by codegen.
+1. Service-wide defaults set by codegen.
+1. Operation-specific defaults set by codegen.
+
+Likewise, users may mount their own interceptors and runtime plugins:
+
+1. The AWS config level, e.g. `aws_types::Config`.
+1. The service config level, e.g. `aws_sdk_s3::Config`.
+1. The operation config level, e.g. `aws_sdk_s3::Client::get_object`.
+
+Configuration is resolved in a fixed manner by reading the "lowest level" of config available, falling back to "higher levels" only when no value has been set. Therefore, at least 3 separate `ConfigBag`s are necessary, and user configuration has precedence over codegen-defined default configuration. With that in mind, resolution of configuration would look like this:
+
+1. Check user-set operation config.
+1. Check codegen-defined operation config.
+1. Check user-set service config.
+1. Check codegen-defined service config.
+1. Check user-set AWS config.
+1. Check codegen-defined AWS config.
 
 ### The `aws-smithy-orchestrator` crate
 
@@ -383,27 +476,64 @@ async fn make_an_attempt<In, Out>(
 }
 ```
 
+#### Traits
+
+At various points in the execution of `invoke`, trait objects are fetched from the `ConfigBag`. These are preliminary definitions of those traits:
+
+```rust
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
+
+pub trait TraceProbe: Send + Sync + Debug {
+    fn dispatch_events(&self, cfg: &ConfigBag) -> BoxFallibleFut<()>;
+}
+
+pub trait RequestSerializer<In, TxReq>: Send + Sync + Debug {
+    fn serialize_request(&self, req: &mut In, cfg: &ConfigBag) -> Result<TxReq, BoxError>;
+}
+
+pub trait ResponseDeserializer<TxRes, Out>: Send + Sync + Debug {
+    fn deserialize_response(&self, res: &mut TxRes, cfg: &ConfigBag) -> Result<Out, BoxError>;
+}
+
+pub trait Connection<TxReq, TxRes>: Send + Sync + Debug {
+    fn call(&self, req: &mut TxReq, cfg: &ConfigBag) -> BoxFallibleFut<TxRes>;
+}
+
+pub trait RetryStrategy<Out>: Send + Sync + Debug {
+    fn should_retry(&self, res: &Out, cfg: &ConfigBag) -> Result<bool, BoxError>;
+}
+
+pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
+    fn auth_request(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
+}
+
+pub trait EndpointOrchestrator<Req>: Send + Sync {
+    fn resolve_and_apply_endpoint(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
+}
+```
+
 ## F.A.Q.
 
 - The orchestrator is a large and complex feature, with many moving parts. How can we ensure that multiple people can contribute in parallel?
-    -
+	-
 - What is the precedence of interceptors?
-    - The precedence of interceptors is as follows:
-        - Interceptors registered via Smithy default plugins.
-        - *(AWS Services only)* Interceptors registered via AWS default plugins.
-        - Interceptors registered via service-customization plugins.
-        - Interceptors registered via client-level plugins.
-        - Interceptors registered via client-level configuration.
-        - Interceptors registered via operation-level plugins.
-        - Interceptors registered via operation-level configuration.
+	- The precedence of interceptors is as follows:
+		- Interceptors registered via Smithy default plugins.
+		- *(AWS Services only)* Interceptors registered via AWS default plugins.
+		- Interceptors registered via service-customization plugins.
+		- Interceptors registered via client-level plugins.
+		- Interceptors registered via client-level configuration.
+		- Interceptors registered via operation-level plugins.
+		- Interceptors registered via operation-level configuration.
 - What runtime plugins will be defined in `smithy-rs`?
-    - `RetryStrategy`: Configures how requests are retried.
-    - `TraceProbes`: Configures locations to which SDK metrics are published.
-    - `EndpointProviders`: Configures which hostname an SDK will call when making a request.
-    - `HTTPClients`: Configures how remote services are called.
-    - `IdentityProviders`: Configures how customers identify themselves to remote services.
-    - `HTTPAuthSchemes` & `AuthSchemeResolvers`: Configures how customers authenticate themselves to remote services.
-    - `Checksum Algorithms`: Configures how an SDK calculates request and response checksums.
+	- `RetryStrategy`: Configures how requests are retried.
+	- `TraceProbes`: Configures locations to which SDK metrics are published.
+	- `EndpointProviders`: Configures which hostname an SDK will call when making a request.
+	- `HTTPClients`: Configures how remote services are called.
+	- `IdentityProviders`: Configures how customers identify themselves to remote services.
+	- `HTTPAuthSchemes` & `AuthSchemeResolvers`: Configures how customers authenticate themselves to remote services.
+	- `Checksum Algorithms`: Configures how an SDK calculates request and response checksums.
 
 ## Changes checklist
 
