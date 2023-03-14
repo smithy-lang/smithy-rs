@@ -192,7 +192,7 @@ async fn no_reconnect_when_disabled() {
             ReplayedEvent::with_body(end_of_test()),
         ],
         |_b| {},
-        |b| b.reconnect_mode(ReconnectMode::NoReconnect),
+        |b| b.reconnect_mode(ReconnectMode::ReuseAllConnections),
         match_events!(ev!(dns), ev!(connect), ev!(http(503)), ev!(http(200))),
     )
     .await;

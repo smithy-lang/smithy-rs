@@ -43,7 +43,7 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
 
 /// transitional default: disable this behavior by default
 const fn default_reconnect_mode() -> ReconnectMode {
-    ReconnectMode::NoReconnect
+    ReconnectMode::ReuseAllConnections
 }
 
 impl<C, M> Default for Builder<C, M>

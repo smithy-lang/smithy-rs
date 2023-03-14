@@ -31,7 +31,9 @@ async fn disable_reconnects() {
         .sleep_impl(Arc::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_connector(mock.http_connector())
-        .retry_config(RetryConfig::standard().with_reconnect_mode(ReconnectMode::NoReconnect))
+        .retry_config(
+            RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReuseAllConnections),
+        )
         .build();
     let client = aws_sdk_s3::Client::new(&sdk_config);
     let resp = client
