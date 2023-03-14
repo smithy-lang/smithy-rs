@@ -70,7 +70,7 @@ class AwsQueryCompatibleTest {
                                 }"##,
                             )
                             .unwrap();
-                        let some_operation = $moduleName::operation::SomeOperation::new();
+                        let some_operation = $moduleName::operation::some_operation::SomeOperation::new();
                         let error = some_operation
                             .parse(&response.map(bytes::Bytes::from))
                             .err()
@@ -136,7 +136,7 @@ class AwsQueryCompatibleTest {
                                 }"##,
                             )
                             .unwrap();
-                        let some_operation = $moduleName::operation::SomeOperation::new();
+                        let some_operation = $moduleName::operation::some_operation::SomeOperation::new();
                         let error = some_operation
                             .parse(&response.map(bytes::Bytes::from))
                             .err()

@@ -282,3 +282,8 @@ references = ["smithy-rs#2433"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "The modules in generated client crates have been reorganized. See the [Client Crate Reorganization Upgrade Guidance](https://github.com/awslabs/smithy-rs/discussions/2449) to see how to fix your code after this change."
+references = ["smithy-rs#2448"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

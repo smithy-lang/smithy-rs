@@ -127,7 +127,7 @@ class RequestBindingGenerator(
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdFmt.resolve("Write").toSymbol(), null)
         writer.rustBlockTemplate(
-            "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
+            "fn uri_base(_input: &#{Input}, output: &mut String) -> std::result::Result<(), #{BuildError}>",
             *codegenScope,
         ) {
             httpTrait.uri.labels.map { label ->

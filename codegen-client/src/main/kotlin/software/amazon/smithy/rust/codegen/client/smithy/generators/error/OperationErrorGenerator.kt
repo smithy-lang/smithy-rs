@@ -111,7 +111,7 @@ class OperationErrorGenerator(
                 """
                 fn create_unhandled_error(
                     source: Box<dyn std::error::Error + Send + Sync + 'static>,
-                    meta: Option<#T>
+                    meta: std::option::Option<#T>
                 ) -> Self
                 """,
                 errorMetadata,
@@ -152,11 +152,11 @@ class OperationErrorGenerator(
             "impl #T for ${errorSymbol.name}",
             RuntimeType.provideErrorKind(symbolProvider.config.runtimeConfig),
         ) {
-            rustBlock("fn code(&self) -> Option<&str>") {
+            rustBlock("fn code(&self) -> std::option::Option<&str>") {
                 rust("#T::code(self)", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
             }
 
-            rustBlock("fn retryable_error_kind(&self) -> Option<#T>", retryErrorKindT) {
+            rustBlock("fn retryable_error_kind(&self) -> std::option::Option<#T>", retryErrorKindT) {
                 val retryableVariants = errors.filter { it.hasTrait<RetryableTrait>() }
                 if (retryableVariants.isEmpty()) {
                     rust("None")
@@ -216,7 +216,7 @@ class OperationErrorGenerator(
         }
 
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
-            rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
+            rustBlock("fn source(&self) -> std::option::Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants(errors) {
                     writable {
                         rust("Some(_inner)")

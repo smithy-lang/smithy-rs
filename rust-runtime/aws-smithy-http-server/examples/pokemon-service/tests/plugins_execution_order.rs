@@ -7,7 +7,7 @@ use aws_smithy_http_server::operation::Operation;
 use aws_smithy_http_server::plugin::{Plugin, PluginPipeline};
 use hyper::http;
 use pokemon_service::do_nothing;
-use pokemon_service_client::input::DoNothingInput;
+use pokemon_service_client::operation::do_nothing::DoNothingInput;
 use pokemon_service_client::Config;
 use std::ops::Deref;
 use std::sync::Arc;
