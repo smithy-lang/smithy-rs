@@ -372,13 +372,11 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = """Servers can send the `ServerRequestId` in the response headers.
-Servers need to create their service using the new layer `ServerRequestIdResponseProviderLayer`:
+Servers need to create their service using the new layer builder `ServerRequestIdProviderLayer::new_with_response_header`:
 ```
 let app = app
-    .layer(&ServerRequestIdResponseProviderLayer::new("X-Request-Id".into()))
-    .layer(&ServerRequestIdProviderLayer::new());
+    .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id")));
 ```
-`ServerRequestIdResponseProviderLayer` must be specified before `ServerRequestIdProviderLayer`.
 """
 references = ["smithy-rs#2438"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
