@@ -116,7 +116,6 @@ use tower::{BoxError, Service};
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`Adapter::builder`]. For examples
 /// see [the module documentation](crate::hyper_ext).
 #[derive(Clone, Debug)]
-#[non_exhaustive]
 pub struct Adapter<C> {
     client: HttpReadTimeout<hyper::Client<ConnectTimeout<C>, SdkBody>>,
 }
