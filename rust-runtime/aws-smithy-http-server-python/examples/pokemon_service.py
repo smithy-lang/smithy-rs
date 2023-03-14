@@ -6,33 +6,35 @@
 import argparse
 import logging
 import random
-from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Callable, Awaitable
 
 from pokemon_service_server_sdk import App
+from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.aws_lambda import LambdaContext
 from pokemon_service_server_sdk.error import ResourceNotFoundException
 from pokemon_service_server_sdk.input import (
-    CheckHealthInput,
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
-    GetUnionInput,
+    CheckHealthInput,
     StreamPokemonRadioInput,
 )
 from pokemon_service_server_sdk.logging import TracingHandler
-from pokemon_service_server_sdk.middleware import MiddlewareException, Request, Response
-from pokemon_service_server_sdk.model import ConstrainedStuff, FlavorText, InnerUnion, Language, MyUnion
+from pokemon_service_server_sdk.middleware import (
+    MiddlewareException,
+    Response,
+    Request,
+)
+from pokemon_service_server_sdk.model import FlavorText, Language
 from pokemon_service_server_sdk.output import (
-    CheckHealthOutput,
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
-    GetUnionOutput,
+    CheckHealthOutput,
     StreamPokemonRadioOutput,
 )
-from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
@@ -247,7 +249,7 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp  # type: ignore
+    import aiohttp # type: ignore
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
@@ -256,11 +258,6 @@ async def stream_pokemon_radio(
             data = ByteStream(await response.read())
         logging.debug("Successfully fetched radio url %s", radio_url)
     return StreamPokemonRadioOutput(data=data)
-
-
-@app.get_union
-def get_union(_: GetUnionInput) -> GetUnionOutput:
-    return GetUnionOutput(data=MyUnion.inner(InnerUnion.b(ConstrainedStuff(inner="some data"))))
 
 
 ###########################################################
