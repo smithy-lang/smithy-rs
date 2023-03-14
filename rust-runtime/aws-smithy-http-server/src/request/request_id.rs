@@ -37,7 +37,7 @@
 //!     .build().unwrap();
 //!
 //! let app = app
-//!     .layer(&ServerRequestIdProviderLayer::new_with_response_header("x-response-id".into())); /* Generate a server request ID and add it to the response header */
+//!     .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id"))); /* Generate a server request ID and add it to the response header */
 //!
 //! let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
 //!     .parse()
@@ -119,7 +119,7 @@ impl ServerRequestIdProviderLayer {
     }
 
     /// Generate a new unique request ID and add it as a response header
-    pub fn new_with_response_header(header_key: Box<str>) -> ServerRequestIdResponseProviderLayer {
+    pub fn new_with_response_header(header_key: HeaderName) -> ServerRequestIdResponseProviderLayer {
         ServerRequestIdResponseProviderLayer::new(header_key)
     }
 }
@@ -172,12 +172,12 @@ pub struct ServerRequestIdResponseProvider<S> {
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ServerRequestIdResponseProviderLayer {
-    header_key: Box<str>,
+    header_key: HeaderName,
 }
 
 impl ServerRequestIdResponseProviderLayer {
     /// Add the request ID to the response header `header_key`
-    fn new(header_key: Box<str>) -> Self {
+    fn new(header_key: HeaderName) -> Self {
         Self { header_key }
     }
 }
@@ -186,8 +186,7 @@ impl<S> Layer<S> for ServerRequestIdResponseProviderLayer {
     type Service = ServerRequestIdResponseProvider<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let header_key = HeaderName::from_bytes(self.header_key.as_bytes()).unwrap();
-        ServerRequestIdResponseProvider { inner, header_key }
+        ServerRequestIdResponseProvider { inner, header_key: self.header_key.clone() }
     }
 }
 
