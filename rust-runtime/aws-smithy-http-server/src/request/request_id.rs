@@ -17,8 +17,7 @@
 //!
 //! The [`ServerRequestId`] is not meant to be propagated to downstream dependencies of the service. You should rely on a distributed tracing implementation for correlation purposes (e.g. OpenTelemetry).
 //!
-//! To optionally add the [`ServerRequestId`] to the response headers, use [`ServerRequestIdResponseProviderLayer`].
-//! [`ServerRequestIdResponseProviderLayer`] must be added _before_ [`ServerRequestIdProviderLayer`]. Otherwise, [`ServerRequestIdResponseProviderLayer`] will panic.
+//! To optionally add the [`ServerRequestId`] to the response headers, use [`ServerRequestIdProviderLayer::new_with_response_header`].
 //!
 //! ## Examples
 //!
@@ -38,8 +37,7 @@
 //!     .build().unwrap();
 //!
 //! let app = app
-//!     .layer(&ServerRequestIdResponseProviderLayer::new("X-Request-Id".into())) /* Add the server generated ID to the response */
-//!     .layer(&ServerRequestIdProviderLayer::new()); /* Generate a server request ID */
+//!     .layer(&ServerRequestIdProviderLayer::new_with_response_header("x-response-id".into())); /* Generate a server request ID and add it to the response header */
 //!
 //! let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
 //!     .parse()
@@ -119,6 +117,11 @@ impl ServerRequestIdProviderLayer {
     pub fn new() -> Self {
         Self {}
     }
+
+    /// Generate a new unique request ID and add it as a response header
+    pub fn new_with_response_header(header_key: Box<str>) -> ServerRequestIdResponseProviderLayer {
+        ServerRequestIdResponseProviderLayer::new(header_key)
+    }
 }
 
 impl Default for ServerRequestIdProviderLayer {
@@ -165,7 +168,7 @@ pub struct ServerRequestIdResponseProvider<S> {
     header_key: HeaderName,
 }
 
-/// A layer that inserts the generated [`ServerRequestId`] to the response headers
+/// A layer that inserts a newly generated [`ServerRequestId`] to the response headers
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ServerRequestIdResponseProviderLayer {
@@ -174,7 +177,7 @@ pub struct ServerRequestIdResponseProviderLayer {
 
 impl ServerRequestIdResponseProviderLayer {
     /// Add the request ID to the response header `header_key`
-    pub fn new(header_key: Box<str>) -> Self {
+    fn new(header_key: Box<str>) -> Self {
         Self { header_key }
     }
 }
@@ -230,11 +233,9 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
-        let request_id = req.extensions().get::<ServerRequestId>()
-            .expect("You must add `ServerRequestIdProviderLayer` before `ServerRequestIdResponseProviderLayer` to provide a request ID for the response. \
-                    If you believe you have correctly configured your service, please file a bug report under https://github.com/awslabs/smithy-rs/issues")
-            .to_owned();
+    fn call(&mut self, mut req: http::Request<Body>) -> Self::Future {
+        let request_id = ServerRequestId::new();
+        req.extensions_mut().insert(request_id.clone());
         let header_key = self.header_key.clone();
         ServerRequestIdResponseFuture {
             request_id,
