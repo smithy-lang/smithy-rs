@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use smithy_rs_tool_common::package::{PackageCategory, SDK_PREFIX};
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use toml::value::{Table, Value};
+use toml_edit::{Document, InlineTable, Item, Table, Value};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -116,7 +116,12 @@ fn update_manifest(
 ) -> anyhow::Result<()> {
     println!("Updating {:?}...", manifest_path);
 
-    let mut metadata: Value = toml::from_slice(&fs::read(manifest_path)?)?;
+    let mut metadata: Document = String::from_utf8(
+        fs::read(manifest_path).with_context(|| format!("failed to read {manifest_path:?}"))?,
+    )
+    .with_context(|| format!("{manifest_path:?} has invalid UTF-8"))?
+    .parse::<Document>()
+    .with_context(|| format!("failed to parse {manifest_path:?}"))?;
     let mut changed = false;
     for set in ["dependencies", "dev-dependencies", "build-dependencies"] {
         if let Some(dependencies) = metadata.get_mut(set) {
@@ -134,7 +139,7 @@ fn update_manifest(
     }
 
     if changed {
-        fs::write(manifest_path, &toml::to_vec(&metadata)?)?;
+        fs::write(manifest_path, metadata.to_string())?;
     }
 
     Ok(())
@@ -146,12 +151,18 @@ fn update_dependencies(
 ) -> Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
-        let category = PackageCategory::from_package_name(key);
+        let category = PackageCategory::from_package_name(key.get());
         if !matches!(category, PackageCategory::Unknown) {
-            if !value.is_table() {
-                *value = Value::Table(Table::new());
-            }
-            update_dependency_value(key, value.as_table_mut().unwrap(), dependency_context)?;
+            let old_value = match value {
+                Item::Table(table) => table.clone(),
+                Item::Value(Value::InlineTable(inline)) => inline.clone().into_table(),
+                _ => Table::new(),
+            };
+            *value = Item::Value(Value::InlineTable(updated_dependency_value(
+                key.get(),
+                old_value,
+                dependency_context,
+            )?));
             changed = true;
         }
     }
@@ -169,11 +180,13 @@ fn crate_path_name(name: &str) -> &str {
     }
 }
 
-fn update_dependency_value(
+fn updated_dependency_value(
     crate_name: &str,
-    value: &mut Table,
+    old_value: Table,
     dependency_context: &DependencyContext,
-) -> Result<()> {
+) -> Result<InlineTable> {
+    let mut value = old_value;
+
     // Remove keys that will be replaced
     value.remove("git");
     value.remove("branch");
@@ -183,25 +196,19 @@ fn update_dependency_value(
     // Set the `path` if one was given
     if let Some(path) = &dependency_context.sdk_path {
         let crate_path = path.join(crate_path_name(crate_name));
-        value.insert(
-            "path".to_string(),
-            Value::String(
-                crate_path
-                    .as_os_str()
-                    .to_str()
-                    .expect("valid utf-8 path")
-                    .to_string(),
-            ),
+        value["path"] = toml_edit::value(
+            crate_path
+                .as_os_str()
+                .to_str()
+                .expect("valid utf-8 path")
+                .to_string(),
         );
     }
 
     // Set the `version` if one was given
     if let Some(manifest) = &dependency_context.versions_manifest {
         if let Some(crate_metadata) = manifest.crates.get(crate_name) {
-            value.insert(
-                "version".to_string(),
-                Value::String(crate_metadata.version.clone()),
-            );
+            value["version"] = toml_edit::value(crate_metadata.version.clone());
         } else {
             bail!(
                 "Crate `{}` was missing from the `versions.toml`",
@@ -210,7 +217,8 @@ fn update_dependency_value(
         }
     }
 
-    Ok(())
+    value.sort_values_by(|a, _, b, _| b.cmp(a));
+    Ok(value.into_inline_table())
 }
 
 /// Recursively discovers Cargo.toml files in the given `path` and adds them to `manifests`.
@@ -238,7 +246,6 @@ mod tests {
     use smithy_rs_tool_common::package::PackageCategory;
     use smithy_rs_tool_common::versions_manifest::{CrateVersion, VersionsManifest};
     use std::path::PathBuf;
-    use toml::Value;
 
     fn versions_toml_for(crates: &[(&str, &str)]) -> VersionsManifest {
         VersionsManifest {
@@ -264,17 +271,25 @@ mod tests {
     }
 
     const TEST_MANIFEST: &[u8] = br#"
-        [package]
-        name = "test"
-        version = "0.1.0"
+[package]
+name = "test"
+version = "0.1.0"
 
-        [dependencies]
-        aws-config = "0.4.1"
-        aws-sdk-s3 = "0.4.1"
-        aws-smithy-types = "0.34.1"
-        aws-smithy-http = { version = "0.34.1", features = ["test-util"] }
-        something-else = "0.1"
-    "#;
+# Some comment that should be preserved
+[dependencies]
+aws-config = "0.4.1"
+aws-sdk-s3 = "0.4.1"
+aws-smithy-types = "0.34.1"
+aws-smithy-http = { version = "0.34.1", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#;
 
     #[track_caller]
     fn test_with_context(context: DependencyContext, expected: &[u8]) {
@@ -284,9 +299,9 @@ mod tests {
 
         update_manifest(&manifest_path, &context).expect("success");
 
-        let actual = toml::from_slice(&std::fs::read(&manifest_path).expect("read tmp file"))
-            .expect("valid toml");
-        let expected: Value = toml::from_slice(expected).unwrap();
+        let actual =
+            String::from_utf8(std::fs::read(&manifest_path).expect("read tmp file")).unwrap();
+        let expected = std::str::from_utf8(expected).unwrap();
         assert_eq!(expected, actual);
     }
 
@@ -303,17 +318,25 @@ mod tests {
                 ])),
             },
             br#"
-            [package]
-            name = "test"
-            version = "0.1.0"
+[package]
+name = "test"
+version = "0.1.0"
 
-            [dependencies]
-            aws-config = { version = "0.5.0" }
-            aws-sdk-s3 = { version = "0.13.0" }
-            aws-smithy-types = { version = "0.10.0" }
-            aws-smithy-http = { version = "0.9.0", features = ["test-util"] }
-            something-else = "0.1"
-            "#,
+# Some comment that should be preserved
+[dependencies]
+aws-config = { version = "0.5.0" }
+aws-sdk-s3 = { version = "0.13.0" }
+aws-smithy-types = { version = "0.10.0" }
+aws-smithy-http = { version = "0.9.0", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#,
         );
     }
 
@@ -325,17 +348,25 @@ mod tests {
                 versions_manifest: None,
             },
             br#"
-            [package]
-            name = "test"
-            version = "0.1.0"
+[package]
+name = "test"
+version = "0.1.0"
 
-            [dependencies]
-            aws-config = { path = "/foo/asdf/aws-config" }
-            aws-sdk-s3 = { path = "/foo/asdf/s3" }
-            aws-smithy-types = { path = "/foo/asdf/aws-smithy-types" }
-            aws-smithy-http = { path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
-            something-else = "0.1"
-            "#,
+# Some comment that should be preserved
+[dependencies]
+aws-config = { path = "/foo/asdf/aws-config" }
+aws-sdk-s3 = { path = "/foo/asdf/s3" }
+aws-smithy-types = { path = "/foo/asdf/aws-smithy-types" }
+aws-smithy-http = { path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#,
         );
     }
 
@@ -352,17 +383,25 @@ mod tests {
                 ])),
             },
             br#"
-            [package]
-            name = "test"
-            version = "0.1.0"
+[package]
+name = "test"
+version = "0.1.0"
 
-            [dependencies]
-            aws-config = { version = "0.5.0", path = "/foo/asdf/aws-config" }
-            aws-sdk-s3 = { version = "0.13.0", path = "/foo/asdf/s3" }
-            aws-smithy-types = { version = "0.10.0", path = "/foo/asdf/aws-smithy-types" }
-            aws-smithy-http = { version = "0.9.0", path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
-            something-else = "0.1"
-            "#
+# Some comment that should be preserved
+[dependencies]
+aws-config = { version = "0.5.0", path = "/foo/asdf/aws-config" }
+aws-sdk-s3 = { version = "0.13.0", path = "/foo/asdf/s3" }
+aws-smithy-types = { version = "0.10.0", path = "/foo/asdf/aws-smithy-types" }
+aws-smithy-http = { version = "0.9.0", path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#
         );
     }
 }
