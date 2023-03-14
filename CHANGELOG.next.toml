@@ -310,5 +310,5 @@ If a transient error (timeout, 500, 503, 503) is encountered, the connection wil
 be reused.
 """
 references = ["aws-sdk-rust#160", "smithy-rs#2445"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
