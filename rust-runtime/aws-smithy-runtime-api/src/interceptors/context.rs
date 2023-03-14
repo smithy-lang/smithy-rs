@@ -91,7 +91,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     }
 
     /// Retrieve the response to the customer. This will only be available
-    /// once the [transmit_response] has been unmarshalled or the
+    /// once the `tx_response` has been unmarshalled or the
     /// attempt/execution has failed.
     pub fn modeled_response(&self) -> Result<&ModRes, InterceptorError> {
         self.modeled_response
@@ -100,7 +100,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     }
 
     /// Retrieve the response to the customer. This will only be available
-    /// once the [transmit_response] has been unmarshalled or the
+    /// once the `tx_response` has been unmarshalled or the
     /// attempt/execution has failed.
     pub fn modeled_response_mut(&mut self) -> Result<&mut ModRes, InterceptorError> {
         self.modeled_response
