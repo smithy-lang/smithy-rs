@@ -13,7 +13,7 @@ use std::{
 
 use futures_util::ready;
 use pin_project_lite::pin_project;
-use tower::{layer::util::Stack, Layer, Service, ServiceExt};
+use tower::{layer::util::Stack, util::Oneshot, Layer, Service, ServiceExt};
 use tracing::error;
 
 use crate::{
@@ -106,7 +106,8 @@ pin_project! {
     }
 }
 
-type InnerAlias<Input, Exts, Protocol, B, Fut> = Inner<<(Input, Exts) as FromRequest<Protocol, B>>::Future, Fut>;
+type InnerAlias<Input, Exts, Protocol, B, S> =
+    Inner<<(Input, Exts) as FromRequest<Protocol, B>>::Future, Oneshot<S, (Input, Exts)>>;
 
 pin_project! {
     /// The [`Service::Future`] of [`Upgrade`].
@@ -118,7 +119,7 @@ pin_project! {
     {
         service: S,
         #[pin]
-        inner: InnerAlias<Operation::Input, Exts, Protocol, B, S::Future>
+        inner: InnerAlias<Operation::Input, Exts, Protocol, B, S>
     }
 }
 
@@ -137,9 +138,9 @@ where
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error>,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 {
-    type Output = Result<http::Response<crate::body::BoxBody>, Op::Error>;
+    type Output = Result<http::Response<crate::body::BoxBody>, Infallible>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
@@ -150,7 +151,7 @@ where
                 InnerProj::FromRequest { inner } => {
                     let result = ready!(inner.poll(cx));
                     match result {
-                        Ok(ok) => this.service.call(ok),
+                        Ok(ok) => this.service.clone().oneshot(ok),
                         Err(err) => return Poll::Ready(Ok(err.into_response())),
                     }
                 }
@@ -187,11 +188,11 @@ where
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 {
     type Response = http::Response<crate::body::BoxBody>;
-    type Error = Op::Error;
+    type Error = Infallible;
     type Future = UpgradeFuture<P, Op, Exts, B, S>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
@@ -233,7 +234,7 @@ where
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    Pl::Service: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 
     // The plugin takes this operation as input
     Pl: Plugin<P, Op, S, L>,
@@ -243,7 +244,7 @@ where
 
     // For `Route::new` for the resulting service
     UpgradedService<Pl, P, Op, Exts, S, L>:
-        Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Op::Error> + Clone + Send + 'static,
+        Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
     <UpgradedService<Pl, P, Op, Exts, S, L> as Service<http::Request<B>>>::Future: Send + 'static,
 {
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
@@ -253,15 +254,7 @@ where
     fn upgrade(self, plugin: &Pl) -> Route<B> {
         let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
-        let svc = layer
-            .layer(mapped.inner)
-            // NOTE: `map_result` has an annoying `Error: From<Self::Error>` bound on it
-            // to ignore this we follow this combinator with a `map_err`
-            .map_result(|res| match res {
-                Ok(ok) => Ok::<_, Op::Error>(ok),
-                Err(err) => Ok::<_, Op::Error>(err.into_response()),
-            })
-            .map_err(|_| unreachable!("the error case is unreachable here via the prior `map_result`"));
+        let svc = layer.layer(mapped.inner);
         Route::new(svc)
     }
 }
