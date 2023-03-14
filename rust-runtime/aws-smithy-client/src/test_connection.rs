@@ -323,7 +323,7 @@ pub mod wire_mock {
     /// An event recorded by [`WireLevelTestConnection`]
     #[derive(Debug, Clone)]
     pub enum RecordedEvent {
-        DnsLookup(Name),
+        DnsLookup(String),
         NewConnection,
         Response(ReplayedEvent),
     }
@@ -603,7 +603,9 @@ pub mod wire_mock {
             let log = self.log.clone();
             Box::pin(async move {
                 println!("looking up {:?}, replying with {:?}", req, sock_addr);
-                log.lock().unwrap().push(RecordedEvent::DnsLookup(req));
+                log.lock()
+                    .unwrap()
+                    .push(RecordedEvent::DnsLookup(req.to_string()));
                 Ok(iter::once(sock_addr))
             })
         }
