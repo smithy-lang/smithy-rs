@@ -41,7 +41,7 @@ class CustomizableOperationGenerator(
                 "Operation" to smithyHttp.resolve("operation::Operation"),
                 "Request" to smithyHttp.resolve("operation::Request"),
                 "Response" to smithyHttp.resolve("operation::Response"),
-                "ClassifyRetry" to smithyHttp.resolve("retry::ClassifyRetry"),
+                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                 "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
             renderCustomizableOperationModule(this)
@@ -150,6 +150,9 @@ class CustomizableOperationGenerator(
             "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
             "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
             "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
+            "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+            "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
         writer.rustTemplate(
@@ -164,6 +167,7 @@ class CustomizableOperationGenerator(
                     E: std::error::Error + Send + Sync + 'static,
                     O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
                     Retry: Send + Sync + Clone,
+                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
                     <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + Clone,
                 {
                     self.handle.client.call(self.operation).await
