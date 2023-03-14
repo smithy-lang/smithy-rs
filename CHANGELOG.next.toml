@@ -275,3 +275,15 @@ message = "Smithy members named `send` were previously renamed to `send_value` a
 references = ["smithy-rs#2382"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The modules in the SDK crates have been reorganized. See the [SDK Crate Reorganization Upgrade Guidance](https://github.com/awslabs/aws-sdk-rust/discussions/752) to see how to fix your code after this change."
+references = ["smithy-rs#2433"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The modules in generated client crates have been reorganized. See the [Client Crate Reorganization Upgrade Guidance](https://github.com/awslabs/smithy-rs/discussions/2449) to see how to fix your code after this change."
+references = ["smithy-rs#2448"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

@@ -11,10 +11,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 object EventStreamMarshallTestCases {
     fun RustWriter.writeMarshallTestCases(
+        codegenContext: CodegenContext,
         testCase: EventStreamTestModels.TestCase,
         optionalBuilderInputs: Boolean,
     ) {
@@ -29,12 +32,13 @@ object EventStreamMarshallTestCases {
             vararg ctx: Pair<String, Any>,
         ): Writable = conditionalBuilderInput(input, conditional = optionalBuilderInputs, ctx = ctx)
 
+        val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
         rustTemplate(
             """
             use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
             use std::collections::HashMap;
             use aws_smithy_types::{Blob, DateTime};
-            use crate::model::*;
+            use ${typesModule.fullyQualifiedPath()}::*;
 
             use #{validate_body};
             use #{MediaType};

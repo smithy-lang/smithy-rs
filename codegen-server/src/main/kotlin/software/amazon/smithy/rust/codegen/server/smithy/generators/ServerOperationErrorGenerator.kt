@@ -95,7 +95,7 @@ open class ServerOperationErrorGenerator(
         }
 
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
-            rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
+            rustBlock("fn source(&self) -> std::option::Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants(errors, errorSymbol) {
                     rust("Some(_inner)")
                 }

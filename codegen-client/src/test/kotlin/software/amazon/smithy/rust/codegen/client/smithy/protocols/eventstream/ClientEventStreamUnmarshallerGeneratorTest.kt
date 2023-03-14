@@ -22,12 +22,12 @@ class ClientEventStreamUnmarshallerGeneratorTest {
         clientIntegrationTest(
             testCase.model,
             IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
-        ) { _, rustCrate ->
+        ) { codegenContext, rustCrate ->
             val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
 
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
-                writeUnmarshallTestCases(testCase, optionalBuilderInputs = false)
+                writeUnmarshallTestCases(codegenContext, testCase, optionalBuilderInputs = false)
 
                 unitTest(
                     "unknown_message",
@@ -52,7 +52,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap()) {
                         TestStreamError::Unhandled(err) => {
-                            let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
+                            let message = format!("{}", crate::error::DisplayErrorContext(&err));
                             let expected = "message: \"unmodeled error\"";
                             assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
                         }

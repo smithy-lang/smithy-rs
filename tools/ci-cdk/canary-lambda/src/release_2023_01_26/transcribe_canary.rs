@@ -79,8 +79,9 @@ pub async fn transcribe_canary(
 }
 
 fn pcm_data() -> Vec<u8> {
-    let reader = hound::WavReader::new(&include_bytes!("../audio/hello-transcribe-8000.wav")[..])
-        .expect("valid wav data");
+    let reader =
+        hound::WavReader::new(&include_bytes!("../../audio/hello-transcribe-8000.wav")[..])
+            .expect("valid wav data");
     let samples_result: hound::Result<Vec<i16>> = reader.into_samples::<i16>().collect();
 
     let mut pcm: Vec<u8> = Vec::new();
