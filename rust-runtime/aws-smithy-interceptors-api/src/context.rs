@@ -14,7 +14,7 @@ pub struct InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
     inner_context: Option<Box<InterceptorContext<ModReq, TxReq, TxRes, ModRes>>>,
 }
 
-// TODO we could use types to ensure that people calling methods on interceptor context can't access
+// TODO(interceptors) we could use types to ensure that people calling methods on interceptor context can't access
 //     field that haven't been set yet.
 impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
     pub fn new(request: ModReq) -> Self {
@@ -78,7 +78,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     pub fn tx_response(&self) -> Result<&TxRes, InterceptorError> {
         self.tx_response
             .as_ref()
-            .ok_or(InterceptorError::invalid_tx_response_access())
+            .ok_or_else(InterceptorError::invalid_tx_response_access)
     }
 
     /// Retrieve the response to the transmittable request for the operation
@@ -87,7 +87,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     pub fn tx_response_mut(&mut self) -> Result<&mut TxRes, InterceptorError> {
         self.tx_response
             .as_mut()
-            .ok_or(InterceptorError::invalid_tx_response_access())
+            .ok_or_else(InterceptorError::invalid_tx_response_access)
     }
 
     /// Retrieve the response to the customer. This will only be available
@@ -96,7 +96,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     pub fn modeled_response(&self) -> Result<&ModRes, InterceptorError> {
         self.modeled_response
             .as_ref()
-            .ok_or(InterceptorError::invalid_modeled_response_access())
+            .ok_or_else(InterceptorError::invalid_modeled_response_access)
     }
 
     /// Retrieve the response to the customer. This will only be available
@@ -105,7 +105,7 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     pub fn modeled_response_mut(&mut self) -> Result<&mut ModRes, InterceptorError> {
         self.modeled_response
             .as_mut()
-            .ok_or(InterceptorError::invalid_modeled_response_access())
+            .ok_or_else(InterceptorError::invalid_modeled_response_access)
     }
 
     // There is no set_modeled_request method because that can only be set once, during context construction
@@ -137,10 +137,10 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     pub fn into_responses(self) -> Result<(ModRes, TxRes), InterceptorError> {
         let mod_res = self
             .modeled_response
-            .ok_or(InterceptorError::invalid_modeled_response_access())?;
+            .ok_or_else(InterceptorError::invalid_modeled_response_access)?;
         let tx_res = self
             .tx_response
-            .ok_or(InterceptorError::invalid_tx_response_access())?;
+            .ok_or_else(InterceptorError::invalid_tx_response_access)?;
 
         Ok((mod_res, tx_res))
     }

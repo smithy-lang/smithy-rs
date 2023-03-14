@@ -39,7 +39,7 @@ pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
     fn auth_request(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
 }
 
-pub trait EndpointOrchestrator<Req>: Send + Sync {
+pub trait EndpointOrchestrator<Req>: Send + Sync + Debug {
     fn resolve_and_apply_endpoint(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
 }
 
@@ -64,7 +64,7 @@ where
     let mut ctx: InterceptorContext<In, Req, Res, Result<T, BoxError>> =
         InterceptorContext::new(input);
     // 1
-    // // TODO initialize runtime plugins (see section 3.11 "Runtime Plugins and Their Configuration" of SRA)
+    // // TODO(runtime-plugins) initialize runtime plugins (see section 3.11 "Runtime Plugins and Their Configuration" of SRA)
     // let cfg = cfg.clone().apply_plugins();
 
     interceptors.read_before_execution(&ctx)?;

@@ -126,9 +126,9 @@ impl ConfigBag {
     }
 }
 
-impl Into<FrozenConfigBag> for ConfigBag {
-    fn into(self) -> FrozenConfigBag {
-        FrozenConfigBag(Arc::new(self))
+impl From<ConfigBag> for FrozenConfigBag {
+    fn from(bag: ConfigBag) -> Self {
+        FrozenConfigBag(Arc::new(bag))
     }
 }
 
