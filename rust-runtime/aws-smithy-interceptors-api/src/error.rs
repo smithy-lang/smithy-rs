@@ -338,6 +338,6 @@ impl fmt::Display for InterceptorError {
 
 impl std::error::Error for InterceptorError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        &self.source as _
+        self.source.as_ref().map(|err| err.as_ref() as _)
     }
 }
