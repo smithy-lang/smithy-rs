@@ -44,7 +44,6 @@ private fun toPythonByteStreamSymbolOrOriginal(model: Model, config: RustSymbolP
     val target = model.expectShape(shape.target)
     val container = model.expectShape(shape.container)
 
-    // We are only targeting non-synthetic inputs and outputs.
     if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
         return initial
     }

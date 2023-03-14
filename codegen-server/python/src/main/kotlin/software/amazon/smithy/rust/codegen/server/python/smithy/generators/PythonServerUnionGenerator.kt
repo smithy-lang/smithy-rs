@@ -11,7 +11,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -28,9 +27,11 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCarg
 import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
 
-private fun RustType.renderPy() {
-}
-
+/*
+ * Generate unions that are compatible with Python by wrapping the Rust implementation into
+ * a new structure and implementing `IntoPy` and `FromPyObject` to ensure the ability to extract
+ * the union inside the Python context.
+ */
 class PythonServerUnionGenerator(
     model: Model,
     private val symbolProvider: SymbolProvider,
@@ -79,7 +80,7 @@ class PythonServerUnionGenerator(
                 rust("/// Returns true if the union instance is the `Unknown` variant.")
                 rust("/// :rtype bool:")
                 rustBlock("pub fn is_unknown(&self) -> bool") {
-                    rust("matches!(self.0, Self::Unknown)")
+                    rust("self.0.is_unknown()")
                 }
             }
         }
