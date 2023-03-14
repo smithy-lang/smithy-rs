@@ -150,8 +150,10 @@ impl TokenBucket for Standard {
                 }
                 RetryKind::Explicit(_) => self.retryable_error_cost,
                 RetryKind::Error(error_kind) => match error_kind {
-                    ErrorKind::ThrottlingError => self.timeout_error_cost,
-                    ErrorKind::ServerError | ErrorKind::TransientError => self.retryable_error_cost,
+                    ErrorKind::ThrottlingError | ErrorKind::TransientError => {
+                        self.timeout_error_cost
+                    }
+                    ErrorKind::ServerError => self.retryable_error_cost,
                     ErrorKind::ClientError => unreachable!(
                         "BUG: asked for a token to retry a request that failed due to user error"
                     ),

@@ -20,3 +20,9 @@ aws-smithy-retries = { path = "../aws-smithy-retries" }
 http = "0.2.8"
 http-body = "0.4.5"
 tower = { version = "0.4.13", features = ["util", "retry"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata
