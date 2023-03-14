@@ -90,7 +90,7 @@ impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
 /// If response is `None`, it will reply with a 200 response with an empty body
 ///
 /// Example:
-/// ```rust,compile_fail
+/// ```compile_fail
 /// let (server, request) = capture_request(None);
 /// let conf = aws_sdk_sts::Config::builder()
 ///     .http_connector(server)
@@ -467,7 +467,7 @@ pub mod wire_mock {
 
     impl WireLevelTestConnection {
         pub async fn spinup(mut response_events: Vec<ReplayedEvent>) -> Self {
-            let listener = TcpListener::bind("0.0.0.0:0").unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let (tx, rx) = oneshot::channel();
             let listener_addr = listener.local_addr().unwrap();
             response_events.reverse();
