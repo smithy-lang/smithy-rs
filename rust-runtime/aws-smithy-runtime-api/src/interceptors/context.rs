@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::InterceptorError;
+use super::InterceptorError;
 
 /// A container for the data currently available to an interceptor.
 pub struct InterceptorContext<ModReq, TxReq, TxRes, ModRes> {

@@ -7,7 +7,7 @@ pub mod config_bag;
 
 pub use crate::config_bag::ConfigBag;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_interceptors_api::{InterceptorContext, Interceptors};
+use aws_smithy_runtime_api::interceptors::{InterceptorContext, Interceptors};
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;

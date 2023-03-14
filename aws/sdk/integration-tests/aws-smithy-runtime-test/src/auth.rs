@@ -4,12 +4,13 @@
  */
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_orchestrator::{AuthOrchestrator, BoxErr, ConfigBag};
+use aws_smithy_runtime::{AuthOrchestrator, BoxError, ConfigBag};
 
+#[derive(Debug)]
 pub struct GetObjectAuthOrc {}
 
 impl GetObjectAuthOrc {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self {}
     }
 }
@@ -17,9 +18,9 @@ impl GetObjectAuthOrc {
 impl AuthOrchestrator<http::Request<SdkBody>> for GetObjectAuthOrc {
     fn auth_request(
         &self,
-        req: &mut http::Request<SdkBody>,
-        cfg: &ConfigBag,
-    ) -> Result<(), BoxErr> {
+        _req: &mut http::Request<SdkBody>,
+        _cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
         todo!()
     }
 }

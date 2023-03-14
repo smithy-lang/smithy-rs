@@ -6,16 +6,17 @@
 use aws_smithy_client::conns::Https;
 use aws_smithy_client::hyper_ext::Adapter;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_orchestrator::{BoxFallibleFut, ConfigBag, Connection};
+use aws_smithy_runtime::{BoxFallibleFut, ConfigBag, Connection};
 
+#[derive(Debug)]
 pub struct HyperConnection {
-    adapter: Adapter<Https>,
+    _adapter: Adapter<Https>,
 }
 
 impl HyperConnection {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self {
-            adapter: Adapter::builder().build(aws_smithy_client::conns::https()),
+            _adapter: Adapter::builder().build(aws_smithy_client::conns::https()),
         }
     }
 }
@@ -23,8 +24,8 @@ impl HyperConnection {
 impl Connection<http::Request<SdkBody>, http::Response<SdkBody>> for HyperConnection {
     fn call(
         &self,
-        req: &mut http::Request<SdkBody>,
-        cfg: &ConfigBag,
+        _req: &mut http::Request<SdkBody>,
+        _cfg: &ConfigBag,
     ) -> BoxFallibleFut<http::Response<SdkBody>> {
         todo!("hyper's connector wants to take ownership of req");
         // self.adapter.call(req)

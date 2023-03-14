@@ -5,9 +5,9 @@
 
 //! A token bucket intended for use with the standard smithy client retry policy.
 
+use super::error::RateLimitingError;
+use super::token;
 use super::Token;
-use crate::rate_limiting::error::RateLimitingError;
-use crate::rate_limiting::token;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -195,11 +195,11 @@ impl TokenBucket for Standard {
 
 #[cfg(test)]
 mod test {
+    use super::{Token, TokenBucket};
     use super::{
         STANDARD_INITIAL_RETRY_TOKENS, STANDARD_RETRYABLE_ERROR_RETRY_COST,
         STANDARD_TIMEOUT_ERROR_RETRY_COST,
     };
-    use crate::rate_limiting::{Token, TokenBucket};
     use aws_smithy_types::retry::{ErrorKind, RetryKind};
 
     #[test]

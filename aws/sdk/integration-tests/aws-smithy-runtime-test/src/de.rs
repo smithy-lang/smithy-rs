@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::output::GetObjectOutput;
+use aws_sdk_s3::operation::get_object::GetObjectOutput;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_orchestrator::{BoxErr, ConfigBag, ResponseDeserializer};
+use aws_smithy_runtime::{BoxError, ConfigBag, ResponseDeserializer};
 
+#[derive(Debug)]
 pub struct GetObjectResponseDeserializer {}
 
 impl GetObjectResponseDeserializer {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self {}
     }
 }
@@ -20,9 +21,9 @@ impl ResponseDeserializer<http::Response<SdkBody>, GetObjectOutput>
 {
     fn deserialize_response(
         &self,
-        res: &mut http::Response<SdkBody>,
-        cfg: &ConfigBag,
-    ) -> Result<GetObjectOutput, BoxErr> {
+        _res: &mut http::Response<SdkBody>,
+        _cfg: &ConfigBag,
+    ) -> Result<GetObjectOutput, BoxError> {
         todo!()
         // Ok({
         //     #[allow(unused_mut)]

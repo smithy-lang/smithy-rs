@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::error::GetObjectError;
-use aws_sdk_s3::output::GetObjectOutput;
-use aws_smithy_orchestrator::{BoxErr, ConfigBag, RetryStrategy};
+use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
+use aws_smithy_runtime::{BoxError, ConfigBag, RetryStrategy};
 
 //     retry_classifier: Arc::new(
 //         |res: Result<&SdkSuccess<GetObjectOutput>, &SdkError<GetObjectError>>| -> RetryKind {
@@ -14,10 +13,11 @@ use aws_smithy_orchestrator::{BoxErr, ConfigBag, RetryStrategy};
 //         },
 //     ),
 
+#[derive(Debug)]
 pub struct GetObjectRetryStrategy {}
 
 impl GetObjectRetryStrategy {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self {}
     }
 }
@@ -25,9 +25,9 @@ impl GetObjectRetryStrategy {
 impl RetryStrategy<Result<GetObjectOutput, GetObjectError>> for GetObjectRetryStrategy {
     fn should_retry(
         &self,
-        res: &Result<GetObjectOutput, GetObjectError>,
-        cfg: &ConfigBag,
-    ) -> Result<bool, BoxErr> {
+        _res: &Result<GetObjectOutput, GetObjectError>,
+        _cfg: &ConfigBag,
+    ) -> Result<bool, BoxError> {
         todo!()
     }
 }

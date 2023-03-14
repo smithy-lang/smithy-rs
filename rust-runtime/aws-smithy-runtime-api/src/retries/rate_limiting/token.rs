@@ -10,7 +10,7 @@
 
 use tokio::sync::OwnedSemaphorePermit;
 
-/// A trait implemented by types that represent a token dispensed from a [`TokenBucket`].
+/// A trait implemented by types that represent a token dispensed from a [`TokenBucket`](super::TokenBucket).
 pub trait Token {
     /// Release this token back to the bucket. This should be called if the related request succeeds.
     fn release(self);

@@ -1,11 +1,8 @@
 [package]
-name = "aws-smithy-retries"
+name = "aws-smithy-runtime"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
-description = """
-Smithy code related to retry handling and token bucket. This code defines when and how failed requests should be retried.
-It also defines the behavior used to limit the rate that requests are sent."
-"""
+description = "The new smithy runtime crate"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
@@ -14,10 +11,14 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.25", features = ["sync"] }
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
 aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 http = "0.2.8"
 http-body = "0.4.5"
+tower = { version = "0.4.13", features = ["util", "retry"] }
 
 [package.metadata.docs.rs]
 all-features = true

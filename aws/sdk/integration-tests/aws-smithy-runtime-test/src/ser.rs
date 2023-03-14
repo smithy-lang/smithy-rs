@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::input::GetObjectInput;
+use aws_sdk_s3::operation::get_object::GetObjectInput;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_orchestrator::{BoxErr, ConfigBag, RequestSerializer};
+use aws_smithy_runtime::{BoxError, ConfigBag, RequestSerializer};
 
+#[derive(Debug)]
 pub struct GetObjectInputSerializer {}
 
 impl GetObjectInputSerializer {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self {}
     }
 }
@@ -18,9 +19,9 @@ impl GetObjectInputSerializer {
 impl RequestSerializer<GetObjectInput, http::Request<SdkBody>> for GetObjectInputSerializer {
     fn serialize_request(
         &self,
-        input: &mut GetObjectInput,
-        cfg: &ConfigBag,
-    ) -> Result<http::Request<SdkBody>, BoxErr> {
+        _input: &mut GetObjectInput,
+        _cfg: &ConfigBag,
+    ) -> Result<http::Request<SdkBody>, BoxError> {
         todo!()
         // let request = {
         //     fn uri_base(_input: &GetObjectInput, output: &mut String) -> Result<(), BuildError> {
