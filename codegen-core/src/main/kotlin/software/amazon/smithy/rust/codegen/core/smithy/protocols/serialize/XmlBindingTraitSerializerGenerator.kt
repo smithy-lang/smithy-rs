@@ -121,7 +121,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
                         let mut root = writer.start_el(${operationXmlName.dq()})${
-                        inputShape.xmlNamespace(root = true).apply()
+                            inputShape.xmlNamespace(root = true).apply()
                         };
                         """,
                         *codegenScope,
@@ -212,7 +212,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
                         let mut root = writer.start_el(${operationXmlName.dq()})${
-                        outputShape.xmlNamespace(root = true).apply()
+                            outputShape.xmlNamespace(root = true).apply()
                         };
                         """,
                         *codegenScope,
