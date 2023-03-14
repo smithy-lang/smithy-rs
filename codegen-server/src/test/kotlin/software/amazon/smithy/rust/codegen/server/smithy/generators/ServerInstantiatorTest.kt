@@ -146,7 +146,7 @@ class ServerInstantiatorTest {
             nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
-            withInlineModule(RustModule.inlineTests()) {
+            withInlineModule(RustModule.inlineTests(), null) {
                 unitTest("server_instantiator_test") {
                     withBlock("let result = ", ";") {
                         sut.render(this, structure, data)

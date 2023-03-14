@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -34,7 +34,7 @@ class PythonServerServiceGenerator(
     }
 
     override fun renderExtras(operations: List<OperationShape>) {
-        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) {
+        rustCrate.withModule(PythonServerRustModule.PythonServerApplication) {
             PythonApplicationGenerator(context, protocol, operations)
                 .render(this)
         }

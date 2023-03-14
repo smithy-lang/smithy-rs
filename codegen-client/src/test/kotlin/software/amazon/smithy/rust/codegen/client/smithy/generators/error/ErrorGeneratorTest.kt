@@ -35,7 +35,7 @@ class ErrorGeneratorTest {
     @Test
     fun `generate error structure and builder`() {
         clientIntegrationTest(model) { _, rustCrate ->
-            rustCrate.withFile("src/error.rs") {
+            rustCrate.withFile("src/types/error.rs") {
                 rust(
                     """
                     ##[test]

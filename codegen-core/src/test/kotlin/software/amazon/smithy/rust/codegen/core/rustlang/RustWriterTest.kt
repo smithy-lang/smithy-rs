@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -30,7 +31,10 @@ class RustWriterTest {
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
-        sut.withInlineModule(RustModule.new("inner", visibility = Visibility.PUBLIC, inline = true)) {
+        sut.withInlineModule(
+            RustModule.new("inner", visibility = Visibility.PUBLIC, inline = true),
+            TestModuleDocProvider,
+        ) {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }

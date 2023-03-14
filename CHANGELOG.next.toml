@@ -251,3 +251,39 @@ message = "Fix `FilterByOperationName` plugin. This previous caused services wit
 references = ["smithy-rs#2441"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "hlbarber"
+
+[[aws-sdk-rust]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`."
+references = ["smithy-rs#2437", "aws-sdk-rust#600"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Enable presigning for S3's `HeadObject` operation."
+references = ["aws-sdk-rust#753", "smithy-rs#2451"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Smithy members named `send` were previously renamed to `send_value` at codegen time. These will now be called `send` in the generated code."
+references = ["smithy-rs#2382"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The modules in the SDK crates have been reorganized. See the [SDK Crate Reorganization Upgrade Guidance](https://github.com/awslabs/aws-sdk-rust/discussions/752) to see how to fix your code after this change."
+references = ["smithy-rs#2433"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The modules in generated client crates have been reorganized. See the [Client Crate Reorganization Upgrade Guidance](https://github.com/awslabs/smithy-rs/discussions/2449) to see how to fix your code after this change."
+references = ["smithy-rs#2448"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

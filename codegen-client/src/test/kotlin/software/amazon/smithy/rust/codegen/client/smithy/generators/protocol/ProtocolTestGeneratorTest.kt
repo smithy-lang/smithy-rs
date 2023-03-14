@@ -220,7 +220,7 @@ class ProtocolTestGeneratorTest {
     private fun testService(
         httpRequestBuilder: String,
         body: String = "${correctBody.dq()}.to_string()",
-        correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())""",
+        correctResponse: String = """Ok(crate::operation::say_hello::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val codegenDecorator = object : ClientCodegenDecorator {
             override val name: String = "mock"
@@ -256,7 +256,7 @@ class ProtocolTestGeneratorTest {
                 .header("X-Greeting", "Hi")
                 .method("POST")
                 """,
-                correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())",
+                correctResponse = "Ok(crate::operation::say_hello::SayHelloOutput::builder().build())",
             )
         }
 

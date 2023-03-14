@@ -80,8 +80,8 @@ internal class InlineDependencyTest {
     fun `prevent the creation of duplicate modules`() {
         val root = RustModule.private("parent")
         // create a child module with no docs
-        val child1 = RustModule.private("child", parent = root)
-        val child2 = RustModule.public("child", parent = root)
+        val child1 = RustModule.public("child", parent = root)
+        val child2 = RustModule.private("child", parent = root)
         val crate = TestWorkspace.testProject()
         crate.withModule(child1) { }
         shouldThrow<IllegalStateException> {
@@ -90,11 +90,11 @@ internal class InlineDependencyTest {
 
         shouldThrow<IllegalStateException> {
             // can't make one with docs when the old one had no docs
-            crate.withModule(RustModule.private("child", documentation = "docs", parent = root)) {}
+            crate.withModule(child1.copy(documentationOverride = "docs")) {}
         }
 
         // but making an identical module is fine
-        val identicalChild = RustModule.private("child", parent = root)
+        val identicalChild = RustModule.public("child", parent = root)
         crate.withModule(identicalChild) {}
         identicalChild.fullyQualifiedPath() shouldBe "crate::parent::child"
     }

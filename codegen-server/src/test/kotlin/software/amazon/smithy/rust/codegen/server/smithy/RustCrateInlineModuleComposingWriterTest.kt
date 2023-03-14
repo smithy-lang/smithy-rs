@@ -68,14 +68,18 @@ class RustCrateInlineModuleComposingWriterTest {
             runtimeConfig = runtimeConfig,
         )
         val settings = ServerRustSettings.from(context.model, context.settings)
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
     }
 
-    private fun createTestInlineModule(parentModule: RustModule, moduleName: String, documentation: String? = null): RustModule.LeafModule =
+    private fun createTestInlineModule(parentModule: RustModule, moduleName: String): RustModule.LeafModule =
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
-            documentation = documentation ?: moduleName,
             parent = parentModule,
             inline = true,
         )
@@ -84,7 +88,6 @@ class RustCrateInlineModuleComposingWriterTest {
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
-            documentation = moduleName,
             parent = RustModule.LibRs,
             inline = true,
         )

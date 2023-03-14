@@ -16,8 +16,8 @@ FROM bare_base_image as musl_toolchain
 RUN yum -y install tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
   && ls \
-  && tar xvzf musl-1.2.3.tar.gz \ 
-  && (cd musl-1.2.3 && ./configure && make install) 
+  && tar xvzf musl-1.2.3.tar.gz \
+  && (cd musl-1.2.3 && ./configure && make install)
 
 #
 # Rust & Tools Installation Stage
