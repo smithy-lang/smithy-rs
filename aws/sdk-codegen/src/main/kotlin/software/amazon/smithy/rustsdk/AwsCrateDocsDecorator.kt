@@ -72,17 +72,14 @@ class AwsCrateDocsDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable {
-        return if (generateReadme(codegenContext)) {
-            writable {
-                val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
-                docs("Client for calling $serviceName.")
+    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable =
+        writable {
+            val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
+            docs("Client for calling $serviceName.")
+            if (generateReadme(codegenContext)) {
                 AwsDocs.clientConstructionDocs(codegenContext)(this)
             }
-        } else {
-            baseDocs
         }
-    }
 
     private fun generateReadme(codegenContext: ClientCodegenContext) =
         SdkSettings.from(codegenContext.settings).generateReadme

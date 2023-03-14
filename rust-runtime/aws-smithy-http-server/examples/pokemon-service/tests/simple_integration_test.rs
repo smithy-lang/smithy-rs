@@ -12,9 +12,10 @@ use crate::helpers::{client, client_http2_only, PokemonService};
 use async_stream::stream;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use pokemon_service_client::{
-    error::{AttemptCapturingPokemonEventError, GetStorageError, MasterBallUnsuccessful, StorageAccessNotAuthorized},
-    model::{AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload},
-    types::SdkError,
+    error::SdkError,
+    operation::get_storage::GetStorageError,
+    types::error::{AttemptCapturingPokemonEventError, MasterBallUnsuccessful, StorageAccessNotAuthorized},
+    types::{AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload},
 };
 use rand::Rng;
 use serial_test::serial;

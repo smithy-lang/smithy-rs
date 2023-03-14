@@ -49,11 +49,18 @@ fun awsSdkIntegrationTest(
                     .withMember(
                         "awsSdk",
                         ObjectNode.builder()
+                            .withMember("generateReadme", false)
                             .withMember("integrationTestPath", "../sdk/integration-tests")
                             .build(),
                     ).build(),
             )
-                .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+                .withMember(
+                    "codegen",
+                    ObjectNode.builder()
+                        .withMember("includeFluentClient", false)
+                        .withMember("enableNewCrateOrganizationScheme", true)
+                        .build(),
+                ).build(),
         ),
         test = test,
     )

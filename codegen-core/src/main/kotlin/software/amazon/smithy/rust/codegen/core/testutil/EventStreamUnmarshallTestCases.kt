@@ -13,20 +13,25 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 object EventStreamUnmarshallTestCases {
     fun RustWriter.writeUnmarshallTestCases(
+        codegenContext: CodegenContext,
         testCase: EventStreamTestModels.TestCase,
         optionalBuilderInputs: Boolean = false,
     ) {
         val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
 
+        val testStreamError = codegenContext.symbolProvider.symbolForEventStreamError(codegenContext.model.lookup("test#TestStream"))
+        val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
         rust(
             """
             use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
             use aws_smithy_types::{Blob, DateTime};
-            use crate::error::TestStreamError;
-            use crate::model::*;
+            use $testStreamError;
+            use ${typesModule.fullyQualifiedPath()}::*;
 
             fn msg(
                 message_type: &'static str,

@@ -312,7 +312,7 @@ class ClientCodegenVisitor(
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
-            rustCrate.withModule(ClientRustModule.Error) {
+            rustCrate.withModule(symbolProvider.moduleForEventStreamError(shape)) {
                 OperationErrorGenerator(
                     model,
                     symbolProvider,

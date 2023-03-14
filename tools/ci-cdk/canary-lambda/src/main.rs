@@ -19,35 +19,18 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_texray::TeXRayLayer;
 
-/// Conditionally include the module based on the $version feature gate
-///
-/// When the module is not included, an `mk_canary` function will be generated that returns `None`.
-macro_rules! canary_module {
-    ($name: ident, since: $version: expr) => {
-        #[cfg(feature = $version)]
-        mod $name;
-
-        #[cfg(not(feature = $version))]
-        mod $name {
-            pub(crate) fn mk_canary(
-                _clients: &aws_config::SdkConfig,
-                _env: &crate::canary::CanaryEnv,
-            ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
-                tracing::warn!(concat!(
-                    stringify!($name),
-                    " is disabled because it is not supported by this version of the SDK."
-                ));
-                None
-            }
-        }
-    };
-}
-
 mod canary;
 
-mod s3_canary;
-canary_module!(paginator_canary, since: "v0.4.1");
-mod transcribe_canary;
+#[cfg(feature = "latest")]
+mod latest;
+#[cfg(feature = "latest")]
+pub(crate) use latest as current_canary;
+
+// NOTE: This module can be deleted 3 releases after release-2023-01-26
+#[cfg(feature = "release-2023-01-26")]
+mod release_2023_01_26;
+#[cfg(feature = "release-2023-01-26")]
+pub(crate) use release_2023_01_26 as current_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

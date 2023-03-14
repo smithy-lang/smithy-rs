@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -136,21 +137,22 @@ class ClientModuleDocProvider(
     private fun customizeModuleDoc(): Writable = writable {
         val model = codegenContext.model
         docs("Operation customization and supporting types.\n")
-        if (model.operationShapes.isNotEmpty()) {
+        if (codegenContext.serviceShape.operations.isNotEmpty()) {
             val opFnName = FluentClientGenerator.clientOperationFnName(
                 codegenContext.serviceShape.operations.minOf { it }
                     .let { model.expectShape(it, OperationShape::class.java) },
                 codegenContext.symbolProvider,
             )
+            val moduleUseName = codegenContext.moduleUseName()
             docsTemplate(
                 """
                 The underlying HTTP requests made during an operation can be customized
                 by calling the `customize()` method on the builder returned from a client
                 operation call. For example, this can be used to add an additional HTTP header:
 
-                ```no_run
-                ## async fn wrapper() -> Result<(), crate::Error> {
-                ## let client: crate::Client = unimplemented!();
+                ```ignore
+                ## async fn wrapper() -> Result<(), $moduleUseName::Error> {
+                ## let client: $moduleUseName::Client = unimplemented!();
                 use #{http}::header::{HeaderName, HeaderValue};
 
                 let result = client.$opFnName()
@@ -196,7 +198,7 @@ object ClientModuleProvider : ModuleProvider {
     override fun moduleForEventStreamError(
         context: ModuleProviderContext,
         eventStream: UnionShape,
-    ): RustModule.LeafModule = ClientRustModule.Error
+    ): RustModule.LeafModule = ClientRustModule.Types.Error
 
     override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule =
         RustModule.public("builders", parent = symbol.module(), documentationOverride = "Builders")
@@ -216,7 +218,7 @@ object ClientModuleProvider : ModuleProvider {
         val operationShape = shape.findOperation(context.model)
         val contextName = operationShape.contextName(context.serviceShape)
         val operationModuleName =
-            RustReservedWords.escapeIfNeeded(contextName.toSnakeCase())
+            RustReservedWords.escapeIfNeeded(contextName.toSnakeCase(), EscapeFor.ModuleName)
         return RustModule.public(
             operationModuleName,
             parent = ClientRustModule.Operation,

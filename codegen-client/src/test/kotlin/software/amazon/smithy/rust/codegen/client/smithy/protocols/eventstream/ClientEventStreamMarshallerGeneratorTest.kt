@@ -20,9 +20,9 @@ class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        clientIntegrationTest(testCase.model) { _, rustCrate ->
+        clientIntegrationTest(testCase.model) { codegenContext, rustCrate ->
             rustCrate.testModule {
-                writeMarshallTestCases(testCase, optionalBuilderInputs = false)
+                writeMarshallTestCases(codegenContext, testCase, optionalBuilderInputs = false)
             }
         }
     }
