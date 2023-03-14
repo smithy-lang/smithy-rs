@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
@@ -42,6 +44,11 @@ private fun testServiceShapeFor(model: Model) =
 fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
     serverTestSymbolProviders(model, serviceShape).symbolProvider
 
+private class ServerTestCodegenDecorator : ServerCodegenDecorator {
+    override val name = "test"
+    override val order: Byte = 0
+}
+
 fun serverTestSymbolProviders(
     model: Model,
     serviceShape: ServiceShape? = null,
@@ -57,6 +64,7 @@ fun serverTestSymbolProviders(
                 (serviceShape ?: testServiceShapeFor(model)).id,
             )
             ).codegenConfig.publicConstrainedTypes,
+        ServerTestCodegenDecorator(),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 
@@ -103,12 +111,14 @@ fun serverTestCodegenContext(
         service,
         ServerTestRustSymbolProviderConfig,
         settings.codegenConfig.publicConstrainedTypes,
+        ServerTestCodegenDecorator(),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 
     return ServerCodegenContext(
         model,
         serverSymbolProviders.symbolProvider,
+        TestModuleDocProvider,
         service,
         protocol,
         settings,

@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -57,11 +58,11 @@ val TestRuntimeConfig =
 private object CodegenCoreTestModules {
     // Use module paths that don't align with either server or client to make sure
     // the codegen is resilient to differences in module path.
-    val ModelsTestModule = RustModule.public("test_model", documentation = "Test models module")
-    val ErrorsTestModule = RustModule.public("test_error", documentation = "Test error module")
-    val InputsTestModule = RustModule.public("test_input", documentation = "Test input module")
-    val OutputsTestModule = RustModule.public("test_output", documentation = "Test output module")
-    val OperationsTestModule = RustModule.public("test_operation", documentation = "Test operation module")
+    val ModelsTestModule = RustModule.public("test_model")
+    val ErrorsTestModule = RustModule.public("test_error")
+    val InputsTestModule = RustModule.public("test_input")
+    val OutputsTestModule = RustModule.public("test_output")
+    val OperationsTestModule = RustModule.public("test_operation")
 
     object TestModuleProvider : ModuleProvider {
         override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule =
@@ -138,13 +139,21 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 }
 
 // Intentionally only visible to codegen-core since the other modules have their own symbol providers
-internal fun testSymbolProvider(model: Model): RustSymbolProvider = SymbolVisitor(
+internal fun testSymbolProvider(
+    model: Model,
+    rustReservedWordConfig: RustReservedWordConfig? = null,
+): RustSymbolProvider = SymbolVisitor(
     testRustSettings(),
     model,
     ServiceShape.builder().version("test").id("test#Service").build(),
     TestRustSymbolProviderConfig,
 ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
-    .let { RustReservedWordSymbolProvider(it) }
+    .let {
+        RustReservedWordSymbolProvider(
+            it,
+            rustReservedWordConfig ?: RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap()),
+        )
+    }
 
 // Intentionally only visible to codegen-core since the other modules have their own contexts
 internal fun testCodegenContext(
@@ -155,6 +164,7 @@ internal fun testCodegenContext(
 ): CodegenContext = CodegenContext(
     model,
     testSymbolProvider(model),
+    TestModuleDocProvider,
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),

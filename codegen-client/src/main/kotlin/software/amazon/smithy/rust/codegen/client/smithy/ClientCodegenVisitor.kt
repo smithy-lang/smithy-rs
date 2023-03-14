@@ -52,6 +52,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import java.util.logging.Logger
 
@@ -69,7 +70,7 @@ class ClientCodegenVisitor(
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val codegenContext: ClientCodegenContext
+    private var codegenContext: ClientCodegenContext
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ClientProtocolGenerator, ClientCodegenContext>
     private val protocolGenerator: ClientProtocolGenerator
 
@@ -98,14 +99,30 @@ class ClientCodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig)
+        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig, codegenDecorator)
 
-        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
+        codegenContext = ClientCodegenContext(
+            model,
+            symbolProvider,
+            null,
+            service,
+            protocol,
+            settings,
+            codegenDecorator,
+        )
+
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                ClientModuleDocProvider(codegenContext, service.serviceNameOrDefault("the service")),
+            ),
+        )
 
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             codegenContext.settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -295,7 +312,7 @@ class ClientCodegenVisitor(
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
-            rustCrate.withModule(ClientRustModule.Error) {
+            rustCrate.withModule(symbolProvider.moduleForEventStreamError(shape)) {
                 OperationErrorGenerator(
                     model,
                     symbolProvider,

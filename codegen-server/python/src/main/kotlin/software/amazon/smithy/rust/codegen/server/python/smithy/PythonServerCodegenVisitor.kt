@@ -17,7 +17,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
@@ -29,6 +28,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleDocProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
@@ -81,7 +81,8 @@ class PythonServerCodegenVisitor(
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes)
+            codegenDecorator: ServerCodegenDecorator,
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, codegenDecorator)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             settings,
@@ -89,6 +90,7 @@ class PythonServerCodegenVisitor(
             service,
             rustSymbolProviderConfig,
             settings.codegenConfig.publicConstrainedTypes,
+            codegenDecorator,
             ::baseSymbolProviderFactory,
         )
 
@@ -97,6 +99,7 @@ class PythonServerCodegenVisitor(
             ServerCodegenContext(
                 model,
                 serverSymbolProviders.symbolProvider,
+                null,
                 service,
                 protocol,
                 settings,
@@ -106,8 +109,20 @@ class PythonServerCodegenVisitor(
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
 
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                PythonServerModuleDocProvider(ServerModuleDocProvider()),
+            ),
+        )
+
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -189,7 +204,7 @@ class PythonServerCodegenVisitor(
 
     override fun operationShape(shape: OperationShape) {
         super.operationShape(shape)
-        rustCrate.withModule(RustModule.public("python_operation_adaptor")) {
+        rustCrate.withModule(PythonServerRustModule.PythonOperationAdapter) {
             PythonServerOperationHandlerGenerator(codegenContext, shape).render(this)
         }
     }

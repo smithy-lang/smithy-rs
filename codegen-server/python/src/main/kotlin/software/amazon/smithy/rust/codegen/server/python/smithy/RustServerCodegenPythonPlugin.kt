@@ -19,11 +19,13 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.D
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerReservedWords
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -74,6 +76,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
+            codegenDecorator: ServerCodegenDecorator,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
@@ -96,6 +99,8 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 .let { DeriveEqAndHashSymbolMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
+                // Allows decorators to inject a custom symbol provider
+                .let { codegenDecorator.symbolProvider(it) }
     }
 }

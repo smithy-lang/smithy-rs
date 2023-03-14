@@ -12,9 +12,19 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -22,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -38,32 +49,132 @@ object ClientRustModule {
     val client = Client.self
     object Client {
         /** crate::client */
-        val self = RustModule.public("client", "Client and fluent builders for calling the service.")
+        val self = RustModule.public("client")
 
         /** crate::client::customize */
-        val customize = RustModule.public("customize", parent = self, documentation = "Operation customization and supporting types")
+        val customize = RustModule.public("customize", parent = self)
     }
 
-    val Config = RustModule.public("config", documentation = "Configuration for the service.")
-    val Error = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
-    val Operation = RustModule.public("operation", documentation = "All operations that this crate can perform.")
-    val Meta = RustModule.public("meta", documentation = "Information about this crate.")
-    val Input = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
-    val Output = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
-    val Primitives = RustModule.public("primitives", documentation = "Data primitives referenced by other data types.")
+    val Config = RustModule.public("config")
+    val Error = RustModule.public("error")
+    val Endpoint = RustModule.public("endpoint")
+    val Operation = RustModule.public("operation")
+    val Meta = RustModule.public("meta")
+    val Input = RustModule.public("input")
+    val Output = RustModule.public("output")
+    val Primitives = RustModule.public("primitives")
 
     /** crate::types */
     val types = Types.self
     object Types {
         /** crate::types */
-        val self = RustModule.public("types", documentation = "Data primitives referenced by other data types.")
+        val self = RustModule.public("types")
 
         /** crate::types::error */
-        val Error = RustModule.public("error", parent = self, documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
+        val Error = RustModule.public("error", parent = self)
     }
 
     // TODO(CrateReorganization): Remove this module when cleaning up `enableNewCrateOrganizationScheme`
-    val Model = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
+    val Model = RustModule.public("model")
+}
+
+class ClientModuleDocProvider(
+    private val codegenContext: ClientCodegenContext,
+    private val serviceName: String,
+) : ModuleDocProvider {
+    private val config: ClientCodegenConfig = codegenContext.settings.codegenConfig
+
+    override fun docsWriter(module: RustModule.LeafModule): Writable? {
+        val strDoc: (String) -> Writable = { str -> writable { docs(escape(str)) } }
+        return when (config.enableNewCrateOrganizationScheme) {
+            true -> when (module) {
+                ClientRustModule.client -> clientModuleDoc()
+                ClientRustModule.Client.customize -> customizeModuleDoc()
+                ClientRustModule.Config -> strDoc("Configuration for $serviceName.")
+                ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
+                ClientRustModule.Endpoint -> strDoc("Endpoint resolution functionality.")
+                ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
+                ClientRustModule.Meta -> strDoc("Information about this crate.")
+                ClientRustModule.Input -> PANIC("this module shouldn't exist in the new scheme")
+                ClientRustModule.Output -> PANIC("this module shouldn't exist in the new scheme")
+                ClientRustModule.Primitives -> strDoc("Primitives such as `Blob` or `DateTime` used by other types.")
+                ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
+                ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
+                ClientRustModule.Model -> PANIC("this module shouldn't exist in the new scheme")
+                else -> TODO("Document this module: $module")
+            }
+
+            else -> strDoc(
+                when (module) {
+                    ClientRustModule.client -> "Client and fluent builders for calling $serviceName."
+                    ClientRustModule.Client.customize -> "Operation customization and supporting types."
+                    ClientRustModule.Config -> "Configuration for $serviceName."
+                    ClientRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
+                    ClientRustModule.Endpoint -> "Endpoint resolution functionality."
+                    ClientRustModule.Operation -> "All operations that this crate can perform."
+                    ClientRustModule.Meta -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
+                    ClientRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
+                    ClientRustModule.Primitives -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.types -> "Data primitives referenced by other data types."
+                    ClientRustModule.Types.Error -> PANIC("this module shouldn't exist in the old scheme")
+                    ClientRustModule.Model -> "Data structures used by operation inputs/outputs."
+                    else -> TODO("Document this module: $module")
+                },
+            )
+        }
+    }
+
+    private fun clientModuleDoc(): Writable = writable {
+        val genericClientConstructionDocs = FluentClientDocs.clientConstructionDocs(codegenContext)
+        val writeClientConstructionDocs = codegenContext.rootDecorator
+            .clientConstructionDocs(codegenContext, genericClientConstructionDocs)
+
+        writeClientConstructionDocs(this)
+        FluentClientDocs.clientUsageDocs(codegenContext)(this)
+    }
+
+    private fun customizeModuleDoc(): Writable = writable {
+        val model = codegenContext.model
+        docs("Operation customization and supporting types.\n")
+        if (codegenContext.serviceShape.operations.isNotEmpty()) {
+            val opFnName = FluentClientGenerator.clientOperationFnName(
+                codegenContext.serviceShape.operations.minOf { it }
+                    .let { model.expectShape(it, OperationShape::class.java) },
+                codegenContext.symbolProvider,
+            )
+            val moduleUseName = codegenContext.moduleUseName()
+            docsTemplate(
+                """
+                The underlying HTTP requests made during an operation can be customized
+                by calling the `customize()` method on the builder returned from a client
+                operation call. For example, this can be used to add an additional HTTP header:
+
+                ```ignore
+                ## async fn wrapper() -> Result<(), $moduleUseName::Error> {
+                ## let client: $moduleUseName::Client = unimplemented!();
+                use #{http}::header::{HeaderName, HeaderValue};
+
+                let result = client.$opFnName()
+                    .customize()
+                    .await?
+                    .mutate_request(|req| {
+                        // Add `x-example-header` with value
+                        req.headers_mut()
+                            .insert(
+                                HeaderName::from_static("x-example-header"),
+                                HeaderValue::from_static("1"),
+                            );
+                    })
+                    .send()
+                    .await;
+                ## }
+                ```
+                """.trimIndent(),
+                "http" to CargoDependency.Http.toDevDependency().toType(),
+            )
+        }
+    }
 }
 
 object ClientModuleProvider : ModuleProvider {
@@ -87,10 +198,10 @@ object ClientModuleProvider : ModuleProvider {
     override fun moduleForEventStreamError(
         context: ModuleProviderContext,
         eventStream: UnionShape,
-    ): RustModule.LeafModule = ClientRustModule.Error
+    ): RustModule.LeafModule = ClientRustModule.Types.Error
 
     override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule =
-        RustModule.public("builders", parent = symbol.module(), documentation = "Builders")
+        RustModule.public("builders", parent = symbol.module(), documentationOverride = "Builders")
 
     private fun Shape.findOperation(model: Model): OperationShape {
         val inputTrait = getTrait<SyntheticInputTrait>()
@@ -107,11 +218,11 @@ object ClientModuleProvider : ModuleProvider {
         val operationShape = shape.findOperation(context.model)
         val contextName = operationShape.contextName(context.serviceShape)
         val operationModuleName =
-            RustReservedWords.escapeIfNeeded(contextName.toSnakeCase())
+            RustReservedWords.escapeIfNeeded(contextName.toSnakeCase(), EscapeFor.ModuleName)
         return RustModule.public(
             operationModuleName,
             parent = ClientRustModule.Operation,
-            documentation = "Types for the `$contextName` operation.",
+            documentationOverride = "Types for the `$contextName` operation.",
         )
     }
 }
@@ -147,7 +258,7 @@ object OldModuleSchemeClientModuleProvider : ModuleProvider {
             visibility = Visibility.PUBLIC,
             parent = symbol.module(),
             inline = true,
-            documentation = "See [`${symbol.name}`](${symbol.module().fullyQualifiedPath()}::${symbol.name}).",
+            documentationOverride = "See [`${symbol.name}`](${symbol.module().fullyQualifiedPath()}::${symbol.name}).",
         )
     }
 }
@@ -163,8 +274,8 @@ fun ClientCodegenContext.featureGatedCustomizeModule() = when (settings.codegenC
     true -> ClientRustModule.Client.customize
     else -> RustModule.public(
         "customize",
-        "Operation customization and supporting types",
         parent = ClientRustModule.Operation,
+        documentationOverride = "Operation customization and supporting types",
     )
 }
 
@@ -180,9 +291,9 @@ fun ClientCodegenContext.featureGatedPaginatorModule(symbolProvider: RustSymbolP
         true -> RustModule.public(
             "paginator",
             parent = symbolProvider.moduleForShape(operation),
-            documentation = "Paginator for this operation",
+            documentationOverride = "Paginator for this operation",
         )
-        else -> RustModule.public("paginator", "Paginators for the service")
+        else -> RustModule.public("paginator", documentationOverride = "Paginators for the service")
     }
 
 // TODO(CrateReorganization): Remove when cleaning up `enableNewCrateOrganizationScheme`

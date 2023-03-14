@@ -36,7 +36,13 @@ fun StructureShape.serverBuilderModule(symbolProvider: SymbolProvider, pubCrate:
         true -> Visibility.PUBCRATE
         false -> Visibility.PUBLIC
     }
-    return RustModule.new(builderNamespace, visibility, parent = structureSymbol.module(), inline = true)
+    return RustModule.new(
+        builderNamespace,
+        visibility,
+        parent = structureSymbol.module(),
+        inline = true,
+        documentationOverride = "",
+    )
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/2396): Replace this with `RustSymbolProvider.symbolForBuilder`

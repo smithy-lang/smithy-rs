@@ -18,12 +18,44 @@ import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+
+/** Provider of documentation for generated Rust modules */
+interface ModuleDocProvider {
+    companion object {
+        fun writeDocs(provider: ModuleDocProvider?, module: RustModule.LeafModule, writer: RustWriter) {
+            check(
+                provider != null ||
+                    module.documentationOverride != null ||
+                    module.rustMetadata.visibility != Visibility.PUBLIC,
+            ) {
+                "Documentation must be provided for public modules, either via ModuleDocumentationProvider, or " +
+                    "by the module documentationOverride. Module: $module"
+            }
+            try {
+                when {
+                    module.documentationOverride != null -> writer.docs(module.documentationOverride)
+                    else -> provider?.docsWriter(module)?.also { writeTo -> writeTo(writer) }
+                }
+            } catch (e: NotImplementedError) {
+                // Catch `TODO()` and rethrow only if its a public module
+                if (module.rustMetadata.visibility == Visibility.PUBLIC) {
+                    throw e
+                }
+            }
+        }
+    }
+
+    /** Returns documentation for the given module */
+    fun docsWriter(module: RustModule.LeafModule): Writable?
+}
 
 /**
  * RustCrate abstraction.
@@ -46,6 +78,7 @@ open class RustCrate(
     fileManifest: FileManifest,
     private val symbolProvider: SymbolProvider,
     coreCodegenConfig: CoreCodegenConfig,
+    val moduleDocProvider: ModuleDocProvider,
 ) {
     private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val features: MutableSet<Feature> = mutableSetOf()
@@ -152,13 +185,13 @@ open class RustCrate(
 
                 if (module.isInline()) {
                     withModule(module.parent) {
-                        withInlineModule(module, moduleWriter)
+                        withInlineModule(module, moduleDocProvider, moduleWriter)
                     }
                 } else {
                     // Create a dependency which adds the mod statement for this module. This will be added to the writer
                     // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
                     val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
-                        module.renderModStatement(this)
+                        module.renderModStatement(this, moduleDocProvider)
                     }
                     val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
                     inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
@@ -204,10 +237,8 @@ open class RustCrate(
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/2341): Remove unconstrained/constrained from codegen-core
-val UnconstrainedModule =
-    RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
-val ConstrainedModule =
-    RustModule.private("constrained", "Constrained types for constrained shapes.")
+val UnconstrainedModule = RustModule.private("unconstrained")
+val ConstrainedModule = RustModule.private("constrained")
 
 /**
  * Finalize all the writers by:

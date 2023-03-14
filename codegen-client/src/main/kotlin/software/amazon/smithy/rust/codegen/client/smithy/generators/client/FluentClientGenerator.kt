@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -27,12 +28,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
@@ -65,6 +66,11 @@ class FluentClientGenerator(
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+        fun clientOperationModuleName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
+            RustReservedWords.escapeIfNeeded(
+                symbolProvider.toSymbol(operationShape).name.toSnakeCase(),
+                EscapeFor.ModuleName,
+            )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -76,9 +82,7 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(ClientRustModule.client) {
-            renderFluentClient(this)
-        }
+        renderFluentClient(crate)
 
         operations.forEach { operation ->
             crate.withModule(operation.fluentBuilderModule(codegenContext, symbolProvider)) {
@@ -89,139 +93,145 @@ class FluentClientGenerator(
         CustomizableOperationGenerator(codegenContext, generics).render(crate)
     }
 
-    private fun renderFluentClient(writer: RustWriter) {
-        if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
-            writer.rustTemplate(
+    private fun renderFluentClient(crate: RustCrate) {
+        crate.withModule(ClientRustModule.client) {
+            if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme || reexportSmithyClientBuilder) {
+                rustTemplate(
+                    """
+                    ##[doc(inline)]
+                    pub use #{client}::Builder;
+                    """,
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
+                )
+            }
+            rustTemplate(
                 """
-                ##[doc(inline)]
-                pub use #{client}::Builder;
+                ##[derive(Debug)]
+                pub(crate) struct Handle#{generics_decl:W} {
+                    pub(crate) client: #{client}::Client#{smithy_inst:W},
+                    pub(crate) conf: crate::Config,
+                }
+
+                #{client_docs:W}
+                ##[derive(std::fmt::Debug)]
+                pub struct Client#{generics_decl:W} {
+                    handle: std::sync::Arc<Handle${generics.inst}>
+                }
+
+                impl${generics.inst} std::clone::Clone for Client${generics.inst} {
+                    fn clone(&self) -> Self {
+                        Self { handle: self.handle.clone() }
+                    }
+                }
+
+                impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
+                    fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
+                        Self::with_config(client, crate::Config::builder().build())
+                    }
+                }
+
+                impl${generics.inst} Client${generics.inst} {
+                    /// Creates a client with the given service configuration.
+                    pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
+                        Self {
+                            handle: std::sync::Arc::new(Handle {
+                                client,
+                                conf,
+                            })
+                        }
+                    }
+
+                    /// Returns the client's configuration.
+                    pub fn conf(&self) -> &crate::Config {
+                        &self.handle.conf
+                    }
+                }
                 """,
+                "generics_decl" to generics.decl,
+                "smithy_inst" to generics.smithyInst,
                 "client" to RuntimeType.smithyClient(runtimeConfig),
+                "client_docs" to writable
+                    {
+                        customizations.forEach {
+                            it.section(
+                                FluentClientSection.FluentClientDocs(
+                                    serviceShape,
+                                ),
+                            )(this)
+                        }
+                    },
             )
         }
-        writer.rustTemplate(
-            """
-            ##[derive(Debug)]
-            pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client#{smithy_inst:W},
-                pub(crate) conf: crate::Config,
-            }
 
-            #{client_docs:W}
-            ##[derive(std::fmt::Debug)]
-            pub struct Client#{generics_decl:W} {
-                handle: std::sync::Arc<Handle${generics.inst}>
-            }
+        operations.forEach { operation ->
+            val name = symbolProvider.toSymbol(operation).name
+            val fnName = clientOperationFnName(operation, symbolProvider)
+            val moduleName = clientOperationModuleName(operation, symbolProvider)
 
-            impl${generics.inst} std::clone::Clone for Client${generics.inst} {
-                fn clone(&self) -> Self {
-                    Self { handle: self.handle.clone() }
-                }
-            }
-
-            impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
-                fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
-                    Self::with_config(client, crate::Config::builder().build())
-                }
-            }
-
-            impl${generics.inst} Client${generics.inst} {
-                /// Creates a client with the given service configuration.
-                pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
-                    Self {
-                        handle: std::sync::Arc::new(Handle {
-                            client,
-                            conf,
-                        })
-                    }
-                }
-
-                /// Returns the client's configuration.
-                pub fn conf(&self) -> &crate::Config {
-                    &self.handle.conf
-                }
-            }
-            """,
-            "generics_decl" to generics.decl,
-            "smithy_inst" to generics.smithyInst,
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "client_docs" to writable
-                {
-                    customizations.forEach {
-                        it.section(
-                            FluentClientSection.FluentClientDocs(
-                                serviceShape,
-                            ),
-                        )(this)
-                    }
-                },
-        )
-        writer.rustBlockTemplate(
-            "impl${generics.inst} Client${generics.inst} #{bounds:W}",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "bounds" to generics.bounds,
-        ) {
-            operations.forEach { operation ->
-                val name = symbolProvider.toSymbol(operation).name
-                val fullPath = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
-                val maybePaginated = if (operation.isPaginated(model)) {
-                    "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
-                } else {
-                    ""
-                }
-
-                val output = operation.outputShape(model)
-                val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = symbolProvider.symbolForOperationError(operation)
-
-                val inputFieldsBody = generateOperationShapeDocs(
-                    writer,
-                    codegenContext,
-                    symbolProvider,
-                    operation,
-                    model,
-                ).joinToString("\n") { "///   - $it" }
-
-                val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
-                    "The fluent builder is configurable:"
-                } else {
-                    "The fluent builder takes no input, just [`send`]($fullPath::send) it."
-                }
-
-                val outputFieldsBody =
-                    generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
-                        "///   - $it"
+            val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
+            crate.withModule(privateModule) {
+                rustBlockTemplate(
+                    "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
+                    "bounds" to generics.bounds,
+                ) {
+                    val fullPath = operation.fullyQualifiedFluentBuilder(codegenContext, symbolProvider)
+                    val maybePaginated = if (operation.isPaginated(model)) {
+                        "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
+                    } else {
+                        ""
                     }
 
-                var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
-                if (outputFieldsBody.isNotEmpty()) {
-                    outputFieldsHead += " with field(s):"
-                }
+                    val output = operation.outputShape(model)
+                    val operationOk = symbolProvider.toSymbol(output)
+                    val operationErr = symbolProvider.symbolForOperationError(operation)
 
-                writer.rustTemplate(
-                    """
-                    /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
-                    ///
-                    /// - $inputFieldsHead
-                    $inputFieldsBody
-                    /// - $outputFieldsHead
-                    $outputFieldsBody
-                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    """,
-                )
+                    val inputFieldsBody = generateOperationShapeDocs(
+                        this,
+                        codegenContext,
+                        symbolProvider,
+                        operation,
+                        model,
+                    ).joinToString("\n") { "///   - $it" }
 
-                // Write a deprecation notice if this operation is deprecated.
-                writer.deprecatedShape(operation)
-
-                writer.rustTemplate(
-                    """
-                    pub fn #{fnName}(&self) -> #{FluentBuilder}${generics.inst} {
-                        #{FluentBuilder}::new(self.handle.clone())
+                    val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
+                        "The fluent builder is configurable:\n"
+                    } else {
+                        "The fluent builder takes no input, just [`send`]($fullPath::send) it."
                     }
-                    """,
-                    "fnName" to writable { rust(clientOperationFnName(operation, symbolProvider)) },
-                    "FluentBuilder" to operation.fluentBuilderType(codegenContext, symbolProvider),
-                )
+
+                    val outputFieldsBody =
+                        generateShapeMemberDocs(this, symbolProvider, output, model).joinToString("\n") {
+                            "///   - $it"
+                        }
+
+                    var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
+                    if (outputFieldsBody.isNotEmpty()) {
+                        outputFieldsHead += " with field(s):\n"
+                    }
+
+                    rustTemplate(
+                        """
+                        /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
+                        ///
+                        /// - $inputFieldsHead$inputFieldsBody
+                        /// - $outputFieldsHead$outputFieldsBody
+                        /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
+                        """,
+                    )
+
+                    // Write a deprecation notice if this operation is deprecated.
+                    deprecatedShape(operation)
+
+                    rustTemplate(
+                        """
+                        pub fn $fnName(&self) -> #{FluentBuilder}${generics.inst} {
+                            #{FluentBuilder}::new(self.handle.clone())
+                        }
+                        """,
+                        "FluentBuilder" to operation.fluentBuilderType(codegenContext, symbolProvider),
+                    )
+                }
             }
         }
     }
@@ -232,12 +242,7 @@ class FluentClientGenerator(
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
-        rust(
-            """
-            /// Fluent builder constructing a request to `${operationSymbol.name}`.
-            ///
-            """,
-        )
+        docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
 
         val builderName = operation.fluentBuilderType(codegenContext, symbolProvider).name
         documentShape(operation, model, autoSuppressMissingDocs = false)
@@ -421,7 +426,7 @@ private fun OperationShape.fluentBuilderModule(
     else -> RustModule.public(
         "fluent_builders",
         parent = ClientRustModule.client,
-        documentation = """
+        documentationOverride = """
             Utilities to ergonomically construct a request to the service.
 
             Fluent builders are created through the [`Client`](crate::client::Client) by calling

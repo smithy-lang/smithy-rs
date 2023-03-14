@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -34,7 +33,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
@@ -153,8 +151,6 @@ class ServerRestJsonProtocol(
     val runtimeConfig = codegenContext.runtimeConfig
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.serverBuilderSymbol(serverCodegenContext)
         fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
             if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
                 ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)

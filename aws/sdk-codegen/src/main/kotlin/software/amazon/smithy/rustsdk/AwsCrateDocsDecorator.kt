@@ -11,10 +11,22 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.containerDocsTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rawTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -23,9 +35,9 @@ private const val LINE_BREAK_SIGIL = "[[smithy-rs-br]]"
 private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 
 /**
- * Generates a README.md for each service crate for display on crates.io.
+ * Generates a README.md and top-level crate documentation for each service crate for display on crates.io and docs.rs.
  */
-class AwsReadmeDecorator : ClientCodegenDecorator {
+class AwsCrateDocsDecorator : ClientCodegenDecorator {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
@@ -36,94 +48,171 @@ class AwsReadmeDecorator : ClientCodegenDecorator {
             emptyMap()
         }
 
+    override fun libRsCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
+    ): List<LibRsCustomization> = baseCustomizations + listOf(
+        object : LibRsCustomization() {
+            override fun section(section: LibRsSection): Writable = when {
+                section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs -> writable {
+                    // Include README contents in crate docs if they are to be generated
+                    if (generateReadme(codegenContext)) {
+                        AwsCrateDocGenerator(codegenContext).generateCrateDocComment()(this)
+                    }
+                }
+
+                else -> emptySection
+            }
+        },
+    )
+
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (generateReadme(codegenContext)) {
-            AwsSdkReadmeGenerator().generateReadme(codegenContext, rustCrate)
+            AwsCrateDocGenerator(codegenContext).generateReadme(rustCrate)
         }
     }
+
+    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable =
+        writable {
+            val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
+            docs("Client for calling $serviceName.")
+            if (generateReadme(codegenContext)) {
+                AwsDocs.clientConstructionDocs(codegenContext)(this)
+            }
+        }
 
     private fun generateReadme(codegenContext: ClientCodegenContext) =
         SdkSettings.from(codegenContext.settings).generateReadme
 }
 
-internal class AwsSdkReadmeGenerator {
+internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenContext) {
     private val logger: Logger = Logger.getLogger(javaClass.name)
-
-    internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
+    private val awsConfigVersion by lazy {
+        SdkSettings.from(codegenContext.settings).awsConfigVersion
             ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
-        rustCrate.withFile("README.md") {
-            val description = normalizeDescription(
-                codegenContext.moduleName,
-                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
-            )
-            val moduleName = codegenContext.settings.moduleName
-            val snakeCaseModuleName = moduleName.replace('-', '_')
-            val shortModuleName = moduleName.removePrefix("aws-sdk-")
+    }
 
-            raw(
+    private fun RustWriter.template(asComments: Boolean, text: String, vararg args: Pair<String, Any>) =
+        when (asComments) {
+            true -> containerDocsTemplate(text, *args)
+            else -> rawTemplate(text + "\n", *args)
+        }
+
+    private fun docText(
+        includeHeader: Boolean,
+        includeLicense: Boolean,
+        asComments: Boolean,
+    ): Writable = writable {
+        val moduleName = codegenContext.settings.moduleName
+        val description = normalizeDescription(
+            codegenContext.moduleName,
+            codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
+        )
+        val snakeCaseModuleName = moduleName.replace('-', '_')
+        val shortModuleName = moduleName.removePrefix("aws-sdk-")
+
+        if (includeHeader) {
+            template(asComments, escape("# $moduleName\n"))
+        }
+        template(
+            asComments,
+            """
+            **Please Note: The SDK is currently in Developer Preview and is intended strictly for
+            feedback purposes only. Do not use this SDK for production workloads.**${"\n"}
+            """.trimIndent(),
+        )
+
+        if (description.isNotBlank()) {
+            template(asComments, escape("$description\n"))
+        }
+
+        val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
+        val exampleMode = if (compileExample) "no_run" else "ignore"
+        template(
+            asComments,
+            """
+            #### Getting Started
+
+            > Examples are available for many services and operations, check out the
+            > [examples folder in GitHub](https://github.com/awslabs/aws-sdk-rust/tree/main/examples).
+
+            The SDK provides one crate per AWS service. You must add [Tokio](https://crates.io/crates/tokio)
+            as a dependency within your Rust project to execute asynchronous code. To add `$moduleName` to
+            your project, add the following to your **Cargo.toml** file:
+
+            ```toml
+            [dependencies]
+            aws-config = "$awsConfigVersion"
+            $moduleName = "${codegenContext.settings.moduleVersion}"
+            tokio = { version = "1", features = ["full"] }
+            ```
+
+            Then in code, a client can be created with the following:
+
+            ```rust,$exampleMode
+            use $snakeCaseModuleName as $shortModuleName;
+
+            ##[#{tokio}::main]
+            async fn main() -> Result<(), $shortModuleName::Error> {
+                let config = #{aws_config}::load_from_env().await;
+                let client = $shortModuleName::Client::new(&config);
+
+                // ... make some calls with the client
+
+                Ok(())
+            }
+            ```
+
+            See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
+            for information on what calls can be made, and the inputs and outputs for each of those calls.${"\n"}
+            """.trimIndent().trimStart(),
+            "tokio" to CargoDependency.Tokio.toDevDependency().toType(),
+            "aws_config" to when (compileExample) {
+                true -> AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType()
+                else -> writable { rust("aws_config") }
+            },
+        )
+
+        template(
+            asComments,
+            """
+            #### Using the SDK
+
+            Until the SDK is released, we will be adding information about using the SDK to the
+            [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html). Feel free to suggest
+            additional sections for the guide by opening an issue and describing what you are trying to do.${"\n"}
+            """.trimIndent(),
+        )
+
+        template(
+            asComments,
+            """
+            #### Getting Help
+
+            * [GitHub discussions](https://github.com/awslabs/aws-sdk-rust/discussions) - For ideas, RFCs & general questions
+            * [GitHub issues](https://github.com/awslabs/aws-sdk-rust/issues/new/choose) - For bug reports & feature requests
+            * [Generated Docs (latest version)](https://awslabs.github.io/aws-sdk-rust/)
+            * [Usage examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples)${"\n"}
+            """.trimIndent(),
+        )
+
+        if (includeLicense) {
+            template(
+                asComments,
                 """
-                # $moduleName
+                #### License
 
-                **Please Note: The SDK is currently in Developer Preview and is intended strictly for
-                feedback purposes only. Do not use this SDK for production workloads.**
-                """.trimIndent() +
-                    "\n\n$description\n\n" +
-                    """
-                    ## Getting Started
-
-                    > Examples are available for many services and operations, check out the
-                    > [examples folder in GitHub](https://github.com/awslabs/aws-sdk-rust/tree/main/examples).
-
-                    The SDK provides one crate per AWS service. You must add [Tokio](https://crates.io/crates/tokio)
-                    as a dependency within your Rust project to execute asynchronous code. To add `$moduleName` to
-                    your project, add the following to your **Cargo.toml** file:
-
-                    ```toml
-                    [dependencies]
-                    aws-config = "$awsConfigVersion"
-                    $moduleName = "${codegenContext.settings.moduleVersion}"
-                    tokio = { version = "1", features = ["full"] }
-                    ```
-
-                    Then in code, a client can be created with the following:
-
-                    ```rust
-                    use $snakeCaseModuleName as $shortModuleName;
-
-                    #[tokio::main]
-                    async fn main() -> Result<(), $shortModuleName::Error> {
-                        let config = aws_config::load_from_env().await;
-                        let client = $shortModuleName::Client::new(&config);
-
-                        // ... make some calls with the client
-
-                        Ok(())
-                    }
-                    ```
-
-                    See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
-                    for information on what calls can be made, and the inputs and outputs for each of those calls.
-
-                    ## Using the SDK
-
-                    Until the SDK is released, we will be adding information about using the SDK to the
-                    [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html). Feel free to suggest
-                    additional sections for the guide by opening an issue and describing what you are trying to do.
-
-                    ## Getting Help
-
-                    * [GitHub discussions](https://github.com/awslabs/aws-sdk-rust/discussions) - For ideas, RFCs & general questions
-                    * [GitHub issues](https://github.com/awslabs/aws-sdk-rust/issues/new/choose) – For bug reports & feature requests
-                    * [Generated Docs (latest version)](https://awslabs.github.io/aws-sdk-rust/)
-                    * [Usage examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples)
-
-                    ## License
-
-                    This project is licensed under the Apache-2.0 License.
-                    """.trimIndent(),
+                This project is licensed under the Apache-2.0 License.
+                """.trimIndent(),
             )
         }
+    }
+
+    internal fun generateCrateDocComment(): Writable =
+        docText(includeHeader = false, includeLicense = false, asComments = true)
+
+    internal fun generateReadme(rustCrate: RustCrate) = rustCrate.withFile("README.md") {
+        docText(includeHeader = true, includeLicense = true, asComments = false)(this)
     }
 
     /**

@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -21,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
@@ -245,7 +245,7 @@ open class ServerServiceGenerator(
             rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
         }
 
-        rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
+        rustCrate.withModule(ServerRustModule.Operation) {
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
 
@@ -257,31 +257,17 @@ open class ServerServiceGenerator(
             }
         }
 
-        rustCrate.withModule(
-            RustModule.public("operation_shape"),
-        ) {
+        rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationShapeGenerator(operations, codegenContext).render(this)
         }
 
-        rustCrate.withModule(
-            RustModule.private("service"),
-        ) {
-            ServerServiceGeneratorV2(
-                codegenContext,
-                protocol,
-            ).render(this)
+        rustCrate.withModule(RustModule.private("service")) {
+            ServerServiceGeneratorV2(codegenContext, protocol).render(this)
         }
 
         renderExtras(operations)
 
-        rustCrate.withModule(
-            RustModule.public(
-                "server",
-                """
-                Contains the types that are re-exported from the `aws-smithy-http-server` create.
-                """,
-            ),
-        ) {
+        rustCrate.withModule(ServerRustModule.Server) {
             renderServerReExports(this)
         }
     }

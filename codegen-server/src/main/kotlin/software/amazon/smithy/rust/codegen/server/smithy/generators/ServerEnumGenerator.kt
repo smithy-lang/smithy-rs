@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 open class ConstrainedEnum(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val shape: StringShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) : EnumType() {
@@ -41,7 +41,7 @@ open class ConstrainedEnum(
     )
 
     override fun implFromForStr(context: EnumGeneratorContext): Writable = writable {
-        withInlineModule(constraintViolationSymbol.module()) {
+        withInlineModule(constraintViolationSymbol.module(), codegenContext.moduleDocProvider) {
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]

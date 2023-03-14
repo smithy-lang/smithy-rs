@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClien
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
 
@@ -56,12 +57,18 @@ val TestClientRustSymbolProviderConfig = RustSymbolProviderConfig(
     moduleProvider = OldModuleSchemeClientModuleProvider,
 )
 
+private class ClientTestCodegenDecorator : ClientCodegenDecorator {
+    override val name = "test"
+    override val order: Byte = 0
+}
+
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
         testClientRustSettings(),
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         TestClientRustSymbolProviderConfig,
+        ClientTestCodegenDecorator(),
     )
 
 fun testClientCodegenContext(
@@ -73,6 +80,7 @@ fun testClientCodegenContext(
 ): ClientCodegenContext = ClientCodegenContext(
     model,
     symbolProvider ?: testSymbolProvider(model),
+    TestModuleDocProvider,
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),

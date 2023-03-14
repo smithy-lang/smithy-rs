@@ -69,6 +69,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
             includeConstrainedShapeProvider: Boolean = true,
+            codegenDecorator: ServerCodegenDecorator,
         ) =
             SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.
@@ -89,6 +90,8 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
                 .let { DeriveEqAndHashSymbolMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
+                // Allows decorators to inject a custom symbol provider
+                .let { codegenDecorator.symbolProvider(it) }
     }
 }

@@ -86,7 +86,8 @@ open class ClientProtocolGenerator(
         Attribute.DocHidden.render(operationWriter)
         operationWriter.rust("pub struct $operationName;")
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            rustBlock("pub(crate) fn new() -> Self") {
+            Attribute.DocHidden.render(operationWriter)
+            rustBlock("pub fn new() -> Self") {
                 rust("Self")
             }
 

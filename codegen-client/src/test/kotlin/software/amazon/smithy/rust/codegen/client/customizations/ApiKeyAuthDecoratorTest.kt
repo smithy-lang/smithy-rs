@@ -59,7 +59,7 @@ internal class ApiKeyAuthDecoratorTest {
                         let conf = $moduleName::Config::builder()
                             .api_key(AuthApiKey::new(api_key_value))
                             .build();
-                        let operation = $moduleName::input::SomeOperationInput::builder()
+                        let operation = $moduleName::operation::some_operation::SomeOperationInput::builder()
                             .build()
                             .expect("input is valid")
                             .make_operation(&conf)
@@ -87,7 +87,7 @@ internal class ApiKeyAuthDecoratorTest {
                         let conf = $moduleName::Config::builder()
                             .api_key(AuthApiKey::new(api_key_value))
                             .build();
-                        let operation = $moduleName::input::SomeOperationInput::builder()
+                        let operation = $moduleName::operation::some_operation::SomeOperationInput::builder()
                             .build()
                             .expect("input is valid")
                             .make_operation(&conf)
@@ -149,7 +149,7 @@ internal class ApiKeyAuthDecoratorTest {
                         let conf = $moduleName::Config::builder()
                             .api_key(AuthApiKey::new(api_key_value))
                             .build();
-                        let operation = $moduleName::input::SomeOperationInput::builder()
+                        let operation = $moduleName::operation::some_operation::SomeOperationInput::builder()
                             .build()
                             .expect("input is valid")
                             .make_operation(&conf)
