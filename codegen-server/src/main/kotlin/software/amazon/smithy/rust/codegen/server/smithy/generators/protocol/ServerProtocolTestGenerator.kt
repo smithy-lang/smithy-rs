@@ -387,7 +387,12 @@ class ServerProtocolTestGenerator(
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
 
-            makeRequest(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
+            makeRequest(
+                operationShape,
+                operationSymbol,
+                this,
+                writable("""panic!("$panicMessage", &input) as $outputT"""),
+            )
             checkResponse(this, testCase.response)
         }
     }
@@ -757,7 +762,6 @@ class ServerProtocolTestGenerator(
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
-        private const val MalformedRangeValidation = "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
@@ -769,6 +773,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
+            FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
             // Tests involving `@range` on floats.
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy-rs/issues/2007.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
@@ -799,8 +804,6 @@ class ServerProtocolTestGenerator(
             // AwsJson1.1 failing tests.
             FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
-            FailingTest(AwsJson11, "parses_httpdate_timestamps", TestType.Response),
-            FailingTest(AwsJson11, "parses_iso8601_timestamps", TestType.Response),
             FailingTest(AwsJson11, "parses_the_request_id_from_the_response", TestType.Response),
         )
         private val RunOnly: Set<String>? = null
@@ -883,8 +886,10 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
+
         private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
+
         private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
 
@@ -930,7 +935,10 @@ class ServerProtocolTestGenerator(
         private val BrokenMalformedRequestTests: Map<Pair<String, String>, KFunction1<HttpMalformedRequestTestCase, HttpMalformedRequestTestCase>> =
             // TODO(https://github.com/awslabs/smithy/issues/1506)
             mapOf(
-                Pair(RestJsonValidation, "RestJsonMalformedPatternReDOSString") to ::fixRestJsonMalformedPatternReDOSString,
+                Pair(
+                    RestJsonValidation,
+                    "RestJsonMalformedPatternReDOSString",
+                ) to ::fixRestJsonMalformedPatternReDOSString,
             )
     }
 }
