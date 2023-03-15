@@ -53,7 +53,7 @@ async fn main() -> Result<(), BoxError> {
         http::Response<SdkBody>,
         Result<GetObjectOutput, BoxError>,
     > = Interceptors::new();
-    let res = invoke(input, &mut interceptors, &mut cfg).await?;
+    let res = invoke(input, &mut interceptors, &runtime_plugins, &mut cfg).await?;
 
     let body = res.body.collect().await?.to_vec();
     let body_string = from_utf8(&body)?;
