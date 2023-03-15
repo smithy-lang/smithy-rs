@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
+import software.amazon.smithy.model.shapes.IntEnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
@@ -59,6 +60,7 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     ByteShape::class to RustType.Integer(8),
     ShortShape::class to RustType.Integer(16),
     IntegerShape::class to RustType.Integer(32),
+    IntEnumShape::class to RustType.Integer(32),
     LongShape::class to RustType.Integer(64),
     StringShape::class to RustType.String,
 )
@@ -178,6 +180,8 @@ open class SymbolVisitor(
     override fun longShape(shape: LongShape): Symbol = simpleShape(shape)
     override fun floatShape(shape: FloatShape): Symbol = simpleShape(shape)
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
+
+    override fun intEnumShape(shape: IntEnumShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())

@@ -10,8 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -21,13 +21,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesG
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
@@ -55,24 +52,18 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         return ModelTransformer.create().mapTraits(model) { _, trait ->
             when (trait) {
                 is EndpointRuleSetTrait -> {
-                    val epRules = EndpointRuleSet.fromNode(trait.ruleSet)
+                    val rules = trait.ruleSet.expectObjectNode()
+                    val params = rules.expectObjectMember("parameters")
                     val newParameters = Parameters.builder()
-                    epRules.parameters.toList()
-                        .map { param ->
-                            param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
-                                val builder = parameter.toBuilder().required(true)
-                                // TODO(https://github.com/awslabs/smithy-rs/issues/2187): undo this workaround
-                                parameter.defaultValue.ifPresent { default -> builder.defaultValue(default) }
-
-                                builder.build()
-                            }
+                    params.members.map { (key, value) ->
+                        val param = Parameter.fromNode(key, value.expectObjectNode())
+                        param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
+                            parameter.toBuilder().required(true).build()
                         }
-                        .forEach(newParameters::addParameter)
-
-                    val newTrait = epRules.toBuilder().parameters(
-                        newParameters.build(),
-                    ).build()
-                    EndpointRuleSetTrait.builder().ruleSet(newTrait.toNode()).build()
+                    }.forEach(newParameters::addParameter)
+                    EndpointRuleSetTrait.builder()
+                        .ruleSet(rules.toBuilder().withMember("parameters", newParameters.build().toNode()).build())
+                        .build()
                 }
 
                 else -> trait
@@ -196,59 +187,6 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                 )
 
                 else -> emptySection
-            }
-        }
-    }
-
-    class SdkEndpointCustomization(
-        codegenContext: CodegenContext,
-    ) :
-        ConfigCustomization() {
-        private val runtimeConfig = codegenContext.runtimeConfig
-        private val resolveAwsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint")
-        private val endpointShim = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim")
-        private val codegenScope = arrayOf(
-            "ResolveAwsEndpoint" to resolveAwsEndpoint,
-            "EndpointShim" to endpointShim,
-            "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
-        )
-
-        override fun section(section: ServiceConfig): Writable = writable {
-            when (section) {
-                ServiceConfig.BuilderImpl -> rustTemplate(
-                    """
-                    /// Sets the endpoint url used to communicate with this service
-                    ///
-                    /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
-                    /// will be prefixed onto this URL. To fully override the endpoint resolver, use
-                    /// [`Builder::endpoint_resolver`].
-                    pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
-                        self.endpoint_url = Some(endpoint_url.into());
-                        self
-                    }
-
-                    /// Sets the endpoint url used to communicate with this service
-                    ///
-                    /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
-                    /// will be prefixed onto this URL. To fully override the endpoint resolver, use
-                    /// [`Builder::endpoint_resolver`].
-                    pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
-                        self.endpoint_url = endpoint_url;
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
-
-                ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url,")
-                ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>,")
-                ServiceConfig.ConfigImpl -> {
-                    Attribute.AllowDeadCode.render(this)
-                    rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
-                }
-
-                ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
-                else -> {}
             }
         }
     }

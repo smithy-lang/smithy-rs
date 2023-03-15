@@ -30,7 +30,7 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 hyper = { version = "0.14.12", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
-tokio = { version = "1.8.4", features = ["sync"] }
+tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
 
 # implementation detail of SSO credential caching
