@@ -11,6 +11,16 @@ pub trait RuntimePlugin {
     fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError>;
 }
 
+impl<T> From<T> for Box<dyn RuntimePlugin>
+where
+    T: RuntimePlugin + 'static,
+{
+    fn from(t: T) -> Self {
+        Box::new(t) as _
+    }
+}
+
+#[derive(Default)]
 pub struct RuntimePlugins {
     client_plugins: Vec<Box<dyn RuntimePlugin>>,
     operation_plugins: Vec<Box<dyn RuntimePlugin>>,
@@ -18,20 +28,20 @@ pub struct RuntimePlugins {
 
 impl RuntimePlugins {
     pub fn new() -> Self {
-        Self {
-            client_plugins: Vec::new(),
-            operation_plugins: Vec::new(),
-        }
+        Default::default()
     }
 
-    pub fn with_client_plugin(&mut self, plugin: impl Into<Box<dyn RuntimePlugin>>) -> &mut Self {
+    pub fn with_client_plugin(
+        &mut self,
+        plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
+    ) -> &mut Self {
         self.client_plugins.push(plugin.into());
         self
     }
 
     pub fn with_operation_plugin(
         &mut self,
-        plugin: impl Into<Box<dyn RuntimePlugin>>,
+        plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
     ) -> &mut Self {
         self.operation_plugins.push(plugin.into());
         self
@@ -51,5 +61,25 @@ impl RuntimePlugins {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BoxError, RuntimePlugin, RuntimePlugins};
+    use crate::config_bag::ConfigBag;
+
+    struct SomeStruct;
+
+    impl RuntimePlugin for SomeStruct {
+        fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn can_add_runtime_plugin_implementors_to_runtime_plugins() {
+        let mut rps = RuntimePlugins::new();
+        rps.with_client_plugin(SomeStruct);
     }
 }
