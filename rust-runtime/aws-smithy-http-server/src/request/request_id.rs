@@ -105,22 +105,25 @@ impl Default for ServerRequestId {
 #[derive(Clone)]
 pub struct ServerRequestIdProvider<S> {
     inner: S,
+    header_key: Option<HeaderName>,
 }
 
 /// A layer that provides services with a unique request ID instance
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct ServerRequestIdProviderLayer;
+pub struct ServerRequestIdProviderLayer {
+    header_key: Option<HeaderName>,
+}
 
 impl ServerRequestIdProviderLayer {
     /// Generate a new unique request ID
     pub fn new() -> Self {
-        Self {}
+        Self { header_key: None, }
     }
 
     /// Generate a new unique request ID and add it as a response header
-    pub fn new_with_response_header(header_key: HeaderName) -> ServerRequestIdResponseProviderLayer {
-        ServerRequestIdResponseProviderLayer::new(header_key)
+    pub fn new_with_response_header(header_key: HeaderName) -> Self {
+        Self { header_key: Some(header_key), }
     }
 }
 
@@ -134,92 +137,11 @@ impl<S> Layer<S> for ServerRequestIdProviderLayer {
     type Service = ServerRequestIdProvider<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ServerRequestIdProvider { inner }
+        ServerRequestIdProvider { inner, header_key: self.header_key.clone() }
     }
 }
 
 impl<Body, S> Service<http::Request<Body>> for ServerRequestIdProvider<S>
-where
-    S: Service<http::Request<Body>>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, mut req: http::Request<Body>) -> Self::Future {
-        req.extensions_mut().insert(ServerRequestId::new());
-        self.inner.call(req)
-    }
-}
-
-impl<Protocol> IntoResponse<Protocol> for MissingServerRequestId {
-    fn into_response(self) -> http::Response<BoxBody> {
-        internal_server_error()
-    }
-}
-
-#[derive(Clone)]
-pub struct ServerRequestIdResponseProvider<S> {
-    inner: S,
-    header_key: HeaderName,
-}
-
-/// A layer that inserts a newly generated [`ServerRequestId`] to the response headers
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct ServerRequestIdResponseProviderLayer {
-    header_key: HeaderName,
-}
-
-impl ServerRequestIdResponseProviderLayer {
-    /// Add the request ID to the response header `header_key`
-    fn new(header_key: HeaderName) -> Self {
-        Self { header_key }
-    }
-}
-
-impl<S> Layer<S> for ServerRequestIdResponseProviderLayer {
-    type Service = ServerRequestIdResponseProvider<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        ServerRequestIdResponseProvider { inner, header_key: self.header_key.clone() }
-    }
-}
-
-pin_project_lite::pin_project! {
-    pub struct ServerRequestIdResponseFuture<Fut> {
-        request_id: ServerRequestId,
-        header_key: Option<HeaderName>,
-        #[pin]
-        fut: Fut,
-    }
-}
-
-impl<Fut> Future for ServerRequestIdResponseFuture<Fut>
-where
-    Fut: TryFuture<Ok = Response<crate::body::BoxBody>>,
-{
-    type Output = Result<Fut::Ok, Fut::Error>;
-
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        let fut = this.fut;
-        let request_id = this.request_id;
-        fut.try_poll(cx)
-            .map_ok(|mut res| {
-                if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
-                    res.headers_mut().insert(this.header_key.take().expect("Futures should not be polled after completion"), value);
-                }
-                res
-            })
-    }
-}
-
-impl<Body, S> Service<http::Request<Body>> for ServerRequestIdResponseProvider<S>
 where
     S: Service<http::Request<Body>, Response = Response<crate::body::BoxBody>>,
     S::Future: std::marker::Send + 'static,
@@ -241,6 +163,43 @@ where
             header_key: Some(header_key),
             fut: self.inner.call(req),
         }
+    }
+}
+
+impl<Protocol> IntoResponse<Protocol> for MissingServerRequestId {
+    fn into_response(self) -> http::Response<BoxBody> {
+        internal_server_error()
+    }
+}
+
+pin_project_lite::pin_project! {
+    pub struct ServerRequestIdResponseFuture<Fut> {
+        request_id: ServerRequestId,
+        header_key: Option<Option<HeaderName>>,
+        #[pin]
+        fut: Fut,
+    }
+}
+
+impl<Fut> Future for ServerRequestIdResponseFuture<Fut>
+where
+    Fut: TryFuture<Ok = Response<crate::body::BoxBody>>,
+{
+    type Output = Result<Fut::Ok, Fut::Error>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        let fut = this.fut;
+        let request_id = this.request_id;
+        fut.try_poll(cx)
+            .map_ok(|mut res| {
+                if let Some(header_key) = this.header_key.take().expect("Futures should not be polled after completion") {
+                    if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
+                        res.headers_mut().insert(header_key.to_owned(), value);
+                    }
+                }
+                res
+            })
     }
 }
 
