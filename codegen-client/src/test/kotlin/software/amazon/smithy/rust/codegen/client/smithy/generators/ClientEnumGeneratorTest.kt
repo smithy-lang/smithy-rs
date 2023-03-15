@@ -29,10 +29,10 @@ class ClientEnumGeneratorTest {
                     "matching_on_enum_should_be_forward_compatible",
                     """
                     match $enumToMatchOn {
-                        SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
-                        SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
-                        other @ _ if other.as_str() == "Variant3" => assert!(true),
-                        _ => assert!(false, "expected `Variant3` but got `_`"),
+                        SomeEnum::Variant1 => panic!("expected `Variant3` but got `Variant1`"),
+                        SomeEnum::Variant2 => panic!("expected `Variant3` but got `Variant2`"),
+                        other @ _ if other.as_str() == "Variant3" => {},
+                        _ => panic!("expected `Variant3` but got `_`"),
                     }
                     """.trimIndent(),
                 )

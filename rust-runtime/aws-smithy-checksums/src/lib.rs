@@ -64,11 +64,11 @@ impl ChecksumAlgorithm {
     /// Return the `HttpChecksum` implementor for this algorithm
     pub fn into_impl(self) -> Box<dyn http::HttpChecksum> {
         match self {
-            Self::Crc32 => Box::new(Crc32::default()),
-            Self::Crc32c => Box::new(Crc32c::default()),
-            Self::Md5 => Box::new(Md5::default()),
-            Self::Sha1 => Box::new(Sha1::default()),
-            Self::Sha256 => Box::new(Sha256::default()),
+            Self::Crc32 => Box::<Crc32>::default(),
+            Self::Crc32c => Box::<Crc32c>::default(),
+            Self::Md5 => Box::<Md5>::default(),
+            Self::Sha1 => Box::<Sha1>::default(),
+            Self::Sha256 => Box::<Sha256>::default(),
         }
     }
 

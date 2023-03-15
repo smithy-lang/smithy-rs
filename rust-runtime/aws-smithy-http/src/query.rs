@@ -85,7 +85,7 @@ mod test {
     proptest! {
         #[test]
         fn test_encode_request(s: String) {
-            let _: Uri = format!("http://host.example.com/?{}", fmt_string(&s)).parse().expect("all strings should be encoded properly");
+            let _: Uri = format!("http://host.example.com/?{}", fmt_string(s)).parse().expect("all strings should be encoded properly");
         }
     }
 }

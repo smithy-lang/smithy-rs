@@ -488,11 +488,11 @@ mod tests {
     fn test_validate_json_body() {
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   5 }"#;
-        validate_body(&actual, expected, MediaType::Json).expect("inputs matched as JSON");
+        validate_body(actual, expected, MediaType::Json).expect("inputs matched as JSON");
 
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   6 }"#;
-        validate_body(&actual, expected, MediaType::Json).expect_err("bodies do not match");
+        validate_body(actual, expected, MediaType::Json).expect_err("bodies do not match");
     }
 
     #[test]
@@ -501,22 +501,22 @@ mod tests {
         hello123
         </a>"#;
         let actual = "<a>hello123</a>";
-        validate_body(&actual, expected, MediaType::Xml).expect("inputs match as XML");
+        validate_body(actual, expected, MediaType::Xml).expect("inputs match as XML");
         let expected = r#"<a>
         hello123
         </a>"#;
         let actual = "<a>hello124</a>";
-        validate_body(&actual, expected, MediaType::Xml).expect_err("inputs are different");
+        validate_body(actual, expected, MediaType::Xml).expect_err("inputs are different");
     }
 
     #[test]
     fn test_validate_non_json_body() {
         let expected = r#"asdf"#;
         let actual = r#"asdf "#;
-        validate_body(&actual, expected, MediaType::from("something/else"))
+        validate_body(actual, expected, MediaType::from("something/else"))
             .expect_err("bodies do not match");
 
-        validate_body(&expected, expected, MediaType::from("something/else"))
+        validate_body(expected, expected, MediaType::from("something/else"))
             .expect("inputs matched exactly")
     }
 
