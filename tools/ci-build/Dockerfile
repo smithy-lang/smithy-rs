@@ -59,6 +59,7 @@ RUN set -eux; \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
+    rustup target add wasm32-unknown-unknown; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
