@@ -195,7 +195,7 @@ where
             .map_ok(|mut res| {
                 if let Some(header_key) = this.header_key.take().expect("Futures should not be polled after completion") {
                     if let Ok(value) = HeaderValue::from_str(&request_id.id.to_string()) {
-                        res.headers_mut().insert(header_key.to_owned(), value);
+                        res.headers_mut().insert(header_key, value);
                     }
                 }
                 res
