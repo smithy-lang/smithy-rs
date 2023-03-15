@@ -146,8 +146,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                 let _result = dbg!(#{invoke_operation});
                 #{assertion}
                 """,
-                "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
-                    .resolve("test_connection::capture_request"),
+                "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                 "conf" to config(testOperationInput),
                 "invoke_operation" to operationInvocation(testOperationInput),
                 "assertion" to writable {

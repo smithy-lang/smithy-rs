@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -101,7 +100,7 @@ class JsonSerializerGeneratorTest {
 
     @Test
     fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         val parserSerializer = JsonSerializerGenerator(
@@ -117,12 +116,12 @@ class JsonSerializerGeneratorTest {
             unitTest(
                 "json_serializers",
                 """
-                use model::{Top, Choice};
+                use test_model::{Top, Choice};
 
                 // Generate the document serializer even though it's not tested directly
                 // ${format(documentGenerator)}
 
-                let input = crate::input::OpInput::builder().top(
+                let input = crate::test_input::OpInput::builder().top(
                     Top::builder()
                         .field("hello!")
                         .extra(45)
@@ -133,7 +132,7 @@ class JsonSerializerGeneratorTest {
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
                 assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
 
-                let input = crate::input::OpInput::builder().top(
+                let input = crate::test_input::OpInput::builder().top(
                     Top::builder()
                         .choice(Choice::Unknown)
                         .build()
@@ -142,15 +141,17 @@ class JsonSerializerGeneratorTest {
                 """,
             )
         }
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
-            val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
+        model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(top) {
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
         }
 
-        project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

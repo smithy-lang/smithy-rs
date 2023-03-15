@@ -53,9 +53,29 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("MutateOutput")
+
+    /**
+     * Allows for adding additional properties to the `extras` field on the
+     * `aws_smithy_types::error::ErrorMetadata`.
+     */
+    data class PopulateErrorMetadataExtras(
+        override val customizations: List<OperationCustomization>,
+        /** Name of the generic error builder (for referring to it in Rust code) */
+        val builderName: String,
+        /** Name of the response (for referring to it in Rust code) */
+        val responseName: String,
+    ) : OperationSection("PopulateErrorMetadataExtras")
+
+    /**
+     * Hook to add custom code right before the response is parsed.
+     */
+    data class BeforeParseResponse(
+        override val customizations: List<OperationCustomization>,
+        val responseName: String,
+    ) : OperationSection("BeforeParseResponse")
 }
 
-abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
+abstract class OperationCustomization : NamedCustomization<OperationSection>() {
     open fun retryType(): RuntimeType? = null
 
     /**

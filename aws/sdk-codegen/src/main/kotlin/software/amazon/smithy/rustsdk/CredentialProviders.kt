@@ -8,19 +8,17 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
 class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
@@ -33,24 +31,22 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
-    }
-
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
-            SdkConfigSection.create { section ->
-                writable {
-                    rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
-                }
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
             },
         )
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
+
+        rustCrate.withModule(codegenContext.featureGatedConfigModule()) {
+            rust(
+                "pub use #T::Credentials;",
+                AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
+            )
+        }
     }
 }
 
@@ -91,21 +87,6 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 "${section.configBuilderRef}.set_credentials_provider(Some(#{provider}::SharedCredentialsProvider::new(#{TestCredentials}::for_tests())));",
                 *codegenScope,
             )
-
-            else -> emptySection
-        }
-    }
-}
-
-class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable {
-        return when (section) {
-            is LibRsSection.Body -> writable {
-                rust(
-                    "pub use #T::Credentials;",
-                    AwsRuntimeType.awsCredentialTypes(runtimeConfig),
-                )
-            }
 
             else -> emptySection
         }

@@ -27,9 +27,9 @@ val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val crateHasherToolPath = rootProject.projectDir.resolve("tools/crate-hasher")
-val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
-val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
+val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
+val publisherToolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
+val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
 val sdkOutputDir = outputDir.resolve("sdk")
 val examplesOutputDir = outputDir.resolve("examples")
@@ -52,7 +52,9 @@ dependencies {
 
 // Class and functions for service and protocol membership for SDK generation
 
-val awsServices: AwsServices by lazy { discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership()) }
+val awsServices: AwsServices by lazy {
+    discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership())
+}
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
@@ -97,7 +99,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "codegen": {
                             "includeFluentClient": false,
                             "renameErrors": false,
-                            "eventStreamAllowList": [$eventStreamAllowListMembers]
+                            "eventStreamAllowList": [$eventStreamAllowListMembers],
+                            "enableNewCrateOrganizationScheme": true
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",

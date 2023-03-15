@@ -25,7 +25,7 @@ import java.util.Optional
  */
 
 /**
- * Settings used by [RustCodegenServerPlugin].
+ * Settings used by [RustServerCodegenPlugin].
  */
 data class ServerRustSettings(
     override val service: ShapeId,
@@ -83,12 +83,20 @@ data class ServerCodegenConfig(
     override val debugMode: Boolean = defaultDebugMode,
     val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
     val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
+    /**
+     * A flag to enable _experimental_ support for custom validation exceptions via the
+     * [CustomValidationExceptionWithReasonDecorator] decorator.
+     * TODO(https://github.com/awslabs/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
+     *  able to define the converters in their Rust application code.
+     */
+    val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
     companion object {
         private const val defaultPublicConstrainedTypes = true
         private const val defaultIgnoreUnsupportedConstraints = false
+        private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -97,6 +105,7 @@ data class ServerCodegenConfig(
                     debugMode = coreCodegenConfig.debugMode,
                     publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
                     ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
+                    experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = node.get().getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
                 )
             } else {
                 ServerCodegenConfig(

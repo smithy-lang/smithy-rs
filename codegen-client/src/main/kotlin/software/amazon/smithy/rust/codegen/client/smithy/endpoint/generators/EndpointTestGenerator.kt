@@ -47,8 +47,7 @@ internal class EndpointTestGenerator(
         "Error" to types.resolveEndpointError,
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
-        "capture_request" to RuntimeType.smithyClientTestUtil(runtimeConfig)
-            .resolve("test_connection::capture_request"),
+        "capture_request" to RuntimeType.captureRequest(runtimeConfig),
     )
 
     private val instantiator = clientInstantiator(codegenContext)

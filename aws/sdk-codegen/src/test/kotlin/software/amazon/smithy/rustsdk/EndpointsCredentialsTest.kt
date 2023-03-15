@@ -96,8 +96,7 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to RuntimeType.smithyClientTestUtil(context.runtimeConfig)
-                            .resolve("test_connection::capture_request"),
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
                         "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
                             .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
@@ -120,8 +119,7 @@ class EndpointsCredentialsTest {
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
-                        "capture_request" to RuntimeType.smithyClientTestUtil(context.runtimeConfig)
-                            .resolve("test_connection::capture_request"),
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
                         "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
                             .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),

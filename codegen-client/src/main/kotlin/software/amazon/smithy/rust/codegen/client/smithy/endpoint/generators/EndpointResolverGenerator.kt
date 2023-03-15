@@ -10,11 +10,11 @@ import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.eval.Type
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
-import software.amazon.smithy.rulesengine.language.syntax.fn.Function
 import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
@@ -164,7 +164,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
         // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
-        return RuntimeType.forInlineFun("DefaultResolver", EndpointsModule) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Endpoint) {
             rustTemplate(
                 """
                 /// The default endpoint resolver
@@ -202,7 +202,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
+        return RuntimeType.forInlineFun("resolve_endpoint", EndpointImpl) {
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
@@ -288,9 +288,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 val target = generator.generate(fn)
                 val next = generateRuleInternal(rule, rest)
                 when {
-                    fn.type() is Type.Option ||
-                        // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
-                        (fn as Function).name == "substring" -> {
+                    fn.type() is Type.Option -> {
                         Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",

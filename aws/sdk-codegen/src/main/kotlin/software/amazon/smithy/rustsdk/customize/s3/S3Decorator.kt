@@ -20,21 +20,17 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustom
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.endpoints.stripEndpointTrait
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
@@ -52,38 +48,22 @@ class S3Decorator : ClientCodegenDecorator {
         ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
     )
 
-    private fun applies(serviceId: ShapeId) =
-        serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
-
     override fun protocols(
         serviceId: ShapeId,
         currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
-    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
-        currentProtocols.letIf(applies(serviceId)) {
-            it + mapOf(
-                RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
-                    S3(protocolConfig)
-                },
-            )
-        }
+    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> = currentProtocols + mapOf(
+        RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
+            S3ProtocolOverride(protocolConfig)
+        },
+    )
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        return model.letIf(applies(service.id)) {
-            ModelTransformer.create().mapShapes(model) { shape ->
-                shape.letIf(isInInvalidXmlRootAllowList(shape)) {
-                    logger.info("Adding AllowInvalidXmlRoot trait to $it")
-                    (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
-                }
-            }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
-        }
-    }
-
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
-        it + S3PubUse()
-    }
+    override fun transformModel(service: ServiceShape, model: Model): Model =
+        ModelTransformer.create().mapShapes(model) { shape ->
+            shape.letIf(isInInvalidXmlRootAllowList(shape)) {
+                logger.info("Adding AllowInvalidXmlRoot trait to $it")
+                (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+            }
+        }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(object : EndpointCustomization {
@@ -108,53 +88,41 @@ class S3Decorator : ClientCodegenDecorator {
     }
 }
 
-class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
+class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
+        "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
-        "s3_errors" to AwsRuntimeType.S3Errors,
     )
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
+        return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(
                     """
+                    // S3 HEAD responses have no response body to for an error code. Therefore,
+                    // check the HTTP response status and populate an error code for 404s.
                     if response.body().is_empty() {
-                        let mut err = #{Error}::builder();
+                        let mut builder = #{ErrorMetadata}::builder();
                         if response.status().as_u16() == 404 {
-                            err.code("NotFound");
+                            builder = builder.code("NotFound");
                         }
-                        Ok(err.build())
+                        Ok(builder)
                     } else {
-                        let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
-                        Ok(#{s3_errors}::parse_extended_error(base_err, response.headers()))
+                        #{base_errors}::parse_error_metadata(response.body().as_ref())
                     }
                     """,
                     *errorScope,
                 )
             }
         }
-    }
-}
-
-class S3PubUse : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable = when (section) {
-        is LibRsSection.Body -> writable {
-            rust(
-                "pub use #T::ErrorExt;",
-                AwsRuntimeType.S3Errors,
-            )
-        }
-
-        else -> emptySection
     }
 }

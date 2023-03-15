@@ -14,9 +14,7 @@ buildscript {
     }
 }
 
-plugins {
-    kotlin("jvm") version "1.3.72" apply false
-}
+plugins { }
 
 allprojects {
     repositories {
@@ -61,7 +59,7 @@ tasks.register<JavaExec>("ktlint") {
     group = "Verification"
     classpath = configurations.getByName("ktlint")
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--") + lintPaths
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
@@ -71,7 +69,7 @@ tasks.register<JavaExec>("ktlintFormat") {
     group = "formatting"
     classpath = configurations.getByName("ktlint")
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--format", "--") + lintPaths
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }

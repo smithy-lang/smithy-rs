@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -27,7 +26,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -47,9 +45,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownV
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlNameIndex
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
@@ -71,7 +69,6 @@ data class OperationWrapperContext(
 class XmlBindingTraitParserGenerator(
     codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
-    private val builderSymbol: (shape: StructureShape) -> Symbol,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
@@ -102,6 +99,8 @@ class XmlBindingTraitParserGenerator(
 
     private val scopedDecoder = smithyXml.resolve("decode::ScopedDecoder")
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val codegenTarget = codegenContext.target
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -117,7 +116,6 @@ class XmlBindingTraitParserGenerator(
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
     private val target = codegenContext.target
-    private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**
      * Generate a parse function for a given targeted as a payload.
@@ -131,9 +129,10 @@ class XmlBindingTraitParserGenerator(
      */
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
-        val fnName = symbolProvider.deserializeFunctionName(member)
-        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        check(shape is UnionShape || shape is StructureShape) {
+            "payload parser should only be used on structures & unions"
+        }
+        return protocolFunctions.deserializeFn(member) { fnName ->
             rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
                 symbolProvider.toSymbol(shape),
@@ -178,17 +177,16 @@ class XmlBindingTraitParserGenerator(
      */
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
-        val fnName = symbolProvider.deserializeFunctionName(operationShape)
         val shapeName = xmlIndex.operationOutputShapeName(operationShape)
         val members = operationShape.operationXmlMembers()
         if (shapeName == null || !members.isNotEmpty()) {
             return null
         }
-        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        return protocolFunctions.deserializeFn(operationShape) { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(outputShape),
+                symbolProvider.symbolForBuilder(outputShape),
                 xmlDecodeError,
             ) {
                 rustTemplate(
@@ -216,12 +214,11 @@ class XmlBindingTraitParserGenerator(
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType {
-        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_xml_err"
-        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        return protocolFunctions.deserializeFn(errorShape, fnNameSuffix = "xml_err") { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(errorShape),
+                symbolProvider.symbolForBuilder(errorShape),
                 xmlDecodeError,
             ) {
                 val members = errorShape.errorXmlMembers()
@@ -245,17 +242,16 @@ class XmlBindingTraitParserGenerator(
 
     override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
         val inputShape = operationShape.inputShape(model)
-        val fnName = symbolProvider.deserializeFunctionName(operationShape)
         val shapeName = xmlIndex.operationInputShapeName(operationShape)
         val members = operationShape.serverInputXmlMembers()
         if (shapeName == null || !members.isNotEmpty()) {
             return null
         }
-        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        return protocolFunctions.deserializeFn(operationShape) { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                builderSymbol(inputShape),
+                symbolProvider.symbolForBuilder(inputShape),
                 xmlDecodeError,
             ) {
                 rustTemplate(
@@ -408,9 +404,8 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseUnion(shape: UnionShape, ctx: Ctx) {
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
@@ -456,7 +451,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.case(member: MemberShape, inner: Writable) {
         rustBlock(
             "s if ${
-            member.xmlName().matchExpression("s")
+                member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => ",
         ) {
             inner()
@@ -465,9 +460,8 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseStructure(shape: StructureShape, ctx: Ctx) {
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
@@ -497,9 +491,8 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseList(target: CollectionShape, ctx: Ctx) {
-        val fnName = symbolProvider.deserializeFunctionName(target)
         val member = target.member
-        val listParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        val listParser = protocolFunctions.deserializeFn(target) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{List}, #{XmlDecodeError}>",
                 *codegenScope,
@@ -532,8 +525,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseMap(target: MapShape, ctx: Ctx) {
-        val fnName = symbolProvider.deserializeFunctionName(target)
-        val mapParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        val mapParser = protocolFunctions.deserializeFn(target) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlDecodeError}>",
                 *codegenScope,
@@ -569,8 +561,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun mapEntryParser(target: MapShape, ctx: Ctx): RuntimeType {
-        val fnName = symbolProvider.deserializeFunctionName(target) + "_entry"
-        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+        return protocolFunctions.deserializeFn(target, "entry") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlDecodeError}>",
                 *codegenScope,
@@ -638,7 +629,7 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
                 withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)

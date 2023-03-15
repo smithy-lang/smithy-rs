@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#[allow(dead_code)]
+mod aws_query_compatible_errors;
 #[allow(unused)]
 mod constrained;
 #[allow(dead_code)]
