@@ -124,6 +124,7 @@ ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
     yum -y install \
+        bc \
         ca-certificates \
         gcc \
         git \
