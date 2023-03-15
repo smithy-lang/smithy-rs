@@ -235,7 +235,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
                 rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))

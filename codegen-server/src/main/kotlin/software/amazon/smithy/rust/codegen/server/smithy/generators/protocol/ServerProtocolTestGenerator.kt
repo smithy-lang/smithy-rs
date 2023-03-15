@@ -759,9 +759,6 @@ class ServerProtocolTestGenerator(
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private const val MalformedRangeValidation = "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
-            // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
-            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
-
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
@@ -838,6 +835,8 @@ class ServerProtocolTestGenerator(
                         "queryTimestamp": 1,
                         "queryTimestampList": [1, 2, 3],
                         "queryEnum": "Foo",
+                        "queryIntegerEnum": 1,
+                        "queryIntegerEnumList": [1,2,3],
                         "queryEnumList": ["Foo", "Baz", "Bar"],
                         "queryParamsMapOfStringList": {
                             "String": ["Hello there"],
@@ -915,7 +914,7 @@ class ServerProtocolTestGenerator(
         // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
         private val BrokenRequestTests = mapOf(
             // TODO(https://github.com/awslabs/smithy/pull/1564)
-            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
+            // Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
             // TODO(https://github.com/awslabs/smithy/pull/1562)
             Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
         )

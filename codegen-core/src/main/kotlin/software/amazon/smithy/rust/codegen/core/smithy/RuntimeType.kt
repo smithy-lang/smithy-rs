@@ -300,9 +300,29 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
 
-        fun timestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
+        fun parseTimestampFormat(
+            codegenTarget: CodegenTarget,
+            runtimeConfig: RuntimeConfig,
+            format: TimestampFormatTrait.Format,
+        ): RuntimeType {
             val timestampFormat = when (format) {
                 TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
+                // clients allow offsets, servers do nt
+                TimestampFormatTrait.Format.DATE_TIME -> codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+                TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
+                TimestampFormatTrait.Format.UNKNOWN -> TODO()
+            }
+
+            return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
+        }
+
+        fun serializeTimestampFormat(
+            runtimeConfig: RuntimeConfig,
+            format: TimestampFormatTrait.Format,
+        ): RuntimeType {
+            val timestampFormat = when (format) {
+                TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
+                // clients allow offsets, servers do not
                 TimestampFormatTrait.Format.DATE_TIME -> "DateTime"
                 TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                 TimestampFormatTrait.Format.UNKNOWN -> TODO()
@@ -314,8 +334,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun captureRequest(runtimeConfig: RuntimeConfig) =
             CargoDependency.smithyClientTestUtil(runtimeConfig).toType().resolve("test_connection::capture_request")
 
-        fun forInlineDependency(inlineDependency: InlineDependency) =
-            RuntimeType("crate::${inlineDependency.name}", inlineDependency)
+        fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             "${module.fullyQualifiedPath()}::$name",

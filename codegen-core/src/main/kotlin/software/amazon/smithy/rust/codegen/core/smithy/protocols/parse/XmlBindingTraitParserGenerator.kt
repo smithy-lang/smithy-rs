@@ -100,6 +100,7 @@ class XmlBindingTraitParserGenerator(
     private val scopedDecoder = smithyXml.resolve("decode::ScopedDecoder")
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val codegenTarget = codegenContext.target
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -628,7 +629,7 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
                 withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
