@@ -181,8 +181,8 @@ impl AuthOrchestrator for Sigv4AuthOrchestrator {
 
         let signature = signer.sign(headers, signing_name, signing_region);
         match cfg.get::<SignatureLocation>() {
-            Some(Query) => req.query.set("sig", signature),
-                Some(Header) => req.headers_mut().insert("sig", signature),
+            Some(SignatureLocation::Query) => req.query.set("sig", signature),
+                Some(SignatureLocation::Header) => req.headers_mut().insert("sig", signature),
                 None => return Err(Error::MissingSignatureLocation),
         };
 
@@ -310,7 +310,7 @@ Configuration is resolved in a fixed manner by reading the "lowest level" of con
 
 ### The `aws-smithy-orchestrator` crate
 
-*I've omitted some of the error conversion to shorten this example and make it easier to understand. The real version will be messier.*
+*The error handling in this example is simplified to use `BoxError`. When fully implemented, this will likely use `SdkError` instead.*
 
 ```rust
 /// `In`: The input message e.g. `ListObjectsRequest`
@@ -319,160 +319,128 @@ Configuration is resolved in a fixed manner by reading the "lowest level" of con
 /// `Out`: The output message. A `Result` containing either:
 ///     - The 'success' output message e.g. `ListObjectsResponse`
 ///     - The 'failure' output message e.g. `NoSuchBucketException`
-pub async fn invoke<In, Req, Res, Out>(input: In, cfg: &mut ConfigBag) -> Out
+pub async fn invoke<In, Req, Res, T>(
+    input: In,
+    interceptors: &mut Interceptors<In, Req, Res, Result<T, BoxError>>,
+    runtime_plugins: &RuntimePlugins,
+    cfg: &mut ConfigBag,
+) -> Result<T, BoxError>
 where
     // The input must be Clone in case of retries
-    In: Clone,
+    In: Clone + 'static,
+    Req: 'static,
+    Res: 'static,
+    T: 'static,
 {
-    // Create a new interceptor context.
-    // This will be passed to each interceptor in turn.
-    let mut ctx = InterceptorContext::new(req);
-    let interceptors: &mut Interceptors<In, http::Request<SdkBody>, http::Response<SdkBody>, Out> =
-        cfg.get()?;
-    // We clone the config and apply all registered plugins to it, before converting
-    // it into a type we can use.
-    let cfg = cfg.clone().apply_plugins().into();
+    let mut ctx: InterceptorContext<In, Req, Res, Result<T, BoxError>> =
+        InterceptorContext::new(input);
 
-    interceptors.read_before_execution(&ctx)?;
-    interceptors.modify_before_serialization(&mut ctx)?;
-    interceptors.read_before_serialization(&ctx)?;
+    runtime_plugins.apply_client_configuration(cfg)?;
+    interceptors.client_read_before_execution(&ctx, cfg)?;
 
-    // We clone the input, serialize it into ""-form,
-    // and store it in the interceptor context.
-    let mod_req = ctx.modeled_request().clone();
-    let req = request_serializer(mod_req)?;
+    runtime_plugins.apply_operation_configuration(cfg)?;
+    interceptors.operation_read_before_execution(&ctx, cfg)?;
+
+    interceptors.read_before_serialization(&ctx, cfg)?;
+    interceptors.modify_before_serialization(&mut ctx, cfg)?;
+
+    let request_serializer = cfg
+        .get::<Box<dyn RequestSerializer<In, Req>>>()
+        .ok_or("missing serializer")?;
+    let req = request_serializer.serialize_request(ctx.modeled_request_mut(), cfg)?;
     ctx.set_tx_request(req);
 
-    interceptors.read_after_serialization(&ctx)?;
-    interceptors.modify_before_retry_loop(&mut ctx)?;
+    interceptors.read_after_serialization(&ctx, cfg)?;
+    interceptors.modify_before_retry_loop(&mut ctx, cfg)?;
 
-    let mut attempt = 0;
     loop {
-        if attempt > config.retry.max_attempts() {
-            break;
+        make_an_attempt(&mut ctx, cfg, interceptors).await?;
+        interceptors.read_after_attempt(&ctx, cfg)?;
+        interceptors.modify_before_attempt_completion(&mut ctx, cfg)?;
+
+        let retry_strategy = cfg
+            .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
+            .ok_or("missing retry strategy")?;
+        let mod_res = ctx
+            .modeled_response()
+            .expect("it's set during 'make_an_attempt'");
+        if retry_strategy.should_retry(mod_res, cfg)? {
+            continue;
         }
 
-        // Acquire initial request token. Some retry/quota strategies don't require a
-        // token for the initial request. We must always ask for the token,
-        // but taking it may not affect the number of tokens in the bucket.
-        let mut token = Some(token_bucket.try_acquire(None).map_err(|err| {
-            SdkError::dispatch_failure(ConnectorError::other(
-                Box::new(err),
-                Some(ErrorKind::ClientError),
-            ))
-        })?);
-
-        // For attempt other than the first, we need to clear out data set in previous
-        // attempts.
-        if attempt > 0 {
-            ctx.reset();
-        }
-
-        let res = make_an_attempt(&mut cfg, &mut ctx).await;
-        ctx.set_modeled_response(res);
-
-        interceptors.read_after_attempt(&ctx)?;
-        interceptors.modify_before_attempt_completion(&mut ctx)?;
-
-        // Figure out if the last attempt succeeded or failed
-        let retry_kind: RetryKind = retry_classifier(
-            ctx.modeled_response()
-                .expect("modeled_response has been set")
-                .as_ref(),
-        );
-        match retry_kind {
-            RetryKind::Explicit(_duration) => {
-                attempt += 1;
-                token.take().unwrap().forget();
-                continue;
-            }
-            RetryKind::Error(_err) => {
-                attempt += 1;
-                token.take().unwrap().forget();
-                continue;
-            }
-            RetryKind::UnretryableFailure => {
-                token.take().unwrap().forget();
-            }
-            RetryKind::Unnecessary => {
-                token.take().unwrap().release();
-                if attempt == 0 {
-                    // Some token buckets refill if a request succeeds with retrying
-                    token_bucket.refill_on_instant_success();
-                }
-            }
-            _unhandled => unreachable!("encountered unhandled RetryKind {_unhandled:?}"),
-        }
-
-        interceptors.modify_before_completion(&mut ctx)?;
-        // Dispatch logging events to all registered tracing probes
-        cfg.dispatch_events();
-        interceptors.read_after_execution(&ctx)?;
+        interceptors.modify_before_completion(&mut ctx, cfg)?;
+        let trace_probe = cfg
+            .get::<Box<dyn TraceProbe>>()
+            .ok_or("missing trace probes")?;
+        trace_probe.dispatch_events(cfg);
+        interceptors.read_after_execution(&ctx, cfg)?;
 
         break;
     }
 
-    let (modeled_response, tx_response, property_bag) =
-        ctx.into_responses().map_err(SdkError::interceptor_error)?;
-    let operation_response = operation::Response::from_parts(tx_response, property_bag);
-
-    match modeled_response {
-        Ok(output) => Ok(SdkSuccess {
-            parsed: output,
-            raw: operation_response,
-        }),
-        Err(err) => Err(SdkError::service_error(err, operation_response)),
-    }
+    let (modeled_response, _) = ctx.into_responses()?;
+    modeled_response
 }
 
 // Making an HTTP request can fail for several reasons, but we still need to
 // call lifecycle events when that happens. Therefore, we define this
 // `make_an_attempt` function to make error handling simpler.
-async fn make_an_attempt<In, Out>(
+async fn make_an_attempt<In, Req, Res, T>(
+    ctx: &mut InterceptorContext<In, Req, Res, Result<T, BoxError>>,
     cfg: &mut ConfigBag,
-    ctx: &mut InterceptorContext<In, http::Request<SdkBody>, http::Response<SdkBody>, Out>,
-) where
-    In: Clone,
+    interceptors: &mut Interceptors<In, Req, Res, Result<T, BoxError>>,
+) -> Result<(), BoxError>
+where
+    In: Clone + 'static,
+    Req: 'static,
+    Res: 'static,
+    T: 'static,
 {
-    let interceptors: &mut Interceptors<In, http::Request<SdkBody>, http::Response<SdkBody>, Out> =
-        cfg.get()?;
+    interceptors.read_before_attempt(ctx, cfg)?;
 
-    interceptors.read_before_attempt(ctx);
-    let auth_schemes = resolve_auth_schemes(ctx, cfg)?;
-    let signer = get_signer_for_first_supported_auth_scheme(&auth_schemes)?;
-    let identity = auth_scheme.resolve_identity(cfg)?;
-    resolve_and_apply_endpoint(ctx, cfg)?;
+    let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
+    let endpoint_orchestrator = cfg
+        .get::<Box<dyn EndpointOrchestrator<Req>>>()
+        .ok_or("missing endpoint orchestrator")?;
+    endpoint_orchestrator.resolve_and_apply_endpoint(tx_req_mut, cfg)?;
 
-    interceptors.modify_before_signing(ctx)?;
-    interceptors.read_before_signing(ctx)?;
-    let (tx_req_mut, props) = ctx.tx_request_mut().expect("tx_request has been set");
-    signer(tx_req_mut, &props)?;
-    interceptors.read_after_signing(ctx)?;
-    interceptors.modify_before_transmit(ctx)?;
-    interceptors.read_before_transmit(ctx)?;
+    interceptors.modify_before_signing(ctx, cfg)?;
+    interceptors.read_before_signing(ctx, cfg)?;
+
+    let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
+    let auth_orchestrator = cfg
+        .get::<Box<dyn AuthOrchestrator<Req>>>()
+        .ok_or("missing auth orchestrator")?;
+    auth_orchestrator.auth_request(tx_req_mut, cfg)?;
+
+    interceptors.read_after_signing(ctx, cfg)?;
+    interceptors.modify_before_transmit(ctx, cfg)?;
+    interceptors.read_before_transmit(ctx, cfg)?;
 
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
-    let tx_req = try_clone_http_request(ctx.tx_request().expect("tx_request has been set"))
-        .expect("tx_request is cloneable");
-    let connection = cfg
-        .get::<Box<dyn Fn(Req) -> Box<dyn Future<Output = Res>>>>()
-        .ok_or_else(|| ConnectorError)?;
-    let res = connection(tx_req).await?;
+    let res = {
+        let tx_req = ctx.tx_request_mut().expect("tx_request has been set");
+        let connection = cfg
+            .get::<Box<dyn Connection<Req, Res>>>()
+            .ok_or("missing connector")?;
+        connection.call(tx_req, cfg).await?
+    };
     ctx.set_tx_response(res);
 
-    interceptors.read_after_transmit(ctx)?;
-    interceptors.modify_before_deserialization(ctx)?;
-    interceptors.read_before_deserialization(ctx)?;
-
-    let (tx_res, _) = ctx.tx_response_mut().expect("tx_response has been set");
+    interceptors.read_after_transmit(ctx, cfg)?;
+    interceptors.modify_before_deserialization(ctx, cfg)?;
+    interceptors.read_before_deserialization(ctx, cfg)?;
+    let tx_res = ctx.tx_response_mut().expect("tx_response has been set");
     let response_deserializer = cfg
-        .get::<Box<dyn Fn(Res) -> Box<dyn Future<Output = Out>>>>()
-        .ok_or_else(|| CfgError)?;
-    let res = response_deserializer(tx_res).await?;
+        .get::<Box<dyn ResponseDeserializer<Res, Result<T, BoxError>>>>()
+        .ok_or("missing response deserializer")?;
+    let res = response_deserializer.deserialize_response(tx_res, cfg)?;
     ctx.set_modeled_response(res);
 
-    interceptors.read_after_deserialization(&ctx)
+    interceptors.read_after_deserialization(ctx, cfg)?;
+
+    Ok(())
 }
 ```
 
