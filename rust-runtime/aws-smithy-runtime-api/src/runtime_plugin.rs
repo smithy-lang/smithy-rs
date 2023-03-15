@@ -17,6 +17,13 @@ pub struct RuntimePlugins {
 }
 
 impl RuntimePlugins {
+    pub fn new() -> Self {
+        Self {
+            client_plugins: Vec::new(),
+            operation_plugins: Vec::new(),
+        }
+    }
+
     pub fn with_client_plugin(&mut self, plugin: impl Into<Box<dyn RuntimePlugin>>) -> &mut Self {
         self.client_plugins.push(plugin.into());
         self

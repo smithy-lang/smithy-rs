@@ -21,35 +21,29 @@ impl AuthOrchestrator<http::Request<SdkBody>> for GetObjectAuthOrc {
         _req: &mut http::Request<SdkBody>,
         _cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
-        todo!()
+        let signer = SigV4Signer::new();
+        let operation_config = props
+            .get::<OperationSigningConfig>()
+            .ok_or("missing signing config".to_string())?;
+
+        let (operation_config, request_config, creds) = match &operation_config.signing_requirements
+        {
+            SigningRequirements::Disabled => return Ok(()),
+            SigningRequirements::Optional => {
+                match aws_sig_auth::middleware::signing_config(props) {
+                    Ok(parts) => parts,
+                    Err(_) => return Ok(()),
+                }
+            }
+            SigningRequirements::Required => {
+                aws_sig_auth::middleware::signing_config(props).map_err(Box::new)?
+            }
+        };
+
+        let _signature = signer
+            .sign(&operation_config, &request_config, &creds, req)
+            .expect("signing goes just fine");
+
+        Ok(())
     }
 }
-
-//     signer: Arc::new(|req: &mut http::Request<SdkBody>, props: &PropertyBag| {
-//         use aws_smithy_orchestrator::auth::error::Error;
-//
-//         let signer = SigV4Signer::new();
-//         let operation_config = props
-//             .get::<OperationSigningConfig>()
-//             .ok_or(Error::SignRequest("missing signing config".into()))?;
-//
-//         let (operation_config, request_config, creds) = match &operation_config
-//             .signing_requirements
-//         {
-//             SigningRequirements::Disabled => return Ok(()),
-//             SigningRequirements::Optional => {
-//                 match aws_sig_auth::middleware::signing_config(props) {
-//                     Ok(parts) => parts,
-//                     Err(_) => return Ok(()),
-//                 }
-//             }
-//             SigningRequirements::Required => aws_sig_auth::middleware::signing_config(props)
-//                 .map_err(|err| Error::SignRequest(Box::new(err)))?,
-//         };
-//
-//         let _signature = signer
-//             .sign(&operation_config, &request_config, &creds, req)
-//             .expect("signing goes just fine");
-//
-//         Ok(())
-//     }),

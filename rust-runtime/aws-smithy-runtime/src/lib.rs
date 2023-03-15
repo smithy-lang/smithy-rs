@@ -39,6 +39,8 @@ pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
 
 pub trait EndpointOrchestrator<Req>: Send + Sync + Debug {
     fn resolve_and_apply_endpoint(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
+    // TODO(jdisanti) The EP Orc and Auth Orc need to share info on auth schemes but I'm not sure how that should happen
+    fn resolve_auth_schemes(&self) -> Result<Vec<String>, BoxError>;
 }
 
 /// `In`: The input message e.g. `ListObjectsRequest`
