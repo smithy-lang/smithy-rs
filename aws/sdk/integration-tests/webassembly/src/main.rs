@@ -5,7 +5,7 @@
 
 use aws_config::retry::RetryConfig;
 use aws_credential_types::Credentials;
-use aws_sdk_s3::{Client, Region};
+use aws_sdk_s3::{Client, config::Region};
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -24,8 +24,8 @@ fn get_default_config() -> impl std::future::Future<Output = aws_config::SdkConf
         .load()
 }
 
-#[tokio::test]
-async fn test_clients_from_service_config() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let shared_config = get_default_config().await;
     let client = Client::new(&shared_config);
     assert_eq!(client.conf().region().unwrap().to_string(), "us-west-2")

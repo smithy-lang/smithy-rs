@@ -11,7 +11,7 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dev-dependencies]
+[dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = ["rt-tokio"]}
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
