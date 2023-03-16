@@ -6,14 +6,7 @@
 package software.amazon.smithy.rustsdk.endpoints
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
-import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -29,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.extendIf
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.SdkConfigSection
@@ -38,38 +30,6 @@ import software.amazon.smithy.rustsdk.getBuiltIn
 class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
     override val order: Byte = 100
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        val customServices = setOf(
-            ShapeId.from("com.amazonaws.s3#AmazonS3"),
-            ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
-            ShapeId.from("com.amazonaws.codecatalyst#CodeCatalyst"),
-        )
-        if (customServices.contains(service.id)) {
-            return model
-        }
-        // currently, most models incorrectly model region is optional when it is actually required—fix these models:
-        return ModelTransformer.create().mapTraits(model) { _, trait ->
-            when (trait) {
-                is EndpointRuleSetTrait -> {
-                    val rules = trait.ruleSet.expectObjectNode()
-                    val params = rules.expectObjectMember("parameters")
-                    val newParameters = Parameters.builder()
-                    params.members.map { (key, value) ->
-                        val param = Parameter.fromNode(key, value.expectObjectNode())
-                        param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
-                            parameter.toBuilder().required(true).build()
-                        }
-                    }.forEach(newParameters::addParameter)
-                    EndpointRuleSetTrait.builder()
-                        .ruleSet(rules.toBuilder().withMember("parameters", newParameters.build().toNode()).build())
-                        .build()
-                }
-
-                else -> trait
-            }
-        }
-    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
