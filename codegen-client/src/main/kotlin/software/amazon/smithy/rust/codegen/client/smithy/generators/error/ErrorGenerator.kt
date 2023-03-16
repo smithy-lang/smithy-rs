@@ -89,7 +89,7 @@ class ErrorGenerator(
                         override fun section(section: BuilderSection): Writable = writable {
                             when (section) {
                                 is BuilderSection.AdditionalFields -> {
-                                    rust("meta: Option<#T>,", errorMetadata(runtimeConfig))
+                                    rust("meta: std::option::Option<#T>,", errorMetadata(runtimeConfig))
                                 }
 
                                 is BuilderSection.AdditionalMethods -> {
@@ -102,7 +102,7 @@ class ErrorGenerator(
                                         }
 
                                         /// Sets error metadata
-                                        pub fn set_meta(&mut self, meta: Option<#{error_metadata}>) -> &mut Self {
+                                        pub fn set_meta(&mut self, meta: std::option::Option<#{error_metadata}>) -> &mut Self {
                                             self.meta = meta;
                                             self
                                         }

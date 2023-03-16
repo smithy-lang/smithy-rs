@@ -359,7 +359,7 @@ class HttpBindingGenerator(
                     HttpBinding.Location.HEADER,
                     defaultTimestampFormat,
                 )
-            val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+            val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
             rust(
                 "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
@@ -730,14 +730,14 @@ class HttpBindingGenerator(
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.base64Encode(runtimeConfig))
-                    "$func(&$targetName)"
+                    "$func($targetName)"
                 } else {
                     quoteValue("$targetName.as_str()")
                 }
             }
 
             target.isTimestampShape -> {
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
                 quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
 

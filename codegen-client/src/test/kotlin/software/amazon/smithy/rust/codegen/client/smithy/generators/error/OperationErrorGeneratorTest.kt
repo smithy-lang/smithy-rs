@@ -52,6 +52,8 @@ class OperationErrorGeneratorTest {
                 unitTest(
                     name = "generates_combined_error_enums",
                     test = """
+                        use crate::operation::greeting::GreetingError;
+
                         let error = GreetingError::InvalidGreeting(
                             InvalidGreeting::builder()
                                 .message("an error")

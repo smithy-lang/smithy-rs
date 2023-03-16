@@ -397,9 +397,12 @@ class JsonSerializerGenerator(
 
             is TimestampShape -> {
                 val timestampFormat =
-                    httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
-                rust("$writer.date_time(${value.asRef()}, #T)?;", timestampFormatType)
+                    httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS, model)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                rustTemplate(
+                    "$writer.date_time(${value.asRef()}, #{FormatType})?;",
+                    "FormatType" to timestampFormatType,
+                )
             }
 
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->

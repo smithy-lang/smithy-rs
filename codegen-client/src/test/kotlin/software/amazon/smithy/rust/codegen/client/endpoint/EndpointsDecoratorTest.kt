@@ -134,7 +134,7 @@ class EndpointsDecoratorTest {
                     """
                     async fn endpoint_params_are_set() {
                             let conf = $moduleName::Config::builder().a_string_param("hello").a_bool_param(false).build();
-                            let operation = $moduleName::input::TestOperationInput::builder()
+                            let operation = $moduleName::operation::test_operation::TestOperationInput::builder()
                                 .bucket("bucket-name").build().expect("input is valid")
                                 .make_operation(&conf).await.expect("valid operation");
                             use $moduleName::endpoint::{Params};

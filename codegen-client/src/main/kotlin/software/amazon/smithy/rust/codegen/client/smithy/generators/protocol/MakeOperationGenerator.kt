@@ -88,6 +88,7 @@ open class MakeOperationGenerator(
         Attribute.AllowClippyLetAndReturn.render(implBlockWriter)
         // Allows builders that don’t consume the input borrow
         Attribute.AllowClippyNeedlessBorrow.render(implBlockWriter)
+
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,
