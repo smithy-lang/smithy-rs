@@ -428,7 +428,7 @@ fn next_start_element<'a, 'inp>(
 
 /// Returns the data element at the current position
 ///
-/// If the current position is not a data element (and is instead a <startelement>) an error
+/// If the current position is not a data element (and is instead a `<start-element>`) an error
 /// will be returned
 pub fn try_data<'a, 'inp>(
     tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlDecodeError>>,

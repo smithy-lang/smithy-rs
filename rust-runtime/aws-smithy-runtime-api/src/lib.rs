@@ -10,6 +10,8 @@
     rust_2018_idioms
 )]
 
+//! Basic types for the new smithy client orchestrator.
+
 /// Smithy interceptors for smithy clients.
 ///
 /// Interceptors are lifecycle hooks that can read/modify requests and responses.
