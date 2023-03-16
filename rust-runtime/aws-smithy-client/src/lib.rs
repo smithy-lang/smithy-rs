@@ -67,7 +67,7 @@ use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 pub use timeout::TimeoutLayer;
 use tower::{Service, ServiceBuilder, ServiceExt};
-use tracing::{debug_span, field, field::display, Instrument};
+use tracing::{debug_span, field, Instrument};
 
 /// Smithy service client.
 ///
@@ -206,8 +206,13 @@ where
         );
         let (mut req, parts) = op.into_request_response();
         if let Some(metadata) = &parts.metadata {
-            span.record("operation", metadata.name());
-            span.record("service", metadata.service());
+            // Clippy has a bug related to needless borrows so we need to allow them here
+            // https://github.com/rust-lang/rust-clippy/issues/9782
+            #[allow(clippy::needless_borrow)]
+            {
+                span.record("operation", &metadata.name());
+                span.record("service", &metadata.service());
+            }
             // This will clone two `Cow::<&'static str>::Borrow`s in the vast majority of cases
             req.properties_mut().insert(metadata.clone());
         }
@@ -216,14 +221,15 @@ where
         let result = async move { check_send_sync(svc).ready().await?.call(op).await }
             .instrument(span.clone())
             .await;
+        #[allow(clippy::needless_borrow)]
         match &result {
             Ok(_) => {
-                span.record("status", "ok");
+                span.record("status", &"ok");
             }
             Err(err) => {
                 span.record(
                     "status",
-                    match err {
+                    &match err {
                         SdkError::ConstructionFailure(_) => "construction_failure",
                         SdkError::DispatchFailure(_) => "dispatch_failure",
                         SdkError::ResponseError(_) => "response_error",
@@ -232,7 +238,7 @@ where
                         _ => "error",
                     },
                 )
-                .record("message", &display(DisplayErrorContext(err)));
+                .record("message", &field::display(DisplayErrorContext(err)));
             }
         }
         result
