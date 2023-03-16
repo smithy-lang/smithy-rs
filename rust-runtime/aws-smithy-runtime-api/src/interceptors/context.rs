@@ -12,22 +12,22 @@ pub type Error = TypeErasedBox;
 pub type OutputOrError = Result<Output, Error>;
 
 /// A container for the data currently available to an interceptor.
-pub struct InterceptorContext<TxReq, TxRes> {
+pub struct InterceptorContext<Request, Response> {
     input: Input,
     output_or_error: Option<OutputOrError>,
-    tx_request: Option<TxReq>,
-    tx_response: Option<TxRes>,
+    request: Option<Request>,
+    response: Option<Response>,
 }
 
 // TODO(interceptors) we could use types to ensure that people calling methods on interceptor context can't access
 //     field that haven't been set yet.
-impl<TxReq, TxRes> InterceptorContext<TxReq, TxRes> {
+impl<Request, Response> InterceptorContext<Request, Response> {
     pub fn new(input: Input) -> Self {
         Self {
             input,
             output_or_error: None,
-            tx_request: None,
-            tx_response: None,
+            request: None,
+            response: None,
         }
     }
 
@@ -43,36 +43,36 @@ impl<TxReq, TxRes> InterceptorContext<TxReq, TxRes> {
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn tx_request(&self) -> Result<&TxReq, InterceptorError> {
-        self.tx_request
+    pub fn request(&self) -> Result<&Request, InterceptorError> {
+        self.request
             .as_ref()
-            .ok_or_else(InterceptorError::invalid_tx_request_access)
+            .ok_or_else(InterceptorError::invalid_request_access)
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn tx_request_mut(&mut self) -> Result<&mut TxReq, InterceptorError> {
-        self.tx_request
+    pub fn request_mut(&mut self) -> Result<&mut Request, InterceptorError> {
+        self.request
             .as_mut()
-            .ok_or_else(InterceptorError::invalid_tx_request_access)
+            .ok_or_else(InterceptorError::invalid_request_access)
     }
 
-    /// Retrieve the response to the transmittable request for the operation
+    /// Retrieve the response to the transmittable response for the operation
     /// being invoked. This will only be available once transmission has
     /// completed.
-    pub fn tx_response(&self) -> Result<&TxRes, InterceptorError> {
-        self.tx_response
+    pub fn response(&self) -> Result<&Response, InterceptorError> {
+        self.response
             .as_ref()
-            .ok_or_else(InterceptorError::invalid_tx_response_access)
+            .ok_or_else(InterceptorError::invalid_response_access)
     }
 
-    /// Retrieve the response to the transmittable request for the operation
+    /// Retrieve the response to the transmittable response for the operation
     /// being invoked. This will only be available once transmission has
     /// completed.
-    pub fn tx_response_mut(&mut self) -> Result<&mut TxRes, InterceptorError> {
-        self.tx_response
+    pub fn response_mut(&mut self) -> Result<&mut Response, InterceptorError> {
+        self.response
             .as_mut()
-            .ok_or_else(InterceptorError::invalid_tx_response_access)
+            .ok_or_else(InterceptorError::invalid_response_access)
     }
 
     /// Retrieve the response to the customer. This will only be available
@@ -96,20 +96,20 @@ impl<TxReq, TxRes> InterceptorContext<TxReq, TxRes> {
 
     // There is no set_modeled_request method because that can only be set once, during context construction
 
-    pub fn set_tx_request(&mut self, transmit_request: TxReq) {
-        if self.tx_request.is_some() {
-            panic!("Called set_tx_request but a transmit_request was already set. This is a bug, pleases report it.");
+    pub fn set_request(&mut self, request: Request) {
+        if self.request.is_some() {
+            panic!("Called set_request but a request was already set. This is a bug. Please report it.");
         }
 
-        self.tx_request = Some(transmit_request);
+        self.request = Some(request);
     }
 
-    pub fn set_tx_response(&mut self, transmit_response: TxRes) {
-        if self.tx_response.is_some() {
-            panic!("Called set_tx_response but a transmit_response was already set. This is a bug, pleases report it.");
+    pub fn set_response(&mut self, response: Response) {
+        if self.response.is_some() {
+            panic!("Called set_response but a transmit_response was already set. This is a bug. Please report it.");
         }
 
-        self.tx_response = Some(transmit_response);
+        self.response = Some(response);
     }
 
     pub fn set_output_or_error(&mut self, output: Result<Output, Error>) {
@@ -123,12 +123,19 @@ impl<TxReq, TxRes> InterceptorContext<TxReq, TxRes> {
     }
 
     #[doc(hidden)]
-    pub fn into_parts(self) -> (Input, Option<OutputOrError>, Option<TxReq>, Option<TxRes>) {
+    pub fn into_parts(
+        self,
+    ) -> (
+        Input,
+        Option<OutputOrError>,
+        Option<Request>,
+        Option<Response>,
+    ) {
         (
             self.input,
             self.output_or_error,
-            self.tx_request,
-            self.tx_response,
+            self.request,
+            self.response,
         )
     }
 }

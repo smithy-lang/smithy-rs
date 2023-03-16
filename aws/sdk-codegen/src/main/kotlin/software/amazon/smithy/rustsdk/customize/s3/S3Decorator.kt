@@ -103,21 +103,21 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(
                     """
                     // S3 HEAD responses have no response body to for an error code. Therefore,
                     // check the HTTP response status and populate an error code for 404s.
-                    if response.body().is_empty() {
+                    if response_body.is_empty() {
                         let mut builder = #{ErrorMetadata}::builder();
-                        if response.status().as_u16() == 404 {
+                        if response_status == 404 {
                             builder = builder.code("NotFound");
                         }
                         Ok(builder)
                     } else {
-                        #{base_errors}::parse_error_metadata(response.body().as_ref())
+                        #{base_errors}::parse_error_metadata(response_body)
                     }
                     """,
                     *errorScope,

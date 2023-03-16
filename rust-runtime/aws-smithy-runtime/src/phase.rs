@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::BoxError;
+use crate::{BoxError, HttpRequest, HttpResponse};
 use aws_smithy_http::result::{ConnectorError, SdkError};
 use aws_smithy_runtime_api::interceptors::context::{Error, Output};
 use aws_smithy_runtime_api::interceptors::InterceptorContext;
@@ -15,35 +15,40 @@ enum OrchestrationPhase {
     ResponseHandling,
 }
 
-pub(crate) struct Phase<Request, Response> {
+pub(crate) struct Phase {
     phase: OrchestrationPhase,
-    context: InterceptorContext<Request, Response>,
+    context: InterceptorContext<HttpRequest, HttpResponse>,
 }
 
-impl<Request, Response> Phase<Request, Response> {
-    pub(crate) fn construction(context: InterceptorContext<Request, Response>) -> Self {
+impl Phase {
+    pub(crate) fn construction(context: InterceptorContext<HttpRequest, HttpResponse>) -> Self {
         Self::start(OrchestrationPhase::Construction, context)
     }
-    pub(crate) fn dispatch(context: InterceptorContext<Request, Response>) -> Self {
+    pub(crate) fn dispatch(context: InterceptorContext<HttpRequest, HttpResponse>) -> Self {
         Self::start(OrchestrationPhase::Dispatch, context)
     }
-    pub(crate) fn response_handling(context: InterceptorContext<Request, Response>) -> Self {
+    pub(crate) fn response_handling(
+        context: InterceptorContext<HttpRequest, HttpResponse>,
+    ) -> Self {
         Self::start(OrchestrationPhase::ResponseHandling, context)
     }
 
-    fn start(phase: OrchestrationPhase, context: InterceptorContext<Request, Response>) -> Self {
+    fn start(
+        phase: OrchestrationPhase,
+        context: InterceptorContext<HttpRequest, HttpResponse>,
+    ) -> Self {
         match phase {
             OrchestrationPhase::Construction => {}
-            OrchestrationPhase::Dispatch => debug_assert!(context.tx_request().is_ok()),
-            OrchestrationPhase::ResponseHandling => debug_assert!(context.tx_response().is_ok()),
+            OrchestrationPhase::Dispatch => debug_assert!(context.request().is_ok()),
+            OrchestrationPhase::ResponseHandling => debug_assert!(context.response().is_ok()),
         }
         Self { phase, context }
     }
 
     pub(crate) fn include_mut<E: Into<BoxError>>(
         mut self,
-        c: impl FnOnce(&mut InterceptorContext<Request, Response>) -> Result<(), E>,
-    ) -> Result<Self, SdkError<Error, Response>> {
+        c: impl FnOnce(&mut InterceptorContext<HttpRequest, HttpResponse>) -> Result<(), E>,
+    ) -> Result<Self, SdkError<Error, HttpResponse>> {
         match c(&mut self.context) {
             Ok(_) => Ok(self),
             Err(e) => Err(self.fail(e)),
@@ -52,19 +57,19 @@ impl<Request, Response> Phase<Request, Response> {
 
     pub(crate) fn include<E: Into<BoxError>>(
         self,
-        c: impl FnOnce(&InterceptorContext<Request, Response>) -> Result<(), E>,
-    ) -> Result<Self, SdkError<Error, Response>> {
+        c: impl FnOnce(&InterceptorContext<HttpRequest, HttpResponse>) -> Result<(), E>,
+    ) -> Result<Self, SdkError<Error, HttpResponse>> {
         match c(&self.context) {
             Ok(_) => Ok(self),
             Err(e) => Err(self.fail(e)),
         }
     }
 
-    pub(crate) fn fail(self, e: impl Into<BoxError>) -> SdkError<Error, Response> {
+    pub(crate) fn fail(self, e: impl Into<BoxError>) -> SdkError<Error, HttpResponse> {
         self.into_sdk_error(e.into())
     }
 
-    pub(crate) fn finalize(self) -> Result<Output, SdkError<Error, Response>> {
+    pub(crate) fn finalize(self) -> Result<Output, SdkError<Error, HttpResponse>> {
         debug_assert!(self.phase == OrchestrationPhase::ResponseHandling);
         let (_input, output_or_error, _request, response) = self.context.into_parts();
         match output_or_error {
@@ -79,7 +84,7 @@ impl<Request, Response> Phase<Request, Response> {
         }
     }
 
-    fn into_sdk_error(self, e: BoxError) -> SdkError<Error, Response> {
+    fn into_sdk_error(self, e: BoxError) -> SdkError<Error, HttpResponse> {
         let e = match e.downcast::<ConnectorError>() {
             Ok(connector_error) => {
                 debug_assert!(
@@ -108,7 +113,7 @@ impl<Request, Response> Phase<Request, Response> {
         }
     }
 
-    pub(crate) fn finish(self) -> InterceptorContext<Request, Response> {
+    pub(crate) fn finish(self) -> InterceptorContext<HttpRequest, HttpResponse> {
         self.context
     }
 }
