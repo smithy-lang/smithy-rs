@@ -327,6 +327,18 @@ references = ["aws-sdk-rust#160", "smithy-rs#2445"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "Update MSRV to 1.66.1"
+references = ["smithy-rs#2467"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to 1.66.1"
+references = ["smithy-rs#2467"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "Velfi"
+
 ###############
 
 [[aws-sdk-rust]]
@@ -340,3 +352,4 @@ To revert to the previous behavior, set `HttpConnector::Prebuilt` on `SdkConfig:
 references = ["smithy-rs#2471", "smithy-rs#2333", "smithy-rs#2151"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+

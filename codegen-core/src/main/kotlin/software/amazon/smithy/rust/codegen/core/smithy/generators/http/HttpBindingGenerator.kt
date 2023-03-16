@@ -730,7 +730,7 @@ class HttpBindingGenerator(
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.base64Encode(runtimeConfig))
-                    "$func(&$targetName)"
+                    "$func($targetName)"
                 } else {
                     quoteValue("$targetName.as_str()")
                 }
