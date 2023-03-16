@@ -210,12 +210,14 @@ fn calculate_signing_params<'a>(
         ),
         (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
+
     if let Some(security_token) = params.security_token {
         signing_params.push((
             param::X_AMZ_SECURITY_TOKEN,
             Cow::Owned(security_token.to_string()),
         ));
     }
+
     Ok((signing_params, signature))
 }
 
@@ -266,9 +268,11 @@ fn calculate_signing_headers<'a>(
             &values.content_sha256,
         );
     }
+
     if let Some(security_token) = values.security_token {
         add_header(&mut headers, header::X_AMZ_SECURITY_TOKEN, security_token);
     }
+
     Ok(SigningOutput::new(headers, signature))
 }
 

@@ -5,6 +5,7 @@
 
 use crate::date_time::{format_date, format_date_time};
 use crate::http_request::error::CanonicalRequestError;
+use crate::http_request::settings::SessionTokenMode;
 use crate::http_request::settings::UriPathNormalizationMode;
 use crate::http_request::sign::SignableRequest;
 use crate::http_request::uri_path_normalization::normalize_uri_path;
@@ -122,6 +123,8 @@ impl<'a> CanonicalRequest<'a> {
     /// - If `settings.percent_encoding_mode` specifies double encoding, `%` in the URL will be re-encoded as `%25`
     /// - If `settings.payload_checksum_kind` is XAmzSha256, add a x-amz-content-sha256 with the body
     ///   checksum. This is the same checksum used as the "payload_hash" in the canonical request
+    /// - If `settings.session_token_mode` specifies X-Amz-Security-Token to be
+    ///   included before calculating the signature, add it, otherwise omit it.
     /// - `settings.signature_location` determines where the signature will be placed in a request,
     ///   and also alters the kinds of signing values that go along with it in the request.
     pub(super) fn from<'b>(
@@ -143,14 +146,20 @@ impl<'a> CanonicalRequest<'a> {
         let payload_hash = Self::payload_hash(req.body());
 
         let date_time = format_date_time(params.time);
-        let (signed_headers, canonical_headers) =
+        let (signed_headers, mut canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
+
+        let security_token = match params.settings.session_token_mode {
+            SessionTokenMode::Include => params.security_token,
+            SessionTokenMode::Exclude => None,
+        };
+
         let values = match params.settings.signature_location {
             SignatureLocation::Headers => SignatureValues::Headers(HeaderValues {
                 content_sha256: payload_hash,
                 date_time,
-                security_token: params.security_token,
+                security_token,
                 signed_headers,
             }),
             SignatureLocation::QueryParams => SignatureValues::QueryParams(QueryParamValues {
@@ -170,10 +179,19 @@ impl<'a> CanonicalRequest<'a> {
                     .expect("presigning requires expires_in")
                     .as_secs()
                     .to_string(),
-                security_token: params.security_token,
+                security_token,
                 signed_headers,
             }),
         };
+
+        if params.settings.session_token_mode == SessionTokenMode::Exclude {
+            if let Some(security_token) = params.security_token {
+                let mut sec_header = HeaderValue::from_str(security_token)?;
+                sec_header.set_sensitive(true);
+                canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
+            }
+        }
+
         let creq = CanonicalRequest {
             method: req.method(),
             path,
@@ -212,10 +230,12 @@ impl<'a> CanonicalRequest<'a> {
         if params.settings.signature_location == SignatureLocation::Headers {
             Self::insert_date_header(&mut canonical_headers, date_time);
 
-            if let Some(security_token) = params.security_token {
-                let mut sec_header = HeaderValue::from_str(security_token)?;
-                sec_header.set_sensitive(true);
-                canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
+            if params.settings.session_token_mode == SessionTokenMode::Include {
+                if let Some(security_token) = params.security_token {
+                    let mut sec_header = HeaderValue::from_str(security_token)?;
+                    sec_header.set_sensitive(true);
+                    canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
+                }
             }
 
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -280,6 +300,7 @@ impl<'a> CanonicalRequest<'a> {
                 param::X_AMZ_SIGNED_HEADERS,
                 values.signed_headers.as_str(),
             );
+
             if let Some(security_token) = values.security_token {
                 add_param(&mut params, param::X_AMZ_SECURITY_TOKEN, security_token);
             }
