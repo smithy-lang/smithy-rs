@@ -40,4 +40,5 @@ pub mod event_stream;
 pub mod byte_stream;
 
 pub mod connection;
+mod sdk_error_v2;
 mod urlencode;

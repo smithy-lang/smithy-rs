@@ -133,6 +133,7 @@ pub mod builders {
     pub struct ServiceErrorBuilder<E, R> {
         source: Option<E>,
         raw: Option<R>,
+        cause: Option<BoxError>,
     }
 
     impl<E, R> Default for ServiceErrorBuilder<E, R> {
@@ -140,6 +141,7 @@ pub mod builders {
             Self {
                 source: None,
                 raw: None,
+                cause: None,
             }
         }
     }
@@ -153,6 +155,11 @@ pub mod builders {
         /// Sets the error source.
         pub fn source(mut self, source: impl Into<E>) -> Self {
             self.source = Some(source.into());
+            self
+        }
+
+        pub fn cause(mut self, cause: BoxError) -> Self {
+            self.cause = Some(cause);
             self
         }
 
@@ -179,6 +186,7 @@ pub mod builders {
             ServiceError {
                 source: self.source.expect("source is required"),
                 raw: self.raw.expect("a raw response is required"),
+                cause: self.cause,
             }
         }
     }
@@ -274,6 +282,18 @@ impl<R> ResponseError<R> {
     }
 }
 
+impl<E: Display + Debug, R: Debug> Error for ServiceError<E, R> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.cause.as_ref().map(|c| c.as_ref() as _)
+    }
+}
+
+impl<E: Display, R> Display for ServiceError<E, R> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
 /// Error context for [`SdkError::ServiceError`]
 #[derive(Debug)]
 pub struct ServiceError<E, R> {
@@ -281,6 +301,8 @@ pub struct ServiceError<E, R> {
     source: E,
     /// Raw response from the service
     raw: R,
+
+    cause: Option<BoxError>,
 }
 
 impl<E, R> ServiceError<E, R> {
@@ -378,7 +400,7 @@ impl<E, R> SdkError<E, R> {
 
     /// Construct a `SdkError` for a service failure
     pub fn service_error(source: E, raw: R) -> Self {
-        Self::ServiceError(ServiceError { source, raw })
+        Self::ServiceError(ServiceError::builder().source(source).raw(raw).build())
     }
 
     /// Returns the underlying service error `E` if there is one
@@ -457,7 +479,7 @@ impl<E, R> Display for SdkError<E, R> {
 impl<E, R> Error for SdkError<E, R>
 where
     E: Error + 'static,
-    R: Debug,
+    R: Debug + 'static,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         use SdkError::*;
@@ -466,7 +488,7 @@ where
             TimeoutError(context) => Some(context.source.as_ref()),
             ResponseError(context) => Some(context.source.as_ref()),
             DispatchFailure(context) => Some(&context.source),
-            ServiceError(context) => Some(&context.source),
+            ServiceError(context) => Some(context),
         }
     }
 }
