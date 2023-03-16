@@ -171,6 +171,10 @@ impl ConfigBag {
         self.freeze().with(layer)
     }
 
+    pub fn add_layer(self, name: &'static str) -> ConfigBag {
+        self.freeze().add_layer(name)
+    }
+
     pub fn sourced_get<T: Send + Sync + Debug + 'static>(
         &self,
         source_trail: &mut Vec<SourceInfo>,
