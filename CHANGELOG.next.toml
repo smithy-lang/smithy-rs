@@ -338,3 +338,18 @@ message = "Update MSRV to 1.66.1"
 references = ["smithy-rs#2467"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
 author = "Velfi"
+
+###############
+
+[[aws-sdk-rust]]
+message = """Default connector provided by `aws-config` now respects `ConnectorSettings`.
+
+Previously, it used the timeout settings provided by aws-config. A test from @Oliboy50 has been incorporated to verify this behavior.
+
+**Behavior Change**: Prior to this change, the Hyper client would be shared between all service clients. After this change, each service client will use its own Hyper Client.
+To revert to the previous behavior, set `HttpConnector::Prebuilt` on `SdkConfig::http_connector`.
+"""
+references = ["smithy-rs#2471", "smithy-rs#2333", "smithy-rs#2151"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
