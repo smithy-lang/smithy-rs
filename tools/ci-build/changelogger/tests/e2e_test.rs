@@ -485,7 +485,7 @@ author = "LukeMathWalker"
         ),
     )
     .unwrap();
-    fs::write(&release_manifest_path, "overwrite-me").unwrap();
+    fs::write(release_manifest_path, "overwrite-me").unwrap();
 
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
@@ -596,7 +596,7 @@ author = "rcoh"
         ),
     )
     .unwrap();
-    fs::write(&release_manifest_path, "overwrite-me").unwrap();
+    fs::write(release_manifest_path, "overwrite-me").unwrap();
 
     let result = subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
