@@ -269,22 +269,12 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     fun errorMessage(): Writable {
         val pattern = patternTrait.pattern
 
-        return if (isSensitive) {
-            writable {
-                rust(
-                    """
-                    format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
-                    """,
-                )
-            }
-        } else {
-            writable {
-                rust(
-                    """
-                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &string, &path, r##"$pattern"##)
-                    """,
-                )
-            }
+        return writable {
+            rust(
+                """
+                format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
+                """,
+            )
         }
     }
 
