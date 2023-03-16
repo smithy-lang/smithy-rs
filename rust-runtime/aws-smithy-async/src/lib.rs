@@ -7,7 +7,8 @@
 #![warn(
     missing_debug_implementations,
     missing_docs,
-    rustdoc::all,
+    missing_crate_level_docs,
+    unreachable_pub,
     rust_2018_idioms
 )]
 
