@@ -84,7 +84,7 @@ fn main() -> Result<()> {
         },
         Args::UseVersionDependencies { versions_toml, .. } => DependencyContext {
             sdk_path: None,
-            versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
+            versions_manifest: Some(VersionsManifest::from_file(versions_toml)?),
         },
         Args::UsePathAndVersionDependencies {
             sdk_path,
@@ -92,7 +92,7 @@ fn main() -> Result<()> {
             ..
         } => DependencyContext {
             sdk_path: Some(sdk_path),
-            versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
+            versions_manifest: Some(VersionsManifest::from_file(versions_toml)?),
         },
     };
 
@@ -134,7 +134,7 @@ fn update_manifest(
     }
 
     if changed {
-        fs::write(manifest_path, &toml::to_vec(&metadata)?)?;
+        fs::write(manifest_path, toml::to_vec(&metadata)?)?;
     }
 
     Ok(())
