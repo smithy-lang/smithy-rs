@@ -30,7 +30,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
     let mut num_pages = 0;
     while let Some(page) = history.try_next().await? {
         let items_in_page = page.spot_price_history.unwrap_or_default().len();
-        if items_in_page > page_size as usize {
+        if items_in_page > page_size {
             bail!(
                 "failed to retrieve results of correct page size (expected {}, got {})",
                 page_size,
