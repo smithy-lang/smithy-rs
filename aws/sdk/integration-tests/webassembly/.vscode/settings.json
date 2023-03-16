@@ -1,0 +1,3 @@
+{
+    "rust-analyzer.cargo.taget": "wasm32-wasi"
+}
