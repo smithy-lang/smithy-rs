@@ -170,7 +170,7 @@ impl<'a> StartEl<'a> {
     }
 
     /// Returns true of `el` at `depth` is a match for this `start_el`
-    fn end_el(&self, el: ElementEnd, depth: Depth) -> bool {
+    fn end_el(&self, el: ElementEnd<'_>, depth: Depth) -> bool {
         if depth != self.depth {
             return false;
         }

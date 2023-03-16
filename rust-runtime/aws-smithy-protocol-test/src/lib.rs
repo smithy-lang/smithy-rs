@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![warn(
+    // missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
 mod urlencoded;
 mod xml;
 
@@ -156,7 +163,7 @@ pub fn forbid_query_params<B>(
     request: &Request<B>,
     forbid_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_params: HashSet<QueryParam> = extract_params(request.uri())
+    let actual_params: HashSet<QueryParam<'_>> = extract_params(request.uri())
         .iter()
         .map(|param| QueryParam::parse(param))
         .collect();

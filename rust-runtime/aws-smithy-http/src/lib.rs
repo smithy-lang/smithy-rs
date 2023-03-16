@@ -4,7 +4,6 @@
  */
 
 #![warn(
-    missing_debug_implementations,
     missing_docs,
     rustdoc::missing_crate_level_docs,
     unreachable_pub,
