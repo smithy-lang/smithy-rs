@@ -292,6 +292,7 @@ where
 
 #[derive(Clone)]
 struct ConnectionFn {
+    #[allow(clippy::type_complexity)]
     response: Arc<
         dyn Fn(http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ConnectorError>
             + Send
