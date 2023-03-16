@@ -60,7 +60,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
 
 #[cfg(test)]
 mod test {
-    use crate::paginator_canary::paginator_canary;
+    use crate::latest::paginator_canary::paginator_canary;
 
     #[tokio::test]
     async fn test_paginator() {
