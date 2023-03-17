@@ -12,6 +12,8 @@
 
 //! Basic types for the new smithy client orchestrator.
 
+/// A typemap for storing configuration.
+pub mod config_bag;
 /// Smithy interceptors for smithy clients.
 ///
 /// Interceptors are lifecycle hooks that can read/modify requests and responses.
@@ -23,5 +25,3 @@ pub mod interceptors;
 pub mod retries;
 /// Runtime plugin type definitions.
 pub mod runtime_plugin;
-/// A typemap for storing configuration.
-pub mod config_bag;
