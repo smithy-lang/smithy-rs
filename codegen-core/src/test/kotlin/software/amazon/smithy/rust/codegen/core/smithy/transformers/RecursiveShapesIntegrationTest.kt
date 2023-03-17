@@ -64,7 +64,8 @@ class RecursiveShapesIntegrationTest {
         val output = assertThrows<CommandFailed> {
             unmodifiedProject.compileAndTest(expectFailure = true)
         }
-        output.message shouldContain "has infinite size"
+        // THIS IS A LOAD-BEARING shouldContain! If the compiler error changes then this will break!
+        output.message shouldContain "have infinite size"
 
         val fixedProject = check(RecursiveShapeBoxer().transform(model))
         fixedProject.compileAndTest()
