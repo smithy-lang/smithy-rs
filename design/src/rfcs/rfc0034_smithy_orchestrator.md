@@ -229,24 +229,26 @@ Configuration has precedence. Configuration set on an operation will override co
 
 ```rust
 let conf: ConfigBag = aws_config::from_env()
-    .with(SomeConfig::builder()
-    .option_a(1)
-    .option_b(2)
-    .option_c(3)
-    .build()
+    .with(
+        SomeConfig::builder()
+            .option_a(1)
+            .option_b(2)
+            .option_c(3)
     )
+    .build()
     .await;
 
 let client = aws_sdk_s3::Client::new(&conf);
 
 client.list_buckets()
     .customize()
-    .with(SomeConfig::builder()
-    .option_a(0)
-    .option_b(Value::Inherit)
-    .option_c(Value::Unset)
-    .build()
+    .with(
+        SomeConfig::builder()
+            .option_a(0)
+            .option_b(Value::Inherit)
+            .option_c(Value::Unset)
     )
+    .build()
     .send()
     .await;
 ```
