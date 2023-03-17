@@ -75,6 +75,7 @@ class PythonServerStructureGenerator(
 
     private fun renderPyO3Methods() {
         Attribute.AllowClippyNewWithoutDefault.render(writer)
+        Attribute.AllowClippyTooManyArguments.render(writer)
         Attribute(pyO3.resolve("pymethods")).render(writer)
         writer.rustTemplate(
             """
