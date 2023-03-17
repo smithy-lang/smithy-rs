@@ -159,7 +159,9 @@ fn invoke() {
     // Get the request to be signed
     let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
     // Fetch the auth orchestrator from the bag
-    let auth_orchestrator = cfg    .get::<Box<dyn AuthOrchestrator<Req>>>()    .ok_or("missing auth orchestrator")?;
+    let auth_orchestrator = cfg
+        .get::<Box<dyn AuthOrchestrator<Req>>>()
+        .ok_or("missing auth orchestrator")?;
     // Auth the request
     auth_orchestrator.auth_request(tx_req_mut, cfg)?;
 
