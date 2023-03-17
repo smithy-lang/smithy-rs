@@ -50,3 +50,9 @@ target/
 
 # IDEs
 .idea/
+.project
+.settings
+.classpath
+
+# tools
+.tool-versions

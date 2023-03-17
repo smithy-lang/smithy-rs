@@ -30,7 +30,7 @@ use pyo3::{
     iter::IterNextOutput,
     prelude::*,
 };
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 use tokio_stream::StreamExt;
 
 use crate::PyError;
@@ -386,7 +386,6 @@ impl Default for ByteStream {
     }
 }
 
-/// ByteStream Abstractions.
 #[pymethods]
 impl ByteStream {
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
@@ -408,7 +407,7 @@ impl ByteStream {
     /// :rtype ByteStream:
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
-        let byte_stream = futures::executor::block_on(async {
+        let byte_stream = Handle::current().block_on(async {
             aws_smithy_http::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))

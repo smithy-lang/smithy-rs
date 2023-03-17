@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -67,12 +68,20 @@ class PythonServerModuleGenerator(
         serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
-                rustTemplate(
-                    """
-                    $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
-                    """,
-                    *codegenScope,
-                )
+                when (shape) {
+                    is UnionShape -> rustTemplate(
+                        """
+                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name}>()?;
+                        """,
+                        *codegenScope,
+                    )
+                    else -> rustTemplate(
+                        """
+                        $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
         }
         rustTemplate(
