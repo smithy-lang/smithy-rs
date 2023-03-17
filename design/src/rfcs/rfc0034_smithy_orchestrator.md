@@ -274,13 +274,13 @@ struct SomeBuilder {
 
 impl struct SomeBuilder<T> {
     fn new() -> Self {
-    // By default, config values inherit from lower-layer configs
-    Self { value: Value::Inherit }
+        // By default, config values inherit from lower-layer configs
+        Self { value: Value::Inherit }
     }
 
     fn some_field(&mut self, value: impl Into<Value<T>>) -> &mut self {
-    self.value = value.into();
-    self
+        self.value = value.into();
+        self
     }
 }
 ```
