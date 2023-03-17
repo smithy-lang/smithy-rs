@@ -244,7 +244,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 Attribute.AllowUnusedVariables.render(this)
                 rustTemplate(
                     """
-                    Self::Pattern(string) => crate::model::ValidationExceptionField {
+                    Self::Pattern(_) => crate::model::ValidationExceptionField {
                         message: #{ErrorMessage:W},
                         path
                     },
