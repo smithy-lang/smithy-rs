@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![warn(
+    // missing_docs,
+    // rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugins;

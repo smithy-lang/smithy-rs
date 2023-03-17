@@ -3,8 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// A typemap for storing configuration.
-pub mod config_bag;
+#![warn(
+    // missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
+//! Basic types for the new smithy client orchestrator.
+
 /// Smithy interceptors for smithy clients.
 ///
 /// Interceptors are lifecycle hooks that can read/modify requests and responses.
@@ -16,3 +23,5 @@ pub mod interceptors;
 pub mod retries;
 /// Runtime plugin type definitions.
 pub mod runtime_plugin;
+/// A typemap for storing configuration.
+pub mod config_bag;

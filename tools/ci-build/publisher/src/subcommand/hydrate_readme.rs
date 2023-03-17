@@ -38,7 +38,7 @@ pub fn subcommand_hydrate_readme(
 ) -> Result<()> {
     let versions_manifest = VersionsManifest::from_file(versions_manifest)
         .with_context(|| format!("Failed to read versions manifest at {versions_manifest:?}"))?;
-    let template = fs::read_to_string(&input)
+    let template = fs::read_to_string(input)
         .with_context(|| format!("Failed to read README template file at {input:?}"))?;
 
     let mut context = json!({ "msrv": msrv });
