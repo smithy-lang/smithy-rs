@@ -201,24 +201,24 @@ This intermediate code should be free from as much logic as possible. Whenever p
 
 ```rust
  let conf: ConfigBag = aws_config::from_env()
-// Configuration can be common to all smithy clients
-.with(RetryConfig::builder().disable_retries().build())
-// Or, protocol-specific
-.with(HttpClient::builder().build())
-// Or, AWS-specific
-.with(Region::from("us-east-1"))
-// Or, service-specific
-.with(S3Config::builder().force_path_style(false).build())
-.await;
+    // Configuration can be common to all smithy clients
+    .with(RetryConfig::builder().disable_retries().build())
+    // Or, protocol-specific
+    .with(HttpClient::builder().build())
+    // Or, AWS-specific
+    .with(Region::from("us-east-1"))
+    // Or, service-specific
+    .with(S3Config::builder().force_path_style(false).build())
+    .await;
 
 let client = aws_sdk_s3::Client::new(&conf);
 
 client.list_buckets()
-.customize()
-// Configuration can be set on operations as well as clients
-.with(HttpConfig::builder().conn(some_other_conn).build())
-.send()
-.await;
+    .customize()
+    // Configuration can be set on operations as well as clients
+    .with(HttpConfig::builder().conn(some_other_conn).build())
+    .send()
+    .await;
 ```
 
 Setting configuration that will not be used wastes memory and can make debugging more difficult. Therefore, configuration defaults are only set when they're relevant. For example, if a smithy service doesn't support HTTP, then no HTTP client will be set.
@@ -229,26 +229,26 @@ Configuration has precedence. Configuration set on an operation will override co
 
 ```rust
 let conf: ConfigBag = aws_config::from_env()
-.with(SomeConfig::builder()
-.option_a(1)
-.option_b(2)
-.option_c(3)
-.build()
-)
-.await;
+    .with(SomeConfig::builder()
+    .option_a(1)
+    .option_b(2)
+    .option_c(3)
+    .build()
+    )
+    .await;
 
 let client = aws_sdk_s3::Client::new(&conf);
 
 client.list_buckets()
-.customize()
-.with(SomeConfig::builder()
-.option_a(0)
-.option_b(Value::Inherit)
-.option_c(Value::Unset)
-.build()
-)
-.send()
-.await;
+    .customize()
+    .with(SomeConfig::builder()
+    .option_a(0)
+    .option_b(Value::Inherit)
+    .option_c(Value::Unset)
+    .build()
+    )
+    .send()
+    .await;
 ```
 
 In the above example, when the `option_a`, `option_b`, `option_c`, values of `SomeConfig` are accessed, they'll return:
