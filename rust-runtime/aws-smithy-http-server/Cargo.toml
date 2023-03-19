@@ -24,7 +24,7 @@ aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 async-trait = "0.1"
 bytes = "1.1"
-futures-util = { version = "0.3", default-features = false }
+futures-util = { version = "0.3.16", default-features = false }
 http = "0.2"
 http-body = "0.4"
 hyper = { version = "0.14.12", features = ["server", "http1", "http2", "tcp", "stream"] }

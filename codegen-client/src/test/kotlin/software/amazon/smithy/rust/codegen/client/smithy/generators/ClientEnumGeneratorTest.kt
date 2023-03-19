@@ -29,12 +29,12 @@ class ClientEnumGeneratorTest {
                     "matching_on_enum_should_be_forward_compatible",
                     """
                     match $enumToMatchOn {
-                        SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
-                        SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
-                        other @ _ if other.as_str() == "Variant3" => assert!(true),
-                        _ => assert!(false, "expected `Variant3` but got `_`"),
+                        SomeEnum::Variant1 => panic!("expected `Variant3` but got `Variant1`"),
+                        SomeEnum::Variant2 => panic!("expected `Variant3` but got `Variant2`"),
+                        other @ _ if other.as_str() == "Variant3" => {},
+                        _ => panic!("expected `Variant3` but got `_`"),
                     }
-                    """.trimIndent(),
+                    """,
                 )
             }
             project.compileAndTest()
@@ -120,7 +120,7 @@ class ClientEnumGeneratorTest {
                 assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
                 assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
                 assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::primitives::UnknownVariantValue("SomethingNew".to_owned())));
-                """.trimIndent(),
+                """,
             )
         }
         project.compileAndTest()

@@ -259,7 +259,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             path.join("release")
         };
         let bin_path = target_path.join("bootstrap");
-        let bundle_path = target_path.join(&name_bundle(
+        let bundle_path = target_path.join(name_bundle(
             &bin_path,
             opt.rust_version.as_deref(),
             opt.sdk_release_tag.as_ref(),
@@ -329,7 +329,6 @@ mod tests {
                 "--sdk-release-tag",
                 "release-2022-07-26"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -349,7 +348,6 @@ mod tests {
                 "--canary-path",
                 "some-canary-path"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -369,7 +367,6 @@ mod tests {
                 "--musl",
                 "--manifest-only"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -391,7 +388,6 @@ mod tests {
                 "--canary-path",
                 "some-canary-path"
             ])
-            .ok()
             .expect("valid args")
         );
     }

@@ -160,12 +160,12 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) = writable {
         val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-        val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+        val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
         rustTemplate(
             """
             pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                 crate::model::ValidationExceptionField {
-                    message: format!(r##"$message"##, &self.0, &path),
+                    message: format!(r##"$message"##, &path),
                     path,
                 }
             }
@@ -197,7 +197,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     rust(
                         """
                         ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                            message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                            message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
                             path: path + "/${it.forMember.memberName}",
                         },
                         """,
