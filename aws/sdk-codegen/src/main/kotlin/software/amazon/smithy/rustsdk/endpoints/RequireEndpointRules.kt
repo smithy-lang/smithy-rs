@@ -11,8 +11,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
-class AwsEndpointDecorator : ClientCodegenDecorator {
-    override val name: String = "AwsEndpoint"
+class RequireEndpointRules : ClientCodegenDecorator {
+    override val name: String = "RequireEndpointRules"
     override val order: Byte = 100
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val epTypes = EndpointTypesGenerator.fromContext(codegenContext)
