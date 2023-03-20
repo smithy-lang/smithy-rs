@@ -90,6 +90,11 @@ sealed class PythonType {
         override val namespace: String = "typing"
     }
 
+    data class AsyncIterator(override val member: PythonType) : PythonType(), Container {
+        override val name: String = "AsyncIterator"
+        override val namespace: String = "typing"
+    }
+
     data class Application(val type: PythonType, val args: kotlin.collections.List<PythonType>) : PythonType() {
         override val name = type.name
         override val namespace = type.namespace
@@ -160,6 +165,7 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
         is PythonType.Set -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Awaitable -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Optional -> "${this.name}[${this.member.render(fullyQualified)}]"
+        is PythonType.AsyncIterator -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Application -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }
             "${this.name}[${args}]"
