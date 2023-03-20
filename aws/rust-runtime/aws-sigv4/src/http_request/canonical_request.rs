@@ -242,6 +242,12 @@ impl<'a> CanonicalRequest<'a> {
                 }
             }
 
+            if params.settings.session_token_mode == SessionTokenMode::Exclude {
+                if name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN) {
+                    continue;
+                }
+            }
+
             if params.settings.signature_location == SignatureLocation::QueryParams {
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
@@ -754,9 +760,17 @@ mod tests {
             creq.values.signed_headers().as_str(),
             "host;x-amz-date;x-amz-security-token"
         );
+        assert_eq!(
+            creq.headers.get("x-amz-security-token").unwrap(),
+            "notarealsessiontoken"
+        );
 
         signing_params.settings.session_token_mode = SessionTokenMode::Exclude;
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+        assert_eq!(
+            creq.headers.get("x-amz-security-token").unwrap(),
+            "notarealsessiontoken"
+        );
         assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
