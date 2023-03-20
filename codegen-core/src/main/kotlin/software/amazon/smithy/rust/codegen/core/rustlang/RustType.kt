@@ -172,6 +172,11 @@ sealed class RustType {
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
+
+    data class Application(val type: RustType, val args: List<RustType>) : RustType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
 }
 
 /**
@@ -242,7 +247,10 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
             }
         }
-
+        is RustType.Application -> {
+            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+            "${this.name}<${args}>"
+        }
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"

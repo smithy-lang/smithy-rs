@@ -90,6 +90,11 @@ sealed class PythonType {
         override val namespace: String = "typing"
     }
 
+    data class Application(val type: PythonType, val args: kotlin.collections.List<PythonType>) : PythonType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
+
     data class Opaque(override val name: String, val rustNamespace: String? = null) : PythonType() {
         // Since Python doesn't have a something like Rust's `crate::` we are using a custom placeholder here
         // and in our stub generation script we will replace placeholder with the real root module name.
@@ -125,6 +130,7 @@ fun RustType.pythonType(): PythonType =
         is RustType.Option -> PythonType.Optional(this.member.pythonType())
         is RustType.Box -> this.member.pythonType()
         is RustType.Dyn -> this.member.pythonType()
+        is RustType.Application -> PythonType.Application(this.type.pythonType(), this.args.map { it.pythonType() })
         is RustType.Opaque -> PythonType.Opaque(this.name, this.namespace)
         // TODO(Constraints): How to handle this?
         // Revisit as part of https://github.com/awslabs/smithy-rs/issues/2114
@@ -154,6 +160,10 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
         is PythonType.Set -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Awaitable -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Optional -> "${this.name}[${this.member.render(fullyQualified)}]"
+        is PythonType.Application -> {
+            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+            "${this.name}[${args}]"
+        }
         is PythonType.Callable -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }
             val rtype = this.rtype.render(fullyQualified)
