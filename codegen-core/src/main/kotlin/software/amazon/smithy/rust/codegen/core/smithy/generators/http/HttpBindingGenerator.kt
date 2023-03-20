@@ -29,7 +29,9 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -222,7 +224,7 @@ class HttpBindingGenerator(
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
                     if (target is UnionShape) {
-                        bindEventStreamOutput(operationShape, target)
+                        bindEventStreamOutput(operationShape, outputT, target)
                     } else {
                         deserializeStreamingBody(binding)
                     }
@@ -243,22 +245,22 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, outputT: Symbol, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             codegenContext,
             operationShape,
             targetShape,
         ).render()
+        val receiver = outputT.rustType().qualifiedName()
         rustTemplate(
             """
             let unmarshaller = #{unmarshallerConstructorFn}();
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok(#{Receiver}::new(unmarshaller, body))
+            Ok(${receiver}::new(unmarshaller, body))
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
-            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
         )
     }
 
