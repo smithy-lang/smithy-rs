@@ -5,11 +5,10 @@
 
 //! Layered Configuration Bag Structure
 //!
-//! [`ConfigBag`] and [`FrozenConfigBag`] are the two representations of a layered configuration structure
+//! [`config_bag::ConfigBag`] and [`config_bag::FrozenConfigBag`] are the two representations of a layered configuration structure
 //! with the following properties:
 //! 1. A new layer of configuration may be applied onto an existing configuration structure without modifying it or taking ownership.
 //! 2. No lifetime shenanigans to deal with
-
 use aws_smithy_http::property_bag::PropertyBag;
 use std::any::type_name;
 use std::fmt::Debug;
