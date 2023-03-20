@@ -357,3 +357,15 @@ message = """Remove deprecated `ResolveAwsEndpoint` interfaces.
 author = "rcoh"
 references = ["smithy-rs#2390", "smithy-rs#1784"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]] # tokio-upgrade
+message = "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)"
+references = ["smithy-rs#2474"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]] # tokio-upgrade
+message = "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)"
+references = ["smithy-rs#2474"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
