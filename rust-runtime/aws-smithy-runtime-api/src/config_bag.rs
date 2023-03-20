@@ -78,8 +78,8 @@ impl FrozenConfigBag {
     ///
     /// # Examples
     /// ```
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
     /// fn add_more_config(bag: &mut ConfigBag) { /* ... */ }
-    /// use aws_smithy_runtime::ConfigBag;
     /// let bag = ConfigBag::base().with_fn("first layer", |_| { /* add a property */ });
     /// let mut bag = bag.add_layer("second layer");
     /// add_more_config(&mut bag);
@@ -151,7 +151,7 @@ impl ConfigBag {
     ///
     /// Hint: If you want to re-use this layer, call `freeze` first.
     /// ```
-    /// use aws_smithy_runtime::ConfigBag;
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
     /// let bag = ConfigBag::base();
     /// let first_layer = bag.with_fn("a", |b: &mut ConfigBag| { b.put("a"); }).freeze();
     /// let second_layer = first_layer.with_fn("other", |b: &mut ConfigBag| { b.put(1i32); });
@@ -289,7 +289,7 @@ mod test {
     #[test]
     fn persist_trait() {
         #[derive(Debug, Eq, PartialEq, Clone)]
-        pub struct MyConfig {
+        struct MyConfig {
             a: bool,
             b: String,
         }
