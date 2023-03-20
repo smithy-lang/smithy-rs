@@ -326,7 +326,7 @@ references = ["aws-sdk-rust#160", "smithy-rs#2445"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
-[[aws-sdk-rust]]
+[[aws-sdk-rust]] # remove interfaces
 message = """Remove deprecated `ResolveAwsEndpoint` interfaces.
 [For details see the longform changelog entry](https://github.com/awslabs/aws-sdk-rust/discussions/755).
 """
