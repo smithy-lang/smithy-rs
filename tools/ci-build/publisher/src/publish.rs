@@ -40,7 +40,7 @@ pub async fn publish(handle: &PackageHandle, crate_path: &Path) -> anyhow::Resul
         5,
         Duration::from_secs(60),
         || async {
-            cargo::Publish::new(handle.clone(), &crate_path)
+            cargo::Publish::new(handle.clone(), crate_path)
                 .spawn()
                 .await?;
             Result::<_, BoxError>::Ok(())

@@ -145,7 +145,7 @@ async def handler(bytestream):
 }
 
 fn streaming_bytestream_from_vec(chunks: Vec<&'static str>) -> ByteStream {
-    let stream = stream::iter(chunks.into_iter().map(|v| Ok::<_, io::Error>(v)));
+    let stream = stream::iter(chunks.into_iter().map(Ok::<_, io::Error>));
     let body = Body::wrap_stream(stream);
     ByteStream::new(SdkBody::from(body))
 }
