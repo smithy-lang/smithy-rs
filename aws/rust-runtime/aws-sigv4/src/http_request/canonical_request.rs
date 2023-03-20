@@ -146,7 +146,7 @@ impl<'a> CanonicalRequest<'a> {
         let payload_hash = Self::payload_hash(req.body());
 
         let date_time = format_date_time(params.time);
-        let (signed_headers, mut canonical_headers) =
+        let (signed_headers, canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
 
