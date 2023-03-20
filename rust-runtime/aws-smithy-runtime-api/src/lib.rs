@@ -14,6 +14,9 @@
 
 /// A typemap for storing configuration.
 pub mod config_bag;
+/// A data structure for storing information about unexpected events that occur when sending requests
+/// and receiving responses.
+pub mod event_log;
 /// Smithy interceptors for smithy clients.
 ///
 /// Interceptors are lifecycle hooks that can read/modify requests and responses.
