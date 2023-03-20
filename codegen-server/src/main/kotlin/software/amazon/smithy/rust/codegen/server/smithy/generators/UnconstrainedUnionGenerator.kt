@@ -228,7 +228,7 @@ class UnconstrainedUnionGenerator(
                                     """
                                     {
                                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
-                                            .try_into() $boxIt $boxErr
+                                            .try_into()$boxIt$boxErr
                                             .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                         constrained.into()
                                     }

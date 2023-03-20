@@ -287,3 +287,69 @@ message = "The modules in generated client crates have been reorganized. See the
 references = ["smithy-rs#2448"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+
+[[smithy-rs]]
+message = "Fix bug in timestamp format resolution. Prior to this fix, the timestamp format may have been incorrect if set on the target instead of on the member."
+references = ["smithy-rs#2226"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Add support for offsets when parsing datetimes. RFC3339 date times now support offsets like `-0200`"
+references = ["smithy-rs#2226"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "rcoh"
+
+
+[[aws-sdk-rust]]
+message = """Reconnect on transient errors.
+
+If a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not
+be reused. This is enabled by default for all AWS services. It can be disabled by setting `RetryConfig::with_reconnect_mode`
+
+Although there is no API breakage from this change, it alters the client behavior in a way that may cause breakage for customers.
+"""
+references = ["aws-sdk-rust#160", "smithy-rs#2445"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """Reconnect on transient errors.
+
+Note: **this behavior is disabled by default for generic clients**. It can be enabled with
+`aws_smithy_client::Builder::reconnect_on_transient_errors`
+
+If a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not
+be reused.
+"""
+references = ["aws-sdk-rust#160", "smithy-rs#2445"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to 1.66.1"
+references = ["smithy-rs#2467"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to 1.66.1"
+references = ["smithy-rs#2467"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "Velfi"
+
+###############
+
+[[aws-sdk-rust]]
+message = """Default connector provided by `aws-config` now respects `ConnectorSettings`.
+
+Previously, it used the timeout settings provided by aws-config. A test from @Oliboy50 has been incorporated to verify this behavior.
+
+**Behavior Change**: Prior to this change, the Hyper client would be shared between all service clients. After this change, each service client will use its own Hyper Client.
+To revert to the previous behavior, set `HttpConnector::Prebuilt` on `SdkConfig::http_connector`.
+"""
+references = ["smithy-rs#2471", "smithy-rs#2333", "smithy-rs#2151"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+

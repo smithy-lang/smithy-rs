@@ -132,6 +132,7 @@ data class CargoDependency(
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
     val features: Set<String> = emptySet(),
+    val defaultFeatures: Boolean = true,
     val rustName: String = name.replace("-", "_"),
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
@@ -166,6 +167,9 @@ data class CargoDependency(
         }
         if (optional) {
             attribs["optional"] = true
+        }
+        if (!defaultFeatures) {
+            attribs["default-features"] = false
         }
         return attribs
     }
@@ -220,7 +224,7 @@ data class CargoDependency(
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev)
+        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)
         val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =

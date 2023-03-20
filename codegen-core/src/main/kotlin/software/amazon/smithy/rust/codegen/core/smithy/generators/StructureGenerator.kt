@@ -131,7 +131,7 @@ open class StructureGenerator(
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
+                writer.renderMemberDoc(member, memberSymbol)
                 writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
                 val returnType = when {
@@ -140,7 +140,7 @@ open class StructureGenerator(
                     memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
-                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
                     when {
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")

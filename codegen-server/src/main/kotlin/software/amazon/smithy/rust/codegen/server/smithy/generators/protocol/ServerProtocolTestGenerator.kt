@@ -387,7 +387,12 @@ class ServerProtocolTestGenerator(
                 renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
             }
 
-            makeRequest(operationShape, operationSymbol, this, writable("""panic!("$panicMessage", &input) as $outputT"""))
+            makeRequest(
+                operationShape,
+                operationSymbol,
+                this,
+                writable("""panic!("$panicMessage", &input) as $outputT"""),
+            )
             checkResponse(this, testCase.response)
         }
     }
@@ -757,11 +762,7 @@ class ServerProtocolTestGenerator(
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
-        private const val MalformedRangeValidation = "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
-            // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
-            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
-
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
@@ -772,6 +773,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
+            FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
             // Tests involving `@range` on floats.
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy-rs/issues/2007.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
@@ -802,9 +804,39 @@ class ServerProtocolTestGenerator(
             // AwsJson1.1 failing tests.
             FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
-            FailingTest(AwsJson11, "parses_httpdate_timestamps", TestType.Response),
-            FailingTest(AwsJson11, "parses_iso8601_timestamps", TestType.Response),
             FailingTest(AwsJson11, "parses_the_request_id_from_the_response", TestType.Response),
+
+            // TODO(https://github.com/awslabs/smithy/issues/1683): This has been marked as failing until resolution of said issue
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBlobList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBooleanList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBooleanList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsStringList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsByteList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsShortList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsIntegerList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsLongList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsTimestampList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsDateTimeList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsHttpDateList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsHttpDateList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsEnumList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsIntEnumList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsListList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsStructureList", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case1", TestType.MalformedRequest),
+
+            // TODO(https://github.com/awslabs/smithy-rs/issues/2472): We don't respect the `@internal` trait
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case1", TestType.MalformedRequest),
         )
         private val RunOnly: Set<String>? = null
 
@@ -838,6 +870,8 @@ class ServerProtocolTestGenerator(
                         "queryTimestamp": 1,
                         "queryTimestampList": [1, 2, 3],
                         "queryEnum": "Foo",
+                        "queryIntegerEnum": 1,
+                        "queryIntegerEnumList": [1,2,3],
                         "queryEnumList": ["Foo", "Baz", "Bar"],
                         "queryParamsMapOfStringList": {
                             "String": ["Hello there"],
@@ -884,8 +918,10 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
+
         private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
+
         private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
 
@@ -898,8 +934,8 @@ class ServerProtocolTestGenerator(
                 .contents(
                     """
                     {
-                        "message" : "1 validation error detected. Value 000000000000000000000000000000000000000000000000000000000000000000000000000000000000! at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}",
-                        "fieldList" : [{"message": "Value 000000000000000000000000000000000000000000000000000000000000000000000000000000000000! at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}", "path": "/evilString"}]
+                        "message" : "1 validation error detected. Value at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}",
+                        "fieldList" : [{"message": "Value at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}", "path": "/evilString"}]
                     }
                     """.trimIndent(),
                 )
@@ -915,7 +951,7 @@ class ServerProtocolTestGenerator(
         // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
         private val BrokenRequestTests = mapOf(
             // TODO(https://github.com/awslabs/smithy/pull/1564)
-            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
+            // Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
             // TODO(https://github.com/awslabs/smithy/pull/1562)
             Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
         )
@@ -931,7 +967,10 @@ class ServerProtocolTestGenerator(
         private val BrokenMalformedRequestTests: Map<Pair<String, String>, KFunction1<HttpMalformedRequestTestCase, HttpMalformedRequestTestCase>> =
             // TODO(https://github.com/awslabs/smithy/issues/1506)
             mapOf(
-                Pair(RestJsonValidation, "RestJsonMalformedPatternReDOSString") to ::fixRestJsonMalformedPatternReDOSString,
+                Pair(
+                    RestJsonValidation,
+                    "RestJsonMalformedPatternReDOSString",
+                ) to ::fixRestJsonMalformedPatternReDOSString,
             )
     }
 }

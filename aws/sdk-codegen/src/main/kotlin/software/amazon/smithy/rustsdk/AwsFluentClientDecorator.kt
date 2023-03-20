@@ -208,6 +208,7 @@ private class AwsFluentClientExtensions(types: Types) {
                     };
                     let mut builder = builder
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .reconnect_mode(retry_config.reconnect_mode())
                         .retry_config(retry_config.into())
                         .operation_timeout_config(timeout_config.into());
                     builder.set_sleep_impl(sleep_impl);
@@ -257,6 +258,7 @@ private fun renderCustomizableOperationSendMethod(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
         "ParseHttpResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
     )
@@ -272,7 +274,7 @@ private fun renderCustomizableOperationSendMethod(
             where
                 E: std::error::Error + Send + Sync + 'static,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
             {
                 self.handle.client.call(self.operation).await
             }

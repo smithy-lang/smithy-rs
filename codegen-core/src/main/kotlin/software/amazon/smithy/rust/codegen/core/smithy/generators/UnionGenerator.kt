@@ -50,7 +50,7 @@ fun CodegenTarget.renderUnknownVariant() = when (this) {
  * Finally, if `[renderUnknownVariant]` is true (the default), it will render an `Unknown` variant. This is used by
  * clients to allow response parsing to succeed, even if the server has added a new variant since the client was generated.
  */
-class UnionGenerator(
+open class UnionGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
     private val writer: RustWriter,
@@ -60,7 +60,7 @@ class UnionGenerator(
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private val unionSymbol = symbolProvider.toSymbol(shape)
 
-    fun render() {
+    open fun render() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
 

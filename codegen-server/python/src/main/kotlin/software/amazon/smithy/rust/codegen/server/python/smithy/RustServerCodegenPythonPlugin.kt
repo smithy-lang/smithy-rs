@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerReservedWords
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -76,6 +75,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
+            includeConstrainedShapeProvider: Boolean = true,
             codegenDecorator: ServerCodegenDecorator,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
@@ -85,7 +85,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
                 .let {
-                    if (constrainedTypes) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+                    if (includeConstrainedShapeProvider) PythonConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
                 }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
