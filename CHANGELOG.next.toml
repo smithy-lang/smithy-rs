@@ -353,3 +353,14 @@ references = ["smithy-rs#2471", "smithy-rs#2333", "smithy-rs#2151"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
+[[smithy-rs]] # tokio-upgrade
+message = "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)"
+references = ["smithy-rs#2474"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]] # tokio-upgrade
+message = "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)"
+references = ["smithy-rs#2474"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
