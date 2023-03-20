@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationErrorGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEventStreamWrapperGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
@@ -244,6 +246,16 @@ class PythonServerCodegenVisitor(
 
         rustCrate.withModule(ServerRustModule.Error) {
             PythonServerOperationErrorGenerator(codegenContext.model, codegenContext.symbolProvider, shape).render(this)
+        }
+    }
+
+    override fun memberShape(shape: MemberShape) {
+        super.memberShape(shape)
+
+        if (shape.isEventStream(model)) {
+            rustCrate.withModule(PythonServerRustModule.PythonEventStream) {
+                PythonServerEventStreamWrapperGenerator(codegenContext, shape).render(this)
+            }
         }
     }
 }
