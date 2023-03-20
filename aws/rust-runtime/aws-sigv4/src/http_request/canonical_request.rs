@@ -184,14 +184,6 @@ impl<'a> CanonicalRequest<'a> {
             }),
         };
 
-        if params.settings.session_token_mode == SessionTokenMode::Exclude {
-            if let Some(security_token) = params.security_token {
-                let mut sec_header = HeaderValue::from_str(security_token)?;
-                sec_header.set_sensitive(true);
-                canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
-            }
-        }
-
         let creq = CanonicalRequest {
             method: req.method(),
             path,
@@ -230,12 +222,10 @@ impl<'a> CanonicalRequest<'a> {
         if params.settings.signature_location == SignatureLocation::Headers {
             Self::insert_date_header(&mut canonical_headers, date_time);
 
-            if params.settings.session_token_mode == SessionTokenMode::Include {
-                if let Some(security_token) = params.security_token {
-                    let mut sec_header = HeaderValue::from_str(security_token)?;
-                    sec_header.set_sensitive(true);
-                    canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
-                }
+            if let Some(security_token) = params.security_token {
+                let mut sec_header = HeaderValue::from_str(security_token)?;
+                sec_header.set_sensitive(true);
+                canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
             }
 
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -260,6 +250,7 @@ impl<'a> CanonicalRequest<'a> {
             }
             signed_headers.push(CanonicalHeaderName(name.clone()));
         }
+
         Ok((signed_headers, canonical_headers))
     }
 
