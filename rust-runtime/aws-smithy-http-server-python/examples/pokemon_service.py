@@ -8,18 +8,22 @@ import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Callable, Awaitable
+from typing import Dict, Any, List, Optional, Callable, Awaitable, AsyncIterator
 
 from pokemon_service_server_sdk import App
 from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.aws_lambda import LambdaContext
-from pokemon_service_server_sdk.error import ResourceNotFoundException
+from pokemon_service_server_sdk.error import (
+    ResourceNotFoundException,
+    UnsupportedRegionError,
+)
 from pokemon_service_server_sdk.input import (
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
+    CapturePokemonInput,
 )
 from pokemon_service_server_sdk.logging import TracingHandler
 from pokemon_service_server_sdk.middleware import (
@@ -27,13 +31,19 @@ from pokemon_service_server_sdk.middleware import (
     Response,
     Request,
 )
-from pokemon_service_server_sdk.model import FlavorText, Language
+from pokemon_service_server_sdk.model import (
+    CapturePokemonEvents,
+    CaptureEvent,
+    FlavorText,
+    Language,
+)
 from pokemon_service_server_sdk.output import (
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
+    CapturePokemonOutput,
 )
 from pokemon_service_server_sdk.types import ByteStream
 
@@ -244,12 +254,44 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
     return CheckHealthOutput()
 
 
+@app.capture_pokemon
+def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
+    if input.region != "Kanto":
+        raise UnsupportedRegionError(input.region)
+
+    async def events(input: CapturePokemonInput) -> AsyncIterator[CapturePokemonEvents]:
+        async for incoming in input.events:
+            logging.debug(f"incoming event -> {incoming}")
+            if incoming.is_event():
+                event = incoming.as_event()
+                payload = event.payload
+                if not payload:
+                    logging.debug("no payload provided, ignoring the event!")
+                    continue
+                name = payload.name or "<unknown>"
+                outgoing_event = CapturePokemonEvents.event(
+                    CaptureEvent(
+                        name=name,
+                        captured=random.choice([True, False]),
+                        shiny=random.choice([True, False]),
+                    )
+                )
+                logging.debug(f"outgoing event -> {outgoing_event}")
+                yield outgoing_event
+            else:
+                logging.error("unknown event!")
+                break
+        logging.debug("done!")
+
+    return CapturePokemonOutput(events=events(input))
+
+
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp # type: ignore
+    import aiohttp  # pyright: ignore
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
