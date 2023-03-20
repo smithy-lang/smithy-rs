@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::result::{ResponseError, SdkError, ServiceError};
+use crate::result::{ConstructionFailure, ResponseError, SdkError, ServiceError};
 use std::any::Any;
 use std::convert::Infallible;
 use std::error::Error;
@@ -37,6 +37,7 @@ impl Error for Event {}
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EventType {
+    Nothing,
     Construction,
     Dispatch,
     Response,
@@ -122,7 +123,9 @@ impl EventLog {
         let mut response: Option<R> = None;
         let mut modeled_error: Option<E> = None;
         let mut error_chain: Vec<BoxError> = vec![];
+        let mut progress = EventType::Nothing;
         while let Some(ev) = self.events.pop() {
+            progress = progress.max(ev.tp);
             if let Some(src) = ev.source {
                 // TODO: include the message
                 error_chain.push(src);
@@ -167,7 +170,15 @@ impl EventLog {
             }
             _ => {}
         };
-        todo!()
+
+        match progress {
+            EventType::Construction => SdkError::ConstructionFailure(
+                ConstructionFailure::builder()
+                    .source(error_chain.expect("have one error..."))
+                    .build(),
+            ),
+            _ => todo!(),
+        }
     }
 }
 
@@ -206,10 +217,14 @@ mod test {
     fn example_error_flow() {
         let mut error_log = EventLog::new();
         error_log.push_construction_error(
-            "failed to load credentials from first provider",
-            "the process environment is broken".into(),
+            "No credentials from the environment",
+            "[credentials] no environment variables set".into(),
         );
-        error_log.push(
+        error_log.push_construction_error(
+            "No credentials from the profile",
+            "[credentials] the profile failed to parse! aborting credentials".into(),
+        );
+        /*error_log.push(
             EventType::Response,
             "received response from service",
             Some(operation::Response::new(
@@ -218,11 +233,15 @@ mod test {
                     .unwrap(),
             )),
             None,
-        );
+        );*/
 
-        error_log.push_service_error(GetObjectError {
+        error_log.push_construction_error(
+            "no credentials",
+            "The credentials provider did not return credentials".into(),
+        );
+        /*error_log.push_service_error(GetObjectError {
             message: "this is an error!",
-        });
+        });*/
 
         let error = error_log.into_error_auto::<GetObjectError, operation::Response>();
         /*assert!(matches!(error, SdkError::ServiceError(_)));
