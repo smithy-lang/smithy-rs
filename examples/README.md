@@ -1,7 +1,13 @@
-# Smithy Rust Server SDK example
+# Smithy Rust Server SDK examples
 
-This folder contains an example service called Pokémon Service used to showcase
-the service framework capabilities and to run benchmarks.
+This folder contains an example services showcasing the service framework capabilities and to run benchmarks.
+
+- `/pokemon-service`, a HTTP server implementation demonstrating [middleware](https://awslabs.github.io/smithy-rs/design/server/middleware.html)
+and [extractors](https://awslabs.github.io/smithy-rs/design/server/from_parts.html).
+- `/pokemon-service-tls`, a minimal HTTPS server implementation.
+- `/pokemon-service-lambda`, a minimal Lambda deployment.
+
+The `{binary}/tests` folders are integration tests involving the generated clients.
 
 ## Build
 
@@ -17,15 +23,18 @@ can be used directly.
 
 ## Run
 
-`cargo run` can be used to start the Pokémon service on
-`http://localhost:13734`.
+To run a binary use
+
+```bash
+cargo run --bin pokemon-service
+```
 
 ## Test
 
 `cargo test` can be used to spawn the service and run some simple integration
 tests against it.
 
-More info can be found in the `tests` folder of `pokemon-service` package.
+More info can be found in the `tests` folder of each package.
 
 ## Benchmarks
 
