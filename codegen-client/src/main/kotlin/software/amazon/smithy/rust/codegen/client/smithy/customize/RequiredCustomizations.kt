@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVers
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.RuntimePluginConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.RuntimePluginReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -52,7 +54,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations + ResiliencyConfigCustomization(codegenContext)
+        baseCustomizations + ResiliencyConfigCustomization(codegenContext) + RuntimePluginConfigCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
@@ -68,6 +70,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
 
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
+
+        RuntimePluginReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
         rustCrate.withModule(codegenContext.featureGatedPrimitivesModule()) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)

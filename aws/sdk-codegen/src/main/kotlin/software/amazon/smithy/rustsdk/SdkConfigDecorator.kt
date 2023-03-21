@@ -78,6 +78,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
                     ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
 
+                    ${section.serviceConfigBuilder}.set_runtime_plugins(${section.sdkConfig}.runtime_plugins().cloned());
                     """,
                 )
             },

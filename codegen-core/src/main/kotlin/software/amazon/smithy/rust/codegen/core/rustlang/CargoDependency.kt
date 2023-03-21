@@ -261,6 +261,7 @@ data class CargoDependency(
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
 
+        fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
