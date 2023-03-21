@@ -24,8 +24,6 @@ pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-home = "0.5"
-http = "0.2.9"
 serial_test = "0.7.0"
 
 # This dependency is only required for testing the `pokemon-service-tls` program.

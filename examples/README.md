@@ -7,7 +7,7 @@ and [extractors](https://awslabs.github.io/smithy-rs/design/server/from_parts.ht
 - `/pokemon-service-tls`, a minimal HTTPS server implementation.
 - `/pokemon-service-lambda`, a minimal Lambda deployment.
 
-The `{binary}/tests` folders are integration tests involving the generated clients.
+The `/{binary}/tests` folders are integration tests involving the generated clients.
 
 ## Build
 
@@ -26,13 +26,21 @@ can be used directly.
 To run a binary use
 
 ```bash
-cargo run --bin pokemon-service
+cargo run -p $BINARY
 ```
+
+CLI arguments can be passed to the servers, use
+
+```bash
+cargo run -p $BINARY -- --help
+```
+
+for more information.
 
 ## Test
 
-`cargo test` can be used to spawn the service and run some simple integration
-tests against it.
+`cargo test` can be used to spawn a service and run some simple integration
+tests against it. Use `-p $BINARY` to filter by package.
 
 More info can be found in the `tests` folder of each package.
 

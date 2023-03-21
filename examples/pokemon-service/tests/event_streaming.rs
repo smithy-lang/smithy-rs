@@ -37,7 +37,6 @@ fn get_pokeball() -> String {
 #[serial]
 async fn event_stream_test() {
     let _child = common::run_server().await;
-
     let client = common::client();
 
     let mut team = vec![];
