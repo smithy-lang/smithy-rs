@@ -158,7 +158,7 @@ class PythonServerUnionGenerator(
                 rustTemplate(
                     """
                     self.0.as_$funcNamePart().map_err(#{pyo3}::exceptions::PyValueError::new_err(
-                        r"${unionSymbol.name} variant is not None"
+                        "${unionSymbol.name} variant is not None"
                     ))
                     """,
                     "pyo3" to pyo3,
