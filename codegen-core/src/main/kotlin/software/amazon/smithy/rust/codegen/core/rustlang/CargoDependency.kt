@@ -235,7 +235,7 @@ data class CargoDependency(
         val Tokio: CargoDependency =
             CargoDependency(
                 "tokio",
-                CratesIo("1.8.4"),
+                CratesIo("1.23.1"),
                 DependencyScope.Dev,
                 features = setOf("macros", "test-util", "rt-multi-thread"),
             )
