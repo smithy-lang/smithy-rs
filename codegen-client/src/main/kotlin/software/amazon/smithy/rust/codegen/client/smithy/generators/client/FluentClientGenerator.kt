@@ -252,13 +252,13 @@ class FluentClientGenerator(
             """
             pub struct $builderName#{generics:W} {
                 handle: std::sync::Arc<crate::client::Handle${generics.inst}>,
-                inner: #{Inner}
+                inner: #{Inner},
+                operation_plugins: Vec<#{SharedRuntimePlugin}>,
             }
             """,
             "Inner" to symbolProvider.symbolForBuilder(input),
-            "client" to RuntimeType.smithyClient(runtimeConfig),
             "generics" to generics.decl,
-            "operation" to operationSymbol,
+            "SharedRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("runtime_plugin::SharedRuntimePlugin"),
         )
 
         rustBlockTemplate(
@@ -274,7 +274,11 @@ class FluentClientGenerator(
                 """
                 /// Creates a new `${operationSymbol.name}`.
                 pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>) -> Self {
-                    Self { handle, inner: Default::default() }
+                    Self {
+                        handle,
+                        inner: Default::default(),
+                        operation_plugins: Default::default(),
+                    }
                 }
 
                 /// Consume this builder, creating a customizable operation that can be modified before being
@@ -307,12 +311,27 @@ class FluentClientGenerator(
                         .map_err(#{SdkError}::construction_failure)?;
                     self.handle.client.call(op).await
                 }
+
+                /// Sets the `runtime_plugin` for the builder.
+                ///
+                /// `runtime_plugin` is applied to the operation configuration level. It will take precedence over
+                /// those applied to the service configuration level or the AWS configuration level.
+                pub fn runtime_plugin(
+                    mut self,
+                    runtime_plugin: impl #{RuntimePlugin} + 'static,
+                ) -> Self {
+                    self.operation_plugins
+                        .push(#{SharedRuntimePlugin}::new(runtime_plugin));
+                    self
+                }
                 """,
                 "CustomizableOperation" to codegenContext.featureGatedCustomizeModule().toType()
                     .resolve("CustomizableOperation"),
                 "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
+                "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("runtime_plugin::RuntimePlugin"),
+                "SharedRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("runtime_plugin::SharedRuntimePlugin"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
                 "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
