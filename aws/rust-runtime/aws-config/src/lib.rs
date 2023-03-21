@@ -155,6 +155,7 @@ mod loader {
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::HttpConnector;
+    use aws_smithy_runtime_api::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
@@ -179,6 +180,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        client_plugins: Vec<SharedRuntimePlugin>,
         credentials_cache: Option<CredentialsCache>,
         credentials_provider: Option<SharedCredentialsProvider>,
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
@@ -227,6 +229,36 @@ mod loader {
         /// ```
         pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
             self.retry_config = Some(retry_config);
+            self
+        }
+
+        /// Override the runtime plugin used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// `runtime_plugin` is applied to the AWS configuration level.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+        /// use aws_smithy_runtime_api::runtime_plugin::{BoxError, RuntimePlugin, SharedRuntimePlugin};
+        /// use aws_types::sdk_config::{SdkConfig, Builder};
+        ///
+        /// #[derive(Debug)]
+        /// struct APlugin;
+        /// impl RuntimePlugin for APlugin {
+        ///     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+        ///         // ..
+        ///         # todo!()
+        ///     }
+        /// }
+        ///
+        /// let config = aws_config::from_env()
+        ///     .runtime_plugin(APlugin{})
+        ///     .load().await;
+        /// # }
+        /// ```
+        pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
+            self.client_plugins
+                .push(SharedRuntimePlugin::new(runtime_plugin));
             self
         }
 
@@ -537,6 +569,9 @@ mod loader {
                     .await
             };
 
+            // TODO(RuntimePlugins): Need to populate it with default plugins if empty
+            let client_plugins = self.client_plugins;
+
             let app_name = if self.app_name.is_some() {
                 self.app_name
             } else {
@@ -605,6 +640,7 @@ mod loader {
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
+                .runtime_plugins(client_plugins)
                 .timeout_config(timeout_config)
                 .credentials_cache(credentials_cache)
                 .credentials_provider(credentials_provider)

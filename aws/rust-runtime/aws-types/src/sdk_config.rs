@@ -15,6 +15,7 @@ use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
+use aws_smithy_runtime_api::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -54,6 +55,7 @@ pub struct SdkConfig {
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
+    client_plugins: Vec<SharedRuntimePlugin>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
@@ -75,6 +77,7 @@ pub struct Builder {
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
+    client_plugins: Vec<SharedRuntimePlugin>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
@@ -220,6 +223,148 @@ impl Builder {
     /// ```
     pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
         self.retry_config = retry_config;
+        self
+    }
+
+    /// Set the `runtime_plugin` for the builder
+    ///
+    /// `runtime_plugin` is applied to the AWS configuration level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_runtime_api::runtime_plugin::{BoxError, RuntimePlugin};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    ///
+    /// #[derive(Debug)]
+    /// struct APlugin;
+    ///
+    /// impl RuntimePlugin for APlugin {
+    ///     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    ///         // ..
+    ///         # todo!()
+    ///     }
+    /// }
+    ///
+    /// SdkConfig::builder().runtime_plugin(APlugin{}).build();
+    /// ```
+    pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
+        self.set_runtime_plugin(runtime_plugin);
+        self
+    }
+
+    /// Set the `runtime_plugin` for the builder
+    ///
+    /// `runtime_plugin` is applied to the AWS configuration level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_runtime_api::runtime_plugin::{BoxError, RuntimePlugin};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    ///
+    /// #[derive(Debug)]
+    /// struct APlugin;
+    ///
+    /// impl RuntimePlugin for APlugin {
+    ///     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    ///         // ..
+    ///         # todo!()
+    ///     }
+    /// }
+    ///
+    /// fn set_runtime_plugin(builder: &mut Builder) {
+    ///     builder.set_runtime_plugin(APlugin{});
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// set_runtime_plugin(&mut builder);
+    /// builder.build();
+    /// ```
+    pub fn set_runtime_plugin(
+        &mut self,
+        runtime_plugin: impl RuntimePlugin + 'static,
+    ) -> &mut Self {
+        self.client_plugins
+            .push(SharedRuntimePlugin::new(runtime_plugin));
+        self
+    }
+
+    /// Bulk set [`SharedRuntimePlugin`](aws_smithy_runtime_api::runtime_plugin::SharedRuntimePlugin)s
+    /// for the builder
+    ///
+    /// `runtime_plugins` are applied to the AWS configuration level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_runtime_api::runtime_plugin::{BoxError, RuntimePlugin, SharedRuntimePlugin};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    ///
+    /// #[derive(Debug)]
+    /// struct APlugin;
+    ///
+    /// impl RuntimePlugin for APlugin {
+    ///     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    ///         // ..
+    ///         # todo!()
+    ///     }
+    /// }
+    ///
+    /// let plugins = vec![
+    ///     SharedRuntimePlugin::new(APlugin{}),
+    ///     SharedRuntimePlugin::new(APlugin{}),
+    ///     SharedRuntimePlugin::new(APlugin{}),
+    /// ];
+    /// SdkConfig::builder().runtime_plugins(plugins).build();
+    /// ```
+    pub fn runtime_plugins(
+        mut self,
+        runtime_plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        self.set_runtime_plugins(runtime_plugins);
+        self
+    }
+
+    /// Bulk set [`SharedRuntimePlugin`](aws_smithy_runtime_api::runtime_plugin::SharedRuntimePlugin)s
+    /// for the builder
+    ///
+    /// `runtime_plugins` are applied to the AWS configuration level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_runtime_api::runtime_plugin::{BoxError, RuntimePlugin, SharedRuntimePlugin};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    ///
+    /// #[derive(Debug)]
+    /// struct APlugin;
+    ///
+    /// impl RuntimePlugin for APlugin {
+    ///     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    ///         // ..
+    ///         # todo!()
+    ///     }
+    /// }
+    ///
+    /// fn set_runtime_plugins(builder: &mut Builder) {
+    ///     let plugins = vec![
+    ///         SharedRuntimePlugin::new(APlugin{}),
+    ///         SharedRuntimePlugin::new(APlugin{}),
+    ///         SharedRuntimePlugin::new(APlugin{}),
+    ///     ];
+    ///     builder.set_runtime_plugins(plugins);
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// set_runtime_plugins(&mut builder);
+    /// builder.build();
+    /// ```
+    pub fn set_runtime_plugins(
+        &mut self,
+        runtime_plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> &mut Self {
+        self.client_plugins.extend(runtime_plugins.into_iter());
         self
     }
 
@@ -560,6 +705,7 @@ impl Builder {
             endpoint_resolver: self.endpoint_resolver,
             endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
+            client_plugins: self.client_plugins,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
             http_connector: self.http_connector,
@@ -629,6 +775,11 @@ impl SdkConfig {
     /// Use dual-stack endpoint
     pub fn use_dual_stack(&self) -> Option<bool> {
         self.use_dual_stack
+    }
+
+    /// Configured client runtime plugins
+    pub fn runtime_plugins(&self) -> impl Iterator<Item = &SharedRuntimePlugin> + '_ {
+        self.client_plugins.iter()
     }
 
     /// Config builder

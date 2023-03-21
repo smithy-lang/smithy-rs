@@ -14,6 +14,7 @@ examples = ["aws-smithy-client/client-hyper", "aws-smithy-client/rustls", "hyper
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
