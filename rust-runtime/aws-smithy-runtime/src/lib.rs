@@ -10,7 +10,9 @@
     rust_2018_idioms
 )]
 
+use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::event_log::EventLog;
 use aws_smithy_runtime_api::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugins;
 use std::fmt::Debug;
@@ -56,12 +58,53 @@ pub trait EndpointOrchestrator<Req>: Send + Sync + Debug {
 /// `Out`: The output message. A `Result` containing either:
 ///     - The 'success' output message e.g. `ListObjectsResponse`
 ///     - The 'failure' output message e.g. `NoSuchBucketException`
-pub async fn invoke<In, Req, Res, T>(
+pub async fn invoke<In, Req, Res, T, E>(
     input: In,
     interceptors: &mut Interceptors<In, Req, Res, Result<T, BoxError>>,
     runtime_plugins: &RuntimePlugins,
     cfg: &mut ConfigBag,
-) -> Result<T, BoxError>
+) -> Result<T, SdkError<E, Res>>
+where
+    // The input must be Clone in case of retries
+    In: Clone + 'static,
+    Req: 'static,
+    Res: 'static,
+    T: 'static,
+    E: 'static,
+{
+    match invoke_inner(input, interceptors, runtime_plugins, cfg).await {
+        Ok(value) => Ok(value),
+        Err(event_log) => Err(event_log
+            .try_into_sdk_error::<E, Res>()
+            .expect("terminal error encountered")),
+    }
+}
+
+fn should_retry<In, Req, Res, T>(
+    ctx: &InterceptorContext<In, Req, Res, Result<T, BoxError>>,
+    cfg: &ConfigBag,
+) -> Result<bool, BoxError> {
+    let retry_strategy = cfg
+        .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
+        .ok_or("missing retry strategy")?;
+    let mod_res = ctx
+        .modeled_response()
+        .expect("it's set during 'make_an_attempt'");
+    retry_strategy.should_retry(mod_res, cfg)
+}
+
+/// `In`: The input message e.g. `ListObjectsRequest`
+/// `Req`: The transport request message e.g. `http::Request<SmithyBody>`
+/// `Res`: The transport response message e.g. `http::Response<SmithyBody>`
+/// `Out`: The output message. A `Result` containing either:
+///     - The 'success' output message e.g. `ListObjectsResponse`
+///     - The 'failure' output message e.g. `NoSuchBucketException`
+pub async fn invoke_inner<In, Req, Res, T>(
+    input: In,
+    interceptors: &mut Interceptors<In, Req, Res, Result<T, BoxError>>,
+    runtime_plugins: &RuntimePlugins,
+    cfg: &mut ConfigBag,
+) -> Result<T, EventLog>
 where
     // The input must be Clone in case of retries
     In: Clone + 'static,
@@ -72,50 +115,58 @@ where
     let mut ctx: InterceptorContext<In, Req, Res, Result<T, BoxError>> =
         InterceptorContext::new(input);
 
-    runtime_plugins.apply_client_configuration(cfg)?;
-    interceptors.client_read_before_execution(&ctx, cfg)?;
-
-    runtime_plugins.apply_operation_configuration(cfg)?;
-    interceptors.operation_read_before_execution(&ctx, cfg)?;
-
-    interceptors.read_before_serialization(&ctx, cfg)?;
-    interceptors.modify_before_serialization(&mut ctx, cfg)?;
-
-    let request_serializer = cfg
-        .get::<Box<dyn RequestSerializer<In, Req>>>()
-        .ok_or("missing serializer")?;
-    let req = request_serializer.serialize_request(ctx.modeled_request_mut(), cfg)?;
-    ctx.set_tx_request(req);
-
-    interceptors.read_after_serialization(&ctx, cfg)?;
-    interceptors.modify_before_retry_loop(&mut ctx, cfg)?;
+    let mut event_log = EventLog::new()
+        .start_construction()
+        // Client configuration
+        .handle_result(runtime_plugins.apply_client_configuration(cfg))?
+        .handle_interceptor(interceptors.client_read_before_execution(&ctx, cfg))?
+        // Operation configuration
+        .handle_result(runtime_plugins.apply_operation_configuration(cfg))?
+        .handle_interceptor(interceptors.operation_read_before_execution(&ctx, cfg))?
+        // Before serialization
+        .handle_interceptor(interceptors.read_before_serialization(&ctx, cfg))?
+        .handle_interceptor(interceptors.modify_before_serialization(&mut ctx, cfg))?
+        // Serialization
+        .handle_result((|| {
+            let request_serializer = cfg
+                .get::<Box<dyn RequestSerializer<In, Req>>>()
+                .ok_or("missing serializer")?;
+            let req = request_serializer.serialize_request(ctx.modeled_request_mut(), cfg)?;
+            ctx.set_tx_request(req);
+            Result::<(), BoxError>::Ok(())
+        })())?
+        // After serialization
+        .handle_interceptor(interceptors.read_after_serialization(&ctx, cfg))?
+        // Retry loop
+        .handle_interceptor(interceptors.modify_before_retry_loop(&mut ctx, cfg))?
+        .start_dispatch();
 
     loop {
-        make_an_attempt(&mut ctx, cfg, interceptors).await?;
-        interceptors.read_after_attempt(&ctx, cfg)?;
-        interceptors.modify_before_attempt_completion(&mut ctx, cfg)?;
+        event_log = event_log
+            .handle_result(make_an_attempt(&mut ctx, cfg, interceptors).await)?
+            .handle_interceptor(interceptors.read_after_attempt(&ctx, cfg))?
+            .handle_interceptor(interceptors.modify_before_attempt_completion(&mut ctx, cfg))?;
 
-        let retry_strategy = cfg
-            .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
-            .ok_or("missing retry strategy")?;
-        let mod_res = ctx
-            .modeled_response()
-            .expect("it's set during 'make_an_attempt'");
-        if retry_strategy.should_retry(mod_res, cfg)? {
-            continue;
+        match should_retry(ctx, cfg) {
+            Ok(true) => continue,
+            Err(err) => return Err(event_log.push_error(err)),
+            _ => {}
         }
 
-        interceptors.modify_before_completion(&mut ctx, cfg)?;
         let trace_probe = cfg
             .get::<Box<dyn TraceProbe>>()
-            .ok_or("missing trace probes")?;
+            .expect("missing trace probes");
+        event_log =
+            event_log.handle_interceptor(interceptors.modify_before_completion(&mut ctx, cfg))?;
         trace_probe.dispatch_events(cfg);
-        interceptors.read_after_execution(&ctx, cfg)?;
+        event_log = event_log.handle_interceptor(interceptors.read_after_execution(&ctx, cfg))?;
 
         break;
     }
 
-    let (modeled_response, _) = ctx.into_responses()?;
+    let (modeled_response, _) = ctx
+        .into_responses()
+        .map_err(|err| event_log.push_interceptor_error(err))?;
     modeled_response
 }
 

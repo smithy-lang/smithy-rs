@@ -3,17 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::interceptors::InterceptorError;
 use aws_smithy_http::result::{
     ConnectorError, ConstructionFailure, DispatchFailure, ResponseError, SdkError, ServiceError,
+    TimeoutError,
 };
 use std::any::Any;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 struct Event {
     event_type: EventType,
-    data: Vec<Box<dyn Any>>,
+    data: Option<Box<dyn Any>>,
     source: Option<BoxError>,
 }
 
@@ -22,45 +24,19 @@ type BoxError = Box<dyn Error + Send + Sync>;
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EventType {
-    Informational,
+    Nothing,
     Construction,
     Dispatch,
     Response,
-}
-
-#[derive(Debug)]
-struct EventLogError {
-    err: BoxError,
-    source: Option<Box<EventLogError>>,
-}
-
-impl EventLogError {
-    fn from_vec(errors: &mut Vec<BoxError>) -> Option<EventLogError> {
-        errors.pop().map(|err| EventLogError {
-            err,
-            source: EventLogError::from_vec(errors).map(|e| Box::new(e) as _),
-        })
-    }
-}
-
-impl Display for EventLogError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.err)
-    }
-}
-
-impl Error for EventLogError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as _)
-    }
+    Timeout,
 }
 
 macro_rules! extract_data {
-    ($from:ident, $($what:ident -> $into:ident,)+) => {
+    ($from:ident, $($what:ident -> $into:expr,)+) => {
         let _chain = $from;
         $(extract_data!(_chain, $what -> $into);)+
     };
-    ($from:ident, $what:ident -> $into:ident) => {
+    ($from:ident, $what:ident -> $into:expr) => {
         let $from = match $from.downcast::<$what>() {
             Ok(value) => {
                 $into = Some(*value);
@@ -81,43 +57,82 @@ impl EventLog {
         Self { events: vec![] }
     }
 
-    pub fn push_connector_error(&mut self, connector_error: ConnectorError) {
-        self.push(
-            EventType::Dispatch,
-            vec![Box::new(connector_error) as _],
-            None,
-        );
+    pub fn start_construction(mut self) -> Self {
+        self.push(EventType::Construction, None, None);
+        self
     }
 
-    pub fn push_construction_error(&mut self, error: BoxError) {
-        self.push(EventType::Construction, Vec::new(), Some(error));
+    pub fn start_dispatch(mut self) -> Self {
+        self.push(EventType::Dispatch, None, None);
+        self
     }
 
-    pub fn push_service_error<E, R>(&mut self, error: E, raw_response: R)
+    pub fn start_response_handling<R>(mut self, raw_response: R) -> Self
     where
-        E: Any + Send + Sync + 'static,
         R: Any + Send + Sync + 'static,
     {
+        self.push(EventType::Response, Some(Box::new(raw_response) as _), None);
+        self
+    }
+
+    pub fn handle_result(self, result: Result<(), BoxError>) -> Result<Self, Self> {
+        match result {
+            Ok(_) => Ok(self),
+            Err(err) => Err(self.push_error(err)),
+        }
+    }
+
+    pub fn handle_interceptor(self, result: Result<(), InterceptorError>) -> Result<Self, Self> {
+        match result {
+            Ok(_) => Ok(self),
+            Err(err) => Err(self.push_interceptor_error(err)),
+        }
+    }
+
+    pub fn push_error(mut self, error: BoxError) -> Self {
+        self.push(EventType::Nothing, None, Some(error.into()));
+        self
+    }
+
+    pub fn push_interceptor_error(mut self, interceptor_error: InterceptorError) -> Self {
+        self.push(EventType::Nothing, None, Some(interceptor_error.into()));
+        self
+    }
+
+    pub fn push_connector_error(mut self, connector_error: ConnectorError) -> Self {
+        self.push(
+            EventType::Dispatch,
+            Some(Box::new(connector_error) as _),
+            None,
+        );
+        self
+    }
+
+    pub fn push_construction_error(mut self, error: impl Into<BoxError>) -> Self {
+        self.push(EventType::Construction, None, Some(error.into()));
+        self
+    }
+
+    pub fn push_timeout_error(mut self, source: impl Into<BoxError>) -> Self {
+        self.push(EventType::Timeout, None, Some(source.into()));
+        self
+    }
+
+    pub fn push_service_error<E: Any + Send + Sync + 'static>(mut self, error: E) -> Self {
         self.push(
             EventType::Response,
-            vec![Box::new(error) as _, Box::new(raw_response) as _],
+            Some(Box::new(error) as _),
             Some("service responded with an error".into()),
         );
+        self
     }
 
-    pub fn push_response_error<R: Any + Send + Sync + 'static>(
-        &mut self,
-        raw_response: R,
-        parse_failure: impl Into<BoxError>,
-    ) {
-        self.push(
-            EventType::Response,
-            vec![Box::new(raw_response) as _],
-            Some(parse_failure.into()),
-        );
+    pub fn push_deserialize_error(mut self, parse_failure: impl Into<BoxError>) -> Self {
+        self.push(EventType::Response, None, Some(parse_failure.into()));
+        self
     }
 
-    fn push(&mut self, event_type: EventType, data: Vec<Box<dyn Any>>, error: Option<BoxError>) {
+    fn push(&mut self, event_type: EventType, data: Option<Box<dyn Any>>, error: Option<BoxError>) {
         self.events.push(Event {
             event_type,
             data,
@@ -134,70 +149,81 @@ impl EventLog {
             return Err(self);
         }
 
-        let mut response: Option<R> = None;
-        let mut modeled_error: Option<E> = None;
-        let mut connector_error: Option<ConnectorError> = None;
-        let mut error_chain: Vec<BoxError> = vec![];
-        let mut progress = EventType::Informational;
+        struct ExtractedData<E, R> {
+            response: Option<R>,
+            modeled_error: Option<E>,
+            connector_error: Option<ConnectorError>,
+        }
+        let mut extracted: ExtractedData<E, R> = ExtractedData {
+            response: None,
+            modeled_error: None,
+            connector_error: None,
+        };
+        let mut top_most_error: Option<BoxError> = None;
+        let mut stage = EventType::Nothing;
         while let Some(ev) = self.events.pop() {
-            progress = progress.max(ev.event_type);
-            if let Some(src) = ev.source {
-                error_chain.push(src);
+            stage = stage.max(ev.event_type);
+            if top_most_error.is_none() {
+                if let Some(src) = ev.source {
+                    top_most_error = Some(src);
+                }
             }
-            for data in ev.data {
+            if let Some(data) = ev.data {
                 extract_data!(
                     data,
-                    R -> response,
-                    ConnectorError -> connector_error,
-                    E -> modeled_error,
+                    E -> extracted.modeled_error,
+                    R -> extracted.response,
+                    ConnectorError -> extracted.connector_error,
                 );
             }
         }
 
-        if let Some(connector_error) = connector_error {
+        if let Some(connector_error) = extracted.connector_error {
             return Ok(SdkError::DispatchFailure(
                 DispatchFailure::builder().source(connector_error).build(),
             ));
         }
+        if let Some(top_most_error) = top_most_error {
+            match (extracted.modeled_error, extracted.response) {
+                (None, Some(raw)) => {
+                    return Ok(SdkError::ResponseError(
+                        ResponseError::builder()
+                            .raw(raw)
+                            .source(top_most_error)
+                            .build(),
+                    ))
+                }
+                (Some(modeled), Some(raw)) => {
+                    return Ok(SdkError::ServiceError(
+                        ServiceError::builder()
+                            .raw(raw)
+                            .modeled_source(modeled)
+                            .unmodeled_source(top_most_error)
+                            .build(),
+                    ))
+                }
+                (Some(_modeled), None) => {
+                    unreachable!("modeled error cannot exist in the absense of a raw response")
+                }
+                _ => {}
+            };
 
-        let error_chain = if let Some(chain) = EventLogError::from_vec(&mut error_chain) {
-            chain
+            match stage {
+                EventType::Nothing => Err(self),
+                EventType::Construction => Ok(SdkError::ConstructionFailure(
+                    ConstructionFailure::builder()
+                        .source(top_most_error)
+                        .build(),
+                )),
+                EventType::Timeout => Ok(SdkError::TimeoutError(
+                    TimeoutError::builder().source(top_most_error).build(),
+                )),
+                _ => unreachable!(
+                    "these cases must be covered by modeled error/raw response extraction above"
+                ),
+            }
         } else {
-            return Err(self);
-        };
-
-        match (modeled_error, response) {
-            (None, Some(raw)) => {
-                return Ok(SdkError::ResponseError(
-                    ResponseError::builder()
-                        .raw(raw)
-                        .source(error_chain)
-                        .build(),
-                ))
-            }
-            (Some(modeled), Some(raw)) => {
-                return Ok(SdkError::ServiceError(
-                    ServiceError::builder()
-                        .raw(raw)
-                        .modeled_source(modeled)
-                        .unmodeled_source(error_chain)
-                        .build(),
-                ))
-            }
-            (Some(_modeled), None) => {
-                unreachable!("modeled error cannot exist in the absense of a raw response")
-            }
-            _ => {}
-        };
-
-        match progress {
-            EventType::Informational => Err(self),
-            EventType::Construction => Ok(SdkError::ConstructionFailure(
-                ConstructionFailure::builder().source(error_chain).build(),
-            )),
-            _ => unreachable!(
-                "these cases must be covered by modeled error/raw response extraction above"
-            ),
+            Err(self)
         }
     }
 }
@@ -225,10 +251,12 @@ mod test {
     #[test]
     fn extract_connector_error() {
         let connector_error = || ConnectorError::other("test".into(), None);
-        let mut error_log = EventLog::new();
-        error_log.push_connector_error(connector_error());
+        let event_log = EventLog::new()
+            .start_construction()
+            .start_dispatch()
+            .push_connector_error(connector_error());
 
-        match error_log
+        match event_log
             .try_into_sdk_error::<GetObjectError, http::Response<()>>()
             .unwrap()
         {
@@ -244,10 +272,11 @@ mod test {
 
     #[test]
     fn construction_failure() {
-        let mut error_log = EventLog::new();
-        error_log.push_construction_error("[credentials] no environment variables set".into());
+        let event_log = EventLog::new()
+            .start_construction()
+            .push_construction_error("[credentials] no environment variables set");
 
-        let sdk_error = error_log
+        let sdk_error = event_log
             .try_into_sdk_error::<GetObjectError, http::Response<()>>()
             .unwrap();
         assert!(matches!(sdk_error, SdkError::ConstructionFailure(_)));
@@ -260,13 +289,13 @@ mod test {
     #[test]
     fn service_error() {
         let original = GetObjectError { message: "foo" };
-        let mut error_log = EventLog::new();
-        error_log.push_service_error(
-            original.clone(),
-            http::Response::builder().status(500).body(()).unwrap(),
-        );
+        let event_log = EventLog::new()
+            .start_construction()
+            .start_dispatch()
+            .start_response_handling(http::Response::builder().status(500).body(()).unwrap())
+            .push_service_error(original.clone());
 
-        let sdk_error = error_log
+        let sdk_error = event_log
             .try_into_sdk_error::<GetObjectError, http::Response<()>>()
             .unwrap();
         match &sdk_error {
@@ -280,13 +309,13 @@ mod test {
 
     #[test]
     fn response_error() {
-        let mut error_log = EventLog::new();
-        error_log.push_response_error(
-            http::Response::builder().status(418).body(()).unwrap(),
-            "failed to parse the response",
-        );
+        let event_log = EventLog::new()
+            .start_construction()
+            .start_dispatch()
+            .start_response_handling(http::Response::builder().status(418).body(()).unwrap())
+            .push_deserialize_error("failed to parse the response");
 
-        let sdk_error = error_log
+        let sdk_error = event_log
             .try_into_sdk_error::<GetObjectError, http::Response<()>>()
             .unwrap();
         match &sdk_error {
@@ -299,5 +328,42 @@ mod test {
             }
             _ => panic!("wrong sdk error type"),
         }
+    }
+
+    #[test]
+    fn timeout_error() {
+        let event_log = EventLog::new()
+            .start_construction()
+            .start_dispatch()
+            .push_timeout_error("timed out after 1 second");
+
+        let sdk_error = event_log
+            .try_into_sdk_error::<GetObjectError, http::Response<()>>()
+            .unwrap();
+        assert!(matches!(sdk_error, SdkError::TimeoutError(_)));
+        assert_eq!(
+            "timed out after 1 second",
+            sdk_error.source().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn interceptor_error_during_construction() {
+        let event_log = EventLog::new().start_construction().push_interceptor_error(
+            InterceptorError::read_before_serialization("interceptor failed"),
+        );
+
+        let sdk_error = event_log
+            .try_into_sdk_error::<GetObjectError, http::Response<()>>()
+            .unwrap();
+        assert!(matches!(sdk_error, SdkError::ConstructionFailure(_)));
+        assert_eq!(
+            "read_before_serialization interceptor encountered an error",
+            sdk_error.source().unwrap().to_string()
+        );
+        assert_eq!(
+            "interceptor failed",
+            sdk_error.source().unwrap().source().unwrap().to_string()
+        );
     }
 }
