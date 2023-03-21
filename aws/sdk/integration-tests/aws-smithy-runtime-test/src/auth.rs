@@ -19,7 +19,8 @@ impl GetObjectAuthOrc {
 
 impl RuntimePlugin for GetObjectAuthOrc {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put an auth orchestrator in the bag
+        Ok(())
     }
 }
 

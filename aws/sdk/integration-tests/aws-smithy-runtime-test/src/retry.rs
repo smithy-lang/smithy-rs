@@ -19,7 +19,8 @@ impl GetObjectRetryStrategy {
 
 impl RuntimePlugin for GetObjectRetryStrategy {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put a retry strategy in the bag
+        Ok(())
     }
 }
 

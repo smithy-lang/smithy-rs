@@ -20,7 +20,8 @@ impl GetObjectResponseDeserializer {
 
 impl RuntimePlugin for GetObjectResponseDeserializer {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put a deserializer in the bag
+        Ok(())
     }
 }
 

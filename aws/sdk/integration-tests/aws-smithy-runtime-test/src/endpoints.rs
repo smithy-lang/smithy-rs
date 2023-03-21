@@ -19,7 +19,8 @@ impl GetObjectEndpointOrc {
 
 impl RuntimePlugin for GetObjectEndpointOrc {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put an endpoint orchestrator in the bag
+        Ok(())
     }
 }
 

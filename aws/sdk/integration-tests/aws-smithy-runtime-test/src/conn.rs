@@ -17,7 +17,8 @@ pub struct HyperConnection {
 
 impl RuntimePlugin for HyperConnection {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put a connection in the bag
+        Ok(())
     }
 }
 

@@ -20,7 +20,8 @@ impl GetObjectInputSerializer {
 
 impl RuntimePlugin for GetObjectInputSerializer {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO put a serializer in the bag
+        Ok(())
     }
 }
 
