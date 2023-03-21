@@ -12,7 +12,7 @@ http = "0.2.9"
 rand = "0.8"
 tower = "0.4"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 tokio = { version = "1", default-features = false, features = ["time"] }
 
 # Local paths

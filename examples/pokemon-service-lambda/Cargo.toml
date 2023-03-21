@@ -7,13 +7,13 @@ authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon via Lambda."
 
 [dependencies]
-async-stream = "0.3"
-clap = { version = "~3.2.1", features = ["derive"] }
-hyper = {version = "0.14.12", features = ["server"] }
-tokio = "1.20.1"
+async-stream = "0.3.4"
+clap = { version = "4.1.11", features = ["derive"] }
+hyper = {version = "0.14.25", features = ["server"] }
+tokio = "1.26.0"
 tracing = "0.1"
 
-lambda_http = "0.7.1"
+lambda_http = "0.7.3"
 
 # Local paths
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["aws-lambda"] }
