@@ -15,8 +15,10 @@ use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::event_log::EventLog;
 use aws_smithy_runtime_api::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugins;
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -51,6 +53,48 @@ pub trait EndpointOrchestrator<Req>: Send + Sync + Debug {
     fn resolve_and_apply_endpoint(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
     // TODO(jdisanti) The EP Orc and Auth Orc need to share info on auth schemes but I'm not sure how that should happen
     fn resolve_auth_schemes(&self) -> Result<Vec<String>, BoxError>;
+}
+
+#[derive(Debug)]
+pub struct TypeErasedBox<T> {
+    inner: TypeErasedBoxInner,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> TypeErasedBox<T>
+where
+    T: Send + Sync + 'static,
+{
+    pub fn new(input: T) -> Self {
+        Self {
+            inner: TypeErasedBoxInner::new(Box::new(input) as _),
+            _phantom: Default::default(),
+        }
+    }
+
+    pub fn unwrap(self) -> T {
+        *self.inner.try_into::<T>().expect("type checked")
+    }
+}
+
+#[derive(Debug)]
+struct TypeErasedBoxInner {
+    inner: Box<dyn Any + Send + Sync>,
+}
+
+impl TypeErasedBoxInner {
+    fn new(input: Box<dyn Any + Send + Sync>) -> Self {
+        Self {
+            inner: input.into(),
+        }
+    }
+
+    fn try_into<T: 'static>(self) -> Result<Box<T>, Self> {
+        match self.inner.downcast() {
+            Ok(t) => Ok(t),
+            Err(s) => Err(Self { inner: s }),
+        }
+    }
 }
 
 /// `In`: The input message e.g. `ListObjectsRequest`

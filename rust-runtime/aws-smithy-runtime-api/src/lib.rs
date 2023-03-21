@@ -28,3 +28,5 @@ pub mod interceptors;
 pub mod retries;
 /// Runtime plugin type definitions.
 pub mod runtime_plugin;
+
+pub mod type_erasure;
