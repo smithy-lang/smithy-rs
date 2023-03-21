@@ -124,10 +124,9 @@ class PythonServerEventStreamWrapperGenerator(
                     let stream = pyo3_asyncio::tokio::into_stream_v2(obj)?;
                     let stream = stream.map(|obj| {
                         #{PyO3}::Python::with_gil(|py| {
-                            obj.extract(py).map_err(|_err| {
-                                // TODO: Extract real error.
-                                #{Error}::ThrottlingError(
-                                    crate::error::ThrottlingError {},
+                            obj.extract(py).map_err(|err| {
+                                #{Error}::InternalServerError(
+                                    crate::error::InternalServerError::new(err.to_string()),
                                 )
                             })
                         })
