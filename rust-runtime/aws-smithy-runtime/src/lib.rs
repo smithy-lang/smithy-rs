@@ -39,7 +39,8 @@ pub trait Connection<TxReq, TxRes>: Send + Sync + Debug {
 }
 
 pub trait RetryStrategy<Out>: Send + Sync + Debug {
-    fn should_retry(&self, res: &Out, cfg: &ConfigBag) -> Result<bool, BoxError>;
+    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> BoxFallibleFut<()>;
+    fn should_attempt_retry(&self, res: &Out, cfg: &ConfigBag) -> BoxFallibleFut<bool>;
 }
 
 pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
@@ -78,19 +79,6 @@ where
             .try_into_sdk_error::<E, Res>()
             .expect("terminal error encountered")),
     }
-}
-
-fn should_retry<In, Req, Res, T>(
-    ctx: &InterceptorContext<In, Req, Res, Result<T, BoxError>>,
-    cfg: &ConfigBag,
-) -> Result<bool, BoxError> {
-    let retry_strategy = cfg
-        .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
-        .ok_or("missing retry strategy")?;
-    let mod_res = ctx
-        .modeled_response()
-        .expect("it's set during 'make_an_attempt'");
-    retry_strategy.should_retry(mod_res, cfg)
 }
 
 /// `In`: The input message e.g. `ListObjectsRequest`
@@ -141,33 +129,61 @@ where
         .handle_interceptor(interceptors.modify_before_retry_loop(&mut ctx, cfg))?
         .start_dispatch();
 
+    let retry_strategy = cfg
+        .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
+        .expect("a retry strategy was set");
+
+    match retry_strategy.should_attempt_initial_request(cfg).await {
+        // Yes, let's make a request
+        Ok(()) => {}
+        // No, we shouldn't make a request because...
+        Err(err) => {
+            event_log = event_log.push_error(err);
+            return Err(event_log);
+        }
+    }
+
     loop {
         event_log = event_log
             .handle_result(make_an_attempt(&mut ctx, cfg, interceptors).await)?
             .handle_interceptor(interceptors.read_after_attempt(&ctx, cfg))?
             .handle_interceptor(interceptors.modify_before_attempt_completion(&mut ctx, cfg))?;
 
-        match should_retry(ctx, cfg) {
-            Ok(true) => continue,
-            Err(err) => return Err(event_log.push_error(err)),
-            _ => {}
+        let retry_strategy = cfg
+            .get::<Box<dyn RetryStrategy<Result<T, BoxError>>>>()
+            .expect("a retry strategy was set");
+        let mod_res = ctx
+            .modeled_response()
+            .expect("it's set during 'make_an_attempt'");
+
+        match retry_strategy.should_attempt_retry(mod_res, cfg).await {
+            // Yes, let's retry the request
+            Ok(true) => {
+                continue;
+            }
+            // No, this request shouldn't be retried
+            Ok(false) => {}
+            // I couldn't determine if the request should be retried because an error occurred.
+            Err(err) => {
+                event_log = event_log.push_error(err);
+            }
         }
 
+        event_log =
+            event_log.handle_interceptor(interceptors.modify_before_completion(&mut ctx, cfg))?;
         let trace_probe = cfg
             .get::<Box<dyn TraceProbe>>()
             .expect("missing trace probes");
-        event_log =
-            event_log.handle_interceptor(interceptors.modify_before_completion(&mut ctx, cfg))?;
         trace_probe.dispatch_events(cfg);
         event_log = event_log.handle_interceptor(interceptors.read_after_execution(&ctx, cfg))?;
 
         break;
     }
 
-    let (modeled_response, _) = ctx
-        .into_responses()
-        .map_err(|err| event_log.push_interceptor_error(err))?;
-    modeled_response
+    match ctx.into_responses() {
+        Err(interceptor_error) => Err(event_log.push_interceptor_error(interceptor_error)),
+        Ok((mod_res, _tx_res)) => mod_res.map_err(|err| event_log.push_error(err)),
+    }
 }
 
 // Making an HTTP request can fail for several reasons, but we still need to

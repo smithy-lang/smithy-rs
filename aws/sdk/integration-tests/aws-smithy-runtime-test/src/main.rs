@@ -11,7 +11,7 @@ mod interceptors;
 mod retry;
 mod ser;
 
-use aws_sdk_s3::operation::get_object::{GetObjectInput, GetObjectOutput};
+use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectInput, GetObjectOutput};
 use aws_sdk_s3::types::ChecksumMode;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::{invoke, BoxError};
@@ -54,7 +54,9 @@ async fn main() -> Result<(), BoxError> {
         http::Response<SdkBody>,
         Result<GetObjectOutput, BoxError>,
     > = Interceptors::new();
-    let res = invoke(input, &mut interceptors, &runtime_plugins, &mut cfg).await?;
+    let res =
+        invoke::<_, _, _, _, GetObjectError>(input, &mut interceptors, &runtime_plugins, &mut cfg)
+            .await?;
 
     let body = res.body.collect().await?.to_vec();
     let body_string = from_utf8(&body)?;

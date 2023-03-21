@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
-use aws_smithy_runtime::{BoxError, RetryStrategy};
+use aws_smithy_runtime::{BoxError, BoxFallibleFut, RetryStrategy};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
@@ -24,11 +24,15 @@ impl RuntimePlugin for GetObjectRetryStrategy {
 }
 
 impl RetryStrategy<Result<GetObjectOutput, GetObjectError>> for GetObjectRetryStrategy {
-    fn should_retry(
+    fn should_attempt_initial_request(&self, _cfg: &ConfigBag) -> BoxFallibleFut<()> {
+        todo!()
+    }
+
+    fn should_attempt_retry(
         &self,
         _res: &Result<GetObjectOutput, GetObjectError>,
         _cfg: &ConfigBag,
-    ) -> Result<bool, BoxError> {
+    ) -> BoxFallibleFut<bool> {
         todo!()
     }
 }
