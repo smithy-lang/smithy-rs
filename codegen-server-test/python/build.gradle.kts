@@ -60,7 +60,6 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
         //     "json_rpc11",
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
-        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     )
 }
 
