@@ -4,35 +4,41 @@
  */
 
 use super::InterceptorError;
+use crate::type_erasure::TypeErasedBox;
+
+pub type Input = TypeErasedBox;
+pub type Output = TypeErasedBox;
+pub type Error = TypeErasedBox;
+pub type OutputOrError = Result<Output, Error>;
 
 /// A container for the data currently available to an interceptor.
-pub struct InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
-    modeled_request: ModReq,
+pub struct InterceptorContext<TxReq, TxRes> {
+    input: Input,
+    output_or_error: Option<OutputOrError>,
     tx_request: Option<TxReq>,
-    modeled_response: Option<ModRes>,
     tx_response: Option<TxRes>,
 }
 
 // TODO(interceptors) we could use types to ensure that people calling methods on interceptor context can't access
 //     field that haven't been set yet.
-impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
-    pub fn new(request: ModReq) -> Self {
+impl<TxReq, TxRes> InterceptorContext<TxReq, TxRes> {
+    pub fn new(input: Input) -> Self {
         Self {
-            modeled_request: request,
+            input,
+            output_or_error: None,
             tx_request: None,
             tx_response: None,
-            modeled_response: None,
         }
     }
 
     /// Retrieve the modeled request for the operation being invoked.
-    pub fn modeled_request(&self) -> &ModReq {
-        &self.modeled_request
+    pub fn input(&self) -> &Input {
+        &self.input
     }
 
     /// Retrieve the modeled request for the operation being invoked.
-    pub fn modeled_request_mut(&mut self) -> &mut ModReq {
-        &mut self.modeled_request
+    pub fn input_mut(&mut self) -> &mut Input {
+        &mut self.input
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
@@ -72,17 +78,18 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
     /// Retrieve the response to the customer. This will only be available
     /// once the `tx_response` has been unmarshalled or the
     /// attempt/execution has failed.
-    pub fn modeled_response(&self) -> Result<&ModRes, InterceptorError> {
-        self.modeled_response
+    pub fn output_or_error(&self) -> Result<Result<&Output, &Error>, InterceptorError> {
+        self.output_or_error
             .as_ref()
             .ok_or_else(InterceptorError::invalid_modeled_response_access)
+            .map(|res| res.as_ref())
     }
 
     /// Retrieve the response to the customer. This will only be available
     /// once the `tx_response` has been unmarshalled or the
     /// attempt/execution has failed.
-    pub fn modeled_response_mut(&mut self) -> Result<&mut ModRes, InterceptorError> {
-        self.modeled_response
+    pub fn output_or_error_mut(&mut self) -> Result<&mut Result<Output, Error>, InterceptorError> {
+        self.output_or_error
             .as_mut()
             .ok_or_else(InterceptorError::invalid_modeled_response_access)
     }
@@ -105,22 +112,23 @@ impl<ModReq, TxReq, TxRes, ModRes> InterceptorContext<ModReq, TxReq, TxRes, ModR
         self.tx_response = Some(transmit_response);
     }
 
-    pub fn set_modeled_response(&mut self, modeled_response: ModRes) {
-        if self.modeled_response.is_some() {
-            panic!("Called set_modeled_response but a modeled_response was already set. This is a bug, pleases report it.");
+    pub fn set_output_or_error(&mut self, output: Result<Output, Error>) {
+        if self.output_or_error.is_some() {
+            panic!(
+                "Called set_output but an output was already set. This is a bug. Please report it."
+            );
         }
 
-        self.modeled_response = Some(modeled_response);
+        self.output_or_error = Some(output);
     }
 
-    pub fn into_responses(self) -> Result<(ModRes, TxRes), InterceptorError> {
-        let mod_res = self
-            .modeled_response
-            .ok_or_else(InterceptorError::invalid_modeled_response_access)?;
-        let tx_res = self
-            .tx_response
-            .ok_or_else(InterceptorError::invalid_tx_response_access)?;
-
-        Ok((mod_res, tx_res))
+    #[doc(hidden)]
+    pub fn into_parts(self) -> (Input, Option<OutputOrError>, Option<TxReq>, Option<TxRes>) {
+        (
+            self.input,
+            self.output_or_error,
+            self.tx_request,
+            self.tx_response,
+        )
     }
 }

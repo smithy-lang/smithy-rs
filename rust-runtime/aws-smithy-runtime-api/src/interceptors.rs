@@ -15,7 +15,7 @@ macro_rules! interceptor_trait_fn {
         #[doc = $docs]
         fn $name(
             &mut self,
-            context: &InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
+            context: &InterceptorContext<TxReq, TxRes>,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
             let _ctx = context;
@@ -35,7 +35,7 @@ macro_rules! interceptor_trait_fn {
 ///   of the SDK ’s request execution pipeline. Hooks are either "read" hooks, which make it possible
 ///   to read in-flight request or response messages, or "read/write" hooks, which make it possible
 ///   to modify in-flight request or output messages.
-pub trait Interceptor<ModReq, TxReq, TxRes, ModRes> {
+pub trait Interceptor<TxReq, TxRes> {
     interceptor_trait_fn!(
         read_before_execution,
         "
@@ -527,12 +527,12 @@ pub trait Interceptor<ModReq, TxReq, TxRes, ModRes> {
     );
 }
 
-pub struct Interceptors<ModReq, TxReq, TxRes, ModRes> {
-    client_interceptors: Vec<Box<dyn Interceptor<ModReq, TxReq, TxRes, ModRes>>>,
-    operation_interceptors: Vec<Box<dyn Interceptor<ModReq, TxReq, TxRes, ModRes>>>,
+pub struct Interceptors<TxReq, TxRes> {
+    client_interceptors: Vec<Box<dyn Interceptor<TxReq, TxRes>>>,
+    operation_interceptors: Vec<Box<dyn Interceptor<TxReq, TxRes>>>,
 }
 
-impl<ModReq, TxReq, TxRes, ModRes> Default for Interceptors<ModReq, TxReq, TxRes, ModRes> {
+impl<TxReq, TxRes> Default for Interceptors<TxReq, TxRes> {
     fn default() -> Self {
         Self {
             client_interceptors: Vec::new(),
@@ -551,7 +551,7 @@ macro_rules! interceptor_impl_fn {
     (context, $outer_name:ident, $inner_name:ident) => {
         pub fn $outer_name(
             &mut self,
-            context: &InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
+            context: &InterceptorContext<TxReq, TxRes>,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
             for interceptor in self.client_interceptors.iter_mut() {
@@ -563,7 +563,7 @@ macro_rules! interceptor_impl_fn {
     (mut context, $outer_name:ident, $inner_name:ident) => {
         pub fn $outer_name(
             &mut self,
-            context: &mut InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
+            context: &mut InterceptorContext<TxReq, TxRes>,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
             for interceptor in self.client_interceptors.iter_mut() {
@@ -574,14 +574,14 @@ macro_rules! interceptor_impl_fn {
     };
 }
 
-impl<ModReq, TxReq, TxRes, ModRes> Interceptors<ModReq, TxReq, TxRes, ModRes> {
+impl<TxReq, TxRes> Interceptors<TxReq, TxRes> {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn with_client_interceptor(
         &mut self,
-        interceptor: impl Interceptor<ModReq, TxReq, TxRes, ModRes> + 'static,
+        interceptor: impl Interceptor<TxReq, TxRes> + 'static,
     ) -> &mut Self {
         self.client_interceptors.push(Box::new(interceptor));
         self
@@ -589,7 +589,7 @@ impl<ModReq, TxReq, TxRes, ModRes> Interceptors<ModReq, TxReq, TxRes, ModRes> {
 
     pub fn with_operation_interceptor(
         &mut self,
-        interceptor: impl Interceptor<ModReq, TxReq, TxRes, ModRes> + 'static,
+        interceptor: impl Interceptor<TxReq, TxRes> + 'static,
     ) -> &mut Self {
         self.operation_interceptors.push(Box::new(interceptor));
         self
