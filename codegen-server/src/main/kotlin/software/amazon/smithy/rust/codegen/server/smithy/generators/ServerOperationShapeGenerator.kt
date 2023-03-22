@@ -68,8 +68,5 @@ class ServerOperationShapeGenerator(
             "Handler" to DocHandlerGenerator(codegenContext, operations[0], "handler", commentToken = "//!")::render,
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
         )
-        for (operation in operations) {
-            ServerOperationGenerator(codegenContext, operation).render(writer)
-        }
     }
 }
