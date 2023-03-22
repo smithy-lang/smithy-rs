@@ -41,7 +41,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-server-codegen-python"
 
     /**
-     * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+     * See [software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin].
      */
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
@@ -67,7 +67,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
 
     companion object {
         /**
-         * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+         * See [software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin].
          */
         fun baseSymbolProvider(
             settings: ServerRustSettings,
