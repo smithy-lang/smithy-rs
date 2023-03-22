@@ -156,7 +156,7 @@ open class ServerCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                ServerModuleDocProvider(),
+                ServerModuleDocProvider(codegenContext),
             ),
         )
 

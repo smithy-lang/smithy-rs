@@ -257,10 +257,6 @@ open class ServerServiceGenerator(
             }
         }
 
-        rustCrate.withModule(ServerRustModule.OperationShape) {
-            ServerOperationShapeGenerator(operations, codegenContext).render(this)
-        }
-
         rustCrate.withModule(RustModule.private("service")) {
             ServerServiceGeneratorV2(codegenContext, protocol).render(this)
         }
