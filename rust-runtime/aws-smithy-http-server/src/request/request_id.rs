@@ -45,11 +45,11 @@
 //! let server = hyper::Server::bind(&bind).serve(app.into_make_service());
 //! ```
 
+use std::future::Future;
 use std::{
     fmt::Display,
     task::{Context, Poll},
 };
-use std::future::Future;
 
 use futures_util::TryFuture;
 use http::request::Parts;
@@ -123,12 +123,14 @@ impl ServerRequestIdProviderLayer {
     /// Generate a new unique request ID and do not add it as a response header
     /// Use [`ServerRequestIdProviderLayer::new_with_response_header`] to also add it as a response header
     pub fn new() -> Self {
-        Self { header_key: None, }
+        Self { header_key: None }
     }
 
     /// Generate a new unique request ID and add it as a response header
     pub fn new_with_response_header(header_key: HeaderName) -> Self {
-        Self { header_key: Some(header_key), }
+        Self {
+            header_key: Some(header_key),
+        }
     }
 }
 
@@ -142,7 +144,10 @@ impl<S> Layer<S> for ServerRequestIdProviderLayer {
     type Service = ServerRequestIdProvider<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ServerRequestIdProvider { inner, header_key: self.header_key.clone() }
+        ServerRequestIdProvider {
+            inner,
+            header_key: self.header_key.clone(),
+        }
     }
 }
 
@@ -212,13 +217,13 @@ where
         let this = self.project();
         let fut = this.fut;
         let response_package = this.response_package;
-        fut.try_poll(cx)
-            .map_ok(|mut res| {
-                if let Some(response_package) = response_package.take() {
-                    res.headers_mut().insert(response_package.header_key, response_package.request_id.to_header());
-                }
-                res
-            })
+        fut.try_poll(cx).map_ok(|mut res| {
+            if let Some(response_package) = response_package.take() {
+                res.headers_mut()
+                    .insert(response_package.header_key, response_package.request_id.to_header());
+            }
+            res
+        })
     }
 }
 
@@ -228,8 +233,8 @@ mod tests {
     use crate::body::{Body, BoxBody};
     use crate::request::Request;
     use http::HeaderValue;
-    use tower::{service_fn, ServiceBuilder, ServiceExt};
     use std::convert::Infallible;
+    use tower::{service_fn, ServiceBuilder, ServiceExt};
 
     #[test]
     fn test_request_id_parsed_by_header_value_infallible() {
@@ -239,7 +244,9 @@ mod tests {
     #[tokio::test]
     async fn test_request_id_in_response_header() {
         let svc = ServiceBuilder::new()
-            .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id")))
+            .layer(&ServerRequestIdProviderLayer::new_with_response_header(
+                HeaderName::from_static("x-request-id"),
+            ))
             .service(service_fn(|_req: Request<Body>| async move {
                 Ok::<_, Infallible>(Response::new(BoxBody::default()))
             }));
