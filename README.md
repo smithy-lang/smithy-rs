@@ -38,6 +38,7 @@ Project Layout
 * [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.
 * `codegen-server`: Whitelabel Smithy server code generation
 * `codegen-server-test`: Smithy protocol test generation & integration tests for Smithy server whitelabel code
+* `examples`: A collection of server implementation examples
 
 Testing
 -------
