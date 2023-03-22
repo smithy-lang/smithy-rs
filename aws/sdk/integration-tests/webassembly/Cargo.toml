@@ -8,6 +8,9 @@ These tests ensure that things will fail (or not fail) as expected
 when target is set to wasm32-wasi for all SDK and runtime crates.
 """
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

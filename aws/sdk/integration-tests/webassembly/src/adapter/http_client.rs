@@ -5,9 +5,7 @@
 
 use aws_smithy_http::body::SdkBody;
 
-pub(crate) fn make_request(
-    _req: http::Request<SdkBody>,
-) -> anyhow::Result<http::Response<SdkBody>> {
+pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ()> {
     // Consumers here would pass the HTTP request to
     // the Wasm host in order to get the response back
     let body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
