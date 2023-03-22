@@ -2,19 +2,24 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+use std::{
+    ops::Deref,
+    sync::Arc,
+    sync::Mutex,
+    task::{Context, Poll},
+};
+
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http_server::operation::Operation;
-use aws_smithy_http_server::plugin::{Plugin, PluginPipeline};
-use hyper::http;
-use pokemon_service::do_nothing;
-use pokemon_service_client::operation::do_nothing::DoNothingInput;
-use pokemon_service_client::Config;
-use std::ops::Deref;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::task::{Context, Poll};
+use aws_smithy_http_server::{
+    operation::Operation,
+    plugin::{Plugin, PluginPipeline},
+};
 use tower::layer::util::Stack;
 use tower::{Layer, Service};
+
+use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
+use pokemon_service_common::do_nothing;
 
 trait OperationExt {
     /// Convert an SDK operation into an `http::Request`.
@@ -59,7 +64,10 @@ struct SentinelPlugin {
 
 impl SentinelPlugin {
     pub fn new(name: &'static str, output: Arc<Mutex<Vec<&'static str>>>) -> Self {
-        Self { name, output: output }
+        Self {
+            name,
+            output: output,
+        }
     }
 }
 
