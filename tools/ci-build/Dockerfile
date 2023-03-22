@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.63.0
+ARG rust_stable_version=1.66.1
 ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
@@ -59,6 +59,7 @@ RUN set -eux; \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
+    rustup target add wasm32-unknown-unknown; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 

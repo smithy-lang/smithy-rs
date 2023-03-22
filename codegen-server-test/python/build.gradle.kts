@@ -42,6 +42,26 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
     listOf(
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
         CodegenTest("com.aws.example.python#PokemonService", "pokemon-service-server-sdk"),
+        CodegenTest(
+            "com.amazonaws.ebs#Ebs", "ebs",
+            imports = listOf("$commonModels/ebs.json"),
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.misc#MiscService",
+            "misc",
+            imports = listOf("$commonModels/misc.smithy"),
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2476)
+        // CodegenTest(
+        //     "aws.protocoltests.json#JsonProtocol",
+        //     "json_rpc11",
+        //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        // ),
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2479)
+        // CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     )
 }
 

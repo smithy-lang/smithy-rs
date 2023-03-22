@@ -569,12 +569,12 @@ class ServerBuilderGenerator(
                 *codegenScope,
             )
         }
-
+        val mapOk = if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"
+        val mapErr = if (errHasBox) ".map_err(Box::new)" else ""
         writer.rustTemplate(
             """
             .map(|res|
-                res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"} ${if (errHasBox) ".map_err(Box::new)" else "" }
-                   .map_err(ConstraintViolation::${constraintViolation.name()})
+                res$mapOk$mapErr.map_err(ConstraintViolation::${constraintViolation.name()})
             )
             .transpose()?
             """,

@@ -148,39 +148,39 @@ class StructureGeneratorTest {
     @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
-        val writer = RustWriter.forModule("lib")
-        val generator = StructureGenerator(model, provider, writer, credentials, emptyList())
-        generator.render()
-        writer.unitTest(
-            "sensitive_fields_redacted",
-            """
-            let creds = Credentials {
-                username: Some("not_redacted".to_owned()),
-                password: Some("don't leak me".to_owned()),
-                secret_key: Some("don't leak me".to_owned())
-            };
-            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-            """,
-        )
-        writer.compileAndTest()
+        TestWorkspace.testProject().unitTest {
+            StructureGenerator(model, provider, this, credentials, emptyList()).render()
+
+            this.unitTest(
+                "sensitive_fields_redacted",
+                """
+                let creds = Credentials {
+                    username: Some("not_redacted".to_owned()),
+                    password: Some("don't leak me".to_owned()),
+                    secret_key: Some("don't leak me".to_owned())
+                };
+                assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+                """,
+            )
+        }.compileAndTest()
     }
 
     @Test
     fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
-        val writer = RustWriter.forModule("lib")
-        val generator = StructureGenerator(model, provider, writer, secretStructure, emptyList())
-        generator.render()
-        writer.unitTest(
-            "sensitive_structure_redacted",
-            """
-            let secret_structure = SecretStructure {
-                secret_field: Some("secret".to_owned()),
-            };
-            assert_eq!(format!("{:?}", secret_structure), "SecretStructure { secret_field: \"*** Sensitive Data Redacted ***\" }");
-            """,
-        )
-        writer.compileAndTest()
+        TestWorkspace.testProject().unitTest {
+            StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
+
+            this.unitTest(
+                "sensitive_structure_redacted",
+                """
+                let secret_structure = SecretStructure {
+                    secret_field: Some("secret".to_owned()),
+                };
+                assert_eq!(format!("{:?}", secret_structure), "SecretStructure { secret_field: \"*** Sensitive Data Redacted ***\" }");
+                """,
+            )
+        }.compileAndTest()
     }
 
     @Test
@@ -242,17 +242,17 @@ class StructureGeneratorTest {
     @Test
     fun `documents are optional in structs`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
-        val writer = RustWriter.forModule("lib")
-        StructureGenerator(model, provider, writer, structWithDoc, emptyList()).render()
-
-        writer.compileAndTest(
-            """
-            let _struct = StructWithDoc {
-                // This will only compile if the document is optional
-                doc: None
-            };
-            """,
-        )
+        TestWorkspace.testProject().unitTest {
+            StructureGenerator(model, provider, this, structWithDoc, emptyList()).render()
+            rust(
+                """
+                let _struct = StructWithDoc {
+                    // This will only compile if the document is optional
+                    doc: None
+                };
+                """.trimIndent(),
+            )
+        }.compileAndTest()
     }
 
     @Test

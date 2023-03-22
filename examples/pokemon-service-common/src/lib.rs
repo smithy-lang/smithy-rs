@@ -10,16 +10,18 @@
 use std::{
     collections::HashMap,
     convert::TryInto,
+    process::Child,
     sync::{atomic::AtomicUsize, Arc},
 };
 
 use async_stream::stream;
+use aws_smithy_http::operation::Request;
 use aws_smithy_http_server::Extension;
-use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
+use pokemon_service_server_sdk::{
+    error, input, model, model::CapturingPayload, output, types::Blob,
+};
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
-
-pub mod plugin;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
@@ -30,13 +32,37 @@ const PIKACHU_ITALIAN_FLAVOR_TEXT: &str =
 const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
     "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
 
+/// Rewrites the base URL of a request
+pub fn rewrite_base_url(base_url: String) -> impl Fn(Request) -> Request + Clone {
+    move |mut req| {
+        let http_req = req.http_mut();
+        let uri = format!("{base_url}{}", http_req.uri().path());
+        *http_req.uri_mut() = uri.parse().unwrap();
+        req
+    }
+}
+
+/// Kills [`Child`] process when dropped.
+#[derive(Debug)]
+#[must_use]
+pub struct ChildDrop(pub Child);
+
+impl Drop for ChildDrop {
+    fn drop(&mut self) {
+        self.0.kill().expect("failed to kill process")
+    }
+}
+
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().json();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
-    tracing_subscriber::registry().with(format).with(filter).init();
+    tracing_subscriber::registry()
+        .with(format)
+        .with(filter)
+        .init();
 }
 
 /// Structure holding the translations for a Pokémon description.
@@ -134,7 +160,10 @@ pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
-    state.0.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    state
+        .0
+        .call_count
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     // We only support retrieving information about Pikachu.
     let pokemon = state.0.pokemons_translations.get(&input.name);
     match pokemon.as_ref() {
@@ -215,7 +244,9 @@ pub async fn capture_pokemon(
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
-            error::UnsupportedRegionError { region: input.region },
+            error::UnsupportedRegionError {
+                region: input.region,
+            },
         ));
     }
     let output_stream = stream! {
@@ -307,7 +338,10 @@ mod tests {
             .find(|flavor_text| flavor_text.language == model::Language::Spanish)
             .unwrap();
 
-        assert_eq!(PIKACHU_SPANISH_FLAVOR_TEXT, actual_spanish_flavor_text.flavor_text());
+        assert_eq!(
+            PIKACHU_SPANISH_FLAVOR_TEXT,
+            actual_spanish_flavor_text.flavor_text()
+        );
 
         let input = input::GetServerStatisticsInput {};
         let stats = get_server_statistics(input, Extension(state.clone())).await;

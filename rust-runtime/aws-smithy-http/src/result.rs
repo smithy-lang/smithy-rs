@@ -3,13 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![warn(
-    missing_debug_implementations,
-    missing_docs,
-    rustdoc::all,
-    unreachable_pub
-)]
-
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
 use crate::connection::ConnectionMetadata;
@@ -341,7 +334,7 @@ pub enum SdkError<E, R = operation::Response> {
     DispatchFailure(DispatchFailure),
 
     /// A response was received but it was not parseable according the the protocol (for example
-    /// the server hung up while the body was being read)
+    /// the server hung up without sending a complete response)
     ResponseError(ResponseError<R>),
 
     /// An error response was received from the service

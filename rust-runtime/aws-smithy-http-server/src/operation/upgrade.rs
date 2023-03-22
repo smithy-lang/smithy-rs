@@ -239,7 +239,8 @@ where
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+    Pl::Service:
+        Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
     // The plugin takes this operation as input
     Pl: Plugin<P, Op, S, L>,

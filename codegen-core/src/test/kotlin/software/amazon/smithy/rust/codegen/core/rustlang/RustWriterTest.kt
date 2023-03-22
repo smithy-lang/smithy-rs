@@ -19,11 +19,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.shouldCompile
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class RustWriterTest {
@@ -45,7 +45,6 @@ class RustWriterTest {
 
     @Test
     fun `manually created struct`() {
-        val sut = RustWriter.forModule("lib")
         val stringShape = StringShape.builder().id("test#Hello").build()
         val set = SetShape.builder()
             .id("foo.bar#Records")
@@ -59,37 +58,43 @@ class RustWriterTest {
         val provider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         val stringSymbol = provider.toSymbol(stringShape)
-        sut.rustBlock("struct Test") {
-            write("member: #T,", setSymbol)
-            write("otherMember: #T,", stringSymbol)
-        }
-        val output = sut.toString()
-        output.shouldCompile()
-        output shouldContain RustType.HashSet.Type
-        output shouldContain "struct Test"
-        output.compileAndRun(
-            """
-            let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
-            assert_eq!(test.otherMember, "hello");
-            assert_eq!(test.member.is_empty(), true);
-            """,
-        )
+
+        TestWorkspace.testProject(provider)
+            .unitTest {
+                rustBlock("struct Test") {
+                    write("member: #T,", setSymbol)
+                    write("other_member: #T,", stringSymbol)
+                }
+
+                unitTest("test_manually_created_struct") {
+                    rust(
+                        """
+                        let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), other_member: "hello".to_string() };
+                        assert_eq!(test.other_member, "hello");
+                        assert_eq!(test.member.is_empty(), true);
+
+                        // If this compiles, then we know the symbol provider resolved the correct type for a set
+                        let _isVec: Vec<_> = test.member;
+                        """,
+                    )
+                }
+            }.compileAndTest(runClippy = true)
     }
 
     @Test
     fun `generate docs`() {
-        val sut = RustWriter.forModule("lib")
-        sut.docs(
+        val writer = RustWriter.root()
+        writer.docs(
             """Top level module documentation
             |More docs
             |/* handle weird characters */
             |`a backtick`
-            |[a link](asdf)
-            """.trimMargin(),
+            |[a link](some_url)
+            """,
         )
-        sut.rustBlock("pub fn foo()") { }
-        sut.compileAndTest()
-        sut.toString() shouldContain "Top level module"
+        writer.rustBlock("pub fn foo()") { }
+        val output = writer.toString()
+        output shouldContain "/// Top level module"
     }
 
     @Test
@@ -100,9 +105,10 @@ class RustWriterTest {
         """.asSmithyModel()
         val shape = model.lookup<StructureShape>("test#Foo")
         val symbol = testSymbolProvider(model).toSymbol(shape)
-        val sut = RustWriter.forModule("lib")
-        sut.docs("A link! #D", symbol)
-        sut.toString() shouldContain "/// A link! [`Foo`](crate::test_model::Foo)"
+        val writer = RustWriter.root()
+        writer.docs("A link! #D", symbol)
+        val output = writer.toString()
+        output shouldContain "/// A link! [`Foo`](crate::test_model::Foo)"
     }
 
     @Test
@@ -113,7 +119,7 @@ class RustWriterTest {
 
     @Test
     fun `attributes with comments when using rust`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute("foo").render(sut)
         sut.rust(" // here's an attribute")
         sut.toString().shouldContain("#[foo]\n// here's an attribute")
@@ -121,7 +127,7 @@ class RustWriterTest {
 
     @Test
     fun `attributes with comments when using docs`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute("foo").render(sut)
         sut.docs("here's an attribute")
         sut.toString().shouldContain("#[foo]\n/// here's an attribute")
@@ -129,28 +135,28 @@ class RustWriterTest {
 
     @Test
     fun `deprecated attribute without any field`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute.Deprecated.render(sut)
         sut.toString() shouldContain "#[deprecated]"
     }
 
     @Test
     fun `deprecated attribute with a note`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute(deprecated(note = "custom")).render(sut)
         sut.toString() shouldContain "#[deprecated(note = \"custom\")]"
     }
 
     @Test
     fun `deprecated attribute with a since`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute(deprecated(since = "1.2.3")).render(sut)
         sut.toString() shouldContain "#[deprecated(since = \"1.2.3\")]"
     }
 
     @Test
     fun `deprecated attribute with a note and a since`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         Attribute(deprecated("1.2.3", "custom")).render(sut)
         sut.toString() shouldContain "#[deprecated(note = \"custom\", since = \"1.2.3\")]"
     }
@@ -158,7 +164,7 @@ class RustWriterTest {
     @Test
     fun `template writables with upper case names`() {
         val inner = writable { rust("hello") }
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
@@ -169,7 +175,7 @@ class RustWriterTest {
 
     @Test
     fun `missing template parameters are enclosed in backticks in the exception message`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.root()
         val exception = assertThrows<CodegenException> {
             sut.rustTemplate(
                 "#{Foo} #{Bar}",
