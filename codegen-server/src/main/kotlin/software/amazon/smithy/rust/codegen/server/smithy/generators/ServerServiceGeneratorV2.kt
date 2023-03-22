@@ -129,14 +129,14 @@ class ServerServiceGeneratorV2(
                 /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
                 /// ```
                 ///
-                pub fn $fieldName<HandlerType, Extensions>(self, handler: HandlerType) -> Self
+                pub fn $fieldName<HandlerType, HandlerExtractors, ServiceExtractors>(self, handler: HandlerType) -> Self
                 where
-                    HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Extensions>,
+                    HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
                     #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>>:
                         #{SmithyHttpServer}::operation::Upgradable<
                             #{Protocol},
                             crate::operation_shape::$structName,
-                            Extensions,
+                            ServiceExtractors,
                             $builderBodyGenericTypeName,
                             $builderPluginGenericTypeName,
                         >
@@ -151,12 +151,12 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<Operation, Extensions>(mut self, operation: Operation) -> Self
+                pub fn ${fieldName}_operation<Operation, Extractors>(mut self, operation: Operation) -> Self
                 where
                     Operation: #{SmithyHttpServer}::operation::Upgradable<
                         #{Protocol},
                         crate::operation_shape::$structName,
-                        Extensions,
+                        Extractors,
                         $builderBodyGenericTypeName,
                         $builderPluginGenericTypeName,
                     >
