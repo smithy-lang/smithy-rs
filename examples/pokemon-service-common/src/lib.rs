@@ -23,8 +23,6 @@ use pokemon_service_server_sdk::{
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
-pub mod plugin;
-
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
 const PIKACHU_SPANISH_FLAVOR_TEXT: &str =

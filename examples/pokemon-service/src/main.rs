@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// This program is exported as a binary named `pokemon-service`.
+mod plugin;
+
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
@@ -12,12 +13,12 @@ use aws_smithy_http_server::{
 };
 use clap::Parser;
 
+use plugin::PrintExt;
 use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
 };
 use pokemon_service_common::{
-    capture_pokemon, check_health, get_pokemon_species, get_server_statistics, plugin::PrintExt,
-    setup_tracing, State,
+    capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing, State,
 };
 use pokemon_service_server_sdk::PokemonService;
 

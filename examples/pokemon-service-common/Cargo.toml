@@ -10,7 +10,6 @@ description = "A smithy Rust service to retrieve information about Pokémon."
 async-stream = "0.3"
 http = "0.2.9"
 rand = "0.8"
-tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 tokio = { version = "1", default-features = false, features = ["time"] }
@@ -20,3 +19,6 @@ aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 pokemon-service-client = { path = "../pokemon-service-client" }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
+
+[dev-dependencies]
+tower = "0.4"

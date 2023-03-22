@@ -22,25 +22,22 @@
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
 // flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
-use std::fs::File;
-use std::future;
-use std::io::BufReader;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{fs::File, future, io::BufReader, net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::AddExtensionLayer;
 use clap::Parser;
 use futures_util::stream::StreamExt;
+use tokio_rustls::{
+    rustls::{Certificate, PrivateKey, ServerConfig},
+    TlsAcceptor,
+};
+
 use pokemon_service_common::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics,
     get_storage, setup_tracing, State,
 };
 use pokemon_service_server_sdk::PokemonService;
 use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
-use tokio_rustls::{
-    rustls::{Certificate, PrivateKey, ServerConfig},
-    TlsAcceptor,
-};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
