@@ -108,7 +108,7 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
         val handlers =
             operations.joinToString("\n") {
                 "async ${it.name}(_: ${
-                model.expectShape(it).asOperationShape().get().inputShape.name
+                    model.expectShape(it).asOperationShape().get().inputShape.name
                 }): Promise<${model.expectShape(it).asOperationShape().get().outputShape.name}> { /* TODO */ }"
             }
         rustCrate.withFile("app.ts") {

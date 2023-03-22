@@ -24,10 +24,12 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
-    implementation(project(":codegen-client"))
     implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+
+    // `smithy.framework#ValidationException` is defined here, which is used in `PythonServerTypesTest`.
+    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
 tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }

@@ -15,6 +15,8 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 
+pub type CrateVersionMetadataMap = BTreeMap<String, CrateVersion>;
+
 /// Root struct representing a `versions.toml` manifest
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct VersionsManifest {
@@ -31,7 +33,7 @@ pub struct VersionsManifest {
     pub manual_interventions: ManualInterventions,
 
     /// All SDK crate version metadata
-    pub crates: BTreeMap<String, CrateVersion>,
+    pub crates: CrateVersionMetadataMap,
 
     /// Crate versions that were a part of this SDK release.
     /// Releases may not release every single crate, which can happen if a crate has no changes.

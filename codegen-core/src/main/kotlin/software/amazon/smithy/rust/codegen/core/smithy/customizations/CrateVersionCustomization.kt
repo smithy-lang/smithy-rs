@@ -5,24 +5,24 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
  * Add `PGK_VERSION` const in lib.rs to enable knowing the version of the current module
  */
-class CrateVersionCustomization : LibRsCustomization() {
-    override fun section(section: LibRsSection) =
-        writable {
-            if (section is LibRsSection.Body) {
-                rust(
-                    """
-                    /// Crate version number.
-                    pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-                    """,
-                )
-            }
+object CrateVersionCustomization {
+    fun pkgVersion(module: RustModule): RuntimeType = RuntimeType(module.fullyQualifiedPath() + "::PKG_VERSION")
+
+    fun extras(rustCrate: RustCrate, module: RustModule) =
+        rustCrate.withModule(module) {
+            rust(
+                """
+                /// Crate version number.
+                pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+                """,
+            )
         }
 }

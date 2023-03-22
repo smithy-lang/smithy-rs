@@ -11,8 +11,8 @@ use std::pin::Pin;
 use aws_config::SdkConfig;
 use tracing::{info_span, Instrument};
 
-use crate::paginator_canary;
-use crate::{s3_canary, transcribe_canary};
+use crate::current_canary::paginator_canary;
+use crate::current_canary::{s3_canary, transcribe_canary};
 
 #[macro_export]
 macro_rules! mk_canary {

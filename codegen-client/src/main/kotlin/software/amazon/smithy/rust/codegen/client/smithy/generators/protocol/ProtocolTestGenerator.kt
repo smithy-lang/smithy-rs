@@ -19,6 +19,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
@@ -32,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -92,7 +92,10 @@ class ProtocolTestGenerator(
             val additionalAttributes = listOf(
                 Attribute(allow("unreachable_code", "unused_variables")),
             )
-            writer.withInlineModule(RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)) {
+            writer.withInlineModule(
+                RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes),
+                null,
+            ) {
                 renderAllTestCases(allTests)
             }
         }
@@ -169,12 +172,12 @@ class ProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
             let config = builder.build();
 
             """,
-            "Config" to RuntimeType.Config,
+            "config" to ClientRustModule.Config,
             "customParams" to customParams,
         )
         writeInline("let input =")
@@ -211,9 +214,9 @@ class ProtocolTestGenerator(
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
-        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -247,10 +250,10 @@ class ProtocolTestGenerator(
         expectedShape: StructureShape,
     ) {
         if (!protocolSupport.responseDeserialization || (
-            !protocolSupport.errorDeserialization && expectedShape.hasTrait(
+                !protocolSupport.errorDeserialization && expectedShape.hasTrait(
                     ErrorTrait::class.java,
                 )
-            )
+                )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -290,49 +293,53 @@ class ProtocolTestGenerator(
             "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
+            val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
-            rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                rustTemplate("#{AssertEq}(expected_output, actual_error);", *codegenScope)
+            rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
+                compareMembers(expectedShape)
             }
             rustBlock("else") {
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
             rust("let parsed = parsed.unwrap();")
-            outputShape.members().forEach { member ->
-                val memberName = codegenContext.symbolProvider.toMemberName(member)
-                if (member.isStreaming(codegenContext.model)) {
-                    rustTemplate(
-                        """
-                        #{AssertEq}(
-                            parsed.$memberName.collect().await.unwrap().into_bytes(),
-                            expected_output.$memberName.collect().await.unwrap().into_bytes()
-                        );
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    when (codegenContext.model.expectShape(member.target)) {
-                        is DoubleShape, is FloatShape -> {
-                            addUseImports(
-                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals").toSymbol(),
-                            )
-                            rust(
-                                """
-                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
-                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
-                                """,
-                            )
-                        }
+            compareMembers(outputShape)
+        }
+    }
 
-                        else ->
-                            rustTemplate(
-                                """#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""",
-                                *codegenScope,
-                            )
+    private fun RustWriter.compareMembers(shape: StructureShape) {
+        shape.members().forEach { member ->
+            val memberName = codegenContext.symbolProvider.toMemberName(member)
+            if (member.isStreaming(codegenContext.model)) {
+                rustTemplate(
+                    """
+                    #{AssertEq}(
+                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                    );
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                when (codegenContext.model.expectShape(member.target)) {
+                    is DoubleShape, is FloatShape -> {
+                        addUseImports(
+                            RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals").toSymbol(),
+                        )
+                        rust(
+                            """
+                            assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
+                                "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
+                            """,
+                        )
                     }
+
+                    else ->
+                        rustTemplate(
+                            """#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""",
+                            *codegenScope,
+                        )
                 }
             }
         }
@@ -353,7 +360,7 @@ class ProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.write(
                     "#T(&body, ${
-                    rustWriter.escape(body).dq()
+                        rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),

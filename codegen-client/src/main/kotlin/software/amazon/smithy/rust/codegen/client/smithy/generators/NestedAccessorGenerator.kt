@@ -13,16 +13,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.lensName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.nestedAccessorName
 
 /** Generator for accessing nested fields through optional values **/
-class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
-    private val module = RustModule.private("lens", "Generated accessors for nested fields")
+class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val module = RustModule.private("lens")
 
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
@@ -30,7 +31,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
     fun generateOwnedAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
         val baseType = symbolProvider.toSymbol(path.last())
-        val fnName = symbolProvider.lensName("", root, path)
+        val fnName = symbolProvider.nestedAccessorName(codegenContext.serviceShape, "", root, path)
         return RuntimeType.forInlineFun(fnName, module) {
             rustTemplate(
                 """
@@ -49,7 +50,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
     fun generateBorrowingAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
         val baseType = symbolProvider.toSymbol(path.last()).makeOptional()
-        val fnName = symbolProvider.lensName("ref", root, path)
+        val fnName = symbolProvider.nestedAccessorName(codegenContext.serviceShape, "ref", root, path)
         val referencedType = baseType.mapRustType { (it as RustType.Option).referenced(lifetime = null) }
         return RuntimeType.forInlineFun(fnName, module) {
             rustTemplate(

@@ -10,7 +10,7 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
@@ -38,7 +38,7 @@ fun Identifier.rustName(): String {
 internal fun endpointsLib(name: String, vararg additionalDependency: RustDependency) = InlineDependency.forRustFile(
     RustModule.pubCrate(
         name,
-        parent = EndpointsStdLib,
+        parent = EndpointStdLib,
     ),
     "/inlineable/src/endpoint_lib/$name.rs",
     *additionalDependency,

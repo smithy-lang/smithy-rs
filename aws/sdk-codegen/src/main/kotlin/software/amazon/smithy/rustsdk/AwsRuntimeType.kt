@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -41,10 +42,17 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 }
 
 object AwsRuntimeType {
-    val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
-    val Presigning by lazy {
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
-    }
+    fun presigning(codegenContext: ClientCodegenContext): RuntimeType =
+        when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
+            true -> RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
+            else -> RuntimeType.forInlineDependency(
+                InlineAwsDependency.forRustFileAs(
+                    file = "old_presigning",
+                    moduleName = "presigning",
+                    visibility = Visibility.PUBLIC,
+                ),
+            )
+        }
 
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
