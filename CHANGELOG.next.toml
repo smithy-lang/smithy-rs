@@ -379,5 +379,5 @@ let app = app
 ```
 """
 references = ["smithy-rs#2438"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
 author = "82marbag"
