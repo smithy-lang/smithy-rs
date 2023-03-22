@@ -18,6 +18,8 @@
 //! The [`ServerRequestId`] is not meant to be propagated to downstream dependencies of the service. You should rely on a distributed tracing implementation for correlation purposes (e.g. OpenTelemetry).
 //!
 //! To optionally add the [`ServerRequestId`] to the response headers, use [`ServerRequestIdProviderLayer::new_with_response_header`].
+//! Use [`ServerRequestIdProviderLayer::new`] to use [`ServerRequestId`] in your handler.
+//! Use [`ServerRequestIdProviderLayer::new_with_response_header`] to use [`ServerRequestId`] in your handler and add it to the response headers.
 //!
 //! ## Examples
 //!
