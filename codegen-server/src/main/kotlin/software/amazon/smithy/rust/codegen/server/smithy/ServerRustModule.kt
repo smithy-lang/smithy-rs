@@ -55,7 +55,6 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
         return when (module) {
             ServerRustModule.Error -> strDoc("All error types that operations can return. Documentation on these types is copied from the model.")
             ServerRustModule.Operation -> strDoc("All operations that this crate can perform.")
-            // TODO(ServerTeam): Document this module (I don't have context)
             ServerRustModule.OperationShape -> operationShapeModuleDoc()
             ServerRustModule.Model -> strDoc("Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
             ServerRustModule.Input -> strDoc("Input structures for operations. Documentation on these types is copied from the model.")
