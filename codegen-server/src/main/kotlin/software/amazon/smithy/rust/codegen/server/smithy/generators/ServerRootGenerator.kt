@@ -12,16 +12,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -32,13 +27,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
  * Generates all code within `lib.rs`, this includes:
  *  - Crate documentation
  *  - Re-exports
- *
- * It also generates the server module (which re-exports from `aws-smithy-http-server`) and the protocol tests.
  */
 open class ServerRootGenerator(
-    private val rustCrate: RustCrate,
-    private val protocolGenerator: ServerProtocolGenerator,
-    private val protocolSupport: ProtocolSupport,
     val protocol: ServerProtocol,
     private val codegenContext: ServerCodegenContext,
 ) {
@@ -242,24 +232,9 @@ open class ServerRootGenerator(
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
-    fun render() {
-        rustCrate.lib {
-            documentation(this)
+    fun render(rustWriter: RustWriter) {
+        documentation(rustWriter)
 
-            rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
-        }
-
-        rustCrate.withModule(ServerRustModule.Operation) {
-            ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
-        }
-
-        rustCrate.withModule(ServerRustModule.Server) {
-            renderServerReExports(this)
-        }
-    }
-
-    // Render `server` crate, re-exporting types.
-    private fun renderServerReExports(writer: RustWriter) {
-        ServerRuntimeTypesReExportsGenerator(codegenContext).render(writer)
+        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
     }
 }
