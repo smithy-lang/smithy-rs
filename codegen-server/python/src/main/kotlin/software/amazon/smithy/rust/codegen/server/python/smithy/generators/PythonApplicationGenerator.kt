@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -66,8 +67,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
 class PythonApplicationGenerator(
     codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
-    private val operations: List<OperationShape>,
 ) {
+    private val index = TopDownIndex.of(codegenContext.model)
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
+        compareBy {
+            it.id
+        },
+    ).toList()
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val runtimeConfig = codegenContext.runtimeConfig
