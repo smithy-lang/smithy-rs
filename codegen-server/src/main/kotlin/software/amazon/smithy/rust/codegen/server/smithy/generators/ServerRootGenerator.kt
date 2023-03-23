@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -41,11 +40,14 @@ open class ServerRootGenerator(
     private val codegenContext: ServerCodegenContext,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
-    protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
+        compareBy {
+            it.id
+        },
+    ).toList()
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun documentation(writer: RustWriter) {
-        val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
         val builderFieldNames =
             operations.associateWith {
                 RustReservedWords.escapeIfNeeded(codegenContext.symbolProvider.toSymbol(it).name.toSnakeCase())
@@ -248,15 +250,10 @@ open class ServerRootGenerator(
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
 
-        renderExtras(operations)
-
         rustCrate.withModule(ServerRustModule.Server) {
             renderServerReExports(this)
         }
     }
-
-    // Render any extra section needed by subclasses of `ServerServiceGenerator`.
-    open fun renderExtras(operations: List<OperationShape>) { }
 
     // Render `server` crate, re-exporting types.
     private fun renderServerReExports(writer: RustWriter) {
