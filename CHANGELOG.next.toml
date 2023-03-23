@@ -369,3 +369,15 @@ message = "Increase Tokio version to 1.23.1 for all crates. This is to address [
 references = ["smithy-rs#2474"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """Servers can send the `ServerRequestId` in the response headers.
+Servers need to create their service using the new layer builder `ServerRequestIdProviderLayer::new_with_response_header`:
+```
+let app = app
+    .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id")));
+```
+"""
+references = ["smithy-rs#2438"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+author = "82marbag"

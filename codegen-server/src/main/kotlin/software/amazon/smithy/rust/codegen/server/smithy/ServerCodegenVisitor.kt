@@ -67,6 +67,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
@@ -155,7 +156,7 @@ open class ServerCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                ServerModuleDocProvider(),
+                ServerModuleDocProvider(codegenContext),
             ),
         )
 
@@ -574,11 +575,17 @@ open class ServerCodegenVisitor(
     }
 
     /**
-     * Generate errors for operation shapes
+     * For each operation shape generate:
+     *  - Errors via `ServerOperationErrorGenerator`
+     *  - OperationShapes via `ServerOperationGenerator`
      */
     override fun operationShape(shape: OperationShape) {
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.OperationShape) {
+            ServerOperationGenerator(shape, codegenContext).render(this)
         }
     }
 

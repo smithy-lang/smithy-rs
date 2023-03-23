@@ -119,7 +119,7 @@ class PythonServerCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                PythonServerModuleDocProvider(ServerModuleDocProvider()),
+                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
             ),
         )
 
