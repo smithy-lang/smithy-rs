@@ -249,14 +249,6 @@ open class ServerServiceGenerator(
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
 
-        for (operation in operations) {
-            if (operation.errors.isNotEmpty()) {
-                rustCrate.withModule(ErrorModule) {
-                    renderCombinedErrors(this, operation)
-                }
-            }
-        }
-
         rustCrate.withModule(RustModule.private("service")) {
             ServerServiceGeneratorV2(codegenContext, protocol).render(this)
         }
@@ -270,11 +262,6 @@ open class ServerServiceGenerator(
 
     // Render any extra section needed by subclasses of `ServerServiceGenerator`.
     open fun renderExtras(operations: List<OperationShape>) { }
-
-    // Render combined errors.
-    open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        /* Subclasses can override */
-    }
 
     // Render `server` crate, re-exporting types.
     private fun renderServerReExports(writer: RustWriter) {
