@@ -27,10 +27,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input 
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
- * ServerServiceGenerator
+ * ServerRootGenerator
  *
- * Service generator is the main code generation entry point for Smithy services. Individual structures and unions are
- * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).
+ * Generates all code within `lib.rs`, this includes:
+ *  - Crate documentation
+ *  - Re-exports
+ *
+ * It also generates the server module (which re-exports from `aws-smithy-http-server`) and the protocol tests.
  */
 open class ServerRootGenerator(
     private val rustCrate: RustCrate,
