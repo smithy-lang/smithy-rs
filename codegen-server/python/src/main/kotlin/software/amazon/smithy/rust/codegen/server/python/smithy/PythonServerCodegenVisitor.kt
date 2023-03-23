@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerRootGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -225,7 +225,7 @@ class PythonServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[python-server-codegen] Generating a service $shape")
-        PythonServerServiceGenerator(
+        PythonServerRootGenerator(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),

@@ -68,7 +68,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
@@ -564,7 +564,7 @@ open class ServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        ServerServiceGenerator(
+        ServerRootGenerator(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
