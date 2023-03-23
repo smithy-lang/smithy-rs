@@ -506,7 +506,7 @@ aws-sdk-transcribestreaming = "0.16.0"
 [features]
 latest = []
 "release-2023-01-26" = []
-default = ["release-2023-01-26"]
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
                 versions: VersionsManifest {
