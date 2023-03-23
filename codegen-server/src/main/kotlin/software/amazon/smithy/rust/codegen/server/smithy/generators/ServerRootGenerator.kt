@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -247,10 +246,6 @@ open class ServerRootGenerator(
 
         rustCrate.withModule(ServerRustModule.Operation) {
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
-        }
-
-        rustCrate.withModule(RustModule.private("service")) {
-            ServerServiceGenerator(codegenContext, protocol).render(this)
         }
 
         renderExtras(operations)

@@ -69,6 +69,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGe
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
@@ -572,6 +573,13 @@ open class ServerCodegenVisitor(
             codegenContext,
         )
             .render()
+
+        rustCrate.withModule(ServerRustModule.Service) {
+            ServerServiceGenerator(
+                codegenContext,
+                protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
+            ).render(this)
+        }
     }
 
     /**
