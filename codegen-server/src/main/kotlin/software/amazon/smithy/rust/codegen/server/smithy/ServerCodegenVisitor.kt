@@ -584,7 +584,7 @@ open class ServerCodegenVisitor(
 
         // Generate protocol tests
         rustCrate.withModule(ServerRustModule.Operation) {
-            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(this)
+            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support()).render(this)
         }
 
         // Generate service module
@@ -608,6 +608,10 @@ open class ServerCodegenVisitor(
 
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.Operation) {
+            protocolGenerator.renderOperation(this, shape)
         }
     }
 

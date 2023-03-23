@@ -64,7 +64,6 @@ import kotlin.reflect.KFunction1
 class ServerProtocolTestGenerator(
     private val codegenContext: CodegenContext,
     private val protocolSupport: ProtocolSupport,
-    private val protocolGenerator: ServerProtocolGenerator,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
@@ -138,7 +137,6 @@ class ServerProtocolTestGenerator(
 
     fun render(writer: RustWriter) {
         for (operation in operations) {
-            protocolGenerator.renderOperation(writer, operation)
             renderOperationTestCases(operation, writer)
         }
     }
