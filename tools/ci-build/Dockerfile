@@ -42,6 +42,7 @@ RUN yum -y install \
         make \
         openssl-devel \
         pkgconfig \
+        tar \
         xz && \
     yum clean all
 RUN set -eux; \
