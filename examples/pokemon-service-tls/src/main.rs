@@ -22,39 +22,37 @@
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
 // flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
-use std::fs::File;
-use std::future;
-use std::io::BufReader;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{fs::File, future, io::BufReader, net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{plugin::PluginPipeline, AddExtensionLayer};
+use aws_smithy_http_server::AddExtensionLayer;
 use clap::Parser;
 use futures_util::stream::StreamExt;
-use pokemon_service::{
-    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
-    plugin::PrintExt, setup_tracing, State,
-};
-use pokemon_service_server_sdk::PokemonService;
 use tokio_rustls::{
     rustls::{Certificate, PrivateKey, ServerConfig},
     TlsAcceptor,
 };
 
+use pokemon_service_common::{
+    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics,
+    get_storage, setup_tracing, State,
+};
+use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Hyper server bind address.
-    #[clap(short, long, action, default_value = "127.0.0.1")]
+    #[clap(short, long, action, default_value = DEFAULT_ADDRESS)]
     address: String,
     /// Hyper server bind port.
-    #[clap(short, long, action, default_value = "13734")]
+    #[clap(short, long, action, default_value_t = DEFAULT_PORT)]
     port: u16,
     /// Hyper server TLS certificate path. Must be a PEM file.
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value = DEFAULT_TEST_CERT)]
     tls_cert_path: String,
     /// Hyper server TLS private key path. Must be a PEM file.
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value = DEFAULT_TEST_KEY)]
     tls_key_path: String,
 }
 
@@ -62,9 +60,8 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
-    // Apply the `PrintPlugin` defined in `plugin.rs`
-    let plugins = PluginPipeline::new().print();
-    let app = PokemonService::builder_with_plugins(plugins)
+
+    let app = PokemonService::builder_without_plugins()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -96,7 +93,8 @@ pub async fn main() {
             future::ready(true)
         }
     });
-    let server = hyper::Server::builder(hyper::server::accept::from_stream(listener)).serve(app.into_make_service());
+    let server = hyper::Server::builder(hyper::server::accept::from_stream(listener))
+        .serve(app.into_make_service());
     if let Err(err) = server.await {
         eprintln!("server error: {}", err);
     }

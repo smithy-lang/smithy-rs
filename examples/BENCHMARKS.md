@@ -5,11 +5,12 @@ using [wrk](https://github.com/wg/wrk).
 
 <!-- vim-markdown-toc Marked -->
 
-* [2022-03-04](#2022-03-04)
-    * [c6i.8xlarge](#c6i.8xlarge)
-        * [Full result](#full-result)
-    * [c6g.8xlarge](#c6g.8xlarge)
-        * [Full result](#full-result)
+- [Smithy Rust Server SDK benchmarks](#smithy-rust-server-sdk-benchmarks)
+  - [2022-03-04](#2022-03-04)
+    - [c6i.8xlarge](#c6i8xlarge)
+      - [Full result](#full-result)
+    - [c6g.8xlarge](#c6g8xlarge)
+      - [Full result](#full-result-1)
 
 <!-- vim-markdown-toc -->
 
@@ -20,19 +21,19 @@ returning an empty output and can be used to stress test the framework overhead.
 
 ### c6i.8xlarge
 
-* 32 cores Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz
-* 64 Gb memory
-* Benchmark:
-    - Duration: 10 minutes
-    - Connections: 1024
-    - Threads: 16
-* Result:
-    - Request/sec: 1_608_742
-    * RSS[^1] memory: 72200 bytes
+- 32 cores Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz
+- 64 Gb memory
+- Benchmark:
+  - Duration: 10 minutes
+  - Connections: 1024
+  - Threads: 16
+- Result:
+  - Request/sec: 1_608_742
+  - RSS[^1] memory: 72200 bytes
 
 #### Full result
 
-```
+```text
 ❯❯❯ wrk -t16 -c1024 -d10m --latency http://localhost:13734/empty-operation
 Running 10m test @ http://localhost:13734/empty-operation
   16 threads and 1024 connections
@@ -52,20 +53,20 @@ Transfer/sec:    167.23MB
 
 ### c6g.8xlarge
 
-* 32 cores Amazon Graviton 2 @ 2.50GHz
-* 64 Gb memory
-* Benchmark:
-    - Duration: 10 minutes
-    - Connections: 1024
-    - Threads: 16
-* Result:
-    - Request/sec: 1_379_942
-    - RSS[^1] memory: 70264 bytes
+- 32 cores Amazon Graviton 2 @ 2.50GHz
+- 64 Gb memory
+- Benchmark:
+  - Duration: 10 minutes
+  - Connections: 1024
+  - Threads: 16
+- Result:
+  - Request/sec: 1_379_942
+  - RSS[^1] memory: 70264 bytes
 
 
 #### Full result
 
-```
+```text
 ❯❯❯ wrk -t16 -c1024 -d10m --latency http://localhost:13734/empty-operation
 Running 10m test @ http://localhost:13734/empty-operation
   16 threads and 1024 connections
