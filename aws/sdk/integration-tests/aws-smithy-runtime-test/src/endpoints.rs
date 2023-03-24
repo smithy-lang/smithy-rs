@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::{BoxError, EndpointOrchestrator};
+use aws_smithy_runtime::{BoxError, EndpointOrchestrator, HttpRequest};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
@@ -19,15 +18,15 @@ impl GetObjectEndpointOrc {
 
 impl RuntimePlugin for GetObjectEndpointOrc {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        // TODO put an endpoint orchestrator in the bag
+        // TODO(orchestrator) put an endpoint orchestrator in the bag
         Ok(())
     }
 }
 
-impl EndpointOrchestrator<http::Request<SdkBody>> for GetObjectEndpointOrc {
+impl EndpointOrchestrator for GetObjectEndpointOrc {
     fn resolve_and_apply_endpoint(
         &self,
-        _req: &mut http::Request<SdkBody>,
+        _req: &mut HttpRequest,
         _cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
         todo!()

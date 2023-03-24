@@ -76,8 +76,7 @@ impl<Request, Response> InterceptorContext<Request, Response> {
     }
 
     /// Retrieve the response to the customer. This will only be available
-    /// once the `tx_response` has been unmarshalled or the
-    /// attempt/execution has failed.
+    /// once the `response` has been unmarshalled or the attempt/execution has failed.
     pub fn output_or_error(&self) -> Result<Result<&Output, &Error>, InterceptorError> {
         self.output_or_error
             .as_ref()
@@ -86,7 +85,7 @@ impl<Request, Response> InterceptorContext<Request, Response> {
     }
 
     /// Retrieve the response to the customer. This will only be available
-    /// once the `tx_response` has been unmarshalled or the
+    /// once the `response` has been unmarshalled or the
     /// attempt/execution has failed.
     pub fn output_or_error_mut(&mut self) -> Result<&mut Result<Output, Error>, InterceptorError> {
         self.output_or_error

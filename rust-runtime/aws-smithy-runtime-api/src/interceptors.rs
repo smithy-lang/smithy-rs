@@ -46,14 +46,14 @@ pub trait Interceptor<TxReq, TxRes> {
         between invocation of this hook and `after_execution` is very close
         to full duration of the execution.
 
-        **Available Information:** The [InterceptorContext::modeled_request()] is
+        **Available Information:** The [InterceptorContext::input()] is
         **ALWAYS** available. Other information **WILL NOT** be available.
 
         **Error Behavior:** Errors raised by this hook will be stored
         until all interceptors have had their `before_execution` invoked.
         Other hooks will then be skipped and execution will jump to
         `modify_before_completion` with the raised error as the
-        [InterceptorContext::modeled_response()]. If multiple
+        [InterceptorContext::output_or_error()]. If multiple
         `before_execution` methods raise errors, the latest
         will be used and earlier ones will be logged and dropped.
         "
@@ -70,7 +70,7 @@ pub trait Interceptor<TxReq, TxRes> {
         **When:** This will **ALWAYS** be called once per execution, except when a
         failure occurs earlier in the request pipeline.
 
-        **Available Information:** The [InterceptorContext::modeled_request()] is
+        **Available Information:** The [InterceptorContext::input()] is
         **ALWAYS** available. This request may have been modified by earlier
         `modify_before_serialization` hooks, and may be modified further by
         later hooks. Other information **WILL NOT** be available.
@@ -78,7 +78,7 @@ pub trait Interceptor<TxReq, TxRes> {
         **Error Behavior:** If errors are raised by this hook,
 
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::modeled_response()].
+        error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** The input message returned by this hook
         MUST be the same type of input message passed into this hook.
@@ -98,12 +98,12 @@ pub trait Interceptor<TxReq, TxRes> {
         duration between invocation of this hook and `after_serialization` is
         very close to the amount of time spent marshalling the request.
 
-        **Available Information:** The [InterceptorContext::modeled_request()] is
+        **Available Information:** The [InterceptorContext::input()] is
         **ALWAYS** available. Other information **WILL NOT** be available.
 
         **Error Behavior:** If errors are raised by this hook,
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::modeled_response()].
+        error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -118,13 +118,13 @@ pub trait Interceptor<TxReq, TxRes> {
         /// between invocation of this hook and `before_serialization` is very
         /// close to the amount of time spent marshalling the request.
         ///
-        /// **Available Information:** The [InterceptorContext::modeled_request()]
-        /// and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        /// **Available Information:** The [InterceptorContext::input()]
+        /// and [InterceptorContext::request()] are **ALWAYS** available.
         /// Other information **WILL NOT** be available.
         ///
         /// **Error Behavior:** If errors are raised by this hook,
         /// execution will jump to `modify_before_completion` with the raised
-        /// error as the [InterceptorContext::modeled_response()].
+        /// error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -135,13 +135,13 @@ pub trait Interceptor<TxReq, TxRes> {
         has the ability to modify and return a new transport request
         message of the same type, except when a failure occurs earlier in the request pipeline.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         Other information **WILL NOT** be available.
 
         **Error Behavior:** If errors are raised by this hook,
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::modeled_response()].
+        error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -159,8 +159,8 @@ pub trait Interceptor<TxReq, TxRes> {
         failure occurs earlier in the request pipeline. This method will be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
@@ -169,7 +169,7 @@ pub trait Interceptor<TxReq, TxRes> {
         until all interceptors have had their `before_attempt` invoked.
         Other hooks will then be skipped and execution will jump to
         `modify_before_attempt_completion` with the raised error as the
-        [InterceptorContext::modeled_response()]. If multiple
+        [InterceptorContext::output_or_error()]. If multiple
         `before_attempt` methods raise errors, the latest will be used
         and earlier ones will be logged and dropped.
         "
@@ -186,8 +186,8 @@ pub trait Interceptor<TxReq, TxRes> {
         failure occurs earlier in the request pipeline. This method may be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         The `http::Request` may have been modified by earlier
         `modify_before_signing` hooks, and may be modified further by later
         hooks. Other information **WILL NOT** be available. In the event of
@@ -197,7 +197,7 @@ pub trait Interceptor<TxReq, TxRes> {
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -217,15 +217,15 @@ pub trait Interceptor<TxReq, TxRes> {
         invocation of this hook and `after_signing` is very close to
         the amount of time spent signing the request.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -240,15 +240,15 @@ pub trait Interceptor<TxReq, TxRes> {
         invocation of this hook and `before_signing` is very close to
         the amount of time spent signing the request.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -263,8 +263,8 @@ pub trait Interceptor<TxReq, TxRes> {
         /// failure occurs earlier in the request pipeline. This method may be
         /// called multiple times in the event of retries.
         ///
-        /// **Available Information:** The [InterceptorContext::modeled_request()]
-        /// and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        /// **Available Information:** The [InterceptorContext::input()]
+        /// and [InterceptorContext::request()] are **ALWAYS** available.
         /// The `http::Request` may have been modified by earlier
         /// `modify_before_transmit` hooks, and may be modified further by later
         /// hooks. Other information **WILL NOT** be available.
@@ -274,7 +274,7 @@ pub trait Interceptor<TxReq, TxRes> {
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -297,8 +297,8 @@ pub trait Interceptor<TxReq, TxRes> {
         Depending on the protocol, the duration may not include the
         time spent reading the response data.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::tx_request()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::request()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
@@ -306,7 +306,7 @@ pub trait Interceptor<TxReq, TxRes> {
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -324,16 +324,16 @@ pub trait Interceptor<TxReq, TxRes> {
         Depending on the protocol, the duration may not include the time
         spent reading the response data.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()] and
-        [InterceptorContext::tx_response()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()] and
+        [InterceptorContext::response()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -348,9 +348,9 @@ pub trait Interceptor<TxReq, TxRes> {
         failure occurs earlier in the request pipeline. This method may be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()] and
-        [InterceptorContext::tx_response()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()] and
+        [InterceptorContext::response()] are **ALWAYS** available.
         The transmit_response may have been modified by earlier
         `modify_before_deserialization` hooks, and may be modified further by
         later hooks. Other information **WILL NOT** be available. In the event of
@@ -360,7 +360,7 @@ pub trait Interceptor<TxReq, TxRes> {
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
         the raised error as the
-        [InterceptorContext::modeled_response()].
+        [InterceptorContext::output_or_error()].
 
         **Return Constraints:** The transport response message returned by this
         hook MUST be the same type of response message passed into
@@ -381,16 +381,16 @@ pub trait Interceptor<TxReq, TxRes> {
         Depending on the protocol and operation, the duration may include
         the time spent downloading the response data.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()] and
-        [InterceptorContext::tx_response()] are **ALWAYS** available.
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()] and
+        [InterceptorContext::response()] are **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion`
-        with the raised error as the [InterceptorContext::modeled_response()].
+        with the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -407,16 +407,16 @@ pub trait Interceptor<TxReq, TxRes> {
         the duration may include the time spent downloading
         the response data.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()],
-        [InterceptorContext::tx_response()] and
-        [InterceptorContext::modeled_response()] are **ALWAYS** available. In the event
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()],
+        [InterceptorContext::response()] and
+        [InterceptorContext::output_or_error()] are **ALWAYS** available. In the event
         of retries, the `InterceptorContext` will not include changes made
         in previous attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -431,16 +431,16 @@ pub trait Interceptor<TxReq, TxRes> {
         failure occurs before `before_attempt`. This method may
         be called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()],
-        [InterceptorContext::tx_response()] and
-        [InterceptorContext::modeled_response()] are **ALWAYS** available. In the event
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()],
+        [InterceptorContext::response()] and
+        [InterceptorContext::output_or_error()] are **ALWAYS** available. In the event
         of retries, the `InterceptorContext` will not include changes made
         in previous attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `after_attempt` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** Any output message returned by this
         hook MUST match the operation being invoked. Any error type can be
@@ -456,10 +456,10 @@ pub trait Interceptor<TxReq, TxRes> {
         **When:** This will **ALWAYS** be called once per attempt, as long as
         `before_attempt` has been executed.
 
-        **Available Information:** The [InterceptorContext::modeled_request()],
-        [InterceptorContext::tx_request()] and
-        [InterceptorContext::modeled_response()] are **ALWAYS** available.
-        The [InterceptorContext::tx_response()] is available if a
+        **Available Information:** The [InterceptorContext::input()],
+        [InterceptorContext::request()] and
+        [InterceptorContext::output_or_error()] are **ALWAYS** available.
+        The [InterceptorContext::response()] is available if a
         response was received by the service for this attempt.
         In the event of retries, the `InterceptorContext` will not include
         changes made in previous attempts (e.g. by request signers or other
@@ -472,7 +472,7 @@ pub trait Interceptor<TxReq, TxRes> {
         retry strategy determines that the execution is retryable,
         execution will then jump to `before_attempt`. Otherwise,
         execution will jump to `modify_before_attempt_completion` with the
-        raised error as the [InterceptorContext::modeled_response()].
+        raised error as the [InterceptorContext::output_or_error()].
         "
     );
 
@@ -486,15 +486,15 @@ pub trait Interceptor<TxReq, TxRes> {
 
         **When:** This will **ALWAYS** be called once per execution.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::modeled_response()] are **ALWAYS** available. The
-        [InterceptorContext::tx_request()]
-        and [InterceptorContext::tx_response()] are available if the
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::output_or_error()] are **ALWAYS** available. The
+        [InterceptorContext::request()]
+        and [InterceptorContext::response()] are available if the
         execution proceeded far enough for them to be generated.
 
         **Error Behavior:** If errors are raised by this
         hook , execution will jump to `after_attempt` with
-        the raised error as the [InterceptorContext::modeled_response()].
+        the raised error as the [InterceptorContext::output_or_error()].
 
         **Return Constraints:** Any output message returned by this
         hook MUST match the operation being invoked. Any error type can be
@@ -511,16 +511,16 @@ pub trait Interceptor<TxReq, TxRes> {
         between invocation of this hook and `before_execution` is very
         close to the full duration of the execution.
 
-        **Available Information:** The [InterceptorContext::modeled_request()]
-        and [InterceptorContext::modeled_response()] are **ALWAYS** available. The
-        [InterceptorContext::tx_request()] and
-        [InterceptorContext::tx_response()] are available if the
+        **Available Information:** The [InterceptorContext::input()]
+        and [InterceptorContext::output_or_error()] are **ALWAYS** available. The
+        [InterceptorContext::request()] and
+        [InterceptorContext::response()] are available if the
         execution proceeded far enough for them to be generated.
 
         **Error Behavior:** Errors raised by this hook will be stored
         until all interceptors have had their `after_execution` invoked.
         The error will then be treated as the
-        [InterceptorContext::modeled_response()] to the customer. If multiple
+        [InterceptorContext::output_or_error()] to the customer. If multiple
         `after_execution` methods raise errors , the latest will be
         used and earlier ones will be logged and dropped.
         "

@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
-use aws_smithy_runtime::{BoxError, BoxFallibleFut, RetryStrategy};
+use aws_smithy_runtime::{BoxError, HttpRequest, HttpResponse, RetryStrategy};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::interceptors::InterceptorContext;
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
 #[derive(Debug)]
@@ -19,21 +19,21 @@ impl GetObjectRetryStrategy {
 
 impl RuntimePlugin for GetObjectRetryStrategy {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        // TODO put a retry strategy in the bag
+        // TODO(orchestrator) put a retry strategy in the bag
         Ok(())
     }
 }
 
-impl RetryStrategy<Result<GetObjectOutput, GetObjectError>> for GetObjectRetryStrategy {
-    fn should_attempt_initial_request(&self, _cfg: &ConfigBag) -> BoxFallibleFut<()> {
+impl RetryStrategy for GetObjectRetryStrategy {
+    fn should_attempt_initial_request(&self, _cfg: &ConfigBag) -> Result<(), BoxError> {
         todo!()
     }
 
     fn should_attempt_retry(
         &self,
-        _res: &Result<GetObjectOutput, GetObjectError>,
+        _context: &InterceptorContext<HttpRequest, HttpResponse>,
         _cfg: &ConfigBag,
-    ) -> BoxFallibleFut<bool> {
+    ) -> Result<bool, BoxError> {
         todo!()
     }
 }

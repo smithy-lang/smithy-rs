@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::{AuthOrchestrator, BoxError};
+use aws_smithy_runtime::{AuthOrchestrator, BoxError, HttpRequest};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
@@ -19,17 +18,13 @@ impl GetObjectAuthOrc {
 
 impl RuntimePlugin for GetObjectAuthOrc {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        // TODO put an auth orchestrator in the bag
+        // TODO(orchestrator) put an auth orchestrator in the bag
         Ok(())
     }
 }
 
-impl AuthOrchestrator<http::Request<SdkBody>> for GetObjectAuthOrc {
-    fn auth_request(
-        &self,
-        _req: &mut http::Request<SdkBody>,
-        _cfg: &ConfigBag,
-    ) -> Result<(), BoxError> {
+impl AuthOrchestrator for GetObjectAuthOrc {
+    fn auth_request(&self, _req: &mut HttpRequest, _cfg: &ConfigBag) -> Result<(), BoxError> {
         todo!()
 
         // let signer = SigV4Signer::new();

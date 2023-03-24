@@ -256,7 +256,7 @@ async fn make_an_attempt(
             None => read_body(response)
                 .instrument(debug_span!("read_body"))
                 .await
-                .and_then(|_| Ok(response_deserializer.deserialize_nonstreaming(response))),
+                .map(|_| response_deserializer.deserialize_nonstreaming(response)),
         }
     };
 
