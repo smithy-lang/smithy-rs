@@ -83,11 +83,11 @@ class HttpBoundProtocolTraitImplGenerator(
     private val orchestratorCodegenScope by lazy {
         arrayOf(
             "Error" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::Error"),
-            "HttpResponse" to CargoDependency.smithyRuntime(runtimeConfig).toType().resolve("client::orchestrator::HttpResponse"),
+            "HttpResponse" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator::HttpResponse"),
             "Instrument" to CargoDependency.Tracing.toType().resolve("Instrument"),
             "Output" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::Output"),
             "OutputOrError" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::OutputOrError"),
-            "ResponseDeserializer" to CargoDependency.smithyRuntime(runtimeConfig).toType().resolve("client::orchestrator::ResponseDeserializer"),
+            "ResponseDeserializer" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator::ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "TypedBox" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("type_erasure::TypedBox"),

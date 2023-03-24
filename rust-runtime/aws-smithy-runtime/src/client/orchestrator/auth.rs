@@ -10,8 +10,8 @@ use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 
 pub(super) async fn orchestrate_auth(
-    dispatch_phase: Phase,
-    cfg: &ConfigBag,
+    _dispatch_phase: Phase,
+    _cfg: &ConfigBag,
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
     todo!()
 }

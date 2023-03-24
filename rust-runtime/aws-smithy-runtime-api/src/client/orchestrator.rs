@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::builders::IdentityResolverConfigBuilder;
-use super::identity::Identity;
-use super::interceptors::context::{Input, OutputOrError};
-use super::interceptors::InterceptorContext;
+use crate::client::identity::Identity;
+use crate::client::interceptors::context::{Input, OutputOrError};
+use crate::client::interceptors::InterceptorContext;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::TypeErasedBox;
 use aws_smithy_http::body::SdkBody;
@@ -16,8 +15,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub type HttpRequest = ::http::Request<SdkBody>;
-pub type HttpResponse = ::http::Response<SdkBody>;
+pub type HttpRequest = http::Request<SdkBody>;
+pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
 
@@ -103,8 +102,8 @@ pub struct IdentityResolverConfig {
 }
 
 impl IdentityResolverConfig {
-    pub fn builder() -> IdentityResolverConfigBuilder {
-        IdentityResolverConfigBuilder::new()
+    pub fn builder() -> builders::IdentityResolverConfigBuilder {
+        builders::IdentityResolverConfigBuilder::new()
     }
 
     pub fn get_identity_resolver(
