@@ -22,9 +22,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -119,7 +120,7 @@ class PythonServerCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                PythonServerModuleDocProvider(ServerModuleDocProvider()),
+                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
             ),
         )
 
@@ -223,21 +224,26 @@ class PythonServerCodegenVisitor(
      * - Python operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
+        super.serviceShape(shape)
+
         logger.info("[python-server-codegen] Generating a service $shape")
-        PythonServerServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
-            codegenContext,
-        )
-            .render()
+
+        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        rustCrate.withModule(PythonServerRustModule.PythonServerApplication) {
+            PythonApplicationGenerator(codegenContext, serverProtocol)
+                .render(this)
+        }
     }
 
     override fun operationShape(shape: OperationShape) {
         super.operationShape(shape)
+
         rustCrate.withModule(PythonServerRustModule.PythonOperationAdapter) {
             PythonServerOperationHandlerGenerator(codegenContext, shape).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.Error) {
+            PythonServerOperationErrorGenerator(codegenContext.model, codegenContext.symbolProvider, shape).render(this)
         }
     }
 }
