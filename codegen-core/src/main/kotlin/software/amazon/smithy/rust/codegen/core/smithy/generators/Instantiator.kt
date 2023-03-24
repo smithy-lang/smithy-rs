@@ -53,7 +53,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
-import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -340,14 +340,10 @@ open class Instantiator(
 
         if (data.isEmpty) {
             shape.allMembers.entries
+                .filter { it.value.hasTrait<HttpHeaderTrait>() }
                 .forEach { (_, value) ->
-                    value.getTrait<HttpHeaderTrait>()
-                        ?.let {
-                            if (headers.containsKey(it.value)) {
-                                val header = headers[it.value]
-                                renderMemberHelper(value, Node.from(header))
-                            }
-                        }
+                    val trait = value.expectTrait<HttpHeaderTrait>().value
+                    headers.get(trait)?.let { renderMemberHelper(value, Node.from(it)) }
                 }
         }
 
