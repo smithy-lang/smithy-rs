@@ -6,9 +6,11 @@
 use aws_smithy_client::conns::Https;
 use aws_smithy_client::hyper_ext::Adapter;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::{BoxError, BoxFallibleFut, Connection, HttpRequest};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxError, BoxFallibleFut, Connection, HttpRequest,
+};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
 #[derive(Debug)]
 pub struct HyperConnection {

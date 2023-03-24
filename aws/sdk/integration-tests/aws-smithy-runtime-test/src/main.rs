@@ -13,10 +13,11 @@ mod ser;
 
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectInput, GetObjectOutput};
 use aws_sdk_s3::types::ChecksumMode;
-use aws_smithy_runtime::{invoke, BoxError, HttpRequest, HttpResponse};
+use aws_smithy_runtime::client::orchestrator::invoke;
+use aws_smithy_runtime_api::client::interceptors::Interceptors;
+use aws_smithy_runtime_api::client::orchestrator::{BoxError, HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_api::interceptors::Interceptors;
-use aws_smithy_runtime_api::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 
 #[tokio::main]

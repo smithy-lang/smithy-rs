@@ -3,126 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use self::auth::orchestrate_auth;
 use crate::client::orchestrator::http::read_body;
 use crate::client::orchestrator::phase::Phase;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output, OutputOrError};
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxError, ConfigBagAccessors, HttpRequest, HttpResponse,
+};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use std::fmt::Debug;
-use std::future::Future;
-use std::pin::Pin;
 use tracing::{debug_span, Instrument};
 
+mod auth;
 mod http;
-mod phase;
-
-pub type HttpRequest = ::http::Request<SdkBody>;
-pub type HttpResponse = ::http::Response<SdkBody>;
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
-
-pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self, cfg: &ConfigBag) -> BoxFallibleFut<()>;
-}
-
-pub trait RequestSerializer: Send + Sync + Debug {
-    fn serialize_input(&self, input: &Input, cfg: &ConfigBag) -> Result<HttpRequest, BoxError>;
-}
-
-pub trait ResponseDeserializer: Send + Sync + Debug {
-    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
-        let _ = response;
-        None
-    }
-
-    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
-}
-
-pub trait Connection: Send + Sync + Debug {
-    fn call(&self, request: &mut HttpRequest, cfg: &ConfigBag) -> BoxFallibleFut<HttpResponse>;
-}
-
-pub trait RetryStrategy: Send + Sync + Debug {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<(), BoxError>;
-
-    fn should_attempt_retry(
-        &self,
-        context: &InterceptorContext<HttpRequest, HttpResponse>,
-        cfg: &ConfigBag,
-    ) -> Result<bool, BoxError>;
-}
-
-pub trait AuthOrchestrator: Send + Sync + Debug {
-    fn auth_request(&self, request: &mut HttpRequest, cfg: &ConfigBag) -> Result<(), BoxError>;
-}
-
-pub trait EndpointOrchestrator: Send + Sync + Debug {
-    fn resolve_and_apply_endpoint(
-        &self,
-        request: &mut HttpRequest,
-        cfg: &ConfigBag,
-    ) -> Result<(), BoxError>;
-
-    // TODO(jdisanti) The EP Orc and Auth Orc need to share info on auth schemes but I'm not sure how that should happen
-    fn resolve_auth_schemes(&self) -> Result<Vec<String>, BoxError>;
-}
-
-trait ConfigBagAccessors {
-    fn retry_strategy(&self) -> &dyn RetryStrategy;
-    fn endpoint_orchestrator(&self) -> &dyn EndpointOrchestrator;
-    fn auth_orchestrator(&self) -> &dyn AuthOrchestrator;
-    fn connection(&self) -> &dyn Connection;
-    fn request_serializer(&self) -> &dyn RequestSerializer;
-    fn response_deserializer(&self) -> &dyn ResponseDeserializer;
-    fn trace_probe(&self) -> &dyn TraceProbe;
-}
-
-impl ConfigBagAccessors for ConfigBag {
-    fn retry_strategy(&self) -> &dyn RetryStrategy {
-        &**self
-            .get::<Box<dyn RetryStrategy>>()
-            .expect("a retry strategy must be set")
-    }
-
-    fn endpoint_orchestrator(&self) -> &dyn EndpointOrchestrator {
-        &**self
-            .get::<Box<dyn EndpointOrchestrator>>()
-            .expect("an endpoint orchestrator must be set")
-    }
-
-    fn auth_orchestrator(&self) -> &dyn AuthOrchestrator {
-        &**self
-            .get::<Box<dyn AuthOrchestrator>>()
-            .expect("an auth orchestrator must be set")
-    }
-
-    fn connection(&self) -> &dyn Connection {
-        &**self
-            .get::<Box<dyn Connection>>()
-            .expect("missing connector")
-    }
-
-    fn request_serializer(&self) -> &dyn RequestSerializer {
-        &**self
-            .get::<Box<dyn RequestSerializer>>()
-            .expect("missing request serializer")
-    }
-
-    fn response_deserializer(&self) -> &dyn ResponseDeserializer {
-        &**self
-            .get::<Box<dyn ResponseDeserializer>>()
-            .expect("missing response deserializer")
-    }
-
-    fn trace_probe(&self) -> &dyn TraceProbe {
-        &**self
-            .get::<Box<dyn TraceProbe>>()
-            .expect("missing trace probe")
-    }
-}
+pub(self) mod phase;
 
 pub async fn invoke(
     input: Input,
@@ -203,21 +99,20 @@ async fn make_an_attempt(
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors<HttpRequest, HttpResponse>,
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
-    let mut context = dispatch_phase
+    let dispatch_phase = dispatch_phase
         .include(|ctx| interceptors.read_before_attempt(ctx, cfg))?
         .include_mut(|ctx| {
-            let tx_req_mut = ctx.request_mut().expect("request has been set");
+            let request = ctx.request_mut().expect("request has been set");
 
-            let endpoint_orchestrator = cfg.endpoint_orchestrator();
-            endpoint_orchestrator.resolve_and_apply_endpoint(tx_req_mut, cfg)
+            let endpoint_resolver = cfg.endpoint_resolver();
+            endpoint_resolver.resolve_and_apply_endpoint(request, cfg)
         })?
         .include_mut(|ctx| interceptors.modify_before_signing(ctx, cfg))?
-        .include(|ctx| interceptors.read_before_signing(ctx, cfg))?
-        .include_mut(|ctx| {
-            let tx_req_mut = ctx.request_mut().expect("request has been set");
-            let auth_orchestrator = cfg.auth_orchestrator();
-            auth_orchestrator.auth_request(tx_req_mut, cfg)
-        })?
+        .include(|ctx| interceptors.read_before_signing(ctx, cfg))?;
+
+    let dispatch_phase = orchestrate_auth(dispatch_phase, cfg).await?;
+
+    let mut context = dispatch_phase
         .include(|ctx| interceptors.read_after_signing(ctx, cfg))?
         .include_mut(|ctx| interceptors.modify_before_transmit(ctx, cfg))?
         .include(|ctx| interceptors.read_before_transmit(ctx, cfg))?

@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::{BoxError, HttpResponse, ResponseDeserializer};
+use aws_smithy_runtime_api::client::interceptors::context::OutputOrError;
+use aws_smithy_runtime_api::client::orchestrator::{BoxError, HttpResponse, ResponseDeserializer};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_api::interceptors::context::OutputOrError;
-use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
 #[derive(Debug)]
 pub struct GetObjectResponseDeserializer {}

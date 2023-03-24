@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::orchestrator::HttpResponse;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use bytes::{Buf, Bytes};
 use http_body::Body;
 use pin_utils::pin_mut;

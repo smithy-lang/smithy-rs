@@ -10,6 +10,9 @@ pub mod identity;
 ///
 /// Interceptors are lifecycle hooks that can read/modify requests and responses.
 pub mod interceptors;
+
+pub mod orchestrator;
+
 /// Smithy code related to retry handling and token bucket.
 ///
 /// This code defines when and how failed requests should be retried. It also defines the behavior
