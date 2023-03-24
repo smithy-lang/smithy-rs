@@ -128,7 +128,7 @@ ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8
 ARG rust_nightly_version
 RUN set -eux; \
     curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
-    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check;
+    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
     tar xf wasmtime.xz; \
     mv wasmtime-v*/wasmtime /opt;
 
