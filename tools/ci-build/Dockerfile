@@ -5,7 +5,7 @@
 
 # This is the base Docker build image used by CI
 
-ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
+ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.66.1
 ARG rust_nightly_version=nightly-2022-11-16
 
@@ -30,7 +30,7 @@ ENV RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y install \
+RUN yum -y install --allowerasing \
         autoconf \
         automake \
         binutils \
@@ -41,6 +41,7 @@ RUN yum -y install \
         git \
         make \
         openssl-devel \
+        perl \
         pkgconfig && \
     yum clean all
 RUN set -eux; \
