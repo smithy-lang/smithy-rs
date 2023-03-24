@@ -41,7 +41,7 @@ RUN yum -y install \
         git \
         make \
         openssl-devel \
-        pkgconfig && \
+        pkgconfig \
         xz && \
     yum clean all
 RUN set -eux; \
