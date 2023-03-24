@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{BoxError, HttpRequest, HttpResponse};
+use crate::client::orchestrator::{BoxError, HttpRequest, HttpResponse};
 use aws_smithy_http::result::{ConnectorError, SdkError};
-use aws_smithy_runtime_api::interceptors::context::{Error, Output};
-use aws_smithy_runtime_api::interceptors::InterceptorContext;
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Output};
+use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum OrchestrationPhase {
