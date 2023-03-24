@@ -19,11 +19,7 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
     let mut visited = BTreeSet::new();
 
     let mut to_visit: Vec<&Package> = packages.iter().map(|e| e.1).collect();
-    to_visit.sort_by(|a, b| {
-        (*a).local_dependencies
-            .len()
-            .cmp(&(*b).local_dependencies.len())
-    });
+    to_visit.sort_by(|a, b| a.local_dependencies.len().cmp(&b.local_dependencies.len()));
 
     // Depth-first search topological sort
     while let Some(package) = to_visit.iter().find(|e| !visited.contains(&e.handle)) {

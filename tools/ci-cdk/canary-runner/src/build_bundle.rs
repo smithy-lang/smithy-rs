@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -64,7 +65,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("v0.4.1").unwrap(), // first version to add support for paginators
+        ReleaseTag::from_str("release-2023-01-26").unwrap(), // last version before the crate reorg
     ];
 }
 
@@ -114,11 +115,18 @@ enum CrateSource {
 fn enabled_features(crate_source: &CrateSource) -> Vec<String> {
     let mut enabled = Vec::new();
     if let CrateSource::VersionsManifest { release_tag, .. } = crate_source {
+        // we want to select the newest module specified after this release
         for notable in NOTABLE_SDK_RELEASE_TAGS.iter() {
-            if notable < release_tag {
+            tracing::debug!(release_tag = ?release_tag, notable = ?notable, "considering if release tag came before notable release");
+            if release_tag <= notable {
+                tracing::debug!("selecting {} as chosen release", notable);
                 enabled.push(notable.as_str().into());
+                break;
             }
         }
+    }
+    if enabled.is_empty() {
+        enabled.push("latest".into());
     }
     enabled
 }
@@ -157,11 +165,12 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
         }
     }
     write!(output, "\n[features]\n").unwrap();
+    writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
         writeln!(
             output,
             "\"{release_tag}\" = []",
-            release_tag = release_tag.as_str().replace('-', "_")
+            release_tag = release_tag.as_str()
         )
         .unwrap();
     }
@@ -254,7 +263,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             path.join("release")
         };
         let bin_path = target_path.join("bootstrap");
-        let bundle_path = target_path.join(&name_bundle(
+        let bundle_path = target_path.join(name_bundle(
             &bin_path,
             opt.rust_version.as_deref(),
             opt.sdk_release_tag.as_ref(),
@@ -324,7 +333,6 @@ mod tests {
                 "--sdk-release-tag",
                 "release-2022-07-26"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -344,7 +352,6 @@ mod tests {
                 "--canary-path",
                 "some-canary-path"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -364,7 +371,6 @@ mod tests {
                 "--musl",
                 "--manifest-only"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
@@ -386,7 +392,6 @@ mod tests {
                 "--canary-path",
                 "some-canary-path"
             ])
-            .ok()
             .expect("valid args")
         );
     }
@@ -428,14 +433,16 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 aws-config = { path = "some/sdk/path/aws-config" }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 
 [features]
-"v0.4.1" = []
-default = []
+latest = []
+"release-2023-01-26" = []
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
         );
@@ -490,14 +497,16 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 aws-config = "0.46.0"
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
 aws-sdk-transcribestreaming = "0.16.0"
 
 [features]
-"v0.4.1" = []
-default = ["v0.4.1"]
+latest = []
+"release-2023-01-26" = []
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
                 versions: VersionsManifest {
@@ -514,7 +523,7 @@ default = ["v0.4.1"]
                     .collect(),
                     release: None,
                 },
-                release_tag: ReleaseTag::from_str("release-2022-07-26").unwrap(),
+                release_tag: ReleaseTag::from_str("release-2023-05-26").unwrap(),
             })
             .expect("success")
         );
@@ -555,6 +564,39 @@ default = ["v0.4.1"]
                 Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
             )
             .unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_notable_versions() {
+        let versions = VersionsManifest {
+            smithy_rs_revision: "some-revision-smithy-rs".into(),
+            aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+            manual_interventions: Default::default(),
+            crates: [].into_iter().collect(),
+            release: None,
+        };
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-02-23".parse().unwrap(),
+            }),
+            vec!["latest".to_string()]
+        );
+
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-01-26".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
+        );
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions,
+                release_tag: "release-2023-01-13".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
         );
     }
 }

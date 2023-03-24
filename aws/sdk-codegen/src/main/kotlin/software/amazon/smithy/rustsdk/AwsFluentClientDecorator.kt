@@ -6,12 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
@@ -25,13 +25,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
@@ -75,7 +74,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun sendBounds(
         operation: Symbol,
         operationOutput: Symbol,
-        operationError: RuntimeType,
+        operationError: Symbol,
         retryClassifier: RuntimeType,
     ): Writable =
         writable { }
@@ -95,17 +94,18 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val generics = AwsClientGenerics(types)
         FluentClientGenerator(
             codegenContext,
-            generics,
+            reexportSmithyClientBuilder = false,
+            generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(runtimeConfig),
+                AwsPresignedFluentBuilderMethod(codegenContext, runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(CustomizableOperationGenerator.CustomizeModule) {
+        rustCrate.withModule(codegenContext.featureGatedCustomizeModule()) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
-        rustCrate.withModule(FluentClientGenerator.clientModule) {
+        rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(types).render(this)
         }
         val awsSmithyClient = "aws-smithy-client"
@@ -208,6 +208,7 @@ private class AwsFluentClientExtensions(types: Types) {
                     };
                     let mut builder = builder
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .reconnect_mode(retry_config.reconnect_mode())
                         .retry_config(retry_config.into())
                         .operation_timeout_config(timeout_config.into());
                     builder.set_sleep_impl(sleep_impl);
@@ -222,21 +223,8 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : FluentClientCustomization() {
-    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = codegenContext.serviceShape
-    private val crateName = codegenContext.moduleUseName()
-    private val codegenScope =
-        arrayOf("aws_config" to AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType())
-
-    // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
-    // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
-    private fun suppressUsageDocs(): Boolean =
-        SdkSettings.from(codegenContext.settings).awsConfigVersion == null ||
-            setOf(
-                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
-                ShapeId.from("com.amazonaws.sso#SWBPortalService"),
-            ).contains(serviceShape.id)
+private class AwsFluentClientDocs(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
+    private val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
 
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -248,38 +236,8 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
                     /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
                     /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service.""",
                 )
-                if (!suppressUsageDocs()) {
-                    rustTemplate(
-                        """
-                        ///
-                        /// ## Examples
-                        /// **Constructing a client and invoking an operation**
-                        /// ```rust,no_run
-                        /// ## async fn docs() {
-                        ///     // create a shared configuration. This can be used & shared between multiple service clients.
-                        ///     let shared_config = #{aws_config}::load_from_env().await;
-                        ///     let client = $crateName::Client::new(&shared_config);
-                        ///     // invoke an operation
-                        ///     /* let rsp = client
-                        ///         .<operation_name>().
-                        ///         .<param>("some value")
-                        ///         .send().await; */
-                        /// ## }
-                        /// ```
-                        /// **Constructing a client with custom configuration**
-                        /// ```rust,no_run
-                        /// use #{aws_config}::retry::RetryConfig;
-                        /// ## async fn docs() {
-                        /// let shared_config = #{aws_config}::load_from_env().await;
-                        /// let config = $crateName::config::Builder::from(&shared_config)
-                        ///   .retry_config(RetryConfig::disabled())
-                        ///   .build();
-                        /// let client = $crateName::Client::from_conf(config);
-                        /// ## }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                AwsDocs.clientConstructionDocs(codegenContext)(this)
+                FluentClientDocs.clientUsageDocs(codegenContext)(this)
             }
 
             else -> emptySection
@@ -300,6 +258,7 @@ private fun renderCustomizableOperationSendMethod(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
         "ParseHttpResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
     )
@@ -315,7 +274,7 @@ private fun renderCustomizableOperationSendMethod(
             where
                 E: std::error::Error + Send + Sync + 'static,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
             {
                 self.handle.client.call(self.operation).await
             }

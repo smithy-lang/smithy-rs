@@ -4,6 +4,16 @@
  */
 
 //! Python wrapped types from aws-smithy-types and aws-smithy-http.
+//!
+//! ## `Deref` hacks for Json serializer
+//! [aws_smithy_json::serialize::JsonValueWriter] expects references to the types
+//! from [aws_smithy_types] (for example [aws_smithy_json::serialize::JsonValueWriter::document()]
+//! expects `&aws_smithy_types::Document`). In order to make
+//! [aws_smithy_json::serialize::JsonValueWriter] happy, we implement `Deref` traits for
+//! Python types to their Rust counterparts (for example
+//! `impl Deref<Target=aws_smithy_types::Document> for Document` and that allows `&Document` to
+//! get coerced to `&aws_smithy_types::Document`). This is a hack, we should ideally handle this
+//! in `JsonSerializerGenerator.kt` but it's not easy to do it with our current Kotlin structure.
 
 use std::{
     collections::HashMap,
@@ -16,17 +26,19 @@ use std::{
 
 use bytes::Bytes;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
+    exceptions::{PyRuntimeError, PyStopAsyncIteration, PyTypeError},
     iter::IterNextOutput,
     prelude::*,
-    pyclass::IterANextOutput,
 };
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 use tokio_stream::StreamExt;
 
 use crate::PyError;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Blob(aws_smithy_types::Blob);
@@ -58,6 +70,8 @@ impl Blob {
     }
 
     /// Python getter for the `Blob` byte array.
+    ///
+    /// :type bytes:
     #[getter(data)]
     pub fn get_data(&self) -> &[u8] {
         self.as_ref()
@@ -134,6 +148,9 @@ impl DateTime {
 #[pymethods]
 impl DateTime {
     /// Creates a `DateTime` from a number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs(epoch_seconds: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -142,6 +159,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of milliseconds since the Unix epoch.
+    ///
+    /// :param epoch_millis int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_millis(epoch_millis: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -150,6 +170,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of nanoseconds since the Unix epoch.
+    ///
+    /// :param epoch_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_nanos(epoch_nanos: i128) -> PyResult<Self> {
         Ok(Self(
@@ -159,6 +182,12 @@ impl DateTime {
     }
 
     /// Read 1 date of `format` from `s`, expecting either `delim` or EOF.
+    ///
+    /// TODO(PythonTyping): How do we represent `char` in Python?
+    ///
+    /// :param format Format:
+    /// :param delim str:
+    /// :rtype typing.Tuple[DateTime, str]:
     #[staticmethod]
     pub fn read(s: &str, format: Format, delim: char) -> PyResult<(Self, &str)> {
         let (self_, next) = aws_smithy_types::date_time::DateTime::read(s, format.into(), delim)
@@ -167,6 +196,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :param fraction float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_fractional_secs(epoch_seconds: i64, fraction: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_fractional_secs(
@@ -176,6 +209,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
+    ///
+    /// :param seconds int:
+    /// :param subsecond_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_and_nanos(
@@ -185,6 +222,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_f64(epoch_seconds: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_f64(
@@ -193,6 +233,10 @@ impl DateTime {
     }
 
     /// Parses a `DateTime` from a string using the given `format`.
+    ///
+    /// :param s str:
+    /// :param format Format:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_str(s: &str, format: Format) -> PyResult<Self> {
         Ok(Self(
@@ -202,31 +246,43 @@ impl DateTime {
     }
 
     /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
+    ///
+    /// :rtype int:
     pub fn as_nanos(&self) -> i128 {
         self.0.as_nanos()
     }
 
     /// Returns the `DateTime` value as an `f64` representing the seconds since the Unix epoch.
+    ///
+    /// :rtype float:
     pub fn as_secs_f64(&self) -> f64 {
         self.0.as_secs_f64()
     }
 
     /// Returns true if sub-second nanos is greater than zero.
+    ///
+    /// :rtype bool:
     pub fn has_subsec_nanos(&self) -> bool {
         self.0.has_subsec_nanos()
     }
 
     /// Returns the epoch seconds component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn secs(&self) -> i64 {
         self.0.secs()
     }
 
     /// Returns the sub-second nanos component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn subsec_nanos(&self) -> u32 {
         self.0.subsec_nanos()
     }
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
+    ///
+    /// :rtype int:
     pub fn to_millis(&self) -> PyResult<i64> {
         Ok(self.0.to_millis().map_err(PyError::DateTimeConversion)?)
     }
@@ -238,15 +294,11 @@ impl From<aws_smithy_types::DateTime> for DateTime {
     }
 }
 
-impl From<DateTime> for aws_smithy_types::DateTime {
-    fn from(other: DateTime) -> aws_smithy_types::DateTime {
-        other.0
-    }
-}
+impl Deref for DateTime {
+    type Target = aws_smithy_types::DateTime;
 
-impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
-    fn from(other: &'date DateTime) -> &'date aws_smithy_types::DateTime {
-        &other.0
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -283,6 +335,9 @@ impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
 ///
 /// The original Rust [ByteStream](aws_smithy_http::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
 /// [Clone] (required by PyO3) and to allow internal mutability, required to fetch the next chunk of data.
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
@@ -303,12 +358,13 @@ impl futures::stream::Stream for ByteStream {
 /// Return a new data chunk from the stream.
 async fn yield_data_chunk(
     body: Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>,
-) -> PyResult<Bytes> {
+) -> PyResult<Option<Bytes>> {
     let mut stream = body.lock().await;
-    match stream.next().await {
-        Some(bytes) => bytes.map_err(|e| PyRuntimeError::new_err(e.to_string())),
-        None => Err(PyStopIteration::new_err("stream exhausted")),
-    }
+    stream
+        .next()
+        .await
+        .transpose()
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }
 
 impl ByteStream {
@@ -330,7 +386,6 @@ impl Default for ByteStream {
     }
 }
 
-/// ByteStream Abstractions.
 #[pymethods]
 impl ByteStream {
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
@@ -347,9 +402,12 @@ impl ByteStream {
     /// requiring Python to await this method.
     ///
     /// **NOTE:** This method will block the Rust event loop when it is running.
+    ///
+    /// :param path str:
+    /// :rtype ByteStream:
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
-        let byte_stream = futures::executor::block_on(async {
+        let byte_stream = Handle::current().block_on(async {
             aws_smithy_http::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))
@@ -360,6 +418,9 @@ impl ByteStream {
 
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, forcing
     /// Python to await this coroutine.
+    ///
+    /// :param path str:
+    /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -388,14 +449,9 @@ impl ByteStream {
         let body = slf.0.clone();
         let data_chunk = futures::executor::block_on(yield_data_chunk(body));
         match data_chunk {
-            Ok(data_chunk) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
-            Err(e) => {
-                if e.is_instance_of::<PyStopIteration>(slf.py()) {
-                    Ok(IterNextOutput::Return(slf.py().None()))
-                } else {
-                    Err(e)
-                }
-            }
+            Ok(Some(data_chunk)) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
+            Ok(None) => Ok(IterNextOutput::Return(slf.py().None())),
+            Err(e) => Err(e),
         }
     }
 
@@ -407,29 +463,30 @@ impl ByteStream {
     }
 
     /// Return an awaitable resulting in a next value of the iterator or raise a StopAsyncIteration
-    /// exception when the iteration is over. PyO3 allows to raise the correct exception using the enum
-    /// [IterANextOutput](pyo3::pyclass::IterANextOutput).
+    /// exception when the iteration is over.
     ///
     /// To get the next value of the iterator, the `Arc` inner stream is cloned and the Rust call
     /// to `next()` is converted into an awaitable Python coroutine.
     ///
     /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__anext__.>`
-    pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<IterANextOutput<Py<PyAny>, PyObject>> {
+    ///
+    /// About the return type, we cannot use `IterANextOutput` because we don't know if we
+    /// have a next value or not until we call the `next` on the underlying stream which is
+    /// an async operation and it's awaited on the Python side. So we're returning
+    /// `StopAsyncIteration` inside the returned future lazily.
+    /// The reason for the extra `Option` wrapper is that PyO3 expects `__anext__` to return
+    /// either `Option<PyObject>` or `IterANextOutput` and fails to compile otherwise, so we're
+    /// using extra `Option` just to make PyO3 happy.
+    pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
         let body = slf.0.clone();
-        let data_chunk = pyo3_asyncio::tokio::local_future_into_py(slf.py(), async move {
+        let fut = pyo3_asyncio::tokio::future_into_py(slf.py(), async move {
             let data = yield_data_chunk(body).await?;
-            Ok(Python::with_gil(|py| data.into_py(py)))
-        });
-        match data_chunk {
-            Ok(data_chunk) => Ok(IterANextOutput::Yield(data_chunk.into_py(slf.py()))),
-            Err(e) => {
-                if e.is_instance_of::<PyStopIteration>(slf.py()) {
-                    Ok(IterANextOutput::Return(slf.py().None()))
-                } else {
-                    Err(e)
-                }
+            match data {
+                Some(data) => Ok(Python::with_gil(|py| data.into_py(py))),
+                None => Err(PyStopAsyncIteration::new_err("stream exhausted")),
             }
-        }
+        })?;
+        Ok(Some(fut.into()))
     }
 }
 
@@ -494,10 +551,6 @@ impl FromPyObject<'_> for Document {
     }
 }
 
-// TODO(PythonSerialization): Get rid of this hack.
-// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
-// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
-// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
 impl Deref for Document {
     type Target = aws_smithy_types::Document;
 
@@ -654,10 +707,10 @@ mod tests {
                     .into(),
                 ),
                 "{
-                    't': True, 
-                    'foo': 'foo', 
-                    'f42': 42.0, 
-                    'i42': 42, 
+                    't': True,
+                    'foo': 'foo',
+                    'f42': 42.0,
+                    'i42': 42,
                     'f': False,
                     'vec': [
                         'inner',

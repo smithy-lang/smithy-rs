@@ -781,9 +781,12 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 
 ## Changes checklist
 
-- [ ] Update `codegen-server` to generate the proposed service builder API
-- [ ] Implement `Pluggable` for `PluginStack`
-- [ ] Evaluate the introduction of a `PluginBuilder` as the primary API to compose multiple plugins (instead of `PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)`)
+- [x] Update `codegen-server` to generate the proposed service builder API
+  - <https://github.com/awslabs/smithy-rs/pull/1954>
+- [x] Implement `Pluggable` for `PluginStack`
+  - <https://github.com/awslabs/smithy-rs/pull/1954>
+- [x] Evaluate the introduction of a `PluginBuilder` as the primary API to compose multiple plugins (instead of `PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)`)
+  - <https://github.com/awslabs/smithy-rs/pull/1971>
 
 [RFC 20]: rfc0020_service_builder.md
 [Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy

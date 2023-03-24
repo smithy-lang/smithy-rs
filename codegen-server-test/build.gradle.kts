@@ -38,6 +38,7 @@ dependencies {
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
+        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
         CodegenTest(
             "naming_obs_structs#NamingObstacleCourseStructs",
             "naming_test_structs",
@@ -75,12 +76,6 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "aws.protocoltests.restjson.validation#RestJsonValidation",
             "rest_json_validation",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
-        ),
-        CodegenTest(
-            "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation",
-            "malformed_range_extras",
-            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
-            imports = listOf("$commonModels/malformed-range-extras.smithy"),
         ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
         CodegenTest(

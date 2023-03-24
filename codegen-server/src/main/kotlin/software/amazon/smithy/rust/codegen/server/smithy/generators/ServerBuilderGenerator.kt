@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -49,7 +50,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.withInMemoryInlineModule
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
 /**
@@ -86,8 +89,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWra
  * [derive_builder]: https://docs.rs/derive_builder/latest/derive_builder/index.html
  */
 class ServerBuilderGenerator(
-    codegenContext: ServerCodegenContext,
+    val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
+    private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -141,7 +145,7 @@ class ServerBuilderGenerator(
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
+        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
@@ -151,9 +155,9 @@ class ServerBuilderGenerator(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(writer: RustWriter) {
-        writer.docs("See #D.", structureSymbol)
-        writer.withInlineModule(builderSymbol.module()) {
+    fun render(rustCrate: RustCrate, writer: RustWriter) {
+        val docWriter: () -> Unit = { writer.docs("See #D.", structureSymbol) }
+        rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
         }
     }
@@ -187,7 +191,9 @@ class ServerBuilderGenerator(
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         // Filter out any derive that isn't Debug or Clone. Then add a Default derive
-        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        val builderDerives = baseDerives.filter {
+            it == RuntimeType.Debug || it == RuntimeType.Clone
+        } + RuntimeType.Default
         Attribute(derive(builderDerives)).render(writer)
         writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
@@ -214,21 +220,9 @@ class ServerBuilderGenerator(
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(constraint_violation: ConstraintViolation) -> Self {
-                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
-                    let validation_exception = crate::error::ValidationException {
-                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
-                        field_list: Some(vec![first_validation_exception_field]),
-                    };
-                    Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
-                            .expect("impossible")
-                    )
-                }
-            }
+            #{Converter:W}
             """,
-            *codegenScope,
+            "Converter" to customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(),
         )
     }
 
@@ -401,12 +395,12 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
-                if (symbolProvider.toSymbol(member).isOptional()) {
-                    "input.map(|v| v.into())"
-                } else {
-                    "Some(input.into())"
-                }
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+                    if (symbolProvider.toSymbol(member).isOptional()) {
+                        "input.map(|v| v.into())"
+                    } else {
+                        "Some(input.into())"
+                    }
                 };
                 self
                 """,
@@ -552,6 +546,8 @@ class ServerBuilderGenerator(
         val hasBox = builderMemberSymbol(member)
             .mapRustType { it.stripOuter<RustType.Option>() }
             .isRustBoxed()
+        val errHasBox = member.hasTrait<ConstraintViolationRustBoxTrait>()
+
         if (hasBox) {
             writer.rustTemplate(
                 """
@@ -559,11 +555,6 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                 })
-                .map(|res|
-                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
-                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
@@ -574,15 +565,21 @@ class ServerBuilderGenerator(
                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                 })
-                .map(|res|
-                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                       .map_err(ConstraintViolation::${constraintViolation.name()})
-                )
-                .transpose()?
                 """,
                 *codegenScope,
             )
         }
+        val mapOk = if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"
+        val mapErr = if (errHasBox) ".map_err(Box::new)" else ""
+        writer.rustTemplate(
+            """
+            .map(|res|
+                res$mapOk$mapErr.map_err(ConstraintViolation::${constraintViolation.name()})
+            )
+            .transpose()?
+            """,
+            *codegenScope,
+        )
 
         // Constrained types are not public and this is a member shape that would have generated a
         // public constrained type, were the setting to be enabled.

@@ -55,13 +55,17 @@ class PubCrateConstrainedShapeSymbolProviderTest {
     @Test
     fun `it should crash when provided with a shape that is directly constrained`() {
         val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
-        shouldThrow<IllegalArgumentException> { pubCrateConstrainedShapeSymbolProvider.toSymbol(constrainedStringShape) }
+        shouldThrow<IllegalArgumentException> {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(constrainedStringShape)
+        }
     }
 
     @Test
     fun `it should crash when provided with a shape that is unconstrained`() {
         val unconstrainedStringShape = model.lookup<StringShape>("test#UnconstrainedString")
-        shouldThrow<IllegalArgumentException> { pubCrateConstrainedShapeSymbolProvider.toSymbol(unconstrainedStringShape) }
+        shouldThrow<IllegalArgumentException> {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(unconstrainedStringShape)
+        }
     }
 
     @Test

@@ -7,7 +7,6 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
@@ -16,21 +15,34 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleDocProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -41,15 +53,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtoco
  */
 class PythonServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: ServerCodegenDecorator,
+    private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
-        val symbolVisitorConfig =
-            SymbolVisitorConfig(
+        val rustSymbolProviderConfig =
+            RustSymbolProviderConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -70,17 +83,22 @@ class PythonServerCodegenVisitor(
         settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
         fun baseSymbolProviderFactory(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
+            includeConstraintShapeProvider: Boolean,
+            codegenDecorator: ServerCodegenDecorator,
+        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
+            settings,
             model,
             service,
-            symbolVisitorConfig,
+            rustSymbolProviderConfig,
             settings.codegenConfig.publicConstrainedTypes,
+            codegenDecorator,
             ::baseSymbolProviderFactory,
         )
 
@@ -89,6 +107,7 @@ class PythonServerCodegenVisitor(
             ServerCodegenContext(
                 model,
                 serverSymbolProviders.symbolProvider,
+                null,
                 service,
                 protocol,
                 settings,
@@ -98,8 +117,20 @@ class PythonServerCodegenVisitor(
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
 
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+            ),
+        )
+
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -119,7 +150,18 @@ class PythonServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render()
+
+            shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+                ErrorImplGenerator(
+                    model,
+                    codegenContext.symbolProvider,
+                    this,
+                    shape,
+                    errorTrait,
+                    codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                ).render(CodegenTarget.SERVER)
+            }
 
             renderStructureShapeBuilder(shape, this)
         }
@@ -131,8 +173,8 @@ class PythonServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            PythonServerEnumGenerator(codegenContext, writer, shape)
+        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
+            PythonServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 
@@ -144,7 +186,32 @@ class PythonServerCodegenVisitor(
      * Note: this does not generate serializers
      */
     override fun unionShape(shape: UnionShape) {
-        throw CodegenException("Union shapes are not supported in Python yet")
+        logger.info("[python-server-codegen] Generating an union shape $shape")
+        rustCrate.useShapeWriter(shape) {
+            PythonServerUnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+        }
+
+        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+                model,
+                codegenContext.symbolProvider,
+            )
+        ) {
+            logger.info("[python-server-codegen] Generating an unconstrained type for union shape $shape")
+            rustCrate.withModule(ServerRustModule.UnconstrainedModule) modelsModuleWriter@{
+                UnconstrainedUnionGenerator(
+                    codegenContext,
+                    rustCrate.createInlineModuleCreator(),
+                    this@modelsModuleWriter,
+                    shape,
+                ).render()
+            }
+        }
+
+        if (shape.isEventStream()) {
+            rustCrate.withModule(ServerRustModule.Error) {
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+            }
+        }
     }
 
     /**
@@ -157,21 +224,26 @@ class PythonServerCodegenVisitor(
      * - Python operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
+        super.serviceShape(shape)
+
         logger.info("[python-server-codegen] Generating a service $shape")
-        PythonServerServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
-            codegenContext,
-        )
-            .render()
+
+        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        rustCrate.withModule(PythonServerRustModule.PythonServerApplication) {
+            PythonApplicationGenerator(codegenContext, serverProtocol)
+                .render(this)
+        }
     }
 
     override fun operationShape(shape: OperationShape) {
         super.operationShape(shape)
-        rustCrate.withModule(RustModule.public("python_operation_adaptor")) {
+
+        rustCrate.withModule(PythonServerRustModule.PythonOperationAdapter) {
             PythonServerOperationHandlerGenerator(codegenContext, shape).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.Error) {
+            PythonServerOperationErrorGenerator(codegenContext.model, codegenContext.symbolProvider, shape).render(this)
         }
     }
 }
