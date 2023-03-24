@@ -381,3 +381,15 @@ let app = app
 references = ["smithy-rs#2438"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
 author = "82marbag"
+
+[[aws-sdk-rust]]
+message = "The AWS SDK now compiles for the `wasm32-unknown-unknown` and `wasm32-wasi` targets when no default features are enabled. WebAssembly is not officially supported yet, but this is a great first step towards it!"
+references = ["smithy-rs#2254"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "eduardomourar"
+
+[[smithy-rs]]
+message = "Clients now compile for the `wasm32-unknown-unknown` and `wasm32-wasi` targets when no default features are enabled. WebAssembly is not officially supported yet, but this is a great first step towards it!"
+references = ["smithy-rs#2254"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+author = "eduardomourar"
