@@ -11,7 +11,9 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -40,9 +42,22 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations
 
+    /**
+     * Hook to customize generated errors.
+     */
+    fun errorCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = baseCustomizations
+
     fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap = currentProtocols
 
     fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> = listOf()
+
+    /**
+     * Hook to customize client construction documentation.
+     */
+    fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable = baseDocs
 }
 
 /**
@@ -72,6 +87,13 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
         decorator.operationCustomizations(codegenContext, operation, customizations)
     }
 
+    override fun errorCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.errorCustomizations(codegenContext, customizations)
+    }
+
     override fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap =
         combineCustomizations(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
@@ -79,6 +101,11 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =
         addCustomizations { decorator -> decorator.endpointCustomizations(codegenContext) }
+
+    override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable =
+        combineCustomizations(baseDocs) { decorator, customizations ->
+            decorator.clientConstructionDocs(codegenContext, customizations)
+        }
 
     companion object {
         fun fromClasspath(

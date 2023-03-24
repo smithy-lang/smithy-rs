@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
@@ -49,7 +48,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  */
 class DeriveEqAndHashSymbolMetadataProvider(
     private val base: RustSymbolProvider,
-    val model: Model,
 ) : SymbolMetadataProvider(base) {
     private val walker = DirectedWalker(model)
 
@@ -58,7 +56,7 @@ class DeriveEqAndHashSymbolMetadataProvider(
         val baseMetadata = base.toSymbol(shape).expectRustMetadata()
         // See class-level documentation for why we filter these out.
         return if (walker.walkShapes(shape)
-            .any { it is FloatShape || it is DoubleShape || it is DocumentShape || it.hasTrait<StreamingTrait>() }
+                .any { it is FloatShape || it is DoubleShape || it is DocumentShape || it.hasTrait<StreamingTrait>() }
         ) {
             baseMetadata
         } else {

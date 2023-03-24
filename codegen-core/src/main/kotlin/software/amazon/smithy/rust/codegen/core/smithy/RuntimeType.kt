@@ -241,7 +241,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Tracing = CargoDependency.Tracing.toType()
 
         // codegen types
-        val Config = RuntimeType("crate::config")
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
@@ -251,6 +250,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyClient(runtimeConfig: RuntimeConfig) = CargoDependency.smithyClient(runtimeConfig).toType()
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = CargoDependency.smithyEventStream(runtimeConfig).toType()
         fun smithyHttp(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttp(runtimeConfig).toType()
+        fun smithyHttpAuth(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttpAuth(runtimeConfig).toType()
+        fun smithyHttpTower(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttpTower(runtimeConfig).toType()
         fun smithyJson(runtimeConfig: RuntimeConfig) = CargoDependency.smithyJson(runtimeConfig).toType()
         fun smithyQuery(runtimeConfig: RuntimeConfig) = CargoDependency.smithyQuery(runtimeConfig).toType()
         fun smithyTypes(runtimeConfig: RuntimeConfig) = CargoDependency.smithyTypes(runtimeConfig).toType()
@@ -270,12 +271,14 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun classifyRetry(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("retry::ClassifyRetry")
         fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("DateTime")
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
-        fun errorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
-        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
-
-        fun genericError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Error")
+        fun retryErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
+        fun errorMetadata(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::ErrorMetadata")
+        fun errorMetadataBuilder(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::metadata::Builder")
+        fun provideErrorMetadataTrait(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::metadata::ProvideErrorMetadata")
+        fun unhandledError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::Unhandled")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
+        fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))
         fun labelFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("label::$func")
         fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
         fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
@@ -297,9 +300,29 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
 
-        fun timestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
+        fun parseTimestampFormat(
+            codegenTarget: CodegenTarget,
+            runtimeConfig: RuntimeConfig,
+            format: TimestampFormatTrait.Format,
+        ): RuntimeType {
             val timestampFormat = when (format) {
                 TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
+                // clients allow offsets, servers do nt
+                TimestampFormatTrait.Format.DATE_TIME -> codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+                TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
+                TimestampFormatTrait.Format.UNKNOWN -> TODO()
+            }
+
+            return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
+        }
+
+        fun serializeTimestampFormat(
+            runtimeConfig: RuntimeConfig,
+            format: TimestampFormatTrait.Format,
+        ): RuntimeType {
+            val timestampFormat = when (format) {
+                TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
+                // clients allow offsets, servers do not
                 TimestampFormatTrait.Format.DATE_TIME -> "DateTime"
                 TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                 TimestampFormatTrait.Format.UNKNOWN -> TODO()
@@ -311,8 +334,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun captureRequest(runtimeConfig: RuntimeConfig) =
             CargoDependency.smithyClientTestUtil(runtimeConfig).toType().resolve("test_connection::capture_request")
 
-        fun forInlineDependency(inlineDependency: InlineDependency) =
-            RuntimeType("crate::${inlineDependency.name}", inlineDependency)
+        fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             "${module.fullyQualifiedPath()}::$name",

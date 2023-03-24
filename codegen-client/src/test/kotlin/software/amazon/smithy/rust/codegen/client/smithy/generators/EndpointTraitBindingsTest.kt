@@ -13,10 +13,10 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -50,10 +50,10 @@ internal class EndpointTraitBindingsTest {
             }
         """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
-        val sym = testSymbolProvider(model)
+        val symbolProvider = testSymbolProvider(model)
         val endpointBindingGenerator = EndpointTraitBindings(
             model,
-            sym,
+            symbolProvider,
             TestRuntimeConfig,
             operationShape,
             operationShape.expectTrait(EndpointTrait::class.java),
@@ -67,7 +67,7 @@ internal class EndpointTraitBindingsTest {
                 }
                 """,
             )
-            implBlock(model.lookup("test#GetStatusInput"), sym) {
+            implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
                 rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     RuntimeType.smithyHttp(TestRuntimeConfig),
@@ -145,10 +145,10 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         let conf = $moduleName::Config::builder().build();
-                        $moduleName::operation::SayHello::builder()
+                        $moduleName::operation::say_hello::SayHelloInput::builder()
                             .greeting("hey there!").build().expect("input is valid")
                             .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
-                        let op = $moduleName::operation::SayHello::builder()
+                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");

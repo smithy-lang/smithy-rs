@@ -19,6 +19,7 @@ private fun fillInBaseModel(
 ): String = """
     namespace test
 
+    use smithy.framework#ValidationException
     use aws.protocols#$protocolName
 
     union TestUnion {
@@ -69,12 +70,20 @@ private fun fillInBaseModel(
         MessageWithNoHeaderPayloadTraits: MessageWithNoHeaderPayloadTraits,
         SomeError: SomeError,
     }
-    structure TestStreamInputOutput { @httpPayload @required value: TestStream }
+
+    structure TestStreamInputOutput {
+        @required
+        @httpPayload
+        value: TestStream
+    }
+
+    @http(method: "POST", uri: "/test")
     operation TestStreamOp {
         input: TestStreamInputOutput,
         output: TestStreamInputOutput,
-        errors: [SomeError],
+        errors: [SomeError, ValidationException],
     }
+
     $extraServiceAnnotations
     @$protocolName
     service TestService { version: "123", operations: [TestStreamOp] }
@@ -92,6 +101,7 @@ object EventStreamTestModels {
     data class TestCase(
         val protocolShapeId: String,
         val model: Model,
+        val mediaType: String,
         val requestContentType: String,
         val responseContentType: String,
         val validTestStruct: String,
@@ -111,7 +121,8 @@ object EventStreamTestModels {
         TestCase(
             protocolShapeId = "aws.protocols#restJson1",
             model = restJson1(),
-            requestContentType = "application/json",
+            mediaType = "application/json",
+            requestContentType = "application/vnd.amazon.eventstream",
             responseContentType = "application/json",
             validTestStruct = """{"someString":"hello","someInt":5}""",
             validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
@@ -126,6 +137,7 @@ object EventStreamTestModels {
         TestCase(
             protocolShapeId = "aws.protocols#awsJson1_1",
             model = awsJson11(),
+            mediaType = "application/x-amz-json-1.1",
             requestContentType = "application/x-amz-json-1.1",
             responseContentType = "application/x-amz-json-1.1",
             validTestStruct = """{"someString":"hello","someInt":5}""",
@@ -141,7 +153,8 @@ object EventStreamTestModels {
         TestCase(
             protocolShapeId = "aws.protocols#restXml",
             model = restXml(),
-            requestContentType = "application/xml",
+            mediaType = "application/xml",
+            requestContentType = "application/vnd.amazon.eventstream",
             responseContentType = "application/xml",
             validTestStruct = """
                 <TestStruct>

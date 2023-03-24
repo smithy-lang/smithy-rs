@@ -43,7 +43,6 @@ fn is_coroutine(py: Python, func: &PyObject) -> PyResult<bool> {
 }
 
 // Checks whether given Python type is `Optional[T]`.
-#[allow(unused)]
 pub fn is_optional_of<T: PyTypeInfo>(py: Python, ty: &PyAny) -> PyResult<bool> {
     // for reference: https://stackoverflow.com/a/56833826
 
@@ -131,6 +130,7 @@ async def async_func():
         })
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn check_if_is_optional_of() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();

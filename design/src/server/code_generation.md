@@ -7,13 +7,15 @@ This document introduces the project and how code is being generated. It is writ
 
 The project is divided in:
 
-- `/codegen`: it contains shared code for both client and server, but only generates a client
-- `/codegen-server`: server only. This project started with `codegen` to generate a client, but client and server share common code; that code lives in `codegen`, which `codegen-server` depends on
+- `/codegen-core`: contains common code to be used for both client and server code generation
+- `/codegen-client`: client code generation. Depends on `codegen-core`
+- `/codegen-server`: server code generation. Depends on `codegen-core`
 - `/aws`: the AWS Rust SDK, it deals with AWS services specifically. The folder structure reflects the project's, with the `rust-runtime` and the `codegen`
 - `/rust-runtime`: the generated client and server crates may depend on crates in this folder. Crates here are not code generated. The only crate that is not published is `inlineable`,
 which contains common functions used by other crates, [copied into][2] the source crate
 
-`/rust-runtime` crates ("runtime crates") are added to a crate's dependency only when used. If a model uses event streams, it will depend on [`aws-smithy-eventstream`][3].
+Crates in `/rust-runtime` (informally referred to as "runtime crates") are added to a crate's dependency only when used.
+For example, if a model uses event streams, the generated crates will depend on [`aws-smithy-eventstream`][3].
 
 ## Generating code
 

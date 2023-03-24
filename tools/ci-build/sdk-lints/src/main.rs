@@ -65,20 +65,17 @@ enum Args {
 }
 
 fn load_vcs_files() -> Result<Vec<PathBuf>> {
-    let tracked_files = Command::new("git")
-        .arg("ls-tree")
-        .arg("-r")
-        .arg("HEAD")
-        .arg("--name-only")
+    // This includes files in the index and the working tree (staged or unstaged), as well as
+    // unignored untracked files.
+    let vcs_files = Command::new("git")
+        .arg("ls-files")
+        .arg("--cached")
+        .arg("--others")
+        .arg("--exclude-standard")
         .current_dir(load_repo_root()?)
         .output()
-        .context("couldn't load VCS tracked files")?;
-    let mut output = String::from_utf8(tracked_files.stdout)?;
-    let changed_files = Command::new("git")
-        .arg("diff")
-        .arg("--name-only")
-        .output()?;
-    output.push_str(std::str::from_utf8(changed_files.stdout.as_slice())?);
+        .context("couldn't load VCS files")?;
+    let output = String::from_utf8(vcs_files.stdout)?;
     let files = output
         .lines()
         .map(|line| PathBuf::from(line.trim().to_string()));
