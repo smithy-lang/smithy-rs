@@ -381,3 +381,15 @@ let app = app
 references = ["smithy-rs#2438"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
 author = "82marbag"
+
+[[aws-sdk-rust]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"
