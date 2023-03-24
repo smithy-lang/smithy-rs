@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The outputs for event stream operations (for example, S3's SelectObjectContent) now implement the `Sync` auto-trait."
+references = ["smithy-rs#2496"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The outputs for event stream operations now implement the `Sync` auto-trait."
+references = ["smithy-rs#2496"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "jdisanti"
