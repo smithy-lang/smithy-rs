@@ -1,4 +1,120 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 23rd, 2023
+================
+**Breaking Changes:**
+- ⚠🎉 (all, [smithy-rs#2467](https://github.com/awslabs/smithy-rs/issues/2467)) Update MSRV to 1.66.1
+- ⚠ (client, [smithy-rs#76](https://github.com/awslabs/smithy-rs/issues/76), [smithy-rs#2129](https://github.com/awslabs/smithy-rs/issues/2129)) Generic clients no longer expose a `request_id()` function on errors. To get request ID functionality, use the SDK code generator.
+- ⚠ (client, [smithy-rs#76](https://github.com/awslabs/smithy-rs/issues/76), [smithy-rs#2129](https://github.com/awslabs/smithy-rs/issues/2129)) The `message()` and `code()` methods on errors have been moved into `ProvideErrorMetadata` trait. This trait will need to be imported to continue calling these.
+- ⚠ (client, [smithy-rs#76](https://github.com/awslabs/smithy-rs/issues/76), [smithy-rs#2129](https://github.com/awslabs/smithy-rs/issues/2129), [smithy-rs#2075](https://github.com/awslabs/smithy-rs/issues/2075)) The `*Error` and `*ErrorKind` types have been combined to make error matching simpler.
+    <details>
+    <summary>Example with S3</summary>
+    **Before:**
+    ```rust
+    let result = client
+        .get_object()
+        .bucket(BUCKET_NAME)
+        .key("some-key")
+        .send()
+        .await;
+    match result {
+        Ok(_output) => { /* Do something with the output */ }
+        Err(err) => match err.into_service_error() {
+            GetObjectError { kind, .. } => match kind {
+                GetObjectErrorKind::InvalidObjectState(value) => println!("invalid object state: {:?}", value),
+                GetObjectErrorKind::NoSuchKey(_) => println!("object didn't exist"),
+            }
+            err @ GetObjectError { .. } if err.code() == Some("SomeUnmodeledError") => {}
+            err @ _ => return Err(err.into()),
+        },
+    }
+    ```
+    **After:**
+    ```rust
+    // Needed to access the `.code()` function on the error type:
+    use aws_sdk_s3::types::ProvideErrorMetadata;
+    let result = client
+        .get_object()
+        .bucket(BUCKET_NAME)
+        .key("some-key")
+        .send()
+        .await;
+    match result {
+        Ok(_output) => { /* Do something with the output */ }
+        Err(err) => match err.into_service_error() {
+            GetObjectError::InvalidObjectState(value) => {
+                println!("invalid object state: {:?}", value);
+            }
+            GetObjectError::NoSuchKey(_) => {
+                println!("object didn't exist");
+            }
+            err if err.code() == Some("SomeUnmodeledError") => {}
+            err @ _ => return Err(err.into()),
+        },
+    }
+    ```
+    </details>
+- ⚠ (client, [smithy-rs#76](https://github.com/awslabs/smithy-rs/issues/76), [smithy-rs#2129](https://github.com/awslabs/smithy-rs/issues/2129)) `aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`.
+- ⚠ (server, [smithy-rs#2436](https://github.com/awslabs/smithy-rs/issues/2436)) Remove unnecessary type parameter `B` from `Upgrade` service.
+- 🐛⚠ (server, [smithy-rs#2382](https://github.com/awslabs/smithy-rs/issues/2382)) Smithy members named `send` were previously renamed to `send_value` at codegen time. These will now be called `send` in the generated code.
+- ⚠ (client, [smithy-rs#2448](https://github.com/awslabs/smithy-rs/issues/2448)) The modules in generated client crates have been reorganized. See the [Client Crate Reorganization Upgrade Guidance](https://github.com/awslabs/smithy-rs/discussions/2449) to see how to fix your code after this change.
+- ⚠ (server, [smithy-rs#2438](https://github.com/awslabs/smithy-rs/issues/2438)) Servers can send the `ServerRequestId` in the response headers.
+    Servers need to create their service using the new layer builder `ServerRequestIdProviderLayer::new_with_response_header`:
+    ```
+    let app = app
+        .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id")));
+    ```
+
+**New this release:**
+- 🐛🎉 (client, [aws-sdk-rust#740](https://github.com/awslabs/aws-sdk-rust/issues/740)) Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated.
+- 🎉 (all, [smithy-rs#2398](https://github.com/awslabs/smithy-rs/issues/2398)) Add support for the `awsQueryCompatible` trait. This allows services to continue supporting a custom error code (via the `awsQueryError` trait) when the services migrate their protocol from `awsQuery` to `awsJson1_0` annotated with `awsQueryCompatible`.
+    <details>
+    <summary>Click to expand for more details...</summary>
+
+    After the migration, services will include an additional header `x-amzn-query-error` in their responses whose value is in the form of `<error code>;<error type>`. An example response looks something like
+    ```
+    HTTP/1.1 400
+    x-amzn-query-error: AWS.SimpleQueueService.NonExistentQueue;Sender
+    Date: Wed, 08 Sep 2021 23:46:52 GMT
+    Content-Type: application/x-amz-json-1.0
+    Content-Length: 163
+
+    {
+        "__type": "com.amazonaws.sqs#QueueDoesNotExist",
+        "message": "some user-visible message"
+    }
+    ```
+    `<error code>` is `AWS.SimpleQueueService.NonExistentQueue` and `<error type>` is `Sender`.
+
+    If an operation results in an error that causes a service to send back the response above, you can access `<error code>` and `<error type>` as follows:
+    ```rust
+    match client.some_operation().send().await {
+        Ok(_) => { /* success */ }
+        Err(sdk_err) => {
+            let err = sdk_err.into_service_error();
+            assert_eq!(
+                error.meta().code(),
+                Some("AWS.SimpleQueueService.NonExistentQueue"),
+            );
+            assert_eq!(error.meta().extra("type"), Some("Sender"));
+        }
+    }
+    </details>
+    ```
+- 🎉 (client, [smithy-rs#2428](https://github.com/awslabs/smithy-rs/issues/2428), [smithy-rs#2208](https://github.com/awslabs/smithy-rs/issues/2208)) `SdkError` variants can now be constructed for easier unit testing.
+- 🐛 (server, [smithy-rs#2441](https://github.com/awslabs/smithy-rs/issues/2441)) Fix `FilterByOperationName` plugin. This previous caused services with this applied to fail to compile due to mismatched bounds.
+- (client, [smithy-rs#2437](https://github.com/awslabs/smithy-rs/issues/2437), [aws-sdk-rust#600](https://github.com/awslabs/aws-sdk-rust/issues/600)) Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`.
+- 🐛 (all, [smithy-rs#2226](https://github.com/awslabs/smithy-rs/issues/2226)) Fix bug in timestamp format resolution. Prior to this fix, the timestamp format may have been incorrect if set on the target instead of on the member.
+- (all, [smithy-rs#2226](https://github.com/awslabs/smithy-rs/issues/2226)) Add support for offsets when parsing datetimes. RFC3339 date times now support offsets like `-0200`
+- (client, [aws-sdk-rust#160](https://github.com/awslabs/aws-sdk-rust/issues/160), [smithy-rs#2445](https://github.com/awslabs/smithy-rs/issues/2445)) Reconnect on transient errors.
+
+    Note: **this behavior is disabled by default for generic clients**. It can be enabled with
+    `aws_smithy_client::Builder::reconnect_on_transient_errors`
+
+    If a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not
+    be reused.
+- (all, [smithy-rs#2474](https://github.com/awslabs/smithy-rs/issues/2474)) Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)
+
+
 January 25th, 2023
 ==================
 **New this release:**
