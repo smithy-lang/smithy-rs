@@ -91,7 +91,7 @@ impl HttpAuthOption {
     }
 
     pub fn properties(&self) -> &PropertyBag {
-        &*self.properties
+        &self.properties
     }
 }
 
