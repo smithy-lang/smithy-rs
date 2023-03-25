@@ -7,9 +7,10 @@ use crate::client::identity::Identity;
 use crate::client::interceptors::context::{Input, OutputOrError};
 use crate::client::interceptors::InterceptorContext;
 use crate::config_bag::ConfigBag;
-use crate::type_erasure::TypeErasedBox;
+use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::property_bag::PropertyBag;
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -51,7 +52,18 @@ pub trait RetryStrategy: Send + Sync + Debug {
     ) -> Result<bool, BoxError>;
 }
 
-pub type AuthOptionResolverParams = TypeErasedBox;
+#[derive(Debug)]
+pub struct AuthOptionResolverParams(TypeErasedBox);
+
+impl AuthOptionResolverParams {
+    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+        Self(TypedBox::new(params).erase())
+    }
+
+    pub fn get<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
+}
 
 pub trait AuthOptionResolver: Send + Sync + Debug {
     fn resolve_auth_options(
@@ -63,20 +75,14 @@ pub trait AuthOptionResolver: Send + Sync + Debug {
 #[derive(Clone, Debug)]
 pub struct HttpAuthOption {
     scheme_id: &'static str,
-    identity_properties: Arc<PropertyBag>,
-    signer_properties: Arc<PropertyBag>,
+    properties: Arc<PropertyBag>,
 }
 
 impl HttpAuthOption {
-    pub fn new(
-        scheme_id: &'static str,
-        identity_properties: Arc<PropertyBag>,
-        signer_properties: Arc<PropertyBag>,
-    ) -> Self {
+    pub fn new(scheme_id: &'static str, properties: Arc<PropertyBag>) -> Self {
         Self {
             scheme_id,
-            identity_properties,
-            signer_properties,
+            properties,
         }
     }
 
@@ -84,12 +90,8 @@ impl HttpAuthOption {
         self.scheme_id
     }
 
-    pub fn identity_properties(&self) -> &PropertyBag {
-        &*self.identity_properties
-    }
-
-    pub fn signer_properties(&self) -> &PropertyBag {
-        &*self.signer_properties
+    pub fn properties(&self) -> &PropertyBag {
+        &*self.properties
     }
 }
 
@@ -97,19 +99,17 @@ pub trait IdentityResolver: Send + Sync + Debug {
     fn resolve_identity(&self, cfg: &ConfigBag) -> Result<Identity, BoxError>;
 }
 
-pub struct IdentityResolverConfig {
+#[derive(Debug)]
+pub struct IdentityResolvers {
     identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
 }
 
-impl IdentityResolverConfig {
-    pub fn builder() -> builders::IdentityResolverConfigBuilder {
-        builders::IdentityResolverConfigBuilder::new()
+impl IdentityResolvers {
+    pub fn builder() -> builders::IdentityResolversBuilder {
+        builders::IdentityResolversBuilder::new()
     }
 
-    pub fn get_identity_resolver(
-        &self,
-        identity_type: &'static str,
-    ) -> Option<&dyn IdentityResolver> {
+    pub fn identity_resolver(&self, identity_type: &'static str) -> Option<&dyn IdentityResolver> {
         self.identity_resolvers
             .iter()
             .find(|resolver| resolver.0 == identity_type)
@@ -117,13 +117,33 @@ impl IdentityResolverConfig {
     }
 }
 
+#[derive(Debug)]
+struct HttpAuthSchemesInner {
+    schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
+}
+#[derive(Debug)]
+pub struct HttpAuthSchemes {
+    inner: Arc<HttpAuthSchemesInner>,
+}
+
+impl HttpAuthSchemes {
+    pub fn builder() -> builders::HttpAuthSchemesBuilder {
+        Default::default()
+    }
+
+    pub fn scheme(&self, name: &'static str) -> Option<&dyn HttpAuthScheme> {
+        self.inner
+            .schemes
+            .iter()
+            .find(|scheme| scheme.0 == name)
+            .map(|scheme| &*scheme.1)
+    }
+}
+
 pub trait HttpAuthScheme: Send + Sync + Debug {
     fn scheme_id(&self) -> &'static str;
 
-    fn identity_resolver(
-        &self,
-        identity_resolver_config: &IdentityResolverConfig,
-    ) -> &dyn IdentityResolver;
+    fn identity_resolver(&self, identity_resolvers: &IdentityResolvers) -> &dyn IdentityResolver;
 
     fn request_signer(&self) -> &dyn HttpRequestSigner;
 }
@@ -146,19 +166,29 @@ pub trait EndpointResolver: Send + Sync + Debug {
         request: &mut HttpRequest,
         cfg: &ConfigBag,
     ) -> Result<(), BoxError>;
-
-    fn resolve_auth_schemes(&self) -> Result<Vec<String>, BoxError>;
 }
 
 pub trait ConfigBagAccessors {
-    fn retry_strategy(&self) -> &dyn RetryStrategy;
-    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
+    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams;
+    fn set_auth_option_resolver_params(
+        &mut self,
+        auth_option_resolver_params: AuthOptionResolverParams,
+    );
+
+    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver;
+    fn set_auth_option_resolver(&mut self, auth_option_resolver: impl AuthOptionResolver + 'static);
 
     fn endpoint_resolver(&self) -> &dyn EndpointResolver;
     fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static);
 
+    fn identity_resolvers(&self) -> &IdentityResolvers;
+    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers);
+
     fn connection(&self) -> &dyn Connection;
     fn set_connection(&mut self, connection: impl Connection + 'static);
+
+    fn http_auth_schemes(&self) -> &HttpAuthSchemes;
+    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes);
 
     fn request_serializer(&self) -> &dyn RequestSerializer;
     fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static);
@@ -169,11 +199,48 @@ pub trait ConfigBagAccessors {
         response_serializer: impl ResponseDeserializer + 'static,
     );
 
+    fn retry_strategy(&self) -> &dyn RetryStrategy;
+    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
+
     fn trace_probe(&self) -> &dyn TraceProbe;
     fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static);
 }
 
 impl ConfigBagAccessors for ConfigBag {
+    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams {
+        self.get::<AuthOptionResolverParams>()
+            .expect("auth option resolver params must be set")
+    }
+
+    fn set_auth_option_resolver_params(
+        &mut self,
+        auth_option_resolver_params: AuthOptionResolverParams,
+    ) {
+        self.put::<AuthOptionResolverParams>(auth_option_resolver_params);
+    }
+
+    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver {
+        &**self
+            .get::<Box<dyn AuthOptionResolver>>()
+            .expect("an auth option resolver must be set")
+    }
+
+    fn set_auth_option_resolver(
+        &mut self,
+        auth_option_resolver: impl AuthOptionResolver + 'static,
+    ) {
+        self.put::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
+    }
+
+    fn http_auth_schemes(&self) -> &HttpAuthSchemes {
+        self.get::<HttpAuthSchemes>()
+            .expect("auth schemes must be set")
+    }
+
+    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes) {
+        self.put::<HttpAuthSchemes>(http_auth_schemes);
+    }
+
     fn retry_strategy(&self) -> &dyn RetryStrategy {
         &**self
             .get::<Box<dyn RetryStrategy>>()
@@ -192,6 +259,15 @@ impl ConfigBagAccessors for ConfigBag {
 
     fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static) {
         self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
+    }
+
+    fn identity_resolvers(&self) -> &IdentityResolvers {
+        self.get::<IdentityResolvers>()
+            .expect("identity resolvers must be configured")
+    }
+
+    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers) {
+        self.put::<IdentityResolvers>(identity_resolvers);
     }
 
     fn connection(&self) -> &dyn Connection {
@@ -242,11 +318,11 @@ pub mod builders {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct IdentityResolverConfigBuilder {
+    pub struct IdentityResolversBuilder {
         identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
     }
 
-    impl IdentityResolverConfigBuilder {
+    impl IdentityResolversBuilder {
         pub fn new() -> Self {
             Default::default()
         }
@@ -261,9 +337,37 @@ pub mod builders {
             self
         }
 
-        pub fn build(self) -> IdentityResolverConfig {
-            IdentityResolverConfig {
+        pub fn build(self) -> IdentityResolvers {
+            IdentityResolvers {
                 identity_resolvers: self.identity_resolvers,
+            }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct HttpAuthSchemesBuilder {
+        schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
+    }
+
+    impl HttpAuthSchemesBuilder {
+        pub fn new() -> Self {
+            Default::default()
+        }
+
+        pub fn auth_scheme(
+            mut self,
+            name: &'static str,
+            auth_scheme: impl HttpAuthScheme + 'static,
+        ) -> Self {
+            self.schemes.push((name, Box::new(auth_scheme) as _));
+            self
+        }
+
+        pub fn build(self) -> HttpAuthSchemes {
+            HttpAuthSchemes {
+                inner: Arc::new(HttpAuthSchemesInner {
+                    schemes: self.schemes,
+                }),
             }
         }
     }
