@@ -1,0 +1,2 @@
+group_name = "smithy-rs-compiletime-benchmark"
+description = "This security group is created for the smithy-rs's compute environment on aws-batch."

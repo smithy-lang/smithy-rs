@@ -8,9 +8,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use aws_sdk_ec2::model::TagSpecification;
 use serde::Serialize;
 use tokio::{spawn, task::JoinError};
 
+const APP_NAME: &'static str= "SmithyRsBenchmark";
+const TOGGLE_DRY_RUN: bool = env!("IS_DRY_RUN") == "FALSE";
 fn main() {
     println!("Hello, world!");
 }
@@ -56,13 +59,31 @@ impl SaveData {
     }
 }
 
-async fn create_batch_resources(
-    client: aws_sdk_batch::Client,
-    save_data: &mut SaveData,
-) -> Result<(), JoinError> {
-    let ce = tokio::spawn(client.create_compute_environment().send());
-    let queue = tokio::spawn(client.create_job_queue().send());
-    let definition = tokio::spawn(client.register_job_definition().send());
+async fn setup_resources() -> Result<(), JoinError> {
+    let conf = aws_config::load_from_env().await;
+    let tags = {
+        include_str!("../config/common/tag.toml")
+    };
+    // ec2
+    {
+        let client_ec2 = aws_sdk_ec2::Client::new(&conf);
+        let id = client_ec2.create_security_group().set_fields(include_str!("./config/ec2/create_security_group.toml")).send().await.unwrap().group_id();
+        client_ec2.authorize_security_group_egress().group_id(id).tag_specifications(TagSpecification::builder().resource_type(aws_sdk_ec2::model::ResourceType::SecurityGroupRule).build()).send().await.unwrap();
+        client_ec2.create_key_pair().set_fields(include_str!("./config/ec2/create_key_pair.toml")).send().await;
+        client_ec2.create_launch_template().set_tag_specifications(input).set_fields(include_str!("./config/ec2/create_launch_template.toml")).send().await;
+    };
+
+    {
+        let client_batch = aws_sdk_batch::Client::new(&conf);
+        client_batch.register_job_definition().set_fields();
+        client.create_compute_environment().send();
+        client.create_job_queue().send();
+        client.register_job_definition().send();
+    };
+
+
+    client_batch.submit_job();
+
     Ok(())
 }
 

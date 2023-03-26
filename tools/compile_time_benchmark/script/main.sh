@@ -4,3 +4,7 @@
 #
 
 git clone https://github.com/awslabs/smithy-rs.git
+./gradlew :codegen-client
+
+cargo build
+cargo build --release

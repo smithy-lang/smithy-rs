@@ -1,0 +1,10 @@
+[[ip_permission]]
+from_port = -1
+to_port = -1
+[[ip_permission.ip_ranges]]
+cidr_ip = "0.0.0.0/0"
+description = "all"
+
+[[ip_permission.ipv6_ranges]]
+cidr_ipv6 = "0.0.0.0/0"
+description = "all"

@@ -1,0 +1,6 @@
+[tag_specifications]
+resource_type = "KeyPair"
+
+[[tag_specifications.tag]]
+key = "SmithyRs"
+value = "true"

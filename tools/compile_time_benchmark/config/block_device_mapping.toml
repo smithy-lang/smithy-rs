@@ -1,7 +1,0 @@
-device_name = "/dev/sdh"
-[ebs]
-snapshot_id = !TODO
-encrypted = false
-delete_on_termination = true
-volume_type = "Gp2"
-volume_size = 100

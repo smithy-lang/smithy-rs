@@ -1,1 +1,1 @@
-PREFIX_NAME = "COMP_TIME_BENCH"
+ec2_key_name="SmithyRsBenchmarkKey"
