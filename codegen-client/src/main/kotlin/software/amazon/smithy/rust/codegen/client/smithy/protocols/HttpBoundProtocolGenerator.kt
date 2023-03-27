@@ -291,6 +291,7 @@ class HttpBoundProtocolTraitImplGenerator(
             impl #{ParseResponse} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
                 fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
+                     #{BeforeParseResponse}
                     // This is an error, defer to the non-streaming parser
                     if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
                         return None;
@@ -307,6 +308,9 @@ class HttpBoundProtocolTraitImplGenerator(
             "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_streaming_response" to parseStreamingResponseNoRt(operationShape, customizations),
             "parse_error" to parseError(operationShape, customizations),
+            "BeforeParseResponse" to writable {
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+            },
             *codegenScope,
         )
     }
