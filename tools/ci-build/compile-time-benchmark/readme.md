@@ -3,11 +3,18 @@
 This is a cli app that let's you to benchmark the compile time.
 It is part of RFC30.
 
+# How to use
 
-# Directories
+```bash
+# set `IS_DRY_RUN` to FALSE if you want to turn off the dry run. 
+# export IS_DRY_RUN=FALSE
 
-# Constance
-SmithyRs
-SmithyRsBenchmark
+# create necessary resources on aws
+cargo run --release --bin initial-setup
 
-IAM PROFILE NAME: SmithyRsIAMProfileForEC2
+# submit job to batch
+cargo run --release --bin submit-job
+
+# delete all resources on aws
+cargo run --release --bin delete-all
+```
