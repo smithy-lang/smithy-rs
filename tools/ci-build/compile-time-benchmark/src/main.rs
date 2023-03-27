@@ -12,7 +12,6 @@ use aws_sdk_ec2::model::TagSpecification;
 use serde::Serialize;
 use tokio::{spawn, task::JoinError};
 
-const APP_NAME: &'static str= "SmithyRsBenchmark";
 const TOGGLE_DRY_RUN: bool = env!("IS_DRY_RUN") == "FALSE";
 fn main() {
     let conf = aws_config::load_from_env().await;
