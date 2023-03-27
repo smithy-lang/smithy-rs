@@ -8,9 +8,12 @@ edition = "2021"
 [dependencies]
 aws-config = "0.54.1"
 aws-sdk-batch = "0.24.0"
+aws-sdk-cloudcontrol = "0.24.0"
 aws-sdk-ec2 = "0.24.0"
+aws-sdk-iam = "0.24.0"
+aws-sdk-resourceexplorer2 = "0.2.0"
 env_logger = "0.10.0"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
-tokio = { version = "1.25.0", features = ["tokio-macros", "macros"] }
+tokio = { version = "1.25.0", features = ["tokio-macros", "macros", "rt-multi-thread"] }
 toml = "0.7.1"

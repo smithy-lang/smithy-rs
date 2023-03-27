@@ -11,7 +11,7 @@ timeout = 6_000
 [retry_strategy]
 attempts = 0
 [container_properties]
-memory = 63gb
+memory = 61440
 image = "smithy-rs-compiletime-benchmark"
 vpus = 64
 command = ["bash", "main.sh"]
@@ -21,3 +21,5 @@ execution_role_arn = "smithy-rs-compiletime-benchmark"
 log_driver = "Awslogs"
 [network_configuration]
 assign_public_ip = "Enabled"
+
+propagate_tags=true

@@ -7,4 +7,4 @@ priority = 1
 state = "Enabled"
 [compute_environment_order]
     order = 1
-    compute_environment = "TODO"
+    compute_environment = "smithy-rs-compiletime-benchmark-c7g2xlarge"

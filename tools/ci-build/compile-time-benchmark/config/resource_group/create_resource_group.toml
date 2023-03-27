@@ -1,7 +1,0 @@
-name = "smithy_rs_compilation_benchmark_resource_group"
-description = """
-Resources for benchmarking smithy-rs's compile time.    
-Resources here is created by `compile_time_benchmark` tool which you can find it on smithy-rs repository.  
-
-
-"""
