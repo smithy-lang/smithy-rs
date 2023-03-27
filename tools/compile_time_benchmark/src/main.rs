@@ -59,6 +59,13 @@ impl SaveData {
     }
 }
 
+macro_rules! ec2_request {
+    ($client: ident, $target: ident) => {
+        let file = include_str!(concat!("./config/ec2/", stringify!($target)));
+        $client.$target().set_fields(file).send()
+    };
+}
+
 async fn setup_resources() -> Result<(), JoinError> {
     let conf = aws_config::load_from_env().await;
     let tags = {
