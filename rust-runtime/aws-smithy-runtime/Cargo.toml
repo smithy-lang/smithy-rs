@@ -12,10 +12,13 @@ publish = false
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+bytes = "1"
 http = "0.2.8"
 http-body = "0.4.5"
+pin-utils = "0.1.0"
+tracing = "0.1"
 
 [package.metadata.docs.rs]
 all-features = true
