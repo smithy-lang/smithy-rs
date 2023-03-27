@@ -138,7 +138,6 @@ class ServerProtocolTestGenerator(
 
     fun render(writer: RustWriter) {
         for (operation in operations) {
-            protocolGenerator.renderOperation(writer, operation)
             renderOperationTestCases(operation, writer)
         }
     }
