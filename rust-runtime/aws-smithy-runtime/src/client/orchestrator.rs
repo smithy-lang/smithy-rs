@@ -39,7 +39,8 @@ pub async fn invoke(
         // Serialization
         .include_mut(|ctx| {
             let request_serializer = cfg.request_serializer();
-            let request = request_serializer.serialize_input(ctx.input(), cfg)?;
+            let request = request_serializer
+                .serialize_input(ctx.take_input().expect("input set at this point"))?;
             ctx.set_request(request);
             Result::<(), BoxError>::Ok(())
         })?
@@ -83,7 +84,7 @@ pub async fn invoke(
         let handling_phase = Phase::response_handling(context)
             .include_mut(|ctx| interceptors.modify_before_completion(ctx, cfg))?;
         let trace_probe = cfg.trace_probe();
-        trace_probe.dispatch_events(cfg);
+        trace_probe.dispatch_events();
 
         break handling_phase.include(|ctx| interceptors.read_after_execution(ctx, cfg))?;
     };
@@ -105,7 +106,7 @@ async fn make_an_attempt(
             let request = ctx.request_mut().expect("request has been set");
 
             let endpoint_resolver = cfg.endpoint_resolver();
-            endpoint_resolver.resolve_and_apply_endpoint(request, cfg)
+            endpoint_resolver.resolve_and_apply_endpoint(request)
         })?
         .include_mut(|ctx| interceptors.modify_before_signing(ctx, cfg))?
         .include(|ctx| interceptors.read_before_signing(ctx, cfg))?;

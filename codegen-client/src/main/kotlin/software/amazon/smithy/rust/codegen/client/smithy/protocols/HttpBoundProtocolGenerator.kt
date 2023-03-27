@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
@@ -31,16 +32,18 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 class HttpBoundProtocolGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
+    bodyGenerator: ProtocolPayloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
 ) : ClientProtocolGenerator(
     codegenContext,
     protocol,
     MakeOperationGenerator(
         codegenContext,
         protocol,
-        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+        bodyGenerator,
         public = true,
         includeDefaultPayloadHeaders = true,
     ),
+    bodyGenerator,
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 

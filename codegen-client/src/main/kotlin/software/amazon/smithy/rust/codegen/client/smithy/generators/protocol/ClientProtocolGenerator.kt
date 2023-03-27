@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -29,7 +30,10 @@ open class ClientProtocolGenerator(
      * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
+    // TODO(enableNewSmithyRuntime): Remove the `makeOperationGenerator`
     private val makeOperationGenerator: MakeOperationGenerator,
+    private val bodyGenerator: ProtocolPayloadGenerator,
+    // TODO(enableNewSmithyRuntime): Remove the `traitGenerator`
     private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
 ) : ProtocolGenerator(codegenContext, protocol) {
     /**
@@ -85,10 +89,13 @@ open class ClientProtocolGenerator(
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        when (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-            true -> ResponseDeserializerGenerator(codegenContext, protocol)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
+
+        if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            ResponseDeserializerGenerator(codegenContext, protocol)
                 .render(operationWriter, operationShape, customizations)
-            else -> traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
+            RequestSerializerGenerator(codegenContext, protocol, bodyGenerator)
+                .render(operationWriter, operationShape, customizations)
         }
     }
 }
