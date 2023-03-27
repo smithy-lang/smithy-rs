@@ -124,16 +124,14 @@ pub mod builders {
     /// Builder for [`ServiceError`](super::ServiceError).
     #[derive(Debug)]
     pub struct ServiceErrorBuilder<E, R> {
-        modeled_source: Option<E>,
-        unmodeled_source: Option<BoxError>,
+        source: Option<E>,
         raw: Option<R>,
     }
 
     impl<E, R> Default for ServiceErrorBuilder<E, R> {
         fn default() -> Self {
             Self {
-                modeled_source: None,
-                unmodeled_source: None,
+                source: None,
                 raw: None,
             }
         }
@@ -146,40 +144,14 @@ pub mod builders {
         }
 
         /// Sets the error source.
-        #[deprecated(note = "Use `modeled_source`.")]
-        pub fn source(mut self, modeled_source: impl Into<E>) -> Self {
-            self.modeled_source = Some(modeled_source.into());
+        pub fn source(mut self, source: impl Into<E>) -> Self {
+            self.source = Some(source.into());
             self
         }
 
         /// Sets the error source.
-        #[deprecated(note = "Use `set_modeled_source`.")]
-        pub fn set_source(&mut self, modeled_source: Option<E>) -> &mut Self {
-            self.modeled_source = modeled_source;
-            self
-        }
-
-        /// Sets the modeled error source.
-        pub fn modeled_source(mut self, modeled_source: impl Into<E>) -> Self {
-            self.modeled_source = Some(modeled_source.into());
-            self
-        }
-
-        /// Sets the modeled error source.
-        pub fn set_modeled_source(&mut self, modeled_source: Option<E>) -> &mut Self {
-            self.modeled_source = modeled_source;
-            self
-        }
-
-        /// Sets the unmodeled error source.
-        pub fn unmodeled_source(mut self, unmodeled_source: impl Into<BoxError>) -> Self {
-            self.unmodeled_source = Some(unmodeled_source.into());
-            self
-        }
-
-        /// Sets the unmodeled error source.
-        pub fn set_unmodeled_source(&mut self, unmodeled_source: Option<BoxError>) -> &mut Self {
-            self.unmodeled_source = unmodeled_source;
+        pub fn set_source(&mut self, source: Option<E>) -> &mut Self {
+            self.source = source;
             self
         }
 
@@ -198,8 +170,7 @@ pub mod builders {
         /// Builds the error context.
         pub fn build(self) -> ServiceError<E, R> {
             ServiceError {
-                modeled_source: self.modeled_source.expect("modeled_source is required"),
-                unmodeled_source: self.unmodeled_source,
+                source: self.source.expect("source is required"),
                 raw: self.raw.expect("a raw response is required"),
             }
         }
@@ -300,9 +271,7 @@ impl<R> ResponseError<R> {
 #[derive(Debug)]
 pub struct ServiceError<E, R> {
     /// Modeled service error
-    modeled_source: E,
-    /// Unmodeled error source
-    unmodeled_source: Option<BoxError>,
+    source: E,
     /// Raw response from the service
     raw: R,
 }
@@ -315,12 +284,12 @@ impl<E, R> ServiceError<E, R> {
 
     /// Returns the underlying error of type `E`
     pub fn err(&self) -> &E {
-        &self.modeled_source
+        &self.source
     }
 
     /// Converts this error context into the underlying error `E`
     pub fn into_err(self) -> E {
-        self.modeled_source
+        self.source
     }
 
     /// Returns a reference to the raw response
@@ -331,11 +300,6 @@ impl<E, R> ServiceError<E, R> {
     /// Converts this error context into the raw response
     pub fn into_raw(self) -> R {
         self.raw
-    }
-
-    #[doc(hidden)]
-    pub fn additional_error_context(&self) -> Option<&(dyn Error + Send + Sync)> {
-        self.unmodeled_source.as_deref()
     }
 }
 
@@ -406,12 +370,8 @@ impl<E, R> SdkError<E, R> {
     }
 
     /// Construct a `SdkError` for a service failure
-    pub fn service_error(modeled_source: E, raw: R) -> Self {
-        Self::ServiceError(ServiceError {
-            modeled_source,
-            raw,
-            unmodeled_source: None,
-        })
+    pub fn service_error(source: E, raw: R) -> Self {
+        Self::ServiceError(ServiceError { source, raw })
     }
 
     /// Returns the underlying service error `E` if there is one
@@ -452,7 +412,7 @@ impl<E, R> SdkError<E, R> {
         R: Debug + Send + Sync + 'static,
     {
         match self {
-            Self::ServiceError(context) => context.modeled_source,
+            Self::ServiceError(context) => context.source,
             _ => E::create_unhandled_error(self.into(), None),
         }
     }
@@ -470,7 +430,7 @@ impl<E, R> SdkError<E, R> {
             TimeoutError(context) => Ok(context.source),
             ResponseError(context) => Ok(context.source),
             DispatchFailure(context) => Ok(context.source.into()),
-            ServiceError(context) => Ok(context.modeled_source.into()),
+            ServiceError(context) => Ok(context.source.into()),
         }
     }
 
@@ -479,8 +439,7 @@ impl<E, R> SdkError<E, R> {
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
         match self {
             Self::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
-                modeled_source: map(context.modeled_source),
-                unmodeled_source: context.unmodeled_source,
+                source: map(context.source),
                 raw: context.raw,
             }),
             Self::ConstructionFailure(context) => SdkError::<E2, R>::ConstructionFailure(context),
@@ -515,7 +474,7 @@ where
             TimeoutError(context) => Some(context.source.as_ref()),
             ResponseError(context) => Some(context.source.as_ref()),
             DispatchFailure(context) => Some(&context.source),
-            ServiceError(context) => Some(&context.modeled_source),
+            ServiceError(context) => Some(&context.source),
         }
     }
 }
@@ -530,7 +489,7 @@ where
             Self::TimeoutError(_) => &EMPTY_ERROR_METADATA,
             Self::DispatchFailure(_) => &EMPTY_ERROR_METADATA,
             Self::ResponseError(_) => &EMPTY_ERROR_METADATA,
-            Self::ServiceError(err) => err.modeled_source.meta(),
+            Self::ServiceError(err) => err.source.meta(),
         }
     }
 }

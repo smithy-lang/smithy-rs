@@ -7,6 +7,17 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
+/// A [`TypeErasedBox`] with type information tracked via generics at compile-time
+///
+/// `TypedBox` is used to transition to/from a `TypeErasedBox`. A `TypedBox<T>` can only
+/// be created from a `T` or from a `TypeErasedBox` value that _is a_ `T`. Therefore, it can
+/// be assumed to be a `T` even though the underlying storage is still a `TypeErasedBox`.
+/// Since the `T` is only used in `PhantomData`, it gets compiled down to just a `TypeErasedBox`.
+///
+/// The orchestrator uses `TypeErasedBox` to avoid the complication of six or more generic parameters
+/// and to avoid the monomorphization that brings with it. This `TypedBox` will primarily be useful
+/// for operation-specific or service-specific interceptors that need to operate on the actual
+/// input/output/error types.
 #[derive(Debug)]
 pub struct TypedBox<T> {
     inner: TypeErasedBox,
@@ -17,6 +28,7 @@ impl<T> TypedBox<T>
 where
     T: Send + Sync + 'static,
 {
+    // Creates a new `TypedBox`.
     pub fn new(inner: T) -> Self {
         Self {
             inner: TypeErasedBox::new(Box::new(inner) as _),
@@ -24,6 +36,10 @@ where
         }
     }
 
+    // Tries to create a `TypedBox<T>` from a `TypeErasedBox`.
+    //
+    // If the `TypedBox<T>` can't be created due to the `TypeErasedBox`'s value consisting
+    // of another type, then the original `TypeErasedBox` will be returned in the `Err` variant.
     pub fn assume_from(type_erased: TypeErasedBox) -> Result<TypedBox<T>, TypeErasedBox> {
         if type_erased.downcast_ref::<T>().is_some() {
             Ok(TypedBox {
@@ -35,10 +51,12 @@ where
         }
     }
 
+    /// Converts the `TypedBox<T>` back into `T`.
     pub fn unwrap(self) -> T {
         *self.inner.downcast::<T>().expect("type checked")
     }
 
+    /// Converts the `TypedBox<T>` into a `TypeErasedBox`.
     pub fn erase(self) -> TypeErasedBox {
         self.inner
     }
@@ -58,16 +76,19 @@ impl<T: 'static> DerefMut for TypedBox<T> {
     }
 }
 
+/// A new-type around `Box<dyn Any + Send + Sync>`
 #[derive(Debug)]
 pub struct TypeErasedBox {
     inner: Box<dyn Any + Send + Sync>,
 }
 
 impl TypeErasedBox {
+    // Creates a new `TypeErasedBox`.
     pub fn new(inner: Box<dyn Any + Send + Sync>) -> Self {
         Self { inner }
     }
 
+    // Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
     pub fn downcast<T: 'static>(self) -> Result<Box<T>, Self> {
         match self.inner.downcast() {
             Ok(t) => Ok(t),
@@ -75,10 +96,12 @@ impl TypeErasedBox {
         }
     }
 
+    /// Downcast as a `&T`, or return `None` if it is not a `T`.
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
         self.inner.downcast_ref()
     }
 
+    /// Downcast as a `&mut T`, or return `None` if it is not a `T`.
     pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.inner.downcast_mut()
     }

@@ -81,13 +81,17 @@ class HttpBoundProtocolTraitImplGenerator(
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
     private val orchestratorCodegenScope by lazy {
+        val interceptorContext =
+            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context")
+        val orchestrator =
+            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
-            "Error" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::Error"),
-            "HttpResponse" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator::HttpResponse"),
+            "Error" to interceptorContext.resolve("Error"),
+            "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Instrument" to CargoDependency.Tracing.toType().resolve("Instrument"),
-            "Output" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::Output"),
-            "OutputOrError" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context::OutputOrError"),
-            "ResponseDeserializer" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator::ResponseDeserializer"),
+            "Output" to interceptorContext.resolve("Output"),
+            "OutputOrError" to interceptorContext.resolve("OutputOrError"),
+            "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "TypedBox" to CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("type_erasure::TypedBox"),
