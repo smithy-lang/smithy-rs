@@ -1,4 +1,3 @@
-
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -103,11 +102,15 @@ class PythonServerCodegenVisitor(
         )
 
         // Override `codegenContext` which carries the various symbol providers.
+        val moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+            codegenContext,
+            PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+        )
         codegenContext =
             ServerCodegenContext(
                 model,
                 serverSymbolProviders.symbolProvider,
-                null,
+                moduleDocProvider,
                 service,
                 protocol,
                 settings,
@@ -116,13 +119,6 @@ class PythonServerCodegenVisitor(
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
-
-        codegenContext = codegenContext.copy(
-            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
-                codegenContext,
-                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
-            ),
-        )
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(
@@ -212,6 +208,10 @@ class PythonServerCodegenVisitor(
                 ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
             }
         }
+    }
+
+    override fun protocolTests() {
+        logger.warning("[python-server-codegen] Protocol tests are disabled for this language")
     }
 
     /**
