@@ -605,17 +605,24 @@ open class ServerCodegenVisitor(
 
     /**
      * For each operation shape generate:
+     *  - Operations ser/de
      *  - Errors via `ServerOperationErrorGenerator`
      *  - OperationShapes via `ServerOperationGenerator`
      */
     override fun operationShape(shape: OperationShape) {
+        // Generate errors.
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
+        // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
-            protocolGenerator.renderOperation(this, shape)
             ServerOperationGenerator(shape, codegenContext).render(this)
+        }
+
+        // Generate operations ser/de.
+        rustCrate.withModule(ServerRustModule.Operation) {
+            protocolGenerator.renderOperation(this, shape)
         }
     }
 
