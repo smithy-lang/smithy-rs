@@ -99,7 +99,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "includeFluentClient": false,
                             "renameErrors": false,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true
+                            "enableNewCrateOrganizationScheme": true,
+                            "enableNewSmithyRuntime": false
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",

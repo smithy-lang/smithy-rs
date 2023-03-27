@@ -83,13 +83,13 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
             when (section) {
                 is OperationSection.PopulateErrorMetadataExtras -> {
                     rustTemplate(
-                        "${section.builderName} = #{apply_to_error}(${section.builderName}, ${section.responseName}.headers());",
+                        "${section.builderName} = #{apply_to_error}(${section.builderName}, ${section.responseHeadersName});",
                         "apply_to_error" to applyToError(codegenContext),
                     )
                 }
                 is OperationSection.MutateOutput -> {
                     rust(
-                        "output._set_$fieldName(#T::$accessorFunctionName(response).map(str::to_string));",
+                        "output._set_$fieldName(#T::$accessorFunctionName(${section.responseHeadersName}).map(str::to_string));",
                         accessorTrait(codegenContext),
                     )
                 }

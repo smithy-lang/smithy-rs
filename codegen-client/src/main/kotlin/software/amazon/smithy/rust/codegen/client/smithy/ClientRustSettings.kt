@@ -88,6 +88,8 @@ data class ClientCodegenConfig(
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     // TODO(CrateReorganization): Remove this once we commit to the breaking change
     val enableNewCrateOrganizationScheme: Boolean = defaultEnableNewCrateOrganizationScheme,
+    // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
+    val enableNewSmithyRuntime: Boolean = defaultEnableNewSmithyRuntime,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -97,6 +99,7 @@ data class ClientCodegenConfig(
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
         private const val defaultEnableNewCrateOrganizationScheme = true
+        private const val defaultEnableNewSmithyRuntime = false
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -110,13 +113,12 @@ data class ClientCodegenConfig(
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
                     enableNewCrateOrganizationScheme = node.get().getBooleanMemberOrDefault("enableNewCrateOrganizationScheme", defaultEnableNewCrateOrganizationScheme),
+                    enableNewSmithyRuntime = node.get().getBooleanMemberOrDefault("enableNewSmithyRuntime", defaultEnableNewSmithyRuntime),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = defaultEventStreamAllowList,
-                    enableNewCrateOrganizationScheme = defaultEnableNewCrateOrganizationScheme,
                 )
             }
     }
