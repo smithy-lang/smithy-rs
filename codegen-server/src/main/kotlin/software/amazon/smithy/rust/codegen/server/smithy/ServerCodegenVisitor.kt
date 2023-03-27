@@ -557,6 +557,15 @@ open class ServerCodegenVisitor(
     }
 
     /**
+     * Generate protocol tests. This method can be overridden by other languages such has Python.
+     */
+    open fun protocolTests() {
+        rustCrate.withModule(ServerRustModule.Operation) {
+            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(this)
+        }
+    }
+
+    /**
      * Generate service-specific code for the model:
      * - Serializers
      * - Deserializers
@@ -583,9 +592,7 @@ open class ServerCodegenVisitor(
         }
 
         // Generate protocol tests
-        rustCrate.withModule(ServerRustModule.Operation) {
-            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(this)
-        }
+        protocolTests()
 
         // Generate service module
         rustCrate.withModule(ServerRustModule.Service) {
@@ -607,6 +614,7 @@ open class ServerCodegenVisitor(
         }
 
         rustCrate.withModule(ServerRustModule.OperationShape) {
+            protocolGenerator.renderOperation(this, shape)
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
     }
