@@ -264,7 +264,10 @@ class FluentClientGenerator(
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(symbolProvider)
-
+                    val operationFnName = clientOperationFnName(
+                        operation,
+                        symbolProvider,
+                    )
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
                         """
@@ -287,6 +290,18 @@ class FluentClientGenerator(
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
+                        ##[#{Unstable}]
+                        /// This function replaces the parameter with new one.
+                        /// It is useful when you want to replace the existing data with de-serialized data.
+                        /// ```rust
+                        /// let deserialized_parameters: #{InputBuilderType}  = serde_json::from_str(parameters_written_in_json).unwrap();
+                        /// let outcome: #{OperationOutput} = client.$operationFnName().set_fields(&deserialized_parameters).send().await;
+                        /// ```
+                        pub fn set_fields(mut self, data: #{InputBuilderType}) -> Self {
+                            self.inner = data;
+                            self
+                        }
+
                         /// Sends the request and returns the response.
                         ///
                         /// If an error occurs, an `SdkError` will be returned with additional details that
@@ -304,6 +319,8 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
+                        "Unstable" to Attribute.AwsSdkUnstableAttribute.inner,
+                        "InputBuilderType" to input.builderSymbol(symbolProvider),
                         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,

@@ -1,0 +1,3 @@
+role_name = "smithy_rs_compilation_benchmark_role"
+description = "Compile time benchmark role for smithy-rs."
+assume_role_policy_document = "AwsBatchFullAccess"

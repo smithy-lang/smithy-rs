@@ -15,11 +15,8 @@ use tokio::{spawn, task::JoinError};
 const APP_NAME: &'static str= "SmithyRsBenchmark";
 const TOGGLE_DRY_RUN: bool = env!("IS_DRY_RUN") == "FALSE";
 fn main() {
-    println!("Hello, world!");
-}
-
-async fn async_main() {
     let conf = aws_config::load_from_env().await;
+    
 }
 
 struct SaveData {
@@ -102,5 +99,10 @@ async fn drop_batch_resources(client: aws_sdk_batch::Client) -> Result<(), JoinE
 }
 
 async fn submit_job(client: aws_sdk_batch::Client) {
-    tokio::spawn(client.submit_job().send());
+    if let Ok(job) = client.submit_job().send().await {
+        client.submit_job().depends_on({
+            JobDependency::builder().job_id(job.job_id().unwrap()).build()
+        }).send().await;
+    }
+    let res = client.submit_job().send().await;
 }
