@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
@@ -62,10 +61,10 @@ class HttpBoundProtocolGenerator(
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
-class HttpBoundProtocolTraitImplGenerator(
+open class HttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
-) : ProtocolTraitImplGenerator {
+) {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -100,7 +99,7 @@ class HttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    override fun generateTraitImpls(
+    open fun generateTraitImpls(
         operationWriter: RustWriter,
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
