@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.fluentBuilderType
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -23,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -35,8 +35,8 @@ open class ClientProtocolGenerator(
      * This is the serializer side of request dispatch
      */
     private val makeOperationGenerator: MakeOperationGenerator,
-    private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol, traitGenerator) {
+    private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
+) : ProtocolGenerator(codegenContext, protocol) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *
