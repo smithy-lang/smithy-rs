@@ -69,7 +69,7 @@ let app = PokemonService::builder_with_plugins(plugins)
 
 ### Example
 
-The Pokémon service example, located at `rust-runtime/aws-smithy-http-server/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
+The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
 ```rust
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
