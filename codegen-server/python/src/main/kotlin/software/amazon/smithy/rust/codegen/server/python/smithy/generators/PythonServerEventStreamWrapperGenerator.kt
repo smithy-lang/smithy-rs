@@ -138,8 +138,8 @@ class PythonServerEventStreamWrapperGenerator(
             }
             
             impl #{PyO3}::IntoPy<#{PyO3}::PyObject> for $name {
-                fn into_py(self, _py: #{PyO3}::Python<'_>) -> #{PyO3}::PyObject {
-                    unreachable!("shouldn't be called")
+                fn into_py(self, py: #{PyO3}::Python<'_>) -> #{PyO3}::PyObject {
+                    #{PyO3}::exceptions::PyAttributeError::new_err("this is a write-only field").into_py(py)
                 }
             }
             """,
