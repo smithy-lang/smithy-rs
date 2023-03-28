@@ -72,6 +72,7 @@ construct credentials from hardcoded values.
 //! ```
 
 use crate::Credentials;
+use aws_smithy_runtime_api::storable;
 use std::sync::Arc;
 
 /// Credentials provider errors
@@ -319,6 +320,8 @@ impl ProvideCredentials for Arc<dyn ProvideCredentials> {
 /// Arc.
 #[derive(Clone, Debug)]
 pub struct SharedCredentialsProvider(Arc<dyn ProvideCredentials>);
+
+storable!(SharedCredentialsProvider, mode: replace);
 
 impl SharedCredentialsProvider {
     /// Create a new SharedCredentials provider from `ProvideCredentials`

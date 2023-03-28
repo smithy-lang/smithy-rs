@@ -49,3 +49,42 @@ macro_rules! assert_elapsed {
         );
     }};
 }
+
+use crate::rt::sleep::AsyncSleep;
+use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenConfigBag};
+use aws_smithy_runtime_api::storable;
+use std::sync::Arc;
+
+#[derive(Debug)]
+struct AsyncSleepStorable(Arc<dyn AsyncSleep>);
+storable!(AsyncSleepStorable, mode: replace);
+
+/// Async Runtime configuration
+pub struct AsyncConfiguration {
+    inner: FrozenConfigBag,
+}
+
+pub struct AsyncConfigurationBuilder<'a> {
+    bag: &'a mut ConfigBag,
+}
+
+impl<'a> AsyncConfigurationBuilder<'a> {
+    pub fn from_bag(bag: &'a mut ConfigBag) -> Self {
+        Self { bag }
+    }
+
+    pub fn set_sleep_impl(&mut self, sleep: Option<Arc<dyn AsyncSleep>>) {
+        self.bag.store_or_unset(sleep.map(AsyncSleepStorable));
+    }
+}
+
+impl AsyncConfiguration {
+    pub fn from_bag(bag: &FrozenConfigBag) -> Self {
+        Self { inner: bag.clone() }
+    }
+
+    /// Retrieve an Async Sleep from the bag
+    pub fn async_sleep(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.inner.load::<AsyncSleepStorable>().map(|s| s.0.clone())
+    }
+}

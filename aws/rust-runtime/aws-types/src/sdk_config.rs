@@ -9,14 +9,16 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::{AsyncConfiguration, AsyncConfigurationBuilder};
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigBuilder};
 
 use crate::app_name::AppName;
 use crate::docs_for;
@@ -43,20 +45,42 @@ these services, this setting has no effect"
     }
 }
 
+use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenConfigBag, Storable};
+use aws_smithy_runtime_api::storable;
+
 /// AWS Shared Configuration
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
-    app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
-    credentials_provider: Option<SharedCredentialsProvider>,
-    region: Option<Region>,
-    endpoint_url: Option<String>,
-    retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
+    inner: FrozenConfigBag,
+}
+
+#[derive(Debug)]
+struct UseFips(bool);
+storable!(UseFips, mode: replace);
+
+#[derive(Debug)]
+struct UseDualStack(bool);
+storable!(UseDualStack, mode: replace);
+
+#[derive(Debug)]
+struct EndpointUrl(String);
+storable!(EndpointUrl, mode: replace);
+
+#[derive(Debug)]
+struct RetryConfigStorable(RetryConfig);
+storable!(RetryConfigStorable, mode: replace);
+
+#[derive(Debug, Default)]
+struct TimeoutConfigStorable(TimeoutConfigBuilder);
+impl Storable for TimeoutConfigStorable {
+    type ContainerType<T: Send + Sync + Debug> = TimeoutConfigStorable;
+
+    fn merge<'a>(
+        accum: Self::ContainerType<&'a Self>,
+        item: &'a Self,
+    ) -> Self::ContainerType<&'a Self> {
+        TimeoutConfigStorable(accum.0.take_unset_from(item.0.clone()))
+    }
 }
 
 /// Builder for AWS Shared Configuration
@@ -66,17 +90,7 @@ pub struct SdkConfig {
 /// configuration values.
 #[derive(Debug, Default)]
 pub struct Builder {
-    app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
-    credentials_provider: Option<SharedCredentialsProvider>,
-    region: Option<Region>,
-    endpoint_url: Option<String>,
-    retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
+    bag: ConfigBag,
 }
 
 impl Builder {
@@ -110,7 +124,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_region(&mut self, region: impl Into<Option<Region>>) -> &mut Self {
-        self.region = region.into();
+        self.bag.store_or_unset(region.into());
         self
     }
 
@@ -127,7 +141,7 @@ impl Builder {
 
     /// Set the endpoint url to use when making requests.
     pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
-        self.endpoint_url = endpoint_url;
+        self.bag.store_or_unset(endpoint_url.map(EndpointUrl));
         self
     }
 
@@ -168,7 +182,8 @@ impl Builder {
     /// disable_retries(&mut builder);
     /// ```
     pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
-        self.retry_config = retry_config;
+        self.bag
+            .store_or_unset(retry_config.map(RetryConfigStorable));
         self
     }
 
@@ -223,7 +238,8 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
-        self.timeout_config = timeout_config;
+        self.bag
+            .store_or_unset(timeout_config.map(|c| TimeoutConfigStorable(c.to_builder())));
         self
     }
 
@@ -286,7 +302,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
-        self.sleep_impl = sleep_impl;
+        AsyncConfigurationBuilder::from_bag(&mut self.bag).set_sleep_impl(sleep_impl);
         self
     }
 
@@ -323,7 +339,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_credentials_cache(&mut self, cache: Option<CredentialsCache>) -> &mut Self {
-        self.credentials_cache = cache;
+        self.bag.store_or_unset(cache);
         self
     }
 
@@ -375,7 +391,7 @@ impl Builder {
         &mut self,
         provider: Option<SharedCredentialsProvider>,
     ) -> &mut Self {
-        self.credentials_provider = provider;
+        self.bag.store_or_unset(provider);
         self
     }
 
@@ -393,7 +409,7 @@ impl Builder {
     /// This _optional_ name is used to identify the application in the user agent that
     /// gets sent along with requests.
     pub fn set_app_name(&mut self, app_name: Option<AppName>) -> &mut Self {
-        self.app_name = app_name;
+        self.bag.store_or_unset(app_name);
         self
     }
 
@@ -471,7 +487,7 @@ impl Builder {
         &mut self,
         http_connector: Option<impl Into<HttpConnector>>,
     ) -> &mut Self {
-        self.http_connector = http_connector.map(|inner| inner.into());
+        self.bag.store_or_unset(http_connector.map(|c| c.into()));
         self
     }
 
@@ -483,7 +499,7 @@ impl Builder {
 
     #[doc = docs_for!(use_fips)]
     pub fn set_use_fips(&mut self, use_fips: Option<bool>) -> &mut Self {
-        self.use_fips = use_fips;
+        self.bag.store_or_unset(use_fips.map(UseFips));
         self
     }
 
@@ -495,83 +511,82 @@ impl Builder {
 
     #[doc = docs_for!(use_dual_stack)]
     pub fn set_use_dual_stack(&mut self, use_dual_stack: Option<bool>) -> &mut Self {
-        self.use_dual_stack = use_dual_stack;
+        self.bag.store_or_unset(use_dual_stack.map(UseDualStack));
         self
     }
 
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
-            app_name: self.app_name,
-            credentials_cache: self.credentials_cache,
-            credentials_provider: self.credentials_provider,
-            region: self.region,
-            endpoint_url: self.endpoint_url,
-            retry_config: self.retry_config,
-            sleep_impl: self.sleep_impl,
-            timeout_config: self.timeout_config,
-            http_connector: self.http_connector,
-            use_fips: self.use_fips,
-            use_dual_stack: self.use_dual_stack,
+            inner: self.bag.freeze(),
         }
     }
 }
 
 impl SdkConfig {
+    /// Override this builder with settings from `other`
+    pub fn override_with(&self, other: Builder) -> Self {
+        SdkConfig {
+            inner: self
+                .inner
+                .add_bag_layer("SdkConfig override", other.bag)
+                .freeze(),
+        }
+    }
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
-        self.region.as_ref()
+        self.inner.load::<Region>()
     }
 
     /// Configured endpoint URL
     pub fn endpoint_url(&self) -> Option<&str> {
-        self.endpoint_url.as_deref()
+        self.inner.load::<EndpointUrl>().map(|e| e.0.as_ref())
     }
 
     /// Configured retry config
     pub fn retry_config(&self) -> Option<&RetryConfig> {
-        self.retry_config.as_ref()
+        self.inner.load::<RetryConfigStorable>().map(|r| &r.0)
     }
 
     /// Configured timeout config
-    pub fn timeout_config(&self) -> Option<&TimeoutConfig> {
-        self.timeout_config.as_ref()
+    pub fn timeout_config(&self) -> Option<TimeoutConfig> {
+        Some(self.inner.load::<TimeoutConfigStorable>().0.build())
     }
 
     #[doc(hidden)]
     /// Configured sleep implementation
     pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
-        self.sleep_impl.clone()
+        aws_smithy_async::AsyncConfiguration::from_bag(&self.inner).async_sleep()
     }
 
     /// Configured credentials cache
     pub fn credentials_cache(&self) -> Option<&CredentialsCache> {
-        self.credentials_cache.as_ref()
+        todo!()
     }
 
     /// Configured credentials provider
     pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
-        self.credentials_provider.as_ref()
+        todo!()
     }
 
     /// Configured app name
     pub fn app_name(&self) -> Option<&AppName> {
-        self.app_name.as_ref()
+        todo!()
     }
 
     /// Configured HTTP Connector
     pub fn http_connector(&self) -> Option<&HttpConnector> {
-        self.http_connector.as_ref()
+        todo!()
     }
 
     /// Use FIPS endpoints
     pub fn use_fips(&self) -> Option<bool> {
-        self.use_fips
+        self.inner.load::<UseFips>().map(|u| u.0)
     }
 
     /// Use dual-stack endpoint
     pub fn use_dual_stack(&self) -> Option<bool> {
-        self.use_dual_stack
+        self.inner.load::<UseDualStack>().map(|u| u.0)
     }
 
     /// Config builder
@@ -581,5 +596,56 @@ impl SdkConfig {
     /// configuration values.
     pub fn builder() -> Builder {
         Builder::default()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::region::Region;
+    use crate::SdkConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
+    use std::time::Duration;
+
+    #[test]
+    fn sdk_config_layering_tests() {
+        let base_config = SdkConfig::builder()
+            .region(Region::from_static("us-east-1"))
+            .timeout_config(
+                TimeoutConfig::builder()
+                    .operation_timeout(Duration::from_secs(5))
+                    .build(),
+            )
+            .build();
+
+        let layered_with_endpoint = base_config.override_with(
+            SdkConfig::builder()
+                .endpoint_url("http://localhost:8000")
+                .timeout_config(
+                    TimeoutConfig::builder()
+                        .connect_timeout(Duration::from_secs(3))
+                        .build(),
+                ),
+        );
+
+        assert_eq!(
+            base_config.region(),
+            Some(&Region::from_static("us-east-1"))
+        );
+
+        assert_eq!(base_config.endpoint_url(), None);
+        assert_eq!(
+            layered_with_endpoint.endpoint_url(),
+            Some("http://localhost:8000")
+        );
+
+        assert_eq!(
+            layered_with_endpoint.timeout_config(),
+            Some(
+                TimeoutConfig::builder()
+                    .operation_timeout(Duration::from_secs(5))
+                    .connect_timeout(Duration::from_secs(3))
+                    .build()
+            )
+        )
     }
 }

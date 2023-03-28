@@ -22,6 +22,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 bytes = "1"
 fastrand = "1.4.0"
 http = "0.2.3"

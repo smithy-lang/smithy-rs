@@ -12,6 +12,7 @@ pub use expiring_cache::ExpiringCache;
 pub use lazy_caching::Builder as LazyBuilder;
 
 use crate::provider::{future, SharedCredentialsProvider};
+use aws_smithy_runtime_api::storable;
 use std::sync::Arc;
 
 /// Asynchronous Cached Credentials Provider
@@ -92,6 +93,8 @@ pub(crate) enum Inner {
 pub struct CredentialsCache {
     pub(crate) inner: Inner,
 }
+
+storable!(CredentialsCache, mode: replace);
 
 impl CredentialsCache {
     /// Creates a [`CredentialsCache`] from the default [`LazyBuilder`].

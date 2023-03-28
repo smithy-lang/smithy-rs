@@ -5,6 +5,7 @@
 
 //! New-type for a configurable app name.
 
+use aws_smithy_runtime_api::storable;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
@@ -25,6 +26,7 @@ static APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED: AtomicBool = AtomicBool::new(fa
 /// App names are recommended to be no more than 50 characters.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AppName(Cow<'static, str>);
+storable!(AppName, mode: replace);
 
 impl AsRef<str> for AppName {
     fn as_ref(&self) -> &str {

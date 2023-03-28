@@ -11,7 +11,7 @@
 //! 2. No lifetime shenanigans to deal with
 use aws_smithy_http::property_bag::PropertyBag;
 use std::any::type_name;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -24,12 +24,33 @@ pub struct ConfigBag {
     tail: Option<FrozenConfigBag>,
 }
 
+impl Default for ConfigBag {
+    fn default() -> Self {
+        ConfigBag::base()
+    }
+}
+
+impl Debug for ConfigBag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfigBag")
+            .field("name", &self.head.name)
+            .field("tail", &self.tail)
+            .finish()
+    }
+}
+
 /// Layered Configuration Structure
 ///
 /// [`FrozenConfigBag`] is the "locked" form of the bag.
 #[derive(Clone)]
 #[must_use]
 pub struct FrozenConfigBag(Arc<ConfigBag>);
+
+impl Debug for FrozenConfigBag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl Deref for FrozenConfigBag {
     type Target = ConfigBag;
@@ -42,6 +63,53 @@ impl Deref for FrozenConfigBag {
 pub trait Persist {
     fn layer_name(&self) -> &'static str;
     fn persist(&self, layer: &mut ConfigBag);
+}
+
+pub trait Storable: Sized + Send + Sync + Debug + 'static {
+    type ContainerType<T: Send + Sync + Debug>: Default + Send + Sync + Debug;
+    fn merge<'a>(
+        accum: Self::ContainerType<&'a Self>,
+        item: &'a Self,
+    ) -> Self::ContainerType<&'a Self>;
+}
+
+#[macro_export]
+macro_rules! storable {
+    ($T: ty, mode: replace) => {
+        impl $crate::config_bag::Storable for $T {
+            type ContainerType<T: Send + Sync + std::fmt::Debug> = Option<T>;
+            fn merge<'a>(
+                _accum: Self::ContainerType<&'a Self>,
+                item: &'a Self,
+            ) -> Self::ContainerType<&'a Self> {
+                Some(item)
+            }
+        }
+    };
+    ($T: ty, mode: append) => {
+        impl $crate::config_bag::Storable for $T {
+            type ContainerType<T: Send + Sync + std::fmt::Debug> = Vec<T>;
+            fn merge<'a>(
+                mut accum: Self::ContainerType<&'a Self>,
+                item: &'a Self,
+            ) -> Self::ContainerType<&'a Self> {
+                accum.push(item);
+                accum
+            }
+        }
+    };
+
+    ($T: ty, mode: merge, $f: expr) => {
+        impl $crate::config_bag::Storable for $T {
+            type ContainerType<T: Send + Sync + std::fmt::Debug> = Option<T>;
+            fn merge<'a>(
+                mut accum: Self::ContainerType<&'a Self>,
+                item: &'a Self,
+            ) -> Self::ContainerType<&'a Self> {
+                ($f)(accum, item)
+            }
+        }
+    };
 }
 
 pub trait Load: Sized {
@@ -88,6 +156,12 @@ impl FrozenConfigBag {
         self.with_fn(name, no_op)
     }
 
+    pub fn add_bag_layer(&self, name: &'static str, mut bag: ConfigBag) -> ConfigBag {
+        assert!(bag.tail.is_none());
+        bag.tail = Some(self.clone());
+        bag
+    }
+
     pub fn with(&self, layer: impl Persist) -> ConfigBag {
         self.with_fn(layer.layer_name(), |bag| layer.persist(bag))
     }
@@ -118,6 +192,41 @@ impl ConfigBag {
         }
     }
 
+    pub fn store<T: Storable + 'static>(&mut self, t: T) -> &mut ConfigBag {
+        if let Some(Value::Set(mut existing)) = self.head.props.remove::<Value<Vec<T>>>() {
+            dbg!("inserting merge");
+            existing.push(t.into());
+            self.put::<Vec<T>>(existing);
+        } else {
+            dbg!("inserting direct");
+            self.put::<Vec<T>>(vec![t.into()]);
+        }
+        self
+    }
+
+    pub fn store_or_unset<T: Storable>(&mut self, t: Option<T>) -> &mut ConfigBag {
+        match t {
+            Some(t) => self.store(t),
+            None => self.unset::<Vec<T>>(),
+        }
+    }
+
+    pub fn load<'a, T: Storable>(&'a self) -> T::ContainerType<&'a T> {
+        let bag = &self.head;
+        let mut item: T::ContainerType<&'a T> = self
+            .tail
+            .as_ref()
+            .map(|bag| bag.load::<T>())
+            .unwrap_or_default();
+        let root = bag.props.get::<Value<Vec<T>>>();
+        if let Some(Value::Set(root)) = root {
+            for new_item in root {
+                item = T::merge(item, new_item);
+            }
+        }
+        item
+    }
+
     /// Retrieve the value of type `T` from the bag if exists
     pub fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
         let mut source = vec![];
@@ -133,7 +242,7 @@ impl ConfigBag {
     }
 
     /// Remove `T` from this bag
-    pub fn unset<T: Send + Sync + 'static>(&mut self) -> &mut Self {
+    pub(crate) fn unset<T: Send + Sync + 'static>(&mut self) -> &mut Self {
         self.head.props.insert(Value::<T>::ExplicitlyUnset);
         self
     }
@@ -216,7 +325,8 @@ pub enum SourceInfo {
 #[cfg(test)]
 mod test {
     use super::ConfigBag;
-    use crate::config_bag::{Load, Persist};
+    use crate::config_bag::{Load, Persist, Storable};
+    use std::fmt::Debug;
 
     #[test]
     fn layered_property_bag() {
@@ -325,5 +435,40 @@ mod test {
         let bag = ConfigBag::base().with(conf.clone());
 
         assert_eq!(MyConfig::load(&bag), Some(conf));
+    }
+
+    #[test]
+    fn storeable_option() {
+        let mut bag = ConfigBag::base();
+
+        #[derive(PartialEq, Eq, Debug)]
+        struct Region(String);
+        storable!(Region, mode: replace);
+
+        bag.store(Region("asdf".to_string()));
+        assert_eq!(bag.load::<Region>(), Some(&Region("asdf".to_string())));
+    }
+
+    #[test]
+    fn storeable_vec() {
+        let mut bag = ConfigBag::base();
+        #[derive(PartialEq, Eq, Debug)]
+        struct Interceptor(&'static str);
+        storable!(Interceptor, mode: append);
+        bag.store(Interceptor("1"));
+        bag.store(Interceptor("2"));
+        bag = bag.add_layer("next");
+        bag.store(Interceptor("3"));
+        assert_eq!(
+            bag.load::<Interceptor>(),
+            vec![&Interceptor("1"), &Interceptor("2"), &Interceptor("3")]
+        );
+    }
+
+    #[test]
+    fn test_macro() {
+        #[derive(Debug)]
+        struct Foo;
+        storable!(Foo, mode: replace);
     }
 }

@@ -5,6 +5,7 @@
 
 //! Region type for determining the endpoint to send requests to.
 
+use aws_smithy_runtime_api::storable;
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
@@ -22,6 +23,8 @@ pub struct Region(
     // are not, allow for an owned region
     Cow<'static, str>,
 );
+
+storable!(Region, mode: replace);
 
 impl AsRef<str> for Region {
     fn as_ref(&self) -> &str {

@@ -8,6 +8,7 @@
 
 use crate::erase::DynConnector;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_runtime_api::storable;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::time::Duration;
 use std::{fmt::Debug, sync::Arc};
@@ -24,6 +25,8 @@ pub enum HttpConnector {
     /// A factory function that will be used to create new `DynConnector`s whenever one is needed.
     ConnectorFn(Arc<MakeConnectorFn>),
 }
+
+storable!(HttpConnector, mode: replace);
 
 impl Debug for HttpConnector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
