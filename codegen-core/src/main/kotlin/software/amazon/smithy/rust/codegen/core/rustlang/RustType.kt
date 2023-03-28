@@ -458,6 +458,16 @@ class Attribute(val inner: Writable) {
         }
     }
 
+    // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
+    // You can find the discussion here.
+    // https://github.com/awslabs/smithy-rs/discussions/2248
+    public fun SerdeSerialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+    }
+    public fun SerdeDeserialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+    }
+
     companion object {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
@@ -486,6 +496,7 @@ class Attribute(val inner: Writable) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
@@ -514,6 +525,7 @@ class Attribute(val inner: Writable) {
         }
 
         fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
+        fun cfgAttr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
 
         fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
         fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)

@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -189,6 +188,8 @@ open class EnumGenerator(
     }
 
     private fun RustWriter.renderNamedEnum() {
+        RenderSerdeAttribute.writeAttributes(writer)
+        SensitiveWarning.addDoc(writer, shape)
         // pub enum Blah { V1, V2, .. }
         renderEnum()
         insertTrailingNewline()
@@ -256,11 +257,23 @@ open class EnumGenerator(
             renamedWarning.ifBlank { null },
         )
         deprecatedShape(shape)
+        RenderSerdeAttribute.writeAttributes(writer)
+        SensitiveWarning.addDoc(writer, shape)
 
         context.enumMeta.render(this)
         rustBlock("enum ${context.enumName}") {
             context.sortedMembers.forEach { member -> member.render(this) }
             enumType.additionalEnumMembers(context)(this)
+        writer.deprecatedShape(shape)
+        RenderSerdeAttribute.writeAttributes(writer)
+        SensitiveWarning.addDoc(writer, shape)
+        meta.render(writer)
+        writer.rustBlock("enum $enumName") {
+            sortedMembers.forEach { member -> member.render(writer) }
+            target.ifClient {
+                docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+                rust("$UnknownVariant(#T)", unknownVariantValue())
+            }
         }
     }
 
