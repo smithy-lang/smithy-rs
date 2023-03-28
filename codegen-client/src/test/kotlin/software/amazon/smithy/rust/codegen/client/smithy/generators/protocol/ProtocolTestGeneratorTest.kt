@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -23,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
@@ -44,9 +44,9 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
 }
 
 private class TestProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val correctResponse: String,
-) : ProtocolTraitImplGenerator {
+) : HttpBoundProtocolTraitImplGenerator(codegenContext, RestJson(codegenContext)) {
     private val symbolProvider = codegenContext.symbolProvider
 
     override fun generateTraitImpls(
