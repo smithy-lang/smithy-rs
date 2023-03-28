@@ -14,6 +14,7 @@ publish = false
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 tokio = { version = "1.25", features = ["sync"] }
+http = "0.2.3"
 
 [package.metadata.docs.rs]
 all-features = true

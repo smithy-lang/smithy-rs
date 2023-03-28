@@ -235,7 +235,7 @@ data class CargoDependency(
         val Tokio: CargoDependency =
             CargoDependency(
                 "tokio",
-                CratesIo("1.8.4"),
+                CratesIo("1.23.1"),
                 DependencyScope.Dev,
                 features = setOf("macros", "test-util", "rt-multi-thread"),
             )
@@ -266,6 +266,8 @@ data class CargoDependency(
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
 
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
+        fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
+        fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
     }

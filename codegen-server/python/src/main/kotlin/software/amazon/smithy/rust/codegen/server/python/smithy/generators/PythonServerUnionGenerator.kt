@@ -186,7 +186,7 @@ class PythonServerUnionGenerator(
                     match self.0.as_$funcNamePart() {
                         Ok(variant) => Ok($variantType),
                         Err(_) => Err(#{pyo3}::exceptions::PyValueError::new_err(
-                            "${unionSymbol.name} variant is not of type ${memberSymbol.rustType().pythonType().renderAsDocstring()}"
+                            r"${unionSymbol.name} variant is not of type ${memberSymbol.rustType().pythonType().renderAsDocstring()}"
                         )),
                     }
                     """,
