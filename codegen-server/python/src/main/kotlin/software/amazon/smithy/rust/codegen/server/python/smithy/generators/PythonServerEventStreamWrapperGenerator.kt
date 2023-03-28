@@ -65,6 +65,7 @@ class PythonServerEventStreamWrapperGenerator(
 
     private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
+    private val pyO3Asyncio = PythonServerCargoDependency.PyO3Asyncio.toType()
     private val tokio = PythonServerCargoDependency.Tokio.toType()
     private val futures = PythonServerCargoDependency.Futures.toType()
     private val parkingLot = PythonServerCargoDependency.ParkingLot.toType()
@@ -121,7 +122,7 @@ class PythonServerEventStreamWrapperGenerator(
             impl<'source> #{PyO3}::FromPyObject<'source> for $name {
                 fn extract(obj: &'source #{PyO3}::PyAny) -> #{PyO3}::PyResult<Self> {
                     use #{Futures}::StreamExt;
-                    let stream = pyo3_asyncio::tokio::into_stream_v2(obj)?;
+                    let stream = #{PyO3Asyncio}::tokio::into_stream_v2(obj)?;
                     let stream = stream.map(|obj| {
                         #{PyO3}::Python::with_gil(|py| {
                             obj.extract(py).map_err(|err| {
@@ -144,6 +145,7 @@ class PythonServerEventStreamWrapperGenerator(
             """,
             "Mutex" to parkingLot.resolve("Mutex"),
             "PyO3" to pyO3,
+            "PyO3Asyncio" to pyO3Asyncio,
             "Error" to errorT,
             "Futures" to futures,
         )
@@ -196,7 +198,7 @@ class PythonServerEventStreamWrapperGenerator(
                 
                 pub fn __anext__(slf: #{PyO3}::PyRefMut<Self>) -> #{PyO3}::PyResult<Option<#{PyO3}::PyObject>> {
                     let body = slf.inner.clone();
-                    let fut = pyo3_asyncio::tokio::future_into_py(slf.py(), async move {
+                    let fut = #{PyO3Asyncio}::tokio::future_into_py(slf.py(), async move {
                         let mut inner = body.lock().await;
                         let next = inner.recv().await;
                         match next {
@@ -212,6 +214,7 @@ class PythonServerEventStreamWrapperGenerator(
                 }
                 """,
                 "PyO3" to pyO3,
+                "PyO3Asyncio" to pyO3Asyncio,
                 "SmithyHttp" to smithyHttp,
             )
         }
