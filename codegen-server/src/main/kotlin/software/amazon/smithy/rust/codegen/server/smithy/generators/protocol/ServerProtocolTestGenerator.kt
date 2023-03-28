@@ -456,7 +456,7 @@ class ServerProtocolTestGenerator(
 
             // Construct expected request.
             withBlock("let expected = ", ";") {
-                instantiator.render(this, inputShape, httpRequestTestCase.params)
+                instantiator.render(this, inputShape, httpRequestTestCase.params, httpRequestTestCase.headers)
             }
 
             checkRequestParams(inputShape, this)
@@ -765,7 +765,6 @@ class ServerProtocolTestGenerator(
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
-            FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
 
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
