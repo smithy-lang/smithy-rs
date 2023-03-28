@@ -242,10 +242,8 @@ impl<'a> CanonicalRequest<'a> {
                 }
             }
 
-            if params.settings.session_token_mode == SessionTokenMode::Exclude {
-                if name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN) {
-                    continue;
-                }
+            if params.settings.session_token_mode == SessionTokenMode::Exclude && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN) {
+                continue;
             }
 
             if params.settings.signature_location == SignatureLocation::QueryParams {
