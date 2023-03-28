@@ -111,7 +111,9 @@ open class Instantiator(
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
 
-    fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable { render(this, shape, data, headers, ctx) }
+    fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable {
+        render(this, shape, data, headers, ctx)
+    }
 
     fun render(writer: RustWriter, shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) {
         when (shape) {
