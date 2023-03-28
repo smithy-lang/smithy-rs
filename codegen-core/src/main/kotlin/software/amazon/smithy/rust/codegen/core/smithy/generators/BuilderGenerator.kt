@@ -11,11 +11,8 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
@@ -36,12 +33,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.shape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -53,21 +51,26 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
 
-fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
-    structureShape.builderSymbol(symbolProvider)
+/** BuilderGenerator customization sections */
+sealed class BuilderSection(name: String) : Section(name) {
+    abstract val shape: StructureShape
+
+    /** Hook to add additional fields to the builder */
+    data class AdditionalFields(override val shape: StructureShape) : BuilderSection("AdditionalFields")
+
+    /** Hook to add additional methods to the builder */
+    data class AdditionalMethods(override val shape: StructureShape) : BuilderSection("AdditionalMethods")
+
+    /** Hook to add additional fields to the `build()` method */
+    data class AdditionalFieldsInBuild(override val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
+
+    /** Hook to add additional fields to the `Debug` impl */
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
+        BuilderSection("AdditionalDebugFields")
 }
 
-fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
-    val structureSymbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
-    val module = RustModule.new(builderNamespace, visibility = Visibility.PUBLIC, parent = structureSymbol.module(), inline = true)
-    val rustType = RustType.Opaque("Builder", module.fullyQualifiedPath())
-    return Symbol.builder()
-        .rustType(rustType)
-        .name(rustType.name)
-        .locatedIn(module)
-        .build()
-}
+/** Customizations for BuilderGenerator */
+abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
 fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
@@ -93,6 +96,7 @@ class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
+    private val customizations: List<BuilderCustomization>,
 ) {
     companion object {
         /**
@@ -109,27 +113,34 @@ class BuilderGenerator(
                         // generate a fallible builder.
                         !it.isOptional() && !it.canUseDefault()
                     }
+
+        fun renderConvenienceMethod(implBlock: RustWriter, symbolProvider: RustSymbolProvider, shape: StructureShape) {
+            implBlock.docs("Creates a new builder-style object to manufacture #D.", symbolProvider.toSymbol(shape))
+            symbolProvider.symbolForBuilder(shape).also { builderSymbol ->
+                implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
+                    write("#T::default()", builderSymbol)
+                }
+            }
+        }
     }
 
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
-    private val builderSymbol = shape.builderSymbol(symbolProvider)
-    private val baseDerives = structureSymbol.expectRustMetadata().derives
+    private val builderSymbol = symbolProvider.symbolForBuilder(shape)
+    private val metadata = structureSymbol.expectRustMetadata()
 
     // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
-    private val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone } + RuntimeType.Default
-    private val builderName = "Builder"
+    private val builderDerives = metadata.derives.filter {
+        it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
+    } + RuntimeType.Default
+    private val builderName = symbolProvider.symbolForBuilder(shape).name
 
     fun render(writer: RustWriter) {
-        val symbol = symbolProvider.toSymbol(shape)
-        writer.docs("See #D.", symbol)
-        writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
-            // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
-            renderBuilder(this)
-            if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
-                renderDebugImpl(this)
-            }
+        // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
+        renderBuilder(writer)
+        if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
+            renderDebugImpl(writer)
         }
     }
 
@@ -152,13 +163,6 @@ class BuilderGenerator(
     private fun RustWriter.missingRequiredField(field: String) {
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
-    }
-
-    fun renderConvenienceMethod(implBlock: RustWriter) {
-        implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
-        implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
-            write("#T::default()", builderSymbol)
-        }
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
@@ -210,6 +214,7 @@ class BuilderGenerator(
         writer.docs("This is the datatype returned when calling `Builder::build()`.")
         writer.rustInline("pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
+        metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
         RenderSerdeAttribute.forStructureShape(writer, shape, model)
         SensitiveWarning.addDoc(writer, shape)
@@ -222,6 +227,7 @@ class BuilderGenerator(
                 SensitiveWarning.addDoc(writer, member)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFields(shape))
         }
 
         writer.rustBlock("impl $builderName") {
@@ -241,6 +247,7 @@ class BuilderGenerator(
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalMethods(shape))
             renderBuildFn(this)
         }
     }
@@ -257,6 +264,7 @@ class BuilderGenerator(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
+                writeCustomizations(customizations, BuilderSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
             }
         }
@@ -335,6 +343,7 @@ class BuilderGenerator(
                     }
                 }
             }
+            writeCustomizations(customizations, BuilderSection.AdditionalFieldsInBuild(shape))
         }
     }
 }

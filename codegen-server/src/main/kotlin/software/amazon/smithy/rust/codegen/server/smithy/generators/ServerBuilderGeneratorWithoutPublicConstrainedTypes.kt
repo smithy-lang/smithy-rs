@@ -23,12 +23,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.withInMemoryInlineModule
 
 /**
  * Generates a builder for the Rust type associated with the [StructureShape].
@@ -46,6 +48,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     companion object {
         /**
@@ -79,7 +82,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
+        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
@@ -89,12 +92,12 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
-    fun render(writer: RustWriter) {
+    fun render(rustCrate: RustCrate, writer: RustWriter) {
         check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
         }
-        writer.docs("See #D.", structureSymbol)
-        writer.withInlineModule(builderSymbol.module()) {
+        val docWriter = { writer.docs("See #D.", structureSymbol) }
+        rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
         }
     }

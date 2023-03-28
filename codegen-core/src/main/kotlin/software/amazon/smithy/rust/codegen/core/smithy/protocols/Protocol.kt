@@ -46,21 +46,21 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_http_generic_error(response: &Response<Bytes>) -> aws_smithy_types::error::Error
+     * fn parse_http_error_metadata(response_status: u16, response_headers: HeaderMap, response_body: &[u8]) -> aws_smithy_types::error::Builder
      * ```
      */
-    fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
+    fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType
 
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_event_stream_generic_error(payload: &Bytes) -> aws_smithy_types::error::Error
+     * fn parse_event_stream_error_metadata(payload: &Bytes) -> aws_smithy_types::error::Error
      * ```
      *
      * Event Stream generic errors are almost identical to HTTP generic errors, except that
      * there are no response headers or statuses available to further inform the error parsing.
      */
-    fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
+    fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType
 }
 
 typealias ProtocolMap<T, C> = Map<ShapeId, ProtocolGeneratorFactory<T, C>>

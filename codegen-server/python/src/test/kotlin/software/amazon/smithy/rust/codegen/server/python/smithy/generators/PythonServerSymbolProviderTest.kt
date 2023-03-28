@@ -12,7 +12,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerSymbolVisitor
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestRustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
 internal class PythonServerSymbolProviderTest {
     private val pythonBlobType = RustType.Opaque("Blob", "aws_smithy_http_server_python::types")
@@ -45,7 +46,8 @@ internal class PythonServerSymbolProviderTest {
                 value: Timestamp
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+        val provider =
+            PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 
         // Struct test
         val timestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStruct\$inner"))).rustType()
@@ -95,7 +97,8 @@ internal class PythonServerSymbolProviderTest {
                 value: Blob
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+        val provider =
+            PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 
         // Struct test
         val blob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStruct\$inner"))).rustType()

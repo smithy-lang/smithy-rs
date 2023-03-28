@@ -31,7 +31,7 @@ internal class RecursiveShapeBoxerTest {
                 hello: Hello
             }
         """.asSmithyModel()
-        RecursiveShapeBoxer.transform(model) shouldBe model
+        RecursiveShapeBoxer().transform(model) shouldBe model
     }
 
     @Test
@@ -43,7 +43,7 @@ internal class RecursiveShapeBoxerTest {
                 anotherField: Boolean
             }
         """.asSmithyModel()
-        val transformed = RecursiveShapeBoxer.transform(model)
+        val transformed = RecursiveShapeBoxer().transform(model)
         val member: MemberShape = transformed.lookup("com.example#Recursive\$RecursiveStruct")
         member.expectTrait<RustBoxTrait>()
     }
@@ -70,7 +70,7 @@ internal class RecursiveShapeBoxerTest {
                  third: SecondTree
             }
         """.asSmithyModel()
-        val transformed = RecursiveShapeBoxer.transform(model)
+        val transformed = RecursiveShapeBoxer().transform(model)
         val boxed = transformed.shapes().filter { it.hasTrait<RustBoxTrait>() }.toList()
         boxed.map { it.id.toString().removePrefix("com.example#") }.toSet() shouldBe setOf(
             "Atom\$add",

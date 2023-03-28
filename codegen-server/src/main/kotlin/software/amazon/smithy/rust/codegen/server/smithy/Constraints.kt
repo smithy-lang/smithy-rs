@@ -26,11 +26,20 @@ import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderModule
+import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
 /**
  * This file contains utilities to work with constrained shapes.
@@ -83,7 +92,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         //  The only reason why the functions in this file have
         //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
         //  `required`, so we can't use `member.isOptional` here.
-        this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
+        this.members().any { !symbolProvider.toSymbol(it).isOptional() && !it.hasNonNullDefault() }
     }
 
     is MapShape -> this.hasTrait<LengthTrait>()
@@ -159,4 +168,48 @@ fun Shape.typeNameContainsNonPublicType(
     is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
     is StructureShape, is UnionShape -> false
     else -> UNREACHABLE("the above arms should be exhaustive, but we received shape: $this")
+}
+
+/**
+ * For synthetic shapes that are added to the model because of member constrained shapes, it returns
+ * the "container" and "the member shape" that originally had the constraint trait. For all other
+ * shapes, it returns null.
+ */
+fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
+    val trait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
+    return Pair(trait.container, trait.member)
+}
+
+/**
+ * Returns the parent and the inline module that this particular shape should go in.
+ */
+fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: RustSymbolProvider, publicConstrainedTypes: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
+    val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
+    return if (overriddenTrait.container is StructureShape) {
+        val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()
+        val builderModule = overriddenTrait.container.serverBuilderModule(symbolProvider, !publicConstrainedTypes)
+        Pair(structureModule, builderModule)
+    } else {
+        // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
+        // that is a descendant of the module that contains the extracted shape itself.
+        return if (publicConstrainedTypes) {
+            // Non-structured shape types need to go into their own module.
+            val shapeSymbol = symbolProvider.toSymbol(this)
+            val shapeModule = shapeSymbol.module()
+            check(!shapeModule.parent.isInline()) {
+                "Parent module of $id should not be an inline module."
+            }
+            Pair(shapeModule.parent as RustModule.LeafModule, shapeModule)
+        } else {
+            val name = RustReservedWords.escapeIfNeeded(overriddenTrait.container.id.name).toSnakeCase() + "_internal"
+            val innerModule = RustModule.new(
+                name = name,
+                visibility = Visibility.PUBCRATE,
+                parent = ServerRustModule.Model,
+                inline = true,
+            )
+
+            Pair(ServerRustModule.Model, innerModule)
+        }
+    }
 }

@@ -5,6 +5,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.nio.file.Path
@@ -40,10 +41,17 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
             awsSdk?.getStringMember("integrationTestPath")?.orNull()?.value ?: "aws/sdk/integration-tests"
 
     /** Version number of the `aws-config` crate */
-    val awsConfigVersion: String? get() =
-        awsSdk?.getStringMember("awsConfigVersion")?.orNull()?.value
+    val awsConfigVersion: String?
+        get() =
+            awsSdk?.getStringMember("awsConfigVersion")?.orNull()?.value
 
     /** Whether to generate a README */
-    val generateReadme: Boolean get() =
-        awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: false
+    val generateReadme: Boolean
+        get() =
+            awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: false
+
+    val requireEndpointResolver: Boolean
+        get() = awsSdk?.getBooleanMember("requireEndpointResolver")?.orNull()?.value ?: true
 }
+
+fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)

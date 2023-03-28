@@ -44,7 +44,9 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
 /**
  * Generate a link to the examples for a given service
  */
-private fun examplesLink(service: AwsService, project: Project) = service.examplesUri(project)?.let { "([examples]($it))" }
+private fun examplesLink(service: AwsService, project: Project) = service.examplesUri(project)?.let {
+    "([examples]($it))"
+}
 
 /**
  * Generate a link to the docs
