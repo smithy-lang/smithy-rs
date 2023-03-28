@@ -6,12 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import com.moandjiezana.toml.TomlWriter
-import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -23,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
@@ -201,41 +194,12 @@ class PyTypedMarkerDecorator : ServerCodegenDecorator {
     }
 }
 
-class AddInternalServerErrorToAllEventStreamErrorsDecorator : ServerCodegenDecorator {
-    override val name: String = "AddInternalServerErrorToAllEventStreamErrorsDecorator"
-    override val order: Byte = 0
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        return ModelTransformer.create().mapTraits(model) { shape, trait ->
-            if (shape is UnionShape && trait is SyntheticEventStreamUnionTrait) {
-                val internalServerErrorMember = internalServerErrorMemberShape(shape)
-                SyntheticEventStreamUnionTrait(
-                    trait.errorMembers +
-                        internalServerErrorMember
-                )
-            } else {
-                trait
-            }
-        }
-    }
-
-    private fun internalServerErrorMemberShape(shape: UnionShape): MemberShape =
-        MemberShape.builder()
-            .id("${shape.id}\$internalServerError")
-            .target(internalServerErrorShapeId(shape.id.namespace))
-            .build()
-
-    private fun internalServerErrorShapeId(namespace: String): ShapeId =
-        ShapeId.from("${namespace}#InternalServerError")
-}
-
 val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
      * This is done because the Python interpreter can raise exceptions during execution.
      */
     AddInternalServerErrorToAllOperationsDecorator(),
-    AddInternalServerErrorToAllEventStreamErrorsDecorator(),
     // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
     CdylibManifestDecorator(),
     // Add `pub use` of `aws_smithy_http_server_python::types`.

@@ -10,7 +10,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AnnotationTrait
 
-data class SyntheticEventStreamUnionTrait(
+class SyntheticEventStreamUnionTrait(
     val errorMembers: List<MemberShape>,
 ) : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
