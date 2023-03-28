@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 open class ClientProtocolGenerator(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
     /**
      * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
@@ -85,6 +85,10 @@ open class ClientProtocolGenerator(
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
+        when (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            true -> ResponseDeserializerGenerator(codegenContext, protocol)
+                .render(operationWriter, operationShape, customizations)
+            else -> traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
+        }
     }
 }
