@@ -171,7 +171,7 @@ class PythonServerEventStreamWrapperGenerator(
             writer.rustTemplate(
                 """
                 pub fn new(
-                    unmarshaller: impl #{UnmarshallMessage}<Output = #{Output}, Error = #{Error}> + Send + 'static, 
+                    unmarshaller: impl #{UnmarshallMessage}<Output = #{Output}, Error = #{Error}> + Send + Sync + 'static, 
                     body: #{Body}
                 ) -> $name {
                     let inner = #{Wrapped}::new(unmarshaller, body);
