@@ -7,8 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -23,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class ResponseBindingGeneratorTest {
@@ -65,13 +65,14 @@ class ResponseBindingGeneratorTest {
         }
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
-    private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
+    private val operationShape: OperationShape = model.lookup("smithy.example#PutObject")
+    private val outputShape: StructureShape = operationShape.outputShape(model)
     private val codegenContext = testClientCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
 
     private fun RustCrate.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
-        withModule(ClientRustModule.Output) {
+        withModule(symbolProvider.moduleForShape(outputShape)) {
             rustBlock("impl PutObjectOutput") {
                 val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
                     .responseBindings(operationShape)
@@ -93,7 +94,7 @@ class ResponseBindingGeneratorTest {
     fun deserializeHeadersIntoOutputShape() {
         val testProject = TestWorkspace.testProject(symbolProvider)
         testProject.renderOperation()
-        testProject.withModule(ClientRustModule.Output) {
+        testProject.withModule(symbolProvider.moduleForShape(outputShape)) {
             unitTest(
                 "http_header_deser",
                 """

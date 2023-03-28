@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
@@ -97,12 +96,12 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             reexportSmithyClientBuilder = false,
             generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(codegenContext, runtimeConfig),
+                AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(codegenContext.featureGatedCustomizeModule()) {
+        rustCrate.withModule(ClientRustModule.Client.customize) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
         rustCrate.withModule(ClientRustModule.client) {

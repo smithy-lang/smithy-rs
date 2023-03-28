@@ -14,8 +14,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVers
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -69,19 +67,14 @@ class RequiredCustomizations : ClientCodegenDecorator {
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
-        rustCrate.withModule(codegenContext.featureGatedPrimitivesModule()) {
+        rustCrate.withModule(ClientRustModule.Primitives) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
-            if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                pubUseSmithyErrorTypes(codegenContext)(this)
-            }
         }
-        if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-            rustCrate.withModule(ClientRustModule.Error) {
-                pubUseSmithyErrorTypes(codegenContext)(this)
-            }
+        rustCrate.withModule(ClientRustModule.Error) {
+            pubUseSmithyErrorTypes(codegenContext)(this)
         }
 
-        codegenContext.featureGatedMetaModule().also { metaModule ->
+        ClientRustModule.Meta.also { metaModule ->
             rustCrate.withModule(metaModule) {
                 CrateVersionCustomization.extras(rustCrate, metaModule)
             }
