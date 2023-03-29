@@ -25,7 +25,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
     run("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
-    tasks = ''.join([f'{t}:assemble' for t in targets])
+    tasks = ' '.join([f'{t}:assemble' for t in targets])
     run(f"./gradlew --rerun-tasks {tasks}")
     if 'codegen-server-test' in targets:
         run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
