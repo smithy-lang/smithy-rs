@@ -161,6 +161,7 @@ open class RustCrate(
     }
 
     private fun checkDups(module: RustModule.LeafModule) {
+        println("map: ${System.identityHashCode(duplicateModuleWarningSystem)} ${Thread.currentThread().id}")
         duplicateModuleWarningSystem[module.fullyQualifiedPath()]?.also { preexistingModule ->
             check(module == preexistingModule) {
                 "Duplicate modules with differing properties were created! This will lead to non-deterministic behavior." +
