@@ -762,8 +762,6 @@ class ServerProtocolTestGenerator(
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
-            FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
-
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
