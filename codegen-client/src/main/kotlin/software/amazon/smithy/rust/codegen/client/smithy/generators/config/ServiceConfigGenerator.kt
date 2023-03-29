@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -107,22 +106,17 @@ data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writa
 fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            is ServiceConfig.ConfigStruct -> writable {
-                docsOrFallback(param.getterDocs)
-                rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
-            }
+            is ServiceConfig.ConfigStruct -> emptySection
 
             ServiceConfig.ConfigImpl -> emptySection
-            ServiceConfig.BuilderStruct -> writable {
-                rust("${param.name}: #T,", param.type.makeOptional())
-            }
+            ServiceConfig.BuilderStruct -> emptySection
 
             ServiceConfig.BuilderImpl -> writable {
                 docsOrFallback(param.setterDocs)
                 rust(
                     """
                     pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
-                        self.${param.name} = Some(${param.name}.into());
+                        self.bag.store(${param.name}.into());
                         self
                         }""",
                     param.type,

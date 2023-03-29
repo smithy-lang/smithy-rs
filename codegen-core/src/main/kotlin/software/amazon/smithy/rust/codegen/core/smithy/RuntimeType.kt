@@ -352,5 +352,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
+
+        fun frozenConfigBag(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("config_bag::FrozenConfigBag")
+        fun configBag(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("config_bag::ConfigBag")
     }
 }

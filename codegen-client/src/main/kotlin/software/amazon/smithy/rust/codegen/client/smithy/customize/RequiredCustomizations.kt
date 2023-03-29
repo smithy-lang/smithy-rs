@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Resilien
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
 import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigBagBackedConfiguration
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -52,7 +53,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations + ResiliencyConfigCustomization(codegenContext)
+        baseCustomizations + ResiliencyConfigCustomization(codegenContext) + ConfigBagBackedConfiguration(codegenContext.runtimeConfig)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
