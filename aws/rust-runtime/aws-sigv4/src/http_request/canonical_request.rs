@@ -242,7 +242,9 @@ impl<'a> CanonicalRequest<'a> {
                 }
             }
 
-            if params.settings.session_token_mode == SessionTokenMode::Exclude && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN) {
+            if params.settings.session_token_mode == SessionTokenMode::Exclude
+                && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN)
+            {
                 continue;
             }
 
