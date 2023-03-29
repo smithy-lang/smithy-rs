@@ -97,8 +97,8 @@ class EndpointsCredentialsTest {
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
-                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("Credentials"),
+                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
+                            .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -120,8 +120,8 @@ class EndpointsCredentialsTest {
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
-                        "Credentials" to AwsCargoDependency.awsCredentialTypes(context.runtimeConfig)
-                            .withFeature("test-util").toType().resolve("Credentials"),
+                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
+                            .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
