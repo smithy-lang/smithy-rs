@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedCustomizeModule
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
@@ -29,7 +29,7 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(codegenContext.featureGatedCustomizeModule()) {
+        crate.withModule(ClientRustModule.Client.customize) {
             rustTemplate(
                 """
                 pub use #{Operation};
@@ -66,7 +66,7 @@ class CustomizableOperationGenerator(
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
             "combined_generics_decl" to combinedGenerics.declaration(),
-            "customize_module" to codegenContext.featureGatedCustomizeModule(),
+            "customize_module" to ClientRustModule.Client.customize,
         )
 
         writer.rustTemplate(
