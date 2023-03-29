@@ -7,7 +7,7 @@
 set -eux
 cd smithy-rs
 
-if [[ $# -ne 1 ]]; then
+if [[ $# -ne 0 ]]; then
     echo "Usage: check-deterministic-codegen"
     exit 1
 fi
