@@ -105,7 +105,7 @@ class PythonServerEventStreamWrapperGenerator(
                     signer: impl #{SignMessage} + Send + Sync + 'static,
                 ) -> #{MessageStreamAdapter}<#{Output}, #{Error}> {
                     let mut inner = self.inner.lock();
-                    let inner = inner.take().unwrap();
+                    let inner = inner.take().expect("stream is already gone");
                     inner.into_body_stream(marshaller, error_marshaller, signer)
                 }
                 """,
@@ -147,7 +147,7 @@ class PythonServerEventStreamWrapperGenerator(
             
             impl #{PyO3}::IntoPy<#{PyO3}::PyObject> for $name {
                 fn into_py(self, py: #{PyO3}::Python<'_>) -> #{PyO3}::PyObject {
-                    #{PyO3}::exceptions::PyAttributeError::new_err("this is a write-only field").into_py(py)
+                    #{PyO3}::exceptions::PyAttributeError::new_err("this is a write-only object").into_py(py)
                 }
             }
             """,
@@ -206,7 +206,7 @@ class PythonServerEventStreamWrapperGenerator(
                 pub fn __aiter__(slf: #{PyO3}::PyRef<Self>) -> #{PyO3}::PyRef<Self> {
                     slf
                 }
-                
+
                 pub fn __anext__(slf: #{PyO3}::PyRefMut<Self>) -> #{PyO3}::PyResult<Option<#{PyO3}::PyObject>> {
                     let body = slf.inner.clone();
                     let fut = #{PyO3Asyncio}::tokio::future_into_py(slf.py(), async move {
@@ -215,9 +215,7 @@ class PythonServerEventStreamWrapperGenerator(
                         match next {
                             Ok(Some(data)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(data, py))),
                             Ok(None) => Err(#{PyO3}::exceptions::PyStopAsyncIteration::new_err("stream exhausted")),
-                            // TODO: Modelled error should implement `IntoPy` and we should return modelled error here instead of terminating the stream.
-                            // Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(service_err.into_err(), py))), 
-                            Err(#{SmithyHttp}::result::SdkError::ServiceError(_service_err)) => Err(#{PyO3}::exceptions::PyStopAsyncIteration::new_err("stream exhausted")), 
+                            Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(service_err.into_err(), py))), 
                             Err(err) => Err(#{PyO3}::exceptions::PyRuntimeError::new_err(err.to_string())),
                         }
                     })?;

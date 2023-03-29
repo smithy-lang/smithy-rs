@@ -16,6 +16,7 @@ from pokemon_service_server_sdk.aws_lambda import LambdaContext
 from pokemon_service_server_sdk.error import (
     ResourceNotFoundException,
     UnsupportedRegionError,
+    MasterBallUnsuccessful,
 )
 from pokemon_service_server_sdk.input import (
     DoNothingInput,
@@ -262,25 +263,29 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
     async def events(input: CapturePokemonInput) -> AsyncIterator[CapturePokemonEvents]:
         async for incoming in input.events:
             logging.debug(f"incoming event -> {incoming}")
-            if incoming.is_event():
-                event = incoming.as_event()
-                payload = event.payload
-                if not payload:
-                    logging.debug("no payload provided, ignoring the event!")
-                    continue
-                name = payload.name or "<unknown>"
-                outgoing_event = CapturePokemonEvents.event(
-                    CaptureEvent(
-                        name=name,
-                        captured=random.choice([True, False]),
-                        shiny=random.choice([True, False]),
-                    )
-                )
-                logging.debug(f"outgoing event -> {outgoing_event}")
-                yield outgoing_event
+            if isinstance(incoming, MasterBallUnsuccessful):
+                message = incoming.message
+                logging.debug(f"master ball unsuccessful: {message}")
             else:
-                logging.error("unknown event!")
-                break
+                if incoming.is_event():
+                    event = incoming.as_event()
+                    payload = event.payload
+                    if not payload:
+                        logging.debug("no payload provided, ignoring the event!")
+                        continue
+                    name = payload.name or "<unknown>"
+                    outgoing_event = CapturePokemonEvents.event(
+                        CaptureEvent(
+                            name=name,
+                            captured=random.choice([True, False]),
+                            shiny=random.choice([True, False]),
+                        )
+                    )
+                    logging.debug(f"outgoing event -> {outgoing_event}")
+                    yield outgoing_event
+                else:
+                    logging.error("unknown event!")
+                    break
         logging.debug("done!")
 
     return CapturePokemonOutput(events=events(input))

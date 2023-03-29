@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -20,7 +21,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
 /**
  * Generates Python compatible error types for event streaming union types.
  * It just uses [ServerOperationErrorGenerator] under the hood to generate pure Rust error types and then adds
- * implementation of `pyo3::FromPyObject` to allow extracting error types from Python side.
+ * implementations of `pyo3::FromPyObject` and `pyo3::IntoPy` to allow moving errors from Rust to Python and vice-versa.
  */
 class PythonServerEventStreamErrorGenerator(
     private val model: Model,
@@ -41,6 +42,7 @@ class PythonServerEventStreamErrorGenerator(
     override fun render(writer: RustWriter) {
         super.render(writer)
         renderFromPyObjectImpl(writer)
+        renderIntoPyImpl(writer)
     }
 
     private fun renderFromPyObjectImpl(writer: RustWriter) {
@@ -68,6 +70,27 @@ class PythonServerEventStreamErrorGenerator(
                     """,
                     "PyO3" to pyO3
                 )
+            }
+        }
+    }
+
+    private fun renderIntoPyImpl(writer: RustWriter) {
+        writer.rustBlockTemplate("impl #{PyO3}::IntoPy<#{PyO3}::PyObject> for ${errorSymbol.name}", "PyO3" to pyO3) {
+            writer.rustBlockTemplate("fn into_py(self, py: #{PyO3}::Python<'_>) -> #{PyO3}::PyObject", "PyO3" to pyO3) {
+                writer.rustBlock("match self") {
+                    errors.forEach {
+                        val symbol = symbolProvider.toSymbol(it)
+                        writer.rustTemplate(
+                            """
+                            Self::${symbol.name}(it) => match #{PyO3}::Py::new(py, it) {
+                                Ok(it) => it.into_py(py),
+                                Err(err) => err.into_py(py),
+                            }
+                            """,
+                            "PyO3" to pyO3
+                        )
+                    }
+                }
             }
         }
     }
