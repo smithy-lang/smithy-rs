@@ -44,7 +44,7 @@ def main():
     repository_root = sys.argv[1]
     base_commit_sha = sys.argv[2]
     os.chdir(repository_root)
-    head_commit_sha = get_cmd_output("git rev-parse HEAD")
+    (_, head_commit_sha, _) = get_cmd_output("git rev-parse HEAD")
 
     # Make sure the working tree is clean
     if get_cmd_status("git diff --quiet") != 0:
