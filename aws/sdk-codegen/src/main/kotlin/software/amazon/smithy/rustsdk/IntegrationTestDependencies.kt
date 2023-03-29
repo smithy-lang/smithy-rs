@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
@@ -55,8 +54,8 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
             baseCustomizations + IntegrationTestDependencies(
+                codegenContext,
                 moduleName,
-                codegenContext.runtimeConfig,
                 hasTests,
                 hasBenches,
             )
@@ -67,18 +66,18 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
 }
 
 class IntegrationTestDependencies(
+    private val codegenContext: ClientCodegenContext,
     private val moduleName: String,
-    private val runtimeConfig: RuntimeConfig,
     private val hasTests: Boolean,
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Body -> testDependenciesOnly {
             if (hasTests) {
-                val smithyClient = CargoDependency.smithyClient(runtimeConfig)
+                val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
-                addDependency(CargoDependency.smithyProtocolTestHelpers(runtimeConfig))
+                addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
@@ -98,7 +97,7 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
         "transcribestreaming" -> listOf(TranscribeTestDependencies())
-        "s3" -> listOf(S3TestDependencies())
+        "s3" -> listOf(S3TestDependencies(codegenContext))
         else -> emptyList()
     }
 }
@@ -112,7 +111,7 @@ class TranscribeTestDependencies : LibRsCustomization() {
         }
 }
 
-class S3TestDependencies : LibRsCustomization() {
+class S3TestDependencies(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStd)
@@ -122,5 +121,12 @@ class S3TestDependencies : LibRsCustomization() {
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)
+
+            // TODO(enableNewSmithyRuntime): These additional dependencies may not be needed anymore when removing this flag
+            // depending on if the sra-test is kept around or not.
+            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+                addDependency(CargoDependency.smithyRuntime(codegenContext.runtimeConfig).toDevDependency())
+                addDependency(CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toDevDependency())
+            }
         }
 }

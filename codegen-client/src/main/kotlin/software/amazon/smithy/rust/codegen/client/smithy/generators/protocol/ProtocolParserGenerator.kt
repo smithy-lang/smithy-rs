@@ -185,7 +185,8 @@ class ProtocolParserGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
-        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
+        val fnNameSuffix = if (includeProperties) "http_response_with_props" else "http_response"
+        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = fnNameSuffix) { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             val propertiesArg = if (includeProperties) {
                 Attribute.AllowUnusedVariables.render(this)

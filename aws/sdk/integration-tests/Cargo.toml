@@ -2,7 +2,7 @@
 # `./gradlew -Paws.fullsdk=true :aws:sdk:assemble` these tests are copied into their respective Service crates.
 [workspace]
 members = [
-    "aws-smithy-runtime-test",
+    "../../sra-test/integration-tests/aws-smithy-runtime-test",
     "dynamodb",
     "ec2",
     "glacier",
