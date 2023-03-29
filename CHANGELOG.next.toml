@@ -22,3 +22,15 @@ message = "The outputs for event stream operations now implement the `Sync` auto
 references = ["smithy-rs#2496"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"

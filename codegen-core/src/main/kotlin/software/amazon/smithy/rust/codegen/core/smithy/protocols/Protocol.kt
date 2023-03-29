@@ -46,7 +46,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_http_error_metadata(response: &Response<Bytes>) -> aws_smithy_types::error::Builder
+     * fn parse_http_error_metadata(response_status: u16, response_headers: HeaderMap, response_body: &[u8]) -> aws_smithy_types::error::Builder
      * ```
      */
     fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType

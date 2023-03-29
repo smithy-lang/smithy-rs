@@ -52,10 +52,10 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_error_metadata(response.body().as_ref())", ec2QueryErrors)
+                rust("#T::parse_error_metadata(response_body)", ec2QueryErrors)
             }
         }
 

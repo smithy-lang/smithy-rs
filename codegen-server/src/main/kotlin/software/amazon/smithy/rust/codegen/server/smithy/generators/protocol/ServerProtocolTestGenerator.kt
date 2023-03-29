@@ -456,7 +456,7 @@ class ServerProtocolTestGenerator(
 
             // Construct expected request.
             withBlock("let expected = ", ";") {
-                instantiator.render(this, inputShape, httpRequestTestCase.params)
+                instantiator.render(this, inputShape, httpRequestTestCase.params, httpRequestTestCase.headers)
             }
 
             checkRequestParams(inputShape, this)
