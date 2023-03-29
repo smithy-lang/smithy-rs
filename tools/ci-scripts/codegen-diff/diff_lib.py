@@ -19,45 +19,45 @@ CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 def generate_and_commit_generated_code(revision_sha, targets=None):
     targets = targets or ['codegen-client-test', 'codegen-server-test', 'aws:sdk']
     # Clean the build artifacts before continuing
-    run("rm -rf aws/sdk/build")
+    get_cmd_output("rm -rf aws/sdk/build")
     if 'codegen-server-test' in targets:
-        run("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
-    run("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
+        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
+    get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
     tasks = ' '.join([f'{t}:assemble' for t in targets])
-    run(f"./gradlew --rerun-tasks {tasks}")
+    get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
     if 'codegen-server-test' in targets:
-        run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
+        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
 
     # Move generated code into codegen-diff/ directory
-    run(f"rm -rf {OUTPUT_PATH}")
-    run(f"mkdir {OUTPUT_PATH}")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}")
+    get_cmd_output(f"mkdir {OUTPUT_PATH}")
     if 'aws:sdk' in targets:
-        run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+        get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
     for target in ['codegen-client', 'codegen-server']:
         if target in targets:
-            run(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
+            get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == 'codegen-server-test':
-                run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
+                get_cmd_output(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
 
     # Clean up the SDK directory
-    run(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
+    get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
 
     # Clean up the client-test folder
-    run(f"rm -rf {OUTPUT_PATH}/codegen-client-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-client-test/source")
     run(f"find {OUTPUT_PATH}/codegen-client-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
     # Clean up the server-test folder
-    run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
-    run(f"git add -f {OUTPUT_PATH}")
-    run(f"git -c 'user.name=GitHub Action (generated code preview)' "
+    get_cmd_output(f"git add -f {OUTPUT_PATH}")
+    get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
         f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
         f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
         f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
@@ -139,16 +139,33 @@ def eprint(*args, **kwargs):
 
 # Runs a shell command
 def run(command, shell=False, check=True):
+    eprint(f"running `{command}`")
     if not shell:
         command = shlex.split(command)
     subprocess.run(command, stdout=sys.stderr, stderr=sys.stderr, shell=shell, check=check)
 
 
-# Returns the output from a shell command. Bails if the command failed
-def get_cmd_output(command):
-    result = subprocess.run(shlex.split(command), capture_output=True, check=True)
-    return result.stdout.decode("utf-8").strip()
+# Returns (status, stdout, stderr) from a shell command
+def get_cmd_output(command, cwd=None, check=True, **kwargs):
+    if isinstance(command, str):
+        eprint(f"running {command}")
+        command = shlex.split(command)
+    else:
+        eprint(f"running {' '.join(command)}")
 
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        check=False,
+        cwd=cwd,
+        **kwargs
+    )
+    stdout = result.stdout.decode("utf-8").strip()
+    stderr = result.stderr.decode("utf-8").strip()
+    if check and result.returncode != 0:
+        raise Exception(f"failed to run '{command}.\n{stdout}\n{stderr}")
+
+    return result.returncode, stdout, stderr
 
 # Runs a shell command and returns its exit status
 def get_cmd_status(command):
