@@ -7,7 +7,8 @@ import os
 import sys
 
 from diff_lib import eprint, run, get_cmd_status, get_cmd_output, generate_and_commit_generated_code, make_diffs, \
-    write_to_file
+    write_to_file, HEAD_BRANCH_NAME, BASE_BRANCH_NAME, OUTPUT_PATH
+
 
 # This script can be run and tested locally. To do so, you should check out
 # a second smithy-rs repository so that you can work on the script and still
@@ -72,7 +73,6 @@ def main():
         run("git checkout main")
         run(f"git branch -D {BASE_BRANCH_NAME}")
         run(f"git branch -D {HEAD_BRANCH_NAME}")
-
 
 
 if __name__ == "__main__":
