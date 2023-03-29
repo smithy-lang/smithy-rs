@@ -25,7 +25,7 @@ aws-types = { path = "../aws-types" }
 bytes = "1"
 bytes-utils = "0.1.1"
 hex = "0.4.3"
-http = "0.2.4"
+http = "0.2.9"
 http-body = "0.4.5"
 md-5 = "0.10.1"
 ring = "0.16"
