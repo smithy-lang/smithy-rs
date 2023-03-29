@@ -250,6 +250,12 @@ data class CargoDependency(
             DependencyScope.Dev,
             features = setOf("env-filter", "json"),
         )
+        val TracingTest: CargoDependency = CargoDependency(
+            "tracing_test",
+            CratesIo("0.2.4"),
+            DependencyScope.Dev,
+            features = setOf("no-env-filter"),
+        )
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
