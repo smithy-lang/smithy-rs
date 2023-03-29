@@ -52,3 +52,9 @@ message = "The `enableNewCrateOrganizationScheme` codegen flag has been removed.
 references = ["smithy-rs#2507"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make AppName configurable from within `ConfigLoader`."
+references = ["smithy-rs#2513"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
