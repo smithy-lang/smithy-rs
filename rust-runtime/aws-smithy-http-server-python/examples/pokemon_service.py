@@ -291,7 +291,7 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp  # pyright: ignore
+    import aiohttp
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
