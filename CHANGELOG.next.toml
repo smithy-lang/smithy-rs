@@ -34,3 +34,21 @@ message = "Clients now compile for the `wasm32-unknown-unknown` and `wasm32-wasi
 references = ["smithy-rs#2254"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "eduardomourar"
+
+[[smithy-rs]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
+references = ["smithy-rs#2495"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `enableNewCrateOrganizationScheme` codegen flag has been removed. If you opted out of the new crate organization scheme, it must be adopted now in order to upgrade (see [the upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/2449) from March 23rd's release)."
+references = ["smithy-rs#2507"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

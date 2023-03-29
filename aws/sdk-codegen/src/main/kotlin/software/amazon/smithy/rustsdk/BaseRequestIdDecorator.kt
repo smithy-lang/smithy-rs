@@ -66,12 +66,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     ): List<BuilderCustomization> = baseCustomizations + listOf(RequestIdBuilderCustomization())
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        rustCrate.withModule(
-            when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                true -> ClientRustModule.Operation
-                else -> ClientRustModule.types
-            },
-        ) {
+        rustCrate.withModule(ClientRustModule.Operation) {
             // Re-export RequestId in generated crate
             rust("pub use #T;", accessorTrait(codegenContext))
         }
@@ -83,13 +78,13 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
             when (section) {
                 is OperationSection.PopulateErrorMetadataExtras -> {
                     rustTemplate(
-                        "${section.builderName} = #{apply_to_error}(${section.builderName}, ${section.responseName}.headers());",
+                        "${section.builderName} = #{apply_to_error}(${section.builderName}, ${section.responseHeadersName});",
                         "apply_to_error" to applyToError(codegenContext),
                     )
                 }
                 is OperationSection.MutateOutput -> {
                     rust(
-                        "output._set_$fieldName(#T::$accessorFunctionName(response).map(str::to_string));",
+                        "output._set_$fieldName(#T::$accessorFunctionName(${section.responseHeadersName}).map(str::to_string));",
                         accessorTrait(codegenContext),
                     )
                 }

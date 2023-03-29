@@ -60,8 +60,8 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Opaque("EventStreamSender<crate::model::SomeStream, crate::error::SomeStreamError>", "aws_smithy_http::event_stream")
-        outputType shouldBe RustType.Opaque("Receiver<crate::model::SomeStream, crate::error::SomeStreamError>", "aws_smithy_http::event_stream")
+        inputType shouldBe RustType.Opaque("EventStreamSender<crate::types::SomeStream, crate::types::error::SomeStreamError>", "aws_smithy_http::event_stream")
+        outputType shouldBe RustType.Opaque("Receiver<crate::types::SomeStream, crate::types::error::SomeStreamError>", "aws_smithy_http::event_stream")
     }
 
     @Test
@@ -100,7 +100,7 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::model"))
-        outputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::model"))
+        inputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::types"))
+        outputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::types"))
     }
 }

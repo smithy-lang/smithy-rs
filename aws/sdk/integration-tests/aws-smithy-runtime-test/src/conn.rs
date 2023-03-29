@@ -6,9 +6,11 @@
 use aws_smithy_client::conns::Https;
 use aws_smithy_client::hyper_ext::Adapter;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::{BoxError, BoxFallibleFut, Connection};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxError, BoxFallibleFut, Connection, HttpRequest,
+};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_api::runtime_plugin::RuntimePlugin;
 
 #[derive(Debug)]
 pub struct HyperConnection {
@@ -17,7 +19,8 @@ pub struct HyperConnection {
 
 impl RuntimePlugin for HyperConnection {
     fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        todo!()
+        // TODO(orchestrator) put a connection in the bag
+        Ok(())
     }
 }
 
@@ -29,10 +32,10 @@ impl HyperConnection {
     }
 }
 
-impl Connection<http::Request<SdkBody>, http::Response<SdkBody>> for HyperConnection {
+impl Connection for HyperConnection {
     fn call(
         &self,
-        _req: &mut http::Request<SdkBody>,
+        _req: &mut HttpRequest,
         _cfg: &ConfigBag,
     ) -> BoxFallibleFut<http::Response<SdkBody>> {
         todo!("hyper's connector wants to take ownership of req");
