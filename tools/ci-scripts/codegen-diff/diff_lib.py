@@ -1,36 +1,10 @@
-#!/usr/bin/env python3
-#
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-
-# This script can be run and tested locally. To do so, you should check out
-# a second smithy-rs repository so that you can work on the script and still
-# run it without it immediately bailing for an unclean working tree.
-#
-# Example:
-# `smithy-rs/` - the main repo you're working out of
-# `test/smithy-rs/` - the repo you're testing against
-#
-# ```
-# $ cd test/smithy-rs
-# $ ../../smithy-rs/tools/ci-scripts/codegen-diff-revisions.py . <some commit hash to diff against>
-# ```
-#
-# It will diff the generated code from HEAD against any commit hash you feed it. If you want to test
-# a specific range, change the HEAD of the test repository.
-#
-# This script requires `difftags` to be installed from `tools/ci-build/difftags`:
-# ```
-# $ cargo install --path tools/ci-build/difftags
-# ```
-# Make sure the local version matches the version referenced from the GitHub Actions workflow.
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  SPDX-License-Identifier: Apache-2.0
 
 import os
 import sys
 import subprocess
 import shlex
-
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
 BASE_BRANCH_NAME = "__tmp-localonly-base"
@@ -42,66 +16,30 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 
-def running_in_docker_build():
-    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
-
-
-def main():
-    if len(sys.argv) != 3:
-        eprint("Usage: codegen-diff-revisions.py <repository root> <base commit sha>")
-        sys.exit(1)
-
-    repository_root = sys.argv[1]
-    base_commit_sha = sys.argv[2]
-    os.chdir(repository_root)
-    head_commit_sha = get_cmd_output("git rev-parse HEAD")
-
-    # Make sure the working tree is clean
-    if get_cmd_status("git diff --quiet") != 0:
-        eprint("working tree is not clean. aborting")
-        sys.exit(1)
-
-    if running_in_docker_build():
-        eprint(f"Fetching base revision {base_commit_sha} from GitHub...")
-        run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {base_commit_sha}")
-
-    # Generate code for HEAD
-    eprint(f"Creating temporary branch with generated code for the HEAD revision {head_commit_sha}")
-    run(f"git checkout {head_commit_sha} -b {HEAD_BRANCH_NAME}")
-    generate_and_commit_generated_code(head_commit_sha)
-
-    # Generate code for base
-    eprint(f"Creating temporary branch with generated code for the base revision {base_commit_sha}")
-    run(f"git checkout {base_commit_sha} -b {BASE_BRANCH_NAME}")
-    generate_and_commit_generated_code(base_commit_sha)
-
-    bot_message = make_diffs(base_commit_sha, head_commit_sha)
-    write_to_file(f"{OUTPUT_PATH}/bot-message", bot_message)
-
-    # Clean-up that's only really useful when testing the script in local-dev
-    if not running_in_docker_build():
-        run("git checkout main")
-        run(f"git branch -D {BASE_BRANCH_NAME}")
-        run(f"git branch -D {HEAD_BRANCH_NAME}")
-
-
-def generate_and_commit_generated_code(revision_sha):
+def generate_and_commit_generated_code(revision_sha, targets=None):
+    targets = targets or ['codegen-client-test', 'codegen-server-test', 'aws:sdk']
     # Clean the build artifacts before continuing
     run("rm -rf aws/sdk/build")
-    run("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
+    if 'codegen-server-test' in targets:
+        run("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
     run("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
-    run("./gradlew --rerun-tasks aws:sdk:assemble codegen-client-test:assemble codegen-server-test:assemble")
-    run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
+    tasks = ''.join([f'{t}:assemble' for t in targets])
+    run(f"./gradlew --rerun-tasks {tasks}")
+    if 'codegen-server-test' in targets:
+        run("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
 
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
-    run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-    run(f"mv codegen-client-test/build/smithyprojections/codegen-client-test {OUTPUT_PATH}/")
-    run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}/")
-    run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
+    if 'aws:sdk' in targets:
+        run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+    for target in ['codegen-client', 'codegen-server']:
+        if target in targets:
+            run(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
+            if target == 'codegen-server-test':
+                run(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
 
     # Clean up the SDK directory
     run(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -182,11 +120,11 @@ def make_diffs(base_commit_sha, head_commit_sha):
     server_links_python = diff_link('Server Test Python', 'No codegen difference in the Server Test Python',
                                     server_ws_python, 'ignoring whitespace', server_nows_python)
     # Save escaped newlines so that the GitHub Action script gets the whole message
-    return "A new generated diff is ready to view.\\n"\
-        f"- {sdk_links}\\n"\
-        f"- {client_links}\\n"\
-        f"- {server_links}\\n"\
-        f"- {server_links_python}\\n"
+    return "A new generated diff is ready to view.\\n" \
+           f"- {sdk_links}\\n" \
+           f"- {client_links}\\n" \
+           f"- {server_links}\\n" \
+           f"- {server_links_python}\\n"
 
 
 def write_to_file(path, text):
@@ -215,7 +153,3 @@ def get_cmd_output(command):
 # Runs a shell command and returns its exit status
 def get_cmd_status(command):
     return subprocess.run(command, capture_output=True, shell=True).returncode
-
-
-if __name__ == "__main__":
-    main()
