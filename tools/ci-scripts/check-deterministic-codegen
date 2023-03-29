@@ -14,4 +14,4 @@ fi
 
 # Override version commit hash to prevent unnecessary diffs
 export SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE=ci
-./tools/ci-scripts/codgen-diff/check-deterministic-codegen.py .
+./tools/ci-scripts/codegen-diff/check-deterministic-codegen.py .
