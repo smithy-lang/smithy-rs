@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -126,10 +125,11 @@ class RequestBindingGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+    private val operationModule = symbolProvider.moduleForShape(inputShape)
 
     private fun renderOperation(rustCrate: RustCrate) {
         inputShape.renderWithModelBuilder(model, symbolProvider, rustCrate)
-        rustCrate.withModule(ClientRustModule.Input) {
+        rustCrate.withModule(operationModule) {
             val codegenContext = testClientCodegenContext(model)
             val bindingGen = RequestBindingGenerator(
                 codegenContext,
@@ -182,7 +182,7 @@ class RequestBindingGeneratorTest {
     fun `generates valid request bindings`() {
         val project = TestWorkspace.testProject(symbolProvider)
         renderOperation(project)
-        project.withModule(ClientRustModule.Input) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
+        project.withModule(operationModule) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
             unitTest(
                 name = "generate_uris",
                 test = """

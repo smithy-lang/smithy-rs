@@ -8,9 +8,8 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -67,18 +66,18 @@ class UserAgentDecorator : ClientCodegenDecorator {
         val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
         val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
 
-        rustCrate.withModule(codegenContext.featureGatedMetaModule()) {
+        rustCrate.withModule(ClientRustModule.Meta) {
             rustTemplate(
                 """
                 pub(crate) static API_METADATA: #{user_agent}::ApiMetadata =
                     #{user_agent}::ApiMetadata::new(${serviceId.dq()}, #{PKG_VERSION});
                 """,
                 "user_agent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
-                "PKG_VERSION" to CrateVersionCustomization.pkgVersion(codegenContext.featureGatedMetaModule()),
+                "PKG_VERSION" to CrateVersionCustomization.pkgVersion(ClientRustModule.Meta),
             )
         }
 
-        rustCrate.withModule(codegenContext.featureGatedConfigModule()) {
+        rustCrate.withModule(ClientRustModule.Config) {
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
             rustTemplate(
                 "pub use #{AppName};",
@@ -105,7 +104,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                     }
                     ${section.request}.properties_mut().insert(user_agent);
                     """,
-                    "meta" to codegenContext.featureGatedMetaModule(),
+                    "meta" to ClientRustModule.Meta,
                     "ua_module" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
                     "Env" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("os_shim_internal::Env"),
                 )
