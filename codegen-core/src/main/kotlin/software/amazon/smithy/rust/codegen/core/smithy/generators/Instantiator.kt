@@ -30,6 +30,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -360,6 +361,16 @@ open class Instantiator(
             val memberShape = shape.expectMember(key.value)
             renderMemberHelper(memberShape, value)
         }
+
+        shape.allMembers.entries
+            .firstOrNull {
+                it.value.hasTrait<HttpPayloadTrait>() &&
+                    !data.members.containsKey(Node.from(it.key)) &&
+                    model.expectShape(it.value.target) is StructureShape
+            }
+            ?.let {
+                renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
+            }
 
         writer.rust(".build()")
         if (builderKindBehavior.hasFallibleBuilder(shape)) {
