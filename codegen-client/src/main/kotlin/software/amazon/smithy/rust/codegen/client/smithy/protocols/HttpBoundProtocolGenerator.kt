@@ -177,9 +177,9 @@ open class HttpBoundProtocolTraitImplGenerator(
                 rust("let (response, properties) = op_response.parts_mut();")
                 rustTemplate(
                     """
-                    #{parse_streaming_response}(response)
+                    #{parse_streaming_response}(response, &properties)
                     """,
-                    "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
+                    "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, true, customizations),
                 )
             }
         }
