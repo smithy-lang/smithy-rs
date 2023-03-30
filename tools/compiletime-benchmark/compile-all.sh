@@ -1,3 +1,8 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
 git clone https://github.com/awslabs/smithy-rs.git
 cd smithy-rs
 
@@ -10,12 +15,12 @@ for i in $(ls $PATH_TO_GENERATED_SDK); do
     cd $PATH_TO_GENERATED_SDK/$i
     if [[ ! $($PATH_TO_GENERATED_SDK == *"aws-"*) ]]; then
         # not-optimized
-        echo $i >> unoptimized.txt
+        echo sdk $i >> unoptimized.txt
         time cargo build >> unoptimized.txt
         echo "=======================================" >> unoptimized.txt
 
         # optimized
-        echo "sdk $i" >> optimized.txt
+        echo sdk $i >> optimized.txt
         time cargo build --release >> optimized.txt
         echo "=======================================" >> optimized.txt
     fi
