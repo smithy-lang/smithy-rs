@@ -261,12 +261,9 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
         raise UnsupportedRegionError(input.region)
 
     async def events(input: CapturePokemonInput) -> AsyncIterator[CapturePokemonEvents]:
-        async for incoming in input.events:
-            logging.debug(f"incoming event -> {incoming}")
-            if isinstance(incoming, MasterBallUnsuccessful):
-                message = incoming.message
-                logging.debug(f"master ball unsuccessful: {message}")
-            else:
+        try:
+            async for incoming in input.events:
+                logging.debug(f"incoming event -> {incoming}")
                 if incoming.is_event():
                     event = incoming.as_event()
                     payload = event.payload
@@ -286,6 +283,9 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
                 else:
                     logging.error("unknown event!")
                     break
+        except MasterBallUnsuccessful as err:
+            logging.error(f"masterball unsuccessful: {err}")
+
         logging.debug("done!")
 
     return CapturePokemonOutput(events=events(input))

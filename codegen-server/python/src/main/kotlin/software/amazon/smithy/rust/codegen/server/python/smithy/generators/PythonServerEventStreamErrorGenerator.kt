@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
@@ -21,7 +22,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
 /**
  * Generates Python compatible error types for event streaming union types.
  * It just uses [ServerOperationErrorGenerator] under the hood to generate pure Rust error types and then adds
- * implementations of `pyo3::FromPyObject` and `pyo3::IntoPy` to allow moving errors from Rust to Python and vice-versa.
+ * some implementation to errors to make it possible to moving errors from Rust to Python and vice-versa.
+ * It adds following implementations to errors:
+ *      - `pyo3::FromPyObject`: To allow extracting Rust errors from Python errors
+ *      - `pyo3::IntoPy`: To allow converting Rust errors to Python errors
+ *      - `impl From<#{Error}> for pyo3::PyErr`: To allow converting Rust errors to Python exceptions,
+ *                                               it uses previous impl to convert errors
  */
 class PythonServerEventStreamErrorGenerator(
     private val model: Model,
@@ -43,6 +49,7 @@ class PythonServerEventStreamErrorGenerator(
         super.render(writer)
         renderFromPyObjectImpl(writer)
         renderIntoPyImpl(writer)
+        renderIntoPyErrImpl(writer)
     }
 
     private fun renderFromPyObjectImpl(writer: RustWriter) {
@@ -91,6 +98,22 @@ class PythonServerEventStreamErrorGenerator(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private fun renderIntoPyErrImpl(writer: RustWriter) {
+        writer.rustBlockTemplate("impl #{From}<${errorSymbol.name}> for #{PyO3}::PyErr", "PyO3" to pyO3, "From" to RuntimeType.From) {
+            writer.rustBlockTemplate("fn from(err: ${errorSymbol.name}) -> #{PyO3}::PyErr", "PyO3" to pyO3) {
+                writer.rustTemplate(
+                    """
+                    #{PyO3}::Python::with_gil(|py| {
+                        let py_err = #{PyO3}::IntoPy::into_py(err, py);
+                        #{PyO3}::PyErr::from_value(py_err.as_ref(py))
+                    })
+                    """,
+                    "PyO3" to pyO3,
+                )
             }
         }
     }

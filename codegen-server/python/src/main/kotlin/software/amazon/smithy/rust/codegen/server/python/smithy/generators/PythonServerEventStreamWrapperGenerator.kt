@@ -215,7 +215,7 @@ class PythonServerEventStreamWrapperGenerator(
                         match next {
                             Ok(Some(data)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(data, py))),
                             Ok(None) => Err(#{PyO3}::exceptions::PyStopAsyncIteration::new_err("stream exhausted")),
-                            Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(service_err.into_err(), py))), 
+                            Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Err(service_err.into_err().into()), 
                             Err(err) => Err(#{PyO3}::exceptions::PyRuntimeError::new_err(err.to_string())),
                         }
                     })?;

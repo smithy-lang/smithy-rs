@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonEventStreamSymbolProvider
@@ -135,11 +134,9 @@ class PythonServerStructureGenerator(
 
     private fun memberPythonType(shape: MemberShape, symbol: Symbol): PythonType =
         if (shape.isEventStream(model)) {
-            val targetUnion = model.expectShape(shape.target).asUnionShape().get()
             val eventStreamSymbol = PythonEventStreamSymbolProvider.parseSymbol(symbol)
             val innerT = eventStreamSymbol.innerT.pythonType()
-            val errors = targetUnion.eventStreamErrors().map { symbolProvider.toSymbol(it).rustType().pythonType() }
-            PythonType.AsyncIterator(PythonType.Union(listOf(innerT) + errors))
+            PythonType.AsyncIterator(innerT)
         } else {
             symbol.rustType().pythonType()
         }
