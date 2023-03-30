@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -34,6 +33,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.TraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -66,11 +66,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
     }
     override val shapeId: ShapeId = SHAPE_ID
 
-    override fun renderImplFromConstraintViolationForRequestRejection(): Writable = writable {
-        val codegenScope = arrayOf(
-            "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
-            "From" to RuntimeType.From,
-        )
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable = writable {
         rustTemplate(
             """
             impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -87,7 +83,8 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                 }
             }
             """,
-            *codegenScope,
+            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "From" to RuntimeType.From,
         )
     }
 

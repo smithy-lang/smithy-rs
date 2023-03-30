@@ -68,7 +68,6 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
@@ -131,9 +130,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "Regex" to RuntimeType.Regex,
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-        "RuntimeError" to ServerRuntimeType.runtimeError(runtimeConfig),
-        "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
-        "ResponseRejection" to ServerRuntimeType.responseRejection(runtimeConfig),
+        "RuntimeError" to protocol.runtimeError(runtimeConfig),
+        "RequestRejection" to protocol.requestRejection(runtimeConfig),
+        "ResponseRejection" to protocol.responseRejection(runtimeConfig),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
     )
@@ -159,12 +158,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
+                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
                         return Err(#{RuntimeError}::NotAcceptable)
                     }
                     """,
@@ -1149,7 +1147,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         check(binding.location == HttpLocation.PAYLOAD)
 
         if (model.expectShape(binding.member.target) is StringShape) {
-            return ServerRuntimeType.requestRejection(runtimeConfig).toSymbol()
+            return protocol.requestRejection(runtimeConfig).toSymbol()
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {

@@ -29,6 +29,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestRustSymbolProviderConfig = RustSymbolProviderConfig(
@@ -100,10 +102,7 @@ fun serverTestCodegenContext(
     settings: ServerRustSettings = serverTestRustSettings(),
     protocolShapeId: ShapeId? = null,
 ): ServerCodegenContext {
-    val service =
-        serviceShape
-            ?: model.serviceShapes.firstOrNull()
-            ?: ServiceShape.builder().version("test").id("test#Service").build()
+    val service = serviceShape ?: testServiceShapeFor(model)
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
     val serverSymbolProviders = ServerSymbolProviders.from(
         settings,
@@ -129,15 +128,33 @@ fun serverTestCodegenContext(
     )
 }
 
+fun loadServerProtocol(model: Model): ServerProtocol {
+    val codegenContext = serverTestCodegenContext(model)
+    val (_, protocolGeneratorFactory) =
+        ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(model, codegenContext.serviceShape)
+    return protocolGeneratorFactory.buildProtocolGenerator(codegenContext).protocol
+}
+
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
-fun StructureShape.serverRenderWithModelBuilder(rustCrate: RustCrate, model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
+fun StructureShape.serverRenderWithModelBuilder(
+    rustCrate: RustCrate,
+    model: Model,
+    symbolProvider: RustSymbolProvider,
+    writer: RustWriter,
+    protocol: ServerProtocol? = null,
+) {
     StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
-    val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this, SmithyValidationExceptionConversionGenerator(serverCodegenContext))
+    val modelBuilder = ServerBuilderGenerator(
+        serverCodegenContext,
+        this,
+        SmithyValidationExceptionConversionGenerator(serverCodegenContext),
+        protocol ?: loadServerProtocol(model),
+    )
     modelBuilder.render(rustCrate, writer)
     writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
