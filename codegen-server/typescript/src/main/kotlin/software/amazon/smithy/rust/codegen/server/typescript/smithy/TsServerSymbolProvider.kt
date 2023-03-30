@@ -23,15 +23,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
+import java.util.logging.Logger
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.
@@ -45,11 +47,13 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
  * `aws_smithy_http_server_typescript::types`.
  */
 class TsServerSymbolVisitor(
-    private val model: Model,
+    settings: ServerRustSettings,
+    model: Model,
     serviceShape: ServiceShape?,
-    config: SymbolVisitorConfig,
-) : SymbolVisitor(model, serviceShape, config) {
-    private val runtimeConfig = config().runtimeConfig
+    config: RustSymbolProviderConfig,
+) : SymbolVisitor(settings, model, serviceShape, config) {
+    private val runtimeConfig = config.runtimeConfig
+    private val logger = Logger.getLogger(javaClass.name)
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = shape.accept(this)
@@ -69,7 +73,7 @@ class TsServerSymbolVisitor(
         // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
         // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
-            TsServerRuntimeType.byteStream(config().runtimeConfig).toSymbol()
+            TsServerRuntimeType.byteStream(runtimeConfig).toSymbol()
         } else {
             initial
         }
@@ -96,7 +100,7 @@ class TsServerSymbolVisitor(
  *
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
-class TsStreamingShapeMetadataProvider(private val base: RustSymbolProvider, private val model: Model) : SymbolMetadataProvider(base) {
+class TsStreamingShapeMetadataProvider(private val base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {

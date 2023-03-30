@@ -10,8 +10,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -29,9 +27,9 @@ class TsServerStructureGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
-) : StructureGenerator(model, symbolProvider, writer, shape) {
+) : StructureGenerator(model, symbolProvider, writer, shape, listOf()) {
 
-    private val napi_derive = TsServerCargoDependency.NapiDerive.toType()
+    private val napiDerive = TsServerCargoDependency.NapiDerive.toType()
 
     override fun renderStructure() {
         val flavour = if (shape.hasTrait<ErrorTrait>()) {
@@ -43,7 +41,7 @@ class TsServerStructureGenerator(
             writable {
                 rustInlineTemplate(
                     "#{napi}($flavour)",
-                    "napi" to napi_derive.resolve("napi"),
+                    "napi" to napiDerive.resolve("napi"),
                 )
             },
         ).render(writer)

@@ -16,20 +16,26 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleDocProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.TsServerStructureGenerator
 
 /**
@@ -41,15 +47,16 @@ import software.amazon.smithy.rust.codegen.server.typescript.smithy.generators.T
  */
 class TsServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: ServerCodegenDecorator,
+    private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
         val symbolVisitorConfig =
-            SymbolVisitorConfig(
+            RustSymbolProviderConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -70,17 +77,22 @@ class TsServerCodegenVisitor(
         settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
         fun baseSymbolProviderFactory(
+            settings: ServerRustSettings,
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig,
+            rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
-        ) = RustServerCodegenTsPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
+            includeConstraintShapeProvider: Boolean,
+            codegenDecorator: ServerCodegenDecorator,
+        ) = RustServerCodegenTsPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
+            settings,
             model,
             service,
             symbolVisitorConfig,
             settings.codegenConfig.publicConstrainedTypes,
+            codegenDecorator,
             ::baseSymbolProviderFactory,
         )
 
@@ -89,6 +101,7 @@ class TsServerCodegenVisitor(
             ServerCodegenContext(
                 model,
                 serverSymbolProviders.symbolProvider,
+                null,
                 service,
                 protocol,
                 settings,
@@ -98,8 +111,19 @@ class TsServerCodegenVisitor(
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
 
+        codegenContext = codegenContext.copy(
+            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                // TODO make me TS
+                TsServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+            ),
+        )
+
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig)
+        rustCrate = RustCrate(
+            context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -118,7 +142,18 @@ class TsServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             // Use Typescript specific structure generator that adds the #[napi] attribute
             // and implementation.
-            TsServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
+            TsServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render()
+
+            shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+                ErrorImplGenerator(
+                    model,
+                    codegenContext.symbolProvider,
+                    this,
+                    shape,
+                    errorTrait,
+                    codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                ).render(CodegenTarget.SERVER)
+            }
 
             renderStructureShapeBuilder(shape, this)
         }
@@ -130,8 +165,8 @@ class TsServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun tsServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            TsServerEnumGenerator(codegenContext, writer, shape)
+        fun tsServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
+            TsServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::tsServerEnumGeneratorFactory)
     }
 
@@ -156,21 +191,24 @@ class TsServerCodegenVisitor(
      * - Typescript operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
-        logger.info("[js-server-codegen] Generating a service $shape")
-        TsServerServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
-            codegenContext,
-        )
-            .render()
+        super.serviceShape(shape)
+
+        logger.info("[ts-server-codegen] Generating a service $shape")
+
+        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        rustCrate.withModule(TsServerRustModule.TsServerApplication) {
+            TsApplicationGenerator(codegenContext, serverProtocol).render(this)
+        }
     }
 
     override fun operationShape(shape: OperationShape) {
         super.operationShape(shape)
-        rustCrate.withModule(RustModule.public("js_operation_adaptor")) {
+        rustCrate.withModule(TsServerRustModule.TsOperationAdapter) {
             TsServerOperationHandlerGenerator(codegenContext, shape).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.Error) {
+            TsServerOperationErrorGenerator(codegenContext.model, codegenContext.symbolProvider, shape).render(this)
         }
     }
 }

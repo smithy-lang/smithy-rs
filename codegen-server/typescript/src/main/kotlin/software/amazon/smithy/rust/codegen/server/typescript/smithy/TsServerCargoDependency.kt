@@ -26,6 +26,7 @@ object TsServerCargoDependency {
     val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
+    val Socket2: CargoDependency = CargoDependency("socket2", CratesIo("0.4"))
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
     fun smithyHttpServerTs(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-typescript")

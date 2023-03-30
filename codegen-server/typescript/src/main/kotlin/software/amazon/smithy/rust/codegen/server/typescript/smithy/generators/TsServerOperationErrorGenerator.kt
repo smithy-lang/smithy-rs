@@ -9,11 +9,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCargoDependency
 
@@ -25,13 +23,11 @@ class TsServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape,
-) : ServerOperationErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(operation), listOf()) {
-
+) {
     private val operationIndex = OperationIndex.of(model)
     private val errors = operationIndex.getErrors(operation)
 
-    override fun render(writer: RustWriter) {
-        super.render(writer)
+    fun render(writer: RustWriter) {
         renderFromTsErr(writer)
     }
 
@@ -47,7 +43,7 @@ class TsServerOperationErrorGenerator(
 
             """,
             "napi" to TsServerCargoDependency.Napi.toType(),
-            "Error" to operation.errorSymbol(symbolProvider),
+            "Error" to symbolProvider.symbolForOperationError(operation),
             "From" to RuntimeType.From,
         )
     }

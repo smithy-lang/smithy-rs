@@ -79,7 +79,7 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
                     "@types/node": ">=18"
                 },
                 "engines": {
-                    "node": ">=10"
+                    "node": ">=18"
                 },
                 "scripts": {
                     "artifacts": "napi artifacts",
@@ -96,46 +96,10 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
 }"""
             this.write(content)
         }
-        val operations = codegenContext.serviceShape.operations
-        val model = codegenContext.model
-        val imports =
-            operations.joinToString {
-                listOf(
-                    model.expectShape(it).asOperationShape().get().inputShape.name,
-                    model.expectShape(it).asOperationShape().get().outputShape.name,
-                ).joinToString()
-            }
-        val handlers =
-            operations.joinToString("\n") {
-                "async ${it.name}(_: ${
-                    model.expectShape(it).asOperationShape().get().inputShape.name
-                }): Promise<${model.expectShape(it).asOperationShape().get().outputShape.name}> { /* TODO */ }"
-            }
-        rustCrate.withFile("app.ts") {
-            val content = """
-                import {
-                  App,
-                  TsHandlers,
-                  TsSocket,
-                  $imports
-                } from ".";
-
-                let callsCount = 0;
-                class HandlerImpl implements TsHandlers {
-                  $handlers
-
-                // Pass the handlers to the SURF
-                const app = new App(new HandlerImpl());
-
-                // Start the app 🤘
-                app.start(new TsSocket("127.0.0.1", 13734));
-            """
-            this.write(content)
-        }
     }
 }
 
-val DECORATORS = listOf(
+val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
      * This is done because the Typescript interpreter can raise eceptions during execution.

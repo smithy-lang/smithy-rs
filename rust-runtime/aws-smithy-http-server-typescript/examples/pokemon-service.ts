@@ -8,7 +8,7 @@ import { cpus } from "os";
 
 import {
     App,
-    Handlers,
+    TsHandlers,
     GetPokemonSpeciesInput,
     GetPokemonSpeciesOutput,
     Language,
@@ -21,7 +21,7 @@ import {
     GetServerStatisticsOutput,
 } from ".";
 
-class HandlerImpl implements Handlers {
+class HandlerImpl implements TsHandlers {
     // TODO: implement
     async doNothing(input: DoNothingInput): Promise<DoNothingOutput> {
         return {};

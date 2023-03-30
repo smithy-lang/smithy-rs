@@ -48,7 +48,7 @@ class TsServerOperationHandlerGenerator(
             /// Typescript handler for operation `$operationName`.
             pub(crate) async fn $fnName(
                 input: $input,
-                handlers: #{SmithyServer}::Extension<crate::js_server_application::Handlers>,
+                handlers: #{SmithyServer}::Extension<crate::ts_server_application::Handlers>,
             ) -> std::result::Result<$output, $error> {
                 handlers.$fnName.call_async::<#{napi}::bindgen_prelude::Promise<$output>>(input).await?.await.map_err(|e| e.into())
             }
