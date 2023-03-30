@@ -251,7 +251,7 @@ data class CargoDependency(
             features = setOf("env-filter", "json"),
         )
         val TracingTest: CargoDependency = CargoDependency(
-            "tracing_test",
+            "tracing-test",
             CratesIo("0.2.4"),
             DependencyScope.Dev,
             features = setOf("no-env-filter"),
