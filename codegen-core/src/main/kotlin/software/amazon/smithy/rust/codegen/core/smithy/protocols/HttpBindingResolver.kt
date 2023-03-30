@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 typealias HttpLocation = HttpBinding.Location
@@ -73,17 +74,13 @@ interface HttpBindingResolver {
 
     /**
      * Determine the timestamp format based on the input parameters.
-     *
-     * By default, this uses the timestamp trait, either on the member or on the target.
      */
     fun timestampFormat(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
-        model: Model,
     ): TimestampFormatTrait.Format =
-        memberShape.getMemberTrait(model, TimestampFormatTrait::class.java).map { it.format }
-            .orElse(defaultTimestampFormat)
+        memberShape.getTrait<TimestampFormatTrait>()?.format ?: defaultTimestampFormat
 
     /**
      * Determines the request content type for given [operationShape].
@@ -137,23 +134,14 @@ open class HttpTraitHttpBindingResolver(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
-        model: Model,
     ): TimestampFormatTrait.Format =
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String? =
-        httpIndex.determineRequestContentType(
-            operationShape,
-            contentTypes.requestDocument,
-            contentTypes.eventStreamContentType,
-        ).orNull()
+        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument, contentTypes.eventStreamContentType).orNull()
 
     override fun responseContentType(operationShape: OperationShape): String? =
-        httpIndex.determineResponseContentType(
-            operationShape,
-            contentTypes.responseDocument,
-            contentTypes.eventStreamContentType,
-        ).orNull()
+        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument, contentTypes.eventStreamContentType).orNull()
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =

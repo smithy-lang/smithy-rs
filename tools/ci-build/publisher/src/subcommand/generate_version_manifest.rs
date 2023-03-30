@@ -45,7 +45,7 @@ pub async fn subcommand_generate_version_manifest(
 ) -> Result<()> {
     verify_crate_hasher_available()?;
 
-    let repo_root = find_git_repository_root("smithy-rs", std::env::current_dir()?)?;
+    let repo_root = find_git_repository_root("smithy-rs", &std::env::current_dir()?)?;
     let smithy_rs_revision = GitCLI::new(&repo_root)?
         .get_head_revision()
         .context("get smithy-rs revision")?;
@@ -197,7 +197,7 @@ fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
     // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
-        hashes.push_str(&sha256::try_digest(import.as_path())?);
+        hashes.push_str(&sha256::digest_file(import).context("hash model")?);
         hashes.push('\n');
     }
     Ok(sha256::digest(hashes))
@@ -217,7 +217,7 @@ impl SmithyBuildRoot {
 
 #[derive(Debug, Deserialize)]
 struct SmithyBuildProjection {
-    imports: Vec<PathBuf>,
+    imports: Vec<String>,
 }
 
 #[cfg(test)]
@@ -348,7 +348,10 @@ mod tests {
         fs::write(&model1b, "bar").unwrap();
 
         let hash = hash_models(&SmithyBuildProjection {
-            imports: vec![model1a, model1b],
+            imports: vec![
+                model1a.to_str().unwrap().to_string(),
+                model1b.to_str().unwrap().to_string(),
+            ],
         })
         .unwrap();
 

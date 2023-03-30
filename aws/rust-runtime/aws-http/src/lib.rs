@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! AWS-specific middleware implementations and HTTP-related features.
+//! Provides user agent and credentials middleware for the AWS SDK.
 
-#![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
@@ -28,6 +27,3 @@ pub mod user_agent;
 
 /// AWS-specific content-encoding tools
 pub mod content_encoding;
-
-/// AWS-specific request ID support
-pub mod request_id;

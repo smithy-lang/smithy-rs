@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -22,19 +23,25 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 class ServerRequestBindingGenerator(
     protocol: Protocol,
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
+    private fun serverBuilderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(
+        codegenContext.symbolProvider,
+        !codegenContext.settings.codegenConfig.publicConstrainedTypes,
+    )
     private val httpBindingGenerator =
         HttpBindingGenerator(
             protocol,
             codegenContext,
             codegenContext.unconstrainedShapeSymbolProvider,
             operationShape,
+            ::serverBuilderSymbol,
             listOf(
                 ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUnconstrainedMapHttpBindingCustomization(
                     codegenContext,
@@ -47,11 +54,11 @@ class ServerRequestBindingGenerator(
 
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorSymbol: Symbol,
+        errorT: RuntimeType,
         structuredHandler: RustWriter.(String) -> Unit,
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
         binding,
-        errorSymbol,
+        errorT,
         structuredHandler,
         HttpMessageType.REQUEST,
     )
@@ -75,9 +82,7 @@ class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUncons
             if (section.memberShape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.unconstrainedShapeSymbolProvider)) {
                 rust(
                     "let out = out.map(#T);",
-                    codegenContext.unconstrainedShapeSymbolProvider.toSymbol(section.memberShape).mapRustType {
-                        it.stripOuter<RustType.Option>()
-                    },
+                    codegenContext.unconstrainedShapeSymbolProvider.toSymbol(section.memberShape).mapRustType { it.stripOuter<RustType.Option>() },
                 )
             }
         }

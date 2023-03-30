@@ -8,17 +8,14 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Model
-import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -53,35 +50,23 @@ class UnconstrainedMapGeneratorTest {
         val mapA = model.lookup<MapShape>("test#MapA")
         val mapB = model.lookup<MapShape>("test#MapB")
 
-        val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
+        val project = TestWorkspace.testProject(symbolProvider, debugMode = true)
 
-        project.withModule(Model) {
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
+        project.withModule(ModelsModule) {
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
-        project.withModule(ServerRustModule.ConstrainedModule) {
+        project.withModule(ConstrainedModule) {
             listOf(mapA, mapB).forEach {
-                PubCrateConstrainedMapGenerator(
-                    codegenContext,
-                    this.createTestInlineModuleCreator(),
-                    it,
-                ).render()
+                PubCrateConstrainedMapGenerator(codegenContext, this, it).render()
             }
         }
-        project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
-            project.withModule(Model) modelsModuleWriter@{
+        project.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
+            project.withModule(ModelsModule) modelsModuleWriter@{
                 listOf(mapA, mapB).forEach {
-                    UnconstrainedMapGenerator(
-                        codegenContext,
-                        this@unconstrainedModuleWriter.createTestInlineModuleCreator(), it,
-                    ).render()
+                    UnconstrainedMapGenerator(codegenContext, this@unconstrainedModuleWriter, it).render()
 
-                    MapConstraintViolationGenerator(
-                        codegenContext,
-                        this@modelsModuleWriter.createTestInlineModuleCreator(),
-                        it,
-                        SmithyValidationExceptionConversionGenerator(codegenContext),
-                    ).render()
+                    MapConstraintViolationGenerator(codegenContext, this@modelsModuleWriter, it).render()
                 }
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -174,7 +159,7 @@ class UnconstrainedMapGeneratorTest {
                 )
             }
         }
-        project.renderInlineMemoryModules()
+
         project.compileAndTest()
     }
 }

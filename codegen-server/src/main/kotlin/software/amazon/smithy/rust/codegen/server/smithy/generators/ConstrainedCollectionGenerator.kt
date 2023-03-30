@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -49,7 +48,7 @@ class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: CollectionShape,
-    collectionConstraintsInfo: List<CollectionTraitInfo>,
+    private val constraintsInfo: List<TraitInfo>,
     private val unconstrainedSymbol: Symbol? = null,
 ) {
     private val model = codegenContext.model
@@ -64,7 +63,6 @@ class ConstrainedCollectionGenerator(
             }
         }
     private val symbolProvider = codegenContext.symbolProvider
-    private val constraintsInfo = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         check(constraintsInfo.isNotEmpty()) {
@@ -116,9 +114,7 @@ class ConstrainedCollectionGenerator(
                 #{ValidationFunctions:W}
                 """,
                 *codegenScope,
-                "ValidationFunctions" to constraintsInfo.map {
-                    it.validationFunctionDefinition(constraintViolation, inner)
-                }.join("\n"),
+                "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
             )
         }
 
@@ -149,8 +145,7 @@ class ConstrainedCollectionGenerator(
         if (!publicConstrainedTypes &&
             innerShape.canReachConstrainedShape(model, symbolProvider) &&
             innerShape !is StructureShape &&
-            innerShape !is UnionShape &&
-            innerShape !is EnumShape
+            innerShape !is UnionShape
         ) {
             writer.rustTemplate(
                 """
@@ -183,7 +178,7 @@ class ConstrainedCollectionGenerator(
     }
 }
 
-sealed class CollectionTraitInfo {
+internal sealed class CollectionTraitInfo {
     data class UniqueItems(val uniqueItemsTrait: UniqueItemsTrait, val memberSymbol: Symbol) : CollectionTraitInfo() {
         override fun toTraitInfo(): TraitInfo =
             TraitInfo(
@@ -250,7 +245,7 @@ sealed class CollectionTraitInfo {
                     // [1]: https://github.com/awslabs/smithy-typescript/blob/517c85f8baccf0e5334b4e66d8786bdb5791c595/smithy-typescript-ssdk-libs/server-common/src/validation/index.ts#L106-L111
                     rust(
                         """
-                        Self::UniqueItems { duplicate_indices, .. } =>
+                        Self::UniqueItems { duplicate_indices, .. } => 
                             crate::model::ValidationExceptionField {
                                 message: format!("${uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
                                 path,
@@ -370,10 +365,11 @@ sealed class CollectionTraitInfo {
             }
         }
 
-        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<CollectionTraitInfo> =
+        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<TraitInfo> =
             supportedCollectionConstraintTraits
                 .mapNotNull { shape.getTrait(it).orNull() }
                 .map { trait -> fromTrait(trait, shape, symbolProvider) }
+                .map(CollectionTraitInfo::toTraitInfo)
     }
 
     abstract fun toTraitInfo(): TraitInfo

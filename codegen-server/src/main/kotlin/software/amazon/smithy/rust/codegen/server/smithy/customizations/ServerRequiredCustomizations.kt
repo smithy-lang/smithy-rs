@@ -9,11 +9,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
@@ -31,19 +29,12 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
-        rustCrate.withModule(ServerRustModule.Types) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
-            pubUseSmithyErrorTypes(codegenContext)(this)
-        }
-
-        rustCrate.withModule(ServerRustModule.root) {
-            CrateVersionCustomization.extras(rustCrate, ServerRustModule.root)
-        }
+        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
     }
 }

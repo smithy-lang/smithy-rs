@@ -223,7 +223,7 @@ index 422b64415..9561909ed 100644
  30
         "#;
         let mut patch = PatchSet::new();
-        patch.parse(diff_str).unwrap();
+        patch.parse(&diff_str).unwrap();
 
         let hunk = &patch.files()[0].hunks()[0];
         let section: Section = hunk.into();
@@ -292,7 +292,7 @@ index 422b64415..9561909ed 100644
  36
         "#;
         let mut patch = PatchSet::new();
-        patch.parse(diff_str).unwrap();
+        patch.parse(&diff_str).unwrap();
 
         let hunk = &patch.files()[0].hunks()[0];
         let section: Section = hunk.into();

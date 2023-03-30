@@ -504,8 +504,8 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e334db67871c14c18fc066ad14af13f9fdf5f9a91c61af432d1e3a39c8c6a141"
 dependencies = [
- "hex",
- "sha2",
+    "hex",
+    "sha2",
 ]
 
 [[package]]

@@ -6,25 +6,23 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 class CollectionConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
-    private val inlineModuleCreator: InlineModuleCreator,
+    private val modelsModuleWriter: RustWriter,
     private val shape: CollectionShape,
-    private val collectionConstraintsInfo: List<CollectionTraitInfo>,
-    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+    private val constraintsInfo: List<TraitInfo>,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -37,25 +35,18 @@ class CollectionConstraintViolationGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
-    private val constraintsInfo: List<TraitInfo> = collectionConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
-        val targetShape = model.expectShape(shape.member.target)
+        val memberShape = model.expectShape(shape.member.target)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
-        val isMemberConstrained = targetShape.canReachConstrainedShape(model, symbolProvider)
+        val isMemberConstrained = memberShape.canReachConstrainedShape(model, symbolProvider)
         val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
 
-        inlineModuleCreator(constraintViolationSymbol) {
+        modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
             val constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }.toMutableList()
             if (isMemberConstrained) {
                 constraintViolationVariants += {
-                    val memberConstraintViolationSymbol =
-                        constraintViolationSymbolProvider.toSymbol(targetShape).letIf(
-                            shape.member.hasTrait<ConstraintViolationRustBoxTrait>(),
-                        ) {
-                            it.makeRustBoxed()
-                        }
                     rustTemplate(
                         """
                         /// Constraint violation error when an element doesn't satisfy its own constraints.
@@ -64,7 +55,7 @@ class CollectionConstraintViolationGenerator(
                         ##[doc(hidden)]
                         Member(usize, #{MemberConstraintViolationSymbol})
                         """,
-                        "MemberConstraintViolationSymbol" to memberConstraintViolationSymbol,
+                        "MemberConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(memberShape),
                     )
                 }
             }
@@ -75,7 +66,6 @@ class CollectionConstraintViolationGenerator(
             //  and is for use by the framework.
             rustTemplate(
                 """
-                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq)]
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}
@@ -85,13 +75,30 @@ class CollectionConstraintViolationGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
+                val validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }.toMutableList()
+                if (isMemberConstrained) {
+                    validationExceptionFields += {
+                        rust(
+                            """
+                            Self::Member(index, member_constraint_violation) =>
+                                member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())
+                            """,
+                        )
+                    }
+                }
+
                 rustTemplate(
                     """
                     impl $constraintViolationName {
-                        #{CollectionShapeConstraintViolationImplBlock}
+                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                            match self {
+                                #{AsValidationExceptionFields:W}
+                            }
+                        }
                     }
                     """,
-                    "CollectionShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.collectionShapeConstraintViolationImplBlock(collectionConstraintsInfo, isMemberConstrained),
+                    "String" to RuntimeType.String,
+                    "AsValidationExceptionFields" to validationExceptionFields.join("\n"),
                 )
             }
         }

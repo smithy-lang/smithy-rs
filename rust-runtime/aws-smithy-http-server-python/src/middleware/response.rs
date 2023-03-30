@@ -17,13 +17,8 @@ use tokio::sync::Mutex;
 use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Response] object.
-///
-/// :param status int:
-/// :param headers typing.Optional[typing.Dict[str, str]]:
-/// :param body typing.Optional[bytes]:
-/// :rtype None:
 #[pyclass(name = "Response")]
-#[pyo3(text_signature = "($self, status, headers=None, body=None)")]
+#[pyo3(text_signature = "(status, headers, body)")]
 pub struct PyResponse {
     parts: Option<Parts>,
     headers: PyHeaderMap,
@@ -83,8 +78,6 @@ impl PyResponse {
     }
 
     /// Return the HTTP status of this response.
-    ///
-    /// :type int:
     #[getter]
     fn status(&self) -> PyResult<u16> {
         self.parts
@@ -94,8 +87,6 @@ impl PyResponse {
     }
 
     /// Return the HTTP version of this response.
-    ///
-    /// :type str:
     #[getter]
     fn version(&self) -> PyResult<String> {
         self.parts
@@ -105,8 +96,6 @@ impl PyResponse {
     }
 
     /// Return the HTTP headers of this response.
-    ///
-    /// :type typing.MutableMapping[str, str]:
     #[getter]
     fn headers(&self) -> PyHeaderMap {
         self.headers.clone()
@@ -114,8 +103,6 @@ impl PyResponse {
 
     /// Return the HTTP body of this response.
     /// Note that this is a costly operation because the whole response body is cloned.
-    ///
-    /// :type typing.Awaitable[bytes]:
     #[getter]
     fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let body = self.body.clone();

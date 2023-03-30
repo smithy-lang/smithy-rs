@@ -7,7 +7,6 @@ hlbarber
 jdisanti
 jjant
 LukeMathWalker
-pose
 rcoh
 unexge
 velfi

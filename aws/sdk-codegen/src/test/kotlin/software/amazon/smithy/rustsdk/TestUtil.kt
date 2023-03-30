@@ -8,15 +8,14 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
+import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
@@ -29,10 +28,10 @@ val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
     },
 )
 
-fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = null) =
-    testClientCodegenContext(
+fun awsTestCodegenContext(model: Model? = null, coreRustSettings: CoreRustSettings?) =
+    testCodegenContext(
         model ?: "namespace test".asSmithyModel(),
-        settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
+        settings = coreRustSettings ?: testRustSettings(runtimeConfig = AwsTestRuntimeConfig),
     )
 
 fun awsSdkIntegrationTest(
@@ -40,27 +39,18 @@ fun awsSdkIntegrationTest(
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
-        model,
-        IntegrationTestParams(
-            runtimeConfig = AwsTestRuntimeConfig,
-            additionalSettings = ObjectNode.builder().withMember(
+        model, runtimeConfig = AwsTestRuntimeConfig,
+        additionalSettings = ObjectNode.builder()
+            .withMember(
                 "customizationConfig",
                 ObjectNode.builder()
                     .withMember(
                         "awsSdk",
                         ObjectNode.builder()
-                            .withMember("generateReadme", false)
                             .withMember("integrationTestPath", "../sdk/integration-tests")
                             .build(),
                     ).build(),
             )
-                .withMember(
-                    "codegen",
-                    ObjectNode.builder()
-                        .withMember("includeFluentClient", false)
-                        .withMember("enableNewCrateOrganizationScheme", true)
-                        .build(),
-                ).build(),
-        ),
+            .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
         test = test,
     )

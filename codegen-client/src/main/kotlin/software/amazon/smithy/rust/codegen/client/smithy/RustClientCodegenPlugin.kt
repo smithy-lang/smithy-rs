@@ -9,7 +9,6 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ApiKeyAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
@@ -18,16 +17,16 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCusto
 import software.amazon.smithy.rust.codegen.client.smithy.customize.SerdeDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
+import software.amazon.smithy.rust.codegen.client.testutil.DecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -38,7 +37,7 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
+class RustClientCodegenPlugin : DecoratableBuildPlugin() {
     override fun getName(): String = "rust-client-codegen"
 
     override fun executeWithDecorator(
@@ -61,7 +60,6 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 FluentClientDecorator(),
                 EndpointsDecorator(),
                 NoOpEventStreamSigningDecorator(),
-                ApiKeyAuthDecorator(),
                 *decorator,
             )
 
@@ -70,32 +68,24 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
     }
 
     companion object {
-        /**
+        /** SymbolProvider
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
-         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
+         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
-        fun baseSymbolProvider(
-            settings: ClientRustSettings,
-            model: Model,
-            serviceShape: ServiceShape,
-            rustSymbolProviderConfig: RustSymbolProviderConfig,
-            codegenDecorator: ClientCodegenDecorator,
-        ) =
-            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
+            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.CLIENT) }
+                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.CLIENT) }
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it) }
+                .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
+                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(NonExhaustive)) }
                 // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
-                .let { StreamingShapeMetadataProvider(it) }
+                .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, ClientReservedWords) }
-                // Allows decorators to inject a custom symbol provider
-                .let { codegenDecorator.symbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, model) }
     }
 }

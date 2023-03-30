@@ -8,34 +8,34 @@ import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Callable, Awaitable
+from typing import List, Optional, Callable, Awaitable
 
 from pokemon_service_server_sdk import App
-from pokemon_service_server_sdk.tls import TlsConfig
-from pokemon_service_server_sdk.aws_lambda import LambdaContext
-from pokemon_service_server_sdk.error import ResourceNotFoundException
-from pokemon_service_server_sdk.input import (
+from pokemon_service_server_sdk.tls import TlsConfig  # type: ignore
+from pokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
+from pokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
+from pokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
 )
-from pokemon_service_server_sdk.logging import TracingHandler
-from pokemon_service_server_sdk.middleware import (
+from pokemon_service_server_sdk.logging import TracingHandler  # type: ignore
+from pokemon_service_server_sdk.middleware import (  # type: ignore
     MiddlewareException,
     Response,
     Request,
 )
-from pokemon_service_server_sdk.model import FlavorText, Language
-from pokemon_service_server_sdk.output import (
+from pokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
+from pokemon_service_server_sdk.output import (  # type: ignore
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
 )
-from pokemon_service_server_sdk.types import ByteStream
+from pokemon_service_server_sdk.types import ByteStream  # type: ignore
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
@@ -131,7 +131,7 @@ class Context:
 # Entrypoint
 ###########################################################
 # Get an App instance.
-app: "App[Context]" = App()
+app = App()
 # Register the context.
 app.context(Context())
 
@@ -249,7 +249,7 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp # type: ignore
+    import aiohttp
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
@@ -270,7 +270,7 @@ def main() -> None:
     parser.add_argument("--tls-cert-path")
     args = parser.parse_args()
 
-    config: Dict[str, Any] = dict(workers=1)
+    config = dict(workers=1)
     if args.enable_tls:
         config["tls"] = TlsConfig(
             key_path=args.tls_key_path,

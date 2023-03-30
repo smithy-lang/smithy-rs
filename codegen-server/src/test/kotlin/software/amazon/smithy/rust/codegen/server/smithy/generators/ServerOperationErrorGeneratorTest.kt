@@ -7,14 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
-import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
@@ -52,14 +51,16 @@ class ServerOperationErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ServerRustModule.Error) {
+        project.withModule(ErrorsModule) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
-                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(project, model, symbolProvider, this)
+                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
             }
+            val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
             ServerOperationErrorGenerator(
                 model,
                 symbolProvider,
-                model.lookup("error#Greeting"),
+                symbolProvider.toSymbol(model.lookup("error#Greeting")),
+                errors,
             ).render(this)
 
             unitTest(
@@ -95,7 +96,7 @@ class ServerOperationErrorGeneratorTest {
                     let error: GreetingError = variant.into();
                 """,
             )
-            project.renderInlineMemoryModules()
+
             project.compileAndTest()
         }
     }

@@ -19,13 +19,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 
 /**
  * Generates a Rust type for a constrained map shape that is able to hold values for the corresponding
@@ -40,7 +38,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolat
  */
 class UnconstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,
-    private val inlineModuleCreator: InlineModuleCreator,
+    private val unconstrainedModuleWriter: RustWriter,
     val shape: MapShape,
 ) {
     private val model = codegenContext.model
@@ -74,7 +72,7 @@ class UnconstrainedMapGenerator(
         val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
         val valueMemberSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape.value)
 
-        inlineModuleCreator(symbol) {
+        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
@@ -127,11 +125,6 @@ class UnconstrainedMapGenerator(
                         )
                     }
                     val constrainValueWritable = writable {
-                        val boxErr = if (shape.value.hasTrait<ConstraintViolationRustBoxTrait>()) {
-                            ".map_err(Box::new)"
-                        } else {
-                            ""
-                        }
                         if (constrainedMemberValueSymbol.isOptional()) {
                             // The map is `@sparse`.
                             rustBlock("match v") {
@@ -140,7 +133,7 @@ class UnconstrainedMapGenerator(
                                     // DRYing this up with the else branch below would make this less understandable.
                                     rustTemplate(
                                         """
-                                        match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
+                                        match #{ConstrainedValueSymbol}::try_from(v) {
                                             Ok(v) => Ok((k, Some(v))),
                                             Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
                                         }
@@ -152,7 +145,7 @@ class UnconstrainedMapGenerator(
                         } else {
                             rustTemplate(
                                 """
-                                match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
+                                match #{ConstrainedValueSymbol}::try_from(v) {
                                     Ok(v) => #{Epilogue:W},
                                     Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
                                 }
@@ -221,10 +214,9 @@ class UnconstrainedMapGenerator(
                         // ```
                         rustTemplate(
                             """
-                            let hm: #{HashMap}<#{KeySymbol}, #{ValueSymbol}> =
+                            let hm: std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}> =
                                 hm.into_iter().map(|(k, v)| (k, v.into())).collect();
                             """,
-                            "HashMap" to RuntimeType.HashMap,
                             "KeySymbol" to symbolProvider.toSymbol(keyShape),
                             "ValueSymbol" to symbolProvider.toSymbol(valueShape),
                         )

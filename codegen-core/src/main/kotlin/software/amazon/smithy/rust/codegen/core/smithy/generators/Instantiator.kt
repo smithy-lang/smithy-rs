@@ -55,7 +55,6 @@ import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import java.math.BigDecimal
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -126,16 +125,10 @@ open class Instantiator(
             is MemberShape -> renderMember(writer, shape, data, ctx)
 
             // Wrapped Shapes
-            is TimestampShape -> {
-                val node = (data as NumberNode)
-                val num = BigDecimal(node.toString())
-                val wholePart = num.toInt()
-                val fractionalPart = num.remainder(BigDecimal.ONE)
-                writer.rust(
-                    "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                    RuntimeType.dateTime(runtimeConfig),
-                )
-            }
+            is TimestampShape -> writer.rust(
+                "#T::from_secs(${(data as NumberNode).value})",
+                RuntimeType.dateTime(runtimeConfig),
+            )
 
             /**
              * ```rust

@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -32,9 +33,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
-import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
@@ -176,7 +174,7 @@ class ConstrainedCollectionGeneratorTest {
                 else -> UNREACHABLE("Shape is either list or set.")
             }
 
-            project.withModule(ServerRustModule.Model) {
+            project.withModule(ModelsModule) {
                 render(codegenContext, this, shape)
 
                 val instantiator = serverInstantiator(codegenContext)
@@ -270,7 +268,7 @@ class ConstrainedCollectionGeneratorTest {
             """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedCollectionShape = model.lookup<CollectionShape>("test#ConstrainedList")
 
-        val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        val writer = RustWriter.forModule(ModelsModule.name)
 
         val codegenContext = serverTestCodegenContext(model)
         render(codegenContext, writer, constrainedCollectionShape)
@@ -286,12 +284,6 @@ class ConstrainedCollectionGeneratorTest {
     ) {
         val constraintsInfo = CollectionTraitInfo.fromShape(constrainedCollectionShape, codegenContext.symbolProvider)
         ConstrainedCollectionGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
-        CollectionConstraintViolationGenerator(
-            codegenContext,
-            writer.createTestInlineModuleCreator(),
-            constrainedCollectionShape,
-            constraintsInfo,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
+        CollectionConstraintViolationGenerator(codegenContext, writer, constrainedCollectionShape, constraintsInfo).render()
     }
 }

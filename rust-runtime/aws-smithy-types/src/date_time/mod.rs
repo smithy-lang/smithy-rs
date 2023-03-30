@@ -5,7 +5,6 @@
 
 //! DateTime type for representing Smithy timestamps.
 
-use crate::date_time::format::rfc3339::AllowOffsets;
 use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
@@ -161,8 +160,7 @@ impl DateTime {
     /// Parses a `DateTime` from a string using the given `format`.
     pub fn from_str(s: &str, format: Format) -> Result<Self, DateTimeParseError> {
         match format {
-            Format::DateTime => format::rfc3339::parse(s, AllowOffsets::OffsetsForbidden),
-            Format::DateTimeWithOffset => format::rfc3339::parse(s, AllowOffsets::OffsetsAllowed),
+            Format::DateTime => format::rfc3339::parse(s),
             Format::HttpDate => format::http_date::parse(s),
             Format::EpochSeconds => format::epoch_seconds::parse(s),
         }
@@ -214,8 +212,7 @@ impl DateTime {
     /// Enable parsing multiple dates from the same string
     pub fn read(s: &str, format: Format, delim: char) -> Result<(Self, &str), DateTimeParseError> {
         let (inst, next) = match format {
-            Format::DateTime => format::rfc3339::read(s, AllowOffsets::OffsetsForbidden)?,
-            Format::DateTimeWithOffset => format::rfc3339::read(s, AllowOffsets::OffsetsAllowed)?,
+            Format::DateTime => format::rfc3339::read(s)?,
             Format::HttpDate => format::http_date::read(s)?,
             Format::EpochSeconds => {
                 let split_point = s.find(delim).unwrap_or(s.len());
@@ -237,7 +234,7 @@ impl DateTime {
     /// Returns an error if the given `DateTime` cannot be represented by the desired format.
     pub fn fmt(&self, format: Format) -> Result<String, DateTimeFormatError> {
         match format {
-            Format::DateTime | Format::DateTimeWithOffset => format::rfc3339::format(self),
+            Format::DateTime => format::rfc3339::format(self),
             Format::EpochSeconds => Ok(format::epoch_seconds::format(self)),
             Format::HttpDate => format::http_date::format(self),
         }
@@ -322,15 +319,10 @@ impl fmt::Display for ConversionError {
 /// Formats for representing a `DateTime` in the Smithy protocols.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Format {
-    /// RFC-3339 Date Time. If the date time has an offset, an error will be returned
+    /// RFC-3339 Date Time.
     DateTime,
-
-    /// RFC-3339 Date Time. Offsets are supported
-    DateTimeWithOffset,
-
     /// Date format used by the HTTP `Date` header, specified in RFC-7231.
     HttpDate,
-
     /// Number of seconds since the Unix epoch formatted as a floating point.
     EpochSeconds,
 }

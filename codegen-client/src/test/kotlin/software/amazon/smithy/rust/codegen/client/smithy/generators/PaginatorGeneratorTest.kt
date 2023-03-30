@@ -72,7 +72,7 @@ internal class PaginatorGeneratorTest {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
                 Attribute.AllowUnusedImports.render(this)
-                rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")
+                rust("use ${clientCodegenContext.moduleUseName()}::paginator::PaginatedListPaginator;")
             }
         }
     }

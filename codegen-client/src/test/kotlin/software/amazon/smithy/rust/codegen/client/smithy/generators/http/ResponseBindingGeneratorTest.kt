@@ -8,11 +8,12 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
@@ -66,25 +67,23 @@ class ResponseBindingGeneratorTest {
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
-    private val codegenContext = testClientCodegenContext(model)
+    private val codegenContext: CodegenContext = testCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
 
-    private fun RustCrate.renderOperation() {
+    private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
-        withModule(ClientRustModule.Output) {
-            rustBlock("impl PutObjectOutput") {
-                val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
-                    .responseBindings(operationShape)
-                    .filter { it.location == HttpLocation.HEADER }
-                bindings.forEach { binding ->
-                    val runtimeType = ResponseBindingGenerator(
-                        RestJson(codegenContext),
-                        codegenContext,
-                        operationShape,
-                    ).generateDeserializeHeaderFn(binding)
-                    // little hack to force these functions to be generated
-                    rust("// use #T;", runtimeType)
-                }
+        rustBlock("impl PutObjectOutput") {
+            val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
+                .responseBindings(operationShape)
+                .filter { it.location == HttpLocation.HEADER }
+            bindings.forEach { binding ->
+                val runtimeType = ResponseBindingGenerator(
+                    RestJson(codegenContext),
+                    codegenContext,
+                    operationShape,
+                ).generateDeserializeHeaderFn(binding)
+                // little hack to force these functions to be generated
+                rust("// use #T;", runtimeType)
             }
         }
     }
@@ -92,12 +91,12 @@ class ResponseBindingGeneratorTest {
     @Test
     fun deserializeHeadersIntoOutputShape() {
         val testProject = TestWorkspace.testProject(symbolProvider)
-        testProject.renderOperation()
-        testProject.withModule(ClientRustModule.Output) {
+        testProject.withModule(RustModule.public("output")) {
+            renderOperation()
             unitTest(
                 "http_header_deser",
                 """
-                use crate::protocol_serde::shape_put_object_output::*;
+                use crate::http_serde;
                 let resp = http::Response::builder()
                     .header("X-Ints", "1,2,3")
                     .header("X-Ints", "4,5,6")
@@ -105,9 +104,9 @@ class ResponseBindingGeneratorTest {
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
                     .body(()).expect("valid request");
-                assert_eq!(de_int_list_header(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
-                assert_eq!(de_media_type_header(resp.headers()).expect("valid").unwrap(), "smithy-rs");
-                assert_eq!(de_date_header_list_header(resp.headers()).unwrap().unwrap().len(), 3);
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
                 """,
             )
         }

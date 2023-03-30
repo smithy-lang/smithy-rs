@@ -48,24 +48,16 @@ tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]
 pretty_assertions = "1"
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = "0.3"
 tower-test = "0.4"
 tokio-test = "0.4"
-pyo3-asyncio = { version = "0.17.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
+pyo3-asyncio = { version = "0.17.0", features = ["testing", "attributes", "tokio-runtime"] }
 rcgen = "0.10.0"
 hyper-rustls = { version = "0.23.1", features = ["http2"] }
 
-# PyO3 Asyncio tests cannot use Cargo's default testing harness because `asyncio`
-# wants to control the main thread. So we need to use testing harness provided by `pyo3_asyncio`
-# for the async Python tests. For more detail see:
-# https://docs.rs/pyo3-asyncio/0.18.0/pyo3_asyncio/testing/index.html#pyo3-asyncio-testing-utilities
 [[test]]
 name = "middleware_tests"
 path = "src/middleware/pytests/harness.rs"
-harness = false
-[[test]]
-name = "python_tests"
-path = "src/pytests/harness.rs"
 harness = false
 
 [package.metadata.docs.rs]

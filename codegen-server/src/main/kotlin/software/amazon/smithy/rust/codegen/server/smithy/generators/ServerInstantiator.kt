@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
@@ -48,26 +47,12 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
         // Only operation input builders take in unconstrained types.
         val takesInUnconstrainedTypes = shape.isReachableFromOperationInput()
-
-        val publicConstrainedTypes = if (codegenContext is ServerCodegenContext) {
-            codegenContext.settings.codegenConfig.publicConstrainedTypes
-        } else {
-            true
-        }
-
-        return if (publicConstrainedTypes) {
-            ServerBuilderGenerator.hasFallibleBuilder(
-                shape,
-                codegenContext.model,
-                codegenContext.symbolProvider,
-                takesInUnconstrainedTypes,
-            )
-        } else {
-            ServerBuilderGeneratorWithoutPublicConstrainedTypes.hasFallibleBuilder(
-                shape,
-                codegenContext.symbolProvider,
-            )
-        }
+        return ServerBuilderGenerator.hasFallibleBuilder(
+            shape,
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            takesInUnconstrainedTypes,
+        )
     }
 
     override fun setterName(memberShape: MemberShape): String = codegenContext.symbolProvider.toMemberName(memberShape)

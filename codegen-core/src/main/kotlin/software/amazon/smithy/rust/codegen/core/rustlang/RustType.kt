@@ -222,9 +222,7 @@ fun RustType.asArgument(name: String) = Argument(
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
-    } else {
-        ""
-    }
+    } else ""
     val base = when (this) {
         is RustType.Unit -> this.name
         is RustType.Bool -> this.name
@@ -327,16 +325,6 @@ fun RustType.isCopy(): Boolean = when (this) {
     else -> false
 }
 
-/** Returns true if the type implements Eq */
-fun RustType.isEq(): Boolean = when (this) {
-    is RustType.Integer -> true
-    is RustType.Bool -> true
-    is RustType.String -> true
-    is RustType.Unit -> true
-    is RustType.Container -> this.member.isEq()
-    else -> false
-}
-
 enum class Visibility {
     PRIVATE, PUBCRATE, PUBLIC;
 
@@ -428,7 +416,7 @@ enum class AttributeKind {
     /**
      * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
      */
-    Outer,
+    Outer
 }
 
 /**
@@ -476,14 +464,10 @@ class Attribute(val inner: Writable) {
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
         val AllowClippyUnnecessaryLazyEvaluations = Attribute(allow("clippy::unnecessary_lazy_evaluations"))
-        val AllowClippyTooManyArguments = Attribute(allow("clippy::too_many_arguments"))
         val AllowDeadCode = Attribute(allow("dead_code"))
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
-        val AllowMissingDocs = Attribute(allow("missing_docs"))
-        val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
-        val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
@@ -572,12 +556,5 @@ class Attribute(val inner: Writable) {
             val (key, value) = pair
             rustInline("$key = $value")
         }
-    }
-}
-
-/** Render all attributes in this list, one after another */
-fun Collection<Attribute>.render(writer: RustWriter) {
-    for (attr in this) {
-        attr.render(writer)
     }
 }

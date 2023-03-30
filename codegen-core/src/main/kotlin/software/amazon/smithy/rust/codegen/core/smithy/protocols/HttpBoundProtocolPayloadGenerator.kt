@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
@@ -52,6 +54,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
+    private val operationSerModule = RustModule.private("operation_ser")
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.toType(),
@@ -60,7 +63,6 @@ class HttpBoundProtocolPayloadGenerator(
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
     )
-    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
@@ -237,8 +239,9 @@ class HttpBoundProtocolPayloadGenerator(
         member: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
     ) {
+        val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
-        val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
+        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
             val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
             rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",

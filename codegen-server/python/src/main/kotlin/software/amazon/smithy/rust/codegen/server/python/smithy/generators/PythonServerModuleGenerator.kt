@@ -10,14 +10,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class PythonServerModuleGenerator(
@@ -33,7 +32,9 @@ class PythonServerModuleGenerator(
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
 
     fun render() {
-        rustCrate.withModule(PythonServerRustModule.PythonModuleExport) {
+        rustCrate.withModule(
+            RustModule.public("python_module_export", "Export PyO3 symbols in the shared library"),
+        ) {
             rustBlockTemplate(
                 """
                 ##[#{pyo3}::pymodule]
@@ -68,20 +69,12 @@ class PythonServerModuleGenerator(
         serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
-                when (shape) {
-                    is UnionShape -> rustTemplate(
-                        """
-                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name}>()?;
-                        """,
-                        *codegenScope,
-                    )
-                    else -> rustTemplate(
-                        """
-                        $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
-                        """,
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    """
+                    $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
+                    """,
+                    *codegenScope,
+                )
             }
         }
         rustTemplate(
@@ -106,7 +99,6 @@ class PythonServerModuleGenerator(
             let types = #{pyo3}::types::PyModule::new(py, "types")?;
             types.add_class::<#{SmithyPython}::types::Blob>()?;
             types.add_class::<#{SmithyPython}::types::DateTime>()?;
-            types.add_class::<#{SmithyPython}::types::Format>()?;
             types.add_class::<#{SmithyPython}::types::ByteStream>()?;
             #{pyo3}::py_run!(
                 py,
@@ -193,10 +185,6 @@ class PythonServerModuleGenerator(
             """
             let aws_lambda = #{pyo3}::types::PyModule::new(py, "aws_lambda")?;
             aws_lambda.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
-            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientApplication>()?;
-            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientContext>()?;
-            aws_lambda.add_class::<#{SmithyPython}::lambda::PyCognitoIdentity>()?;
-            aws_lambda.add_class::<#{SmithyPython}::lambda::PyConfig>()?;
             pyo3::py_run!(
                 py,
                 aws_lambda,

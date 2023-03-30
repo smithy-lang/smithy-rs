@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-extra["displayName"] = "Smithy :: Rust :: AWS-SDK :: Ad-hoc Test"
-extra["moduleName"] = "software.amazon.smithy.rust.awssdk.adhoc.test"
+extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
+extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 
 tasks["jar"].enabled = false
 
@@ -45,8 +45,7 @@ val allCodegenTests = listOf(
         extraConfig = """
             ,
             "codegen": {
-                "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "includeFluentClient": false
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -62,8 +61,7 @@ val allCodegenTests = listOf(
         extraConfig = """
             ,
             "codegen": {
-                "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "includeFluentClient": false
             },
             "customizationConfig": {
                 "awsSdk": {

@@ -21,7 +21,7 @@ internal class PythonServerTypesTest {
     fun `document type`() {
         val model = """
             namespace test
-
+            
             use aws.protocols#restJson1
 
             @restJson1
@@ -30,7 +30,7 @@ internal class PythonServerTypesTest {
                     Echo,
                 ],
             }
-
+               
             @http(method: "POST", uri: "/echo")
             operation Echo {
                 input: EchoInput,
@@ -40,7 +40,7 @@ internal class PythonServerTypesTest {
             structure EchoInput {
                 value: Document,
             }
-
+            
             structure EchoOutput {
                 value: Document,
             }
@@ -53,38 +53,38 @@ internal class PythonServerTypesTest {
             Pair(
                 """ { "value": 42 } """,
                 """
-                assert input.value == 42
-                output = EchoOutput(value=input.value)
+                    assert input.value == 42
+                    output = EchoOutput(value=input.value)
                 """,
             ),
             Pair(
                 """ { "value": "foobar" } """,
                 """
-                assert input.value == "foobar"
-                output = EchoOutput(value=input.value)
+                    assert input.value == "foobar"
+                    output = EchoOutput(value=input.value)
                 """,
             ),
             Pair(
                 """
-                {
-                    "value": [
-                        true,
-                        false,
-                        42,
-                        42.0,
-                        -42,
-                        {
-                            "nested": "value"
-                        },
-                        {
-                            "nested": [1, 2, 3]
-                        }
-                    ]
-                }
+                    {
+                        "value": [
+                            true,
+                            false,
+                            42,
+                            42.0,
+                            -42,
+                            {
+                                "nested": "value"
+                            },
+                            {
+                                "nested": [1, 2, 3]
+                            }
+                        ]
+                    }
                 """,
                 """
-                assert input.value == [True, False, 42, 42.0, -42, {"nested": "value"}, {"nested": [1, 2, 3]}]
-                output = EchoOutput(value=input.value)
+                    assert input.value == [True, False, 42, 42.0, -42, {"nested": "value"}, {"nested": [1, 2, 3]}]
+                    output = EchoOutput(value=input.value)
                 """,
             ),
         )
@@ -97,7 +97,7 @@ internal class PythonServerTypesTest {
                 use pyo3::{types::IntoPyDict, IntoPy, Python};
                 use hyper::{Body, Request, body};
                 use crate::{input, output};
-
+                
                 pyo3::prepare_freethreaded_python();
                 """.trimIndent(),
             )
@@ -112,9 +112,9 @@ internal class PythonServerTypesTest {
                             Ok(Python::with_gil(|py| {
                                 let globals = [("EchoOutput", py.get_type::<output::EchoOutput>())].into_py_dict(py);
                                 let locals = [("input", input.into_py(py))].into_py_dict(py);
-
+                
                                 py.run(${pythonHandler.dq()}, Some(globals), Some(locals)).unwrap();
-
+    
                                 locals
                                     .get_item("output")
                                     .unwrap()
@@ -124,13 +124,13 @@ internal class PythonServerTypesTest {
                         })
                         .build()
                         .unwrap();
-
+                        
                     let req = Request::builder()
                         .method("POST")
                         .uri("/echo")
                         .body(Body::from(${payload.dq()}))
                         .unwrap();
-
+                        
                     let res = service.call(req).await.unwrap();
                     assert!(res.status().is_success());
                     let body = body::to_bytes(res.into_body()).await.unwrap();
@@ -138,97 +138,6 @@ internal class PythonServerTypesTest {
                     """.trimIndent(),
                 )
             }
-        }
-
-        testDir.resolve("src/service.rs").appendText(writer.toString())
-
-        cargoTest(testDir)
-    }
-
-    @Test
-    fun `timestamp type`() {
-        val model = """
-            namespace test
-
-            use aws.protocols#restJson1
-            use smithy.framework#ValidationException
-
-            @restJson1
-            service Service {
-                operations: [
-                    Echo,
-                ],
-            }
-
-            @http(method: "POST", uri: "/echo")
-            operation Echo {
-                input: EchoInput,
-                output: EchoOutput,
-                errors: [ValidationException],
-            }
-
-            structure EchoInput {
-                @required
-                value: Timestamp,
-                opt_value: Timestamp,
-            }
-
-            structure EchoOutput {
-                @required
-                value: Timestamp,
-                opt_value: Timestamp,
-            }
-        """.asSmithyModel()
-
-        val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
-        executePythonServerCodegenVisitor(pluginCtx)
-
-        val writer = RustWriter.forModule("service")
-        writer.tokioTest("timestamp_type") {
-            rust(
-                """
-                use tower::Service as _;
-                use pyo3::{types::IntoPyDict, IntoPy, Python};
-                use hyper::{Body, Request, body};
-                use crate::{input, output, python_types};
-
-                pyo3::prepare_freethreaded_python();
-
-                let mut service = Service::builder_without_plugins()
-                    .echo(|input: input::EchoInput| async {
-                        Ok(Python::with_gil(|py| {
-                            let globals = [
-                                ("EchoOutput", py.get_type::<output::EchoOutput>()),
-                                ("DateTime", py.get_type::<python_types::DateTime>()),
-                            ].into_py_dict(py);
-                            let locals = [("input", input.into_py(py))].into_py_dict(py);
-
-                            py.run("assert input.value.secs() == 1676298520", Some(globals), Some(locals)).unwrap();
-                            py.run("output = EchoOutput(value=input.value, opt_value=DateTime.from_secs(1677771678))", Some(globals), Some(locals)).unwrap();
-
-                            locals
-                                .get_item("output")
-                                .unwrap()
-                                .extract::<output::EchoOutput>()
-                                .unwrap()
-                        }))
-                    })
-                    .build()
-                    .unwrap();
-
-                let req = Request::builder()
-                    .method("POST")
-                    .uri("/echo")
-                    .body(Body::from("{\"value\":1676298520}"))
-                    .unwrap();
-                let res = service.call(req).await.unwrap();
-                assert!(res.status().is_success());
-                let body = body::to_bytes(res.into_body()).await.unwrap();
-                let body = std::str::from_utf8(&body).unwrap();
-                assert!(body.contains("\"value\":1676298520"));
-                assert!(body.contains("\"opt_value\":1677771678"));
-                """.trimIndent(),
-            )
         }
 
         testDir.resolve("src/service.rs").appendText(writer.toString())

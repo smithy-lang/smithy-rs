@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
 /**
@@ -61,11 +60,11 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
                 walker.walkShapes(operationShape.inputShape(model))
                     .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
             }
-            .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
+            .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {
-                shape.toBuilder().addError(SmithyValidationExceptionConversionGenerator.SHAPE_ID).build()
+                shape.toBuilder().addError("smithy.framework#ValidationException").build()
             } else {
                 shape
             }

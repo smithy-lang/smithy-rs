@@ -5,9 +5,8 @@
 
 use aws_config::SdkConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::config::{Credentials, Region};
-use aws_sdk_s3::error::DisplayErrorContext;
-use aws_sdk_s3::Client;
+use aws_sdk_s3::{Client, Credentials, Region};
+use aws_smithy_types::error::display::DisplayErrorContext;
 use bytes::BytesMut;
 use std::future::Future;
 use std::net::SocketAddr;
