@@ -11,8 +11,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPaginatorModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -68,7 +68,11 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo = idx.getPaginationInfo(codegenContext.serviceShape, operation).orNull()
         ?: PANIC("failed to load pagination info")
-    private val module = codegenContext.featureGatedPaginatorModule(symbolProvider, operation)
+    private val module = RustModule.public(
+        "paginator",
+        parent = symbolProvider.moduleForShape(operation),
+        documentationOverride = "Paginator for this operation",
+    )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)

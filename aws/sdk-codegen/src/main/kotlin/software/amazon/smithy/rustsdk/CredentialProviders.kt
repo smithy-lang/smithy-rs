@@ -6,9 +6,9 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -41,7 +41,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
-        rustCrate.withModule(codegenContext.featureGatedConfigModule()) {
+        rustCrate.withModule(ClientRustModule.Config) {
             rust(
                 "pub use #T::Credentials;",
                 AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),

@@ -19,10 +19,7 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.ModuleDoc -> if (section.subsection is ModuleDocSection.CrateOrganization) {
-                when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                    true -> crateLayout()
-                    else -> oldCrateLayout()
-                }
+                crateLayout()
             } else {
                 emptySection
             }
@@ -54,24 +51,6 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
                 There is a top-level [`Error`](crate::Error) type that encompasses all the errors that the
                 client can return. Any other error type can be converted to this `Error` type via the
                 [`From`](std::convert::From) trait.
-
-                The other modules within this crate are not required for normal usage.
-                """.trimEnd(),
-            )
-        }
-
-    // TODO(CrateReorganization): Delete this function when removing `enableNewCrateOrganizationScheme`
-    private fun oldCrateLayout(): Writable =
-        writable {
-            containerDocs(
-                """
-                The entry point for most customers will be [`Client`]. [`Client`] exposes one method for each API offered
-                by the service.
-
-                Some APIs require complex or nested arguments. These exist in [`model`](crate::model).
-
-                Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
-                error encompassing all possible errors that can be returned by the service.
 
                 The other modules within this crate are not required for normal usage.
                 """.trimEnd(),

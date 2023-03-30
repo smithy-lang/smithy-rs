@@ -66,12 +66,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     ): List<BuilderCustomization> = baseCustomizations + listOf(RequestIdBuilderCustomization())
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        rustCrate.withModule(
-            when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                true -> ClientRustModule.Operation
-                else -> ClientRustModule.types
-            },
-        ) {
+        rustCrate.withModule(ClientRustModule.Operation) {
             // Re-export RequestId in generated crate
             rust("pub use #T;", accessorTrait(codegenContext))
         }
