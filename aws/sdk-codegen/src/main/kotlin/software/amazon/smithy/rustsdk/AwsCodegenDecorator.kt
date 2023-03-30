@@ -20,9 +20,9 @@ import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExtendedRequestIdDecorator
 import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
-import software.amazon.smithy.rustsdk.endpoints.AwsEndpointDecorator
 import software.amazon.smithy.rustsdk.endpoints.AwsEndpointsStdLib
 import software.amazon.smithy.rustsdk.endpoints.OperationInputTestDecorator
+import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
 
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
@@ -30,7 +30,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         CredentialsCacheDecorator(),
         CredentialsProviderDecorator(),
         RegionDecorator(),
-        AwsEndpointDecorator(),
+        RequireEndpointRules(),
         UserAgentDecorator(),
         SigV4SigningDecorator(),
         HttpRequestChecksumDecorator(),

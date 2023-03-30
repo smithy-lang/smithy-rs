@@ -52,6 +52,8 @@ sealed class OperationSection(name: String) : Section(name) {
     data class MutateOutput(
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
+        /** Name of the response headers map (for referring to it in Rust code) */
+        val responseHeadersName: String,
     ) : OperationSection("MutateOutput")
 
     /**
@@ -62,8 +64,10 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         /** Name of the generic error builder (for referring to it in Rust code) */
         val builderName: String,
-        /** Name of the response (for referring to it in Rust code) */
-        val responseName: String,
+        /** Name of the response status (for referring to it in Rust code) */
+        val responseStatusName: String,
+        /** Name of the response headers map (for referring to it in Rust code) */
+        val responseHeadersName: String,
     ) : OperationSection("PopulateErrorMetadataExtras")
 
     /**

@@ -45,7 +45,7 @@ pub async fn subcommand_generate_version_manifest(
 ) -> Result<()> {
     verify_crate_hasher_available()?;
 
-    let repo_root = find_git_repository_root("smithy-rs", &std::env::current_dir()?)?;
+    let repo_root = find_git_repository_root("smithy-rs", std::env::current_dir()?)?;
     let smithy_rs_revision = GitCLI::new(&repo_root)?
         .get_head_revision()
         .context("get smithy-rs revision")?;

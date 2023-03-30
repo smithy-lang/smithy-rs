@@ -122,6 +122,7 @@ pub mod meta;
 pub mod profile;
 pub mod provider_config;
 pub mod retry;
+#[cfg(feature = "credentials-sso")]
 pub mod sso;
 pub(crate) mod standard_property;
 pub mod sts;
@@ -154,12 +155,11 @@ mod loader {
     use aws_credential_types::cache::CredentialsCache;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-    use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
+    use aws_smithy_client::http_connector::HttpConnector;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
-    use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
     use crate::connector::default_connector;
@@ -181,7 +181,6 @@ mod loader {
         app_name: Option<AppName>,
         credentials_cache: Option<CredentialsCache>,
         credentials_provider: Option<SharedCredentialsProvider>,
-        endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
         endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
@@ -345,33 +344,22 @@ mod loader {
             self
         }
 
-        /// Override the endpoint resolver used for **all** AWS Services
+        /// Override the name of the app used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
-        /// This method is deprecated. Use [`Self::endpoint_url`] instead.
-        ///
-        /// This method will override the endpoint resolver used for **all** AWS services. This mainly
-        /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services
-        /// require the service-specific endpoint resolver they load by default.
+        /// This _optional_ name is used to identify the application in the user agent that
+        /// gets sent along with requests.
         ///
         /// # Examples
-        ///
-        /// Use a static endpoint for all services
         /// ```no_run
-        /// # async fn create_config() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
-        /// use aws_config::endpoint::Endpoint;
-        ///
-        /// let sdk_config = aws_config::from_env()
-        ///     .endpoint_resolver(Endpoint::immutable("http://localhost:1234")?)
-        ///     .load()
-        ///     .await;
-        /// # Ok(())
+        /// # async fn create_config() {
+        /// use aws_config::AppName;
+        /// let config = aws_config::from_env()
+        ///     .app_name(AppName::new("my-app-name").expect("valid app name"))
+        ///     .load().await;
         /// # }
-        #[deprecated(note = "use `.endpoint_url(...)` instead")]
-        pub fn endpoint_resolver(
-            mut self,
-            endpoint_resolver: impl ResolveAwsEndpoint + 'static,
-        ) -> Self {
-            self.endpoint_resolver = Some(Arc::new(endpoint_resolver));
+        /// ```
+        pub fn app_name(mut self, app_name: AppName) -> Self {
+            self.app_name = Some(app_name);
             self
         }
 
@@ -570,12 +558,9 @@ mod loader {
                     .await
             };
 
-            let http_connector = self.http_connector.unwrap_or_else(|| {
-                HttpConnector::Prebuilt(default_connector(
-                    &ConnectorSettings::from_timeout_config(&timeout_config),
-                    sleep_impl.clone(),
-                ))
-            });
+            let http_connector = self
+                .http_connector
+                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
 
             let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
                 let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
@@ -603,8 +588,6 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
-            let endpoint_resolver = self.endpoint_resolver;
-
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
@@ -613,7 +596,6 @@ mod loader {
                 .credentials_provider(credentials_provider)
                 .http_connector(http_connector);
 
-            builder.set_endpoint_resolver(endpoint_resolver);
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.set_endpoint_url(self.endpoint_url);
@@ -665,9 +647,10 @@ mod loader {
                 )
                 .load()
                 .await;
-            assert_eq!(loader.retry_config().unwrap().max_attempts(), 10);
-            assert_eq!(loader.region().unwrap().as_ref(), "us-west-4");
+            assert_eq!(10, loader.retry_config().unwrap().max_attempts());
+            assert_eq!("us-west-4", loader.region().unwrap().as_ref());
             assert_eq!(
+                "akid",
                 loader
                     .credentials_provider()
                     .unwrap()
@@ -675,9 +658,8 @@ mod loader {
                     .await
                     .unwrap()
                     .access_key_id(),
-                "akid"
             );
-            assert_eq!(loader.app_name(), Some(&AppName::new("correct").unwrap()));
+            assert_eq!(Some(&AppName::new("correct").unwrap()), loader.app_name());
             logs_assert(|lines| {
                 let num_config_loader_logs = lines
                     .iter()
@@ -706,16 +688,23 @@ mod loader {
         #[tokio::test]
         async fn load_fips() {
             let conf = base_conf().use_fips(true).load().await;
-            assert_eq!(conf.use_fips(), Some(true));
+            assert_eq!(Some(true), conf.use_fips());
         }
 
         #[tokio::test]
         async fn load_dual_stack() {
             let conf = base_conf().use_dual_stack(false).load().await;
-            assert_eq!(conf.use_dual_stack(), Some(false));
+            assert_eq!(Some(false), conf.use_dual_stack());
 
             let conf = base_conf().load().await;
-            assert_eq!(conf.use_dual_stack(), None);
+            assert_eq!(None, conf.use_dual_stack());
+        }
+
+        #[tokio::test]
+        async fn app_name() {
+            let app_name = AppName::new("my-app-name").unwrap();
+            let conf = base_conf().app_name(app_name.clone()).load().await;
+            assert_eq!(Some(&app_name), conf.app_name());
         }
     }
 }

@@ -3,13 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![warn(
-    missing_debug_implementations,
-    missing_docs,
-    rustdoc::all,
-    unreachable_pub
-)]
-
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
 use crate::connection::ConnectionMetadata;
@@ -341,7 +334,7 @@ pub enum SdkError<E, R = operation::Response> {
     DispatchFailure(DispatchFailure),
 
     /// A response was received but it was not parseable according the the protocol (for example
-    /// the server hung up while the body was being read)
+    /// the server hung up without sending a complete response)
     ResponseError(ResponseError<R>),
 
     /// An error response was received from the service
@@ -438,6 +431,21 @@ impl<E, R> SdkError<E, R> {
             ResponseError(context) => Ok(context.source),
             DispatchFailure(context) => Ok(context.source.into()),
             ServiceError(context) => Ok(context.source.into()),
+        }
+    }
+
+    /// Maps the service error type in `SdkError::ServiceError`
+    #[doc(hidden)]
+    pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
+        match self {
+            Self::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
+                source: map(context.source),
+                raw: context.raw,
+            }),
+            Self::ConstructionFailure(context) => SdkError::<E2, R>::ConstructionFailure(context),
+            Self::DispatchFailure(context) => SdkError::<E2, R>::DispatchFailure(context),
+            Self::ResponseError(context) => SdkError::<E2, R>::ResponseError(context),
+            Self::TimeoutError(context) => SdkError::<E2, R>::TimeoutError(context),
         }
     }
 }

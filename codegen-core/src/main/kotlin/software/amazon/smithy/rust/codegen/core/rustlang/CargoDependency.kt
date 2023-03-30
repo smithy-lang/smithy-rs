@@ -132,6 +132,7 @@ data class CargoDependency(
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
     val features: Set<String> = emptySet(),
+    val defaultFeatures: Boolean = true,
     val rustName: String = name.replace("-", "_"),
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
@@ -166,6 +167,9 @@ data class CargoDependency(
         }
         if (optional) {
             attribs["optional"] = true
+        }
+        if (!defaultFeatures) {
+            attribs["default-features"] = false
         }
         return attribs
     }
@@ -202,7 +206,7 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
+        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
@@ -220,7 +224,7 @@ data class CargoDependency(
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev)
+        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)
         val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
@@ -231,7 +235,7 @@ data class CargoDependency(
         val Tokio: CargoDependency =
             CargoDependency(
                 "tokio",
-                CratesIo("1.8.4"),
+                CratesIo("1.23.1"),
                 DependencyScope.Dev,
                 features = setOf("macros", "test-util", "rt-multi-thread"),
             )
@@ -245,6 +249,12 @@ data class CargoDependency(
             CratesIo("0.3.16"),
             DependencyScope.Dev,
             features = setOf("env-filter", "json"),
+        )
+        val TracingTest: CargoDependency = CargoDependency(
+            "tracing-test",
+            CratesIo("0.2.4"),
+            DependencyScope.Dev,
+            features = setOf("no-env-filter"),
         )
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
@@ -262,6 +272,8 @@ data class CargoDependency(
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
 
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
+        fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
+        fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
     }

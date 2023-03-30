@@ -29,7 +29,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.63.0
+  rust_version: 1.66.1
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -109,6 +109,8 @@ jobs:
         - action: check-style-and-lints
           runner: ubuntu-latest
         - action: check-tools
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: actions/checkout@v3

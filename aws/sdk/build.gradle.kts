@@ -77,6 +77,7 @@ fun eventStreamAllowList(): Set<String> {
 fun generateSmithyBuild(services: AwsServices): String {
     val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
         ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
+    val debugMode = properties.get("debugMode").toBoolean()
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
@@ -99,8 +100,10 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "codegen": {
                             "includeFluentClient": false,
                             "renameErrors": false,
+                            "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true
+                            "enableNewCrateOrganizationScheme": true,
+                            "enableNewSmithyRuntime": false
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -232,6 +235,7 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     binaryName = "sdk-versioner"
     arguments = listOf(
         "use-path-and-version-dependencies",
+        "--isolate-crates",
         "--sdk-path", "../../sdk",
         "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
         outputDir.resolve("examples").absolutePath,

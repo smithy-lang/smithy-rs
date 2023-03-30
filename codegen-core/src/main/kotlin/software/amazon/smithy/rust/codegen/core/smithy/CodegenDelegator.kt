@@ -279,6 +279,7 @@ private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
     check(key == other.key)
     return copy(
         features = features + other.features,
+        defaultFeatures = defaultFeatures || other.defaultFeatures,
         optional = optional && other.optional,
     )
 }

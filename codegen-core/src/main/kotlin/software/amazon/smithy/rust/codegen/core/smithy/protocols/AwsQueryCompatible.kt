@@ -49,11 +49,11 @@ class AwsQueryCompatible(
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+        "HeaderMap" to RuntimeType.HttpHeaderMap,
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
         "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
+        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
 
     override val httpBindingResolver: HttpBindingResolver =
@@ -74,11 +74,11 @@ class AwsQueryCompatible(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     let mut builder =
-                        #{json_errors}::parse_error_metadata(response.body(), response.headers())?;
+                        #{json_errors}::parse_error_metadata(response_body, response_headers)?;
                     if let Some((error_code, error_type)) =
-                        #{aws_query_compatible_errors}::parse_aws_query_compatible_error(response.headers())
+                        #{aws_query_compatible_errors}::parse_aws_query_compatible_error(response_headers)
                     {
                         builder = builder.code(error_code);
                         builder = builder.custom("type", error_type);

@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.63.0
+ARG rust_stable_version=1.66.1
 ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
@@ -41,7 +41,9 @@ RUN yum -y install \
         git \
         make \
         openssl-devel \
-        pkgconfig && \
+        pkgconfig \
+        tar \
+        xz && \
     yum clean all
 RUN set -eux; \
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
@@ -59,6 +61,8 @@ RUN set -eux; \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
+    rustup target add wasm32-unknown-unknown; \
+    rustup target add wasm32-wasi; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
@@ -114,7 +118,25 @@ ARG maturin_version=0.14.1
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
 
+FROM install_rust AS wasm_pack
+ARG wasm_pack_version=0.11.0
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install wasm-pack --locked --version ${wasm_pack_version}
 
+FROM install_rust AS wasmtime
+ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v7.0.0/wasmtime-v7.0.0-x86_64-linux.tar.xz
+ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8a5f3dce84cffec99
+ARG rust_nightly_version
+RUN set -eux; \
+    curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
+    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
+    tar xf wasmtime.xz; \
+    mv wasmtime-v*/wasmtime /opt;
+
+FROM install_rust AS cargo_wasi
+ARG cargo_wasi_version=0.1.27
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-wasi --locked --version ${cargo_wasi_version}
 
 #
 # Final image
@@ -148,6 +170,9 @@ COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/
 COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
+COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
+COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
