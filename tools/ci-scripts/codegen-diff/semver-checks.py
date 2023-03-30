@@ -9,7 +9,7 @@ from diff_lib import get_cmd_output, get_cmd_status, eprint, running_in_docker_b
 
 
 # This script runs `cargo semver-checks` against a previous version of codegen
-def main():
+def main(skip_generation=False):
     if len(sys.argv) != 3:
         eprint("Usage: semver-checks.py <repository root> <base commit sha>")
         sys.exit(1)
@@ -24,21 +24,39 @@ def main():
         eprint("working tree is not clean. aborting")
         sys.exit(1)
 
-    checkout_commit_and_generate(head_commit_sha, 'current', targets=['aws:sdk'])
-    checkout_commit_and_generate(base_commit_sha, 'base', targets=['aws:sdk'])
+    if not skip_generation:
+        checkout_commit_and_generate(head_commit_sha, 'current', targets=['aws:sdk'])
+        checkout_commit_and_generate(base_commit_sha, 'base', targets=['aws:sdk'])
     get_cmd_output('git checkout current')
     sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
 
+    failed = False
     for path in os.listdir():
         eprint(f'checking {path}...', end='')
         if get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
-            get_cmd_output(
-                f'cargo semver-checks check-release --baseline-rev {base_commit_sha} --manifest-path {path}/Cargo.toml -p {path} --release-type patch')
-            eprint('ok!')
+            (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
+                                    f'--baseline-rev {base_commit_sha} '
+                                    # in order to get semver-checks to work with publish-false crates, need to specify
+                                    # package and manifest path explicitly
+                                    f'--manifest-path {path}/Cargo.toml '
+                                    f'-p {path} '
+                                    f'--release-type patch', check=False, quiet=True)
+            if status == 0:
+                eprint('ok!')
+            else:
+                failed = True
+                eprint('failed!')
+                if out:
+                    eprint(out)
+                eprint(err)
         else:
             eprint(f'skipping {path} because it does not exist in base')
+    if failed:
+        eprint('One or more crates failed semver checks!')
+        exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    skip_generation = bool(os.environ.get('SKIP_GENERATION') or False)
+    main(skip_generation=skip_generation)

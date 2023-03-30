@@ -163,12 +163,14 @@ def run(command, shell=False, check=True):
 
 
 # Returns (status, stdout, stderr) from a shell command
-def get_cmd_output(command, cwd=None, check=True, **kwargs):
+def get_cmd_output(command, cwd=None, check=True, quiet=False, **kwargs):
     if isinstance(command, str):
-        eprint(f"running {command}")
+        if not quiet:
+            eprint(f"running {command}")
         command = shlex.split(command)
     else:
-        eprint(f"running {' '.join(command)}")
+        if not quiet:
+            eprint(f"running {' '.join(command)}")
 
     result = subprocess.run(
         command,
