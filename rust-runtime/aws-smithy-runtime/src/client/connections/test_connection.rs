@@ -189,7 +189,7 @@ impl TestConnection {
 
 impl Connection for TestConnection {
     fn call(&self, request: &mut HttpRequest, _cfg: &ConfigBag) -> BoxFallibleFut<HttpResponse> {
-        // TODO Validate request
+        // TODO(orchestrator) Validate request
 
         let res = if let Some((expected, resp)) = self.data.lock().unwrap().pop() {
             let actual = try_clone_http_request(request).expect("test request is cloneable");

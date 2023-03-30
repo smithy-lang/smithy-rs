@@ -4,4 +4,6 @@ allowed_external_types = [
     # TODO(audit-external-type-usage) We should newtype these or otherwise avoid exposing them
     "http::request::Request",
     "http::response::Response",
+    "http::HeaderName",
+    "uri::Uri",
 ]
