@@ -53,8 +53,8 @@ references = ["smithy-rs#2507"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
-[[smithy-rs]]
-message = "Add support for omitting session token in canonical requests."
+[[aws-sdk-rust]]
+message = "Add support for omitting session token in canonical requests for SigV4 signing."
 references = ["smithy-rs#2473"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "martinjlowm"
