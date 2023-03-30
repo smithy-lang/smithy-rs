@@ -124,20 +124,33 @@ class PythonServerEventStreamWrapperGenerator(
             impl<'source> #{PyO3}::FromPyObject<'source> for $name {
                 fn extract(obj: &'source #{PyO3}::PyAny) -> #{PyO3}::PyResult<Self> {
                     use #{Futures}::StreamExt;
-                    let stream = #{PyO3Asyncio}::tokio::into_stream_v2(obj)?;
-                    let stream = stream.filter_map(|obj| {
+                    let stream = #{PyO3Asyncio}::tokio::into_stream_v1(obj)?;
+                    let stream = stream.filter_map(|res| {
                         #{Futures}::future::ready(#{PyO3}::Python::with_gil(|py| {
-                            if let Ok(err) = obj.extract::<#{Error}>(py) {
-                                return Some(Err(err));
+                            // TODO(EventStreamImprovements): Add `InternalServerError` variant to all event streaming 
+                            //                                errors and return that variant in case of errors here? 
+                            match res {
+                                Ok(obj) => {
+                                    match obj.extract::<#{Inner}>(py) {
+                                        Ok(it) => Some(Ok(it)),
+                                        Err(err) => {
+                                            let rich_py_err = #{SmithyPython}::rich_py_err(err);
+                                            #{Tracing}::error!(error = ?rich_py_err, "could not extract the output type '#{Inner}' from streamed value");
+                                            None
+                                        },
+                                    }
+                                },
+                                Err(err) => {
+                                    match #{PyO3}::IntoPy::into_py(err, py).extract::<#{Error}>(py) {
+                                        Ok(modelled_error) => Some(Err(modelled_error)),
+                                        Err(err) => {
+                                            let rich_py_err = #{SmithyPython}::rich_py_err(err);
+                                            #{Tracing}::error!(error = ?rich_py_err, "could not extract the error type '#{Error}' from raised exception");
+                                            None
+                                        }
+                                    }
+                                }
                             }
-
-                            if let Ok(res) = obj.extract::<#{Inner}>(py) {
-                                return Some(Ok(res));
-                            }
-
-                            // TODO: Add `InternalServerError` variant to all event streaming errors and return that variant here? 
-                            #{Tracing}::error!(value = ?obj, "could not extract '#{Inner}' or '#{Error}' from streamed value");
-                            None
                         }))
                     });
             

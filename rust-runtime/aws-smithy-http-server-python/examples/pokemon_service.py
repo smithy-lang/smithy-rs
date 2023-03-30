@@ -17,6 +17,7 @@ from pokemon_service_server_sdk.error import (
     ResourceNotFoundException,
     UnsupportedRegionError,
     MasterBallUnsuccessful,
+    InvalidPokeballError,
 )
 from pokemon_service_server_sdk.input import (
     DoNothingInput,
@@ -270,7 +271,12 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
                     if not payload:
                         logging.debug("no payload provided, ignoring the event!")
                         continue
+
                     name = payload.name or "<unknown>"
+                    pokeball = payload.pokeball or "<unknown>"
+                    if pokeball not in ["Master Ball", "Fast Ball"]:
+                        raise InvalidPokeballError(pokeball)
+
                     outgoing_event = CapturePokemonEvents.event(
                         CaptureEvent(
                             name=name,
