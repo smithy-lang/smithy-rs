@@ -115,9 +115,13 @@ enum CrateSource {
 fn enabled_features(crate_source: &CrateSource) -> Vec<String> {
     let mut enabled = Vec::new();
     if let CrateSource::VersionsManifest { release_tag, .. } = crate_source {
+        // we want to select the newest module specified after this release
         for notable in NOTABLE_SDK_RELEASE_TAGS.iter() {
-            if notable <= release_tag {
+            tracing::debug!(release_tag = ?release_tag, notable = ?notable, "considering if release tag came before notable release");
+            if release_tag <= notable {
+                tracing::debug!("selecting {} as chosen release", notable);
                 enabled.push(notable.as_str().into());
+                break;
             }
         }
     }
@@ -502,7 +506,7 @@ aws-sdk-transcribestreaming = "0.16.0"
 [features]
 latest = []
 "release-2023-01-26" = []
-default = ["release-2023-01-26"]
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
                 versions: VersionsManifest {
@@ -560,6 +564,39 @@ default = ["release-2023-01-26"]
                 Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
             )
             .unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_notable_versions() {
+        let versions = VersionsManifest {
+            smithy_rs_revision: "some-revision-smithy-rs".into(),
+            aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+            manual_interventions: Default::default(),
+            crates: [].into_iter().collect(),
+            release: None,
+        };
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-02-23".parse().unwrap(),
+            }),
+            vec!["latest".to_string()]
+        );
+
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-01-26".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
+        );
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions,
+                release_tag: "release-2023-01-13".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
         );
     }
 }

@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+
+if [[ $# -ne 0 ]]; then
+    echo "Usage: check-deterministic-codegen"
+    exit 1
+fi
+
+# Override version commit hash to prevent unnecessary diffs
+export SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE=ci
+./tools/ci-scripts/codegen-diff/check-deterministic-codegen.py .

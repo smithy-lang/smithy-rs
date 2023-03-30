@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -103,10 +102,10 @@ class ServerHttpBoundProtocolGenerator(
  * Generate all operation input parsers and output serializers for streaming and
  * non-streaming types.
  */
-private class ServerHttpBoundProtocolTraitImplGenerator(
+class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
-) : ProtocolTraitImplGenerator {
+) {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
@@ -139,7 +138,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "http" to RuntimeType.Http,
     )
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 

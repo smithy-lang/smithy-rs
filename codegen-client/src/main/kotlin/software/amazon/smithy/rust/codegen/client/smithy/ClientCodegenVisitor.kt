@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
@@ -41,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -79,16 +77,8 @@ class ClientCodegenVisitor(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
             nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-            moduleProvider = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                true -> ClientModuleProvider
-                else -> OldModuleSchemeClientModuleProvider
-            },
-            nameBuilderFor = { symbol ->
-                when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                    true -> "${symbol.name}Builder"
-                    else -> "Builder"
-                }
-            },
+            moduleProvider = ClientModuleProvider,
+            nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
@@ -207,19 +197,6 @@ class ClientCodegenVisitor(
     override fun getDefault(shape: Shape?) {
     }
 
-    // TODO(CrateReorganization): Remove this function when cleaning up `enableNewCrateOrganizationScheme`
-    private fun RustCrate.maybeInPrivateModuleWithReexport(
-        privateModule: RustModule.LeafModule,
-        symbol: Symbol,
-        writer: Writable,
-    ) {
-        if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-            inPrivateModuleWithReexport(privateModule, symbol, writer)
-        } else {
-            withModule(symbol.module(), writer)
-        }
-    }
-
     private fun privateModule(shape: Shape): RustModule.LeafModule =
         RustModule.private(privateModuleName(shape), parent = symbolProvider.moduleForShape(shape))
 
@@ -278,10 +255,10 @@ class ClientCodegenVisitor(
         }
 
         val privateModule = privateModule(shape)
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
             renderStruct(this)
         }
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.symbolForBuilder(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.symbolForBuilder(shape)) {
             renderBuilder(this)
         }
     }
@@ -294,7 +271,7 @@ class ClientCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         if (shape.hasTrait<EnumTrait>()) {
             val privateModule = privateModule(shape)
-            rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
+            rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
                 ClientEnumGenerator(codegenContext, shape).render(this)
             }
         }
@@ -308,7 +285,7 @@ class ClientCodegenVisitor(
      * Note: this does not generate serializers
      */
     override fun unionShape(shape: UnionShape) {
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {

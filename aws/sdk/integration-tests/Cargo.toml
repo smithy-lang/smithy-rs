@@ -17,4 +17,5 @@ members = [
     "sts",
     "transcribestreaming",
     "using-native-tls-instead-of-rustls",
+    "webassembly",
 ]

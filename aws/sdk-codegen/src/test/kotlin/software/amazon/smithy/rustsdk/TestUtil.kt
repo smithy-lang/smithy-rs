@@ -58,7 +58,6 @@ fun awsSdkIntegrationTest(
                     "codegen",
                     ObjectNode.builder()
                         .withMember("includeFluentClient", false)
-                        .withMember("enableNewCrateOrganizationScheme", true)
                         .build(),
                 ).build(),
         ),
