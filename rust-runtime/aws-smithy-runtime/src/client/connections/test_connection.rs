@@ -5,11 +5,13 @@
 
 //! Module with client connectors useful for testing.
 
-use crate::client::orchestrator::{BoxFallibleFut, Connection, HttpRequest, HttpResponse};
-use crate::config_bag::ConfigBag;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxFallibleFut, Connection, HttpRequest, HttpResponse,
+};
+use aws_smithy_runtime_api::config_bag::ConfigBag;
 use http::header::{HeaderName, CONTENT_TYPE};
 use std::fmt::Debug;
 use std::future::ready;

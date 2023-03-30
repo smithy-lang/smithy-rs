@@ -24,8 +24,5 @@ pub mod runtime_plugin;
 /// Smithy endpoint resolution runtime plugins
 pub mod endpoints;
 
-/// Smithy connector runtime plugins
-pub mod connections;
-
 /// Smithy auth runtime plugins
 pub mod auth;
