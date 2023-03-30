@@ -19,28 +19,41 @@ class ServiceRuntimePluginGenerator(
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         arrayOf(
             "BoxError" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin::BoxError"),
+            "NeverRetryStrategy" to RuntimeType.smithyRuntimeApi(rc).resolve("client::retries::NeverRetryStrategy"),
             "ConfigBag" to RuntimeType.smithyRuntimeApi(rc).resolve("config_bag::ConfigBag"),
+            "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::ConfigBagAccessors"),
+            "TestConnection" to RuntimeType.smithyRuntimeApi(rc).resolve("client::connections::test_connection::TestConnection"),
             "RuntimePlugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin::RuntimePlugin"),
+            "StaticUriEndpointResolver" to RuntimeType.smithyRuntimeApi(rc).resolve("client::endpoints::StaticUriEndpointResolver"),
+            "StubAuthOptionResolver" to RuntimeType.smithyRuntimeApi(rc).resolve("client::auth::option_resolver::StubAuthOptionResolver"),
+            "StubAuthOptionResolverParams" to RuntimeType.smithyRuntimeApi(rc).resolve("client::auth::option_resolver::StubAuthOptionResolverParams"),
+            "AuthOptionResolverParams" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::AuthOptionResolverParams"),
+            "IdentityResolvers" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::IdentityResolvers"),
         )
     }
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            pub(crate) struct ServiceRuntimePlugin;
+            pub(crate) struct ServiceRuntimePlugin {
+                handle: std::sync::Arc<crate::client::Handle>,
+            }
 
             impl ServiceRuntimePlugin {
-                pub fn new() -> Self { Self }
+                pub fn new(handle: std::sync::Arc<crate::client::Handle>) -> Self { Self { handle } }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, _cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
-                    // TODO(RuntimePlugins): Add the AuthOptionResolver to the config bag
-                    // TODO(RuntimePlugins): Add the EndpointResolver to the config bag
-                    // TODO(RuntimePlugins): Add the IdentityResolver to the config bag
-                    // TODO(RuntimePlugins): Add the Connection to the config bag
+                fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
+                    use #{ConfigBagAccessors};
+
+                    cfg.set_identity_resolvers(#{IdentityResolvers}::builder().build());
+                    cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StubAuthOptionResolverParams}::new()));
+                    cfg.set_auth_option_resolver(#{StubAuthOptionResolver}::new());
+                    cfg.set_endpoint_resolver(#{StaticUriEndpointResolver}::default());
+                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
+                    cfg.set_connection(#{TestConnection}::new(vec![]));
                     // TODO(RuntimePlugins): Add the HttpAuthSchemes to the config bag
-                    // TODO(RuntimePlugins): Add the RetryStrategy to the config bag
                     // TODO(RuntimePlugins): Add the TraceProbe to the config bag
                     Ok(())
                 }
