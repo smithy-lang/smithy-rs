@@ -62,3 +62,9 @@ For more information, see [this page](https://docs.aws.amazon.com/AmazonS3/lates
 references = ["aws-sdk-rust#764"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "`AppName` is now configurable from within `ConfigLoader`."
+references = ["smithy-rs#2513"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
