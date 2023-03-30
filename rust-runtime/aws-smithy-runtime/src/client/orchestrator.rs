@@ -22,10 +22,13 @@ pub(self) mod phase;
 
 pub async fn invoke(
     input: Input,
-    interceptors: &mut Interceptors<HttpRequest, HttpResponse>,
     runtime_plugins: &RuntimePlugins,
-    cfg: &mut ConfigBag,
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
+    let mut cfg = ConfigBag::base();
+    let cfg = &mut cfg;
+    let mut interceptors = Interceptors::new();
+    let interceptors = &mut interceptors;
+
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration
         .include(|_| runtime_plugins.apply_client_configuration(cfg))?

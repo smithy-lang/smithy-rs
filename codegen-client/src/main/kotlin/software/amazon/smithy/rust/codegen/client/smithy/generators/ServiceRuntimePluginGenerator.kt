@@ -29,6 +29,10 @@ class ServiceRuntimePluginGenerator(
             """
             pub(crate) struct ServiceRuntimePlugin;
 
+            impl ServiceRuntimePlugin {
+                pub fn new() -> Self { Self }
+            }
+
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
                 fn configure(&self, _cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
                     // TODO(RuntimePlugins): Add the AuthOptionResolver to the config bag

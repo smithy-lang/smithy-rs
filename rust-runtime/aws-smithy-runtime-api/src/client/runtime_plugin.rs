@@ -32,17 +32,17 @@ impl RuntimePlugins {
     }
 
     pub fn with_client_plugin(
-        &mut self,
+        mut self,
         plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
-    ) -> &mut Self {
+    ) -> Self {
         self.client_plugins.push(plugin.into());
         self
     }
 
     pub fn with_operation_plugin(
-        &mut self,
+        mut self,
         plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
-    ) -> &mut Self {
+    ) -> Self {
         self.operation_plugins.push(plugin.into());
         self
     }
