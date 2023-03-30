@@ -16,6 +16,21 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 
+def running_in_docker_build():
+    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
+
+
+def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
+    if running_in_docker_build():
+        eprint(f"Fetching base revision {revision_sha} from GitHub...")
+        run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {revision_sha}")
+
+    # Generate code for HEAD
+    eprint(f"Creating temporary branch {branch_name} with generated code for {revision_sha}")
+    run(f"git checkout {revision_sha} -B {branch_name}")
+    generate_and_commit_generated_code(revision_sha, targets)
+
+
 def generate_and_commit_generated_code(revision_sha, targets=None):
     targets = targets or ['codegen-client-test', 'codegen-server-test', 'aws:sdk']
     # Clean the build artifacts before continuing
@@ -39,7 +54,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == 'codegen-server-test':
-                get_cmd_output(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
+                get_cmd_output(
+                    f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
+                    check=False)
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -58,9 +75,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
 
     get_cmd_output(f"git add -f {OUTPUT_PATH}")
     get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
-        f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
-        f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
-        f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
+                   f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
+                   f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
+                   f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
 
 
 def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whitespace):
@@ -166,6 +183,7 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
         raise Exception(f"failed to run '{command}.\n{stdout}\n{stderr}")
 
     return result.returncode, stdout, stderr
+
 
 # Runs a shell command and returns its exit status
 def get_cmd_status(command):

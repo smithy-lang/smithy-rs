@@ -112,6 +112,8 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
+        - action: check-semver
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: actions/checkout@v3
       with:
