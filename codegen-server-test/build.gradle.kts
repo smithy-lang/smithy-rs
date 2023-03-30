@@ -67,7 +67,13 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
-        CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
+        CodegenTest(
+            "aws.protocoltests.restjson.validation#RestJsonValidation",
+            "rest_json_validation",
+            // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
+            // See https://github.com/awslabs/smithy-rs/issues/1401.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
         CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
         CodegenTest(
