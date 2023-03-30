@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGener
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
@@ -47,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -185,13 +187,7 @@ class ClientCodegenVisitor(
      * - Operation structures
      */
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            codegenContext,
-            codegenDecorator,
-        ).render()
+        ServiceGenerator(rustCrate, codegenContext, codegenDecorator).render()
     }
 
     override fun getDefault(shape: Shape?) {
@@ -301,14 +297,34 @@ class ClientCodegenVisitor(
     }
 
     /**
-     * Generate errors for operation shapes
+     * Generate operations
      */
-    override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(symbolProvider.moduleForOperationError(shape)) {
+    override fun operationShape(operationShape: OperationShape) {
+        rustCrate.useShapeWriter(operationShape) operationWriter@{
+            rustCrate.useShapeWriter(operationShape.inputShape(codegenContext.model)) inputWriter@{
+                // Render the operation shape & serializers input `input.rs`
+                protocolGenerator.renderOperation(
+                    this@operationWriter,
+                    this@inputWriter,
+                    operationShape,
+                    codegenDecorator.operationCustomizations(codegenContext, operationShape, listOf()),
+                )
+
+                // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
+                ProtocolTestGenerator(
+                    codegenContext,
+                    protocolGeneratorFactory.support(),
+                    operationShape,
+                    this@operationWriter,
+                ).render()
+            }
+        }
+
+        rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
             OperationErrorGenerator(
                 model,
                 symbolProvider,
-                shape,
+                operationShape,
                 codegenDecorator.errorCustomizations(codegenContext, emptyList()),
             ).render(this)
         }

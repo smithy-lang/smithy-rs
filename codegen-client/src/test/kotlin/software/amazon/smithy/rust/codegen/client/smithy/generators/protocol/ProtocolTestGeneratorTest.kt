@@ -101,6 +101,7 @@ private class TestProtocolGenerator(
     codegenContext,
     protocol,
     TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
+    TestProtocolPayloadGenerator(body),
     TestProtocolTraitImplGenerator(codegenContext, correctResponse),
 )
 
