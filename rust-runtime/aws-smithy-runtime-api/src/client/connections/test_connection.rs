@@ -136,28 +136,11 @@ impl ValidateRequest {
     }
 }
 
-/// TestConnection for use with a [`Client`](crate::Client).
+/// TestConnection for use as a [`Connection`].
 ///
 /// A basic test connection. It will:
 /// - Respond to requests with a preloaded series of responses
 /// - Record requests for future examination
-///
-/// The generic parameter `B` is the type of the response body.
-/// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
-/// Usage example:
-/// ```no_run
-/// use aws_smithy_runtime_api::client::connections::test_connection::TestConnection;
-/// use aws_smithy_http::body::SdkBody;
-/// let events = vec![(
-///    http::Request::new(SdkBody::from("request body")),
-///    http::Response::builder()
-///        .status(200)
-///        .body(SdkBody::from("response body"))
-///        .unwrap(),
-/// )];
-/// let conn = TestConnection::new(events);
-/// let client = aws_smithy_client::Client::from(conn);
-/// ```
 #[derive(Debug)]
 pub struct TestConnection {
     data: Arc<Mutex<ConnectVec>>,
