@@ -34,3 +34,9 @@ message = "Streaming operations now emit the request ID at the `debug` log level
 references = ["smithy-rs#2495"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add support for omitting session token in canonical requests."
+references = ["smithy-rs#2473"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "martinjlowm"
