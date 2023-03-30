@@ -1,0 +1,25 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+job_definition_name = "smithy-rs-compiletime-benchmark-job"
+type = "Container"
+
+scheduling_priority = "EC2"
+
+timeout = 6_000
+[retry_strategy]
+attempts = 0
+[container_properties]
+memory = 61440
+image = "smithy-rs-compiletime-benchmark"
+vpus = 64
+command = ["bash", "main.sh"]
+job_role_arn = "smithy-rs-compiletime-benchmark"
+execution_role_arn = "smithy-rs-compiletime-benchmark"
+[log_configuration]
+log_driver = "Awslogs"
+[network_configuration]
+assign_public_ip = "Enabled"
+
+propagate_tags=true

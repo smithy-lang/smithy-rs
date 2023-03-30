@@ -1,0 +1,10 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+job_queue_name = "smithy-rs-compiletime-benchmark"
+priority = 1
+state = "Enabled"
+[compute_environment_order]
+    order = 1
+    compute_environment = "smithy-rs-compiletime-benchmark-c7g2xlarge"

@@ -1,0 +1,22 @@
+launch_template_name = "smithy-rs-compiletime-benchmark"
+[launch_template_data]
+    # Amazon Machine Image (AMI) | amzn2-ami-kernel-5.10-hvm-2.0.20230207.0-x86_64-gp2
+    image_id = "ami-0cc87e5027adcdca8"
+    ebs_optimized = true
+    instance_type = "C7g2Xlarge"
+    user_data = ""
+    key_name = "smithy-rs-compiletime-benchmark-private-key"
+    monitoring = { enabled = true }
+
+[launch_template_data.iam_instance_profile]
+    name = "smithy-rs-compiletime-benchmark"
+
+[launch_template_data.block_device_mappings]
+    device_name = "/dev/xvda"
+[launch_template_data.block_device_mappings.ebs]
+    # Default thing
+    snapshot_id = "snap-0da5661276b1e7a00"
+    encrypted = false
+    delete_on_termination = true
+    volume_type = "Gp2"
+    volume_size = 100

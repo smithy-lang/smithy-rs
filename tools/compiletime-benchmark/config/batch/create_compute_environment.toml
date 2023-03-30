@@ -1,0 +1,20 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+compute_environment_name = "smithy-rs-compiletime-benchmark-c7g2xlarge"
+type = "Managed"
+state = "Enabled"
+
+#service_role = null 
+
+[compute_resource]
+    type = "Ec2"
+    allocation_strategy = "BEST_FIT"
+    minv_cpus = 0
+    maxv_cpus = 256
+    instance_types = ["c7g.2xlarge"]
+
+[compute_resource.launch_template]
+    launch_template_name = "smithy-rs-compiletime-benchmark"
+    version = "1"

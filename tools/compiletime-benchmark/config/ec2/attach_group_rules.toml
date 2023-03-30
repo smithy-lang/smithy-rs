@@ -1,0 +1,7 @@
+[[security_group_rules]]
+    ip_protocol = "-1"
+    from_port = -1
+    to_port = -1
+    description = """
+        smithy-rs compiletime benchmark's group rule
+    """
