@@ -54,6 +54,16 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" 
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = """
+S3's `GetObject` will no longer panic when checksum validation is enabled and the target object was uploaded as a multi-part upload.
+However, these objects cannot be checksum validated by the SDK due to the way checksums are calculated for multipart uploads.
+For more information, see [this page](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums).
+"""
+references = ["aws-sdk-rust#764"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "`AppName` is now configurable from within `ConfigLoader`."
 references = ["smithy-rs#2513"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }

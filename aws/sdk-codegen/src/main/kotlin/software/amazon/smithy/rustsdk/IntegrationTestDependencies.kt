@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -122,5 +123,6 @@ class S3TestDependencies : LibRsCustomization() {
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)
+            addDependency(TracingTest)
         }
 }
