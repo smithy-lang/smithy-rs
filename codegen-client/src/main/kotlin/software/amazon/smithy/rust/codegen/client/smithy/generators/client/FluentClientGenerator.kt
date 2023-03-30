@@ -330,7 +330,7 @@ class FluentClientGenerator(
                     /// set when configuring the client.
                     pub async fn send_v2(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let runtime_plugins = #{RuntimePlugins}::new()
-                            .with_client_plugin(crate::config::ServiceRuntimePlugin::new())
+                            .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()))
                             .with_operation_plugin(#{Operation}::new());
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                         let input = #{TypedBox}::new(input).erase();
