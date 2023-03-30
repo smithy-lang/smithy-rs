@@ -79,7 +79,6 @@ mod tests {
 
     #[test]
     fn can_add_runtime_plugin_implementors_to_runtime_plugins() {
-        let mut rps = RuntimePlugins::new();
-        rps.with_client_plugin(SomeStruct);
+        RuntimePlugins::new().with_client_plugin(SomeStruct);
     }
 }

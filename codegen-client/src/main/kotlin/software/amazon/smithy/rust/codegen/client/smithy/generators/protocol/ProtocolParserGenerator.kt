@@ -143,14 +143,14 @@ class ProtocolParserGenerator(
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
                                             errorSymbol,
-                                            listOf(object : software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization() {
-                                                override fun section(section: software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection): Writable =
-                                                    software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                                                        if (section is software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection.MutateOutput) {
+                                            listOf(
+                                                object : OperationCustomization() {
+                                                    override fun section(section: OperationSection): Writable = {
+                                                        if (section is OperationSection.MutateOutput) {
                                                             rust("let output = output.meta(generic);")
                                                         }
                                                     }
-                                            },
+                                                },
                                             ),
                                         )
                                     }
