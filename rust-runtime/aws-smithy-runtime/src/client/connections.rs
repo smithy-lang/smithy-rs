@@ -3,7 +3,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod orchestrator;
-
-/// Smithy connector runtime plugins
-pub mod connections;
+#[cfg(feature = "test-util")]
+pub mod test_connection;
