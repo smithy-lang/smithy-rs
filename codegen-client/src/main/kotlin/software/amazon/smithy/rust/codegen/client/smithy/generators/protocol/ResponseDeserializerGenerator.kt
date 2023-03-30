@@ -57,7 +57,9 @@ class ResponseDeserializerGenerator(
 
         writer.rustTemplate(
             """
-            impl #{ResponseDeserializer} for $operationName {
+            ##[derive(Debug)]
+            struct ${operationName}ResponseDeserializer;
+            impl #{ResponseDeserializer} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
                 fn deserialize_nonstreaming(&self, response: &#{HttpResponse}) -> #{OutputOrError} {

@@ -58,7 +58,9 @@ class RequestSerializerGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         writer.rustTemplate(
             """
-            impl #{RequestSerializer} for $operationName {
+            ##[derive(Debug)]
+            struct ${operationName}RequestSerializer;
+            impl #{RequestSerializer} for ${operationName}RequestSerializer {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();

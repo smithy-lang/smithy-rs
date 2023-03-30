@@ -5,7 +5,7 @@
 
 use crate::config_bag::ConfigBag;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub trait RuntimePlugin {
     fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError>;
