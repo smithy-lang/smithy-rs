@@ -345,6 +345,7 @@ mod loader {
         }
 
         /// Override the name of the app used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
         /// This _optional_ name is used to identify the application in the user agent that
         /// gets sent along with requests.
         ///
