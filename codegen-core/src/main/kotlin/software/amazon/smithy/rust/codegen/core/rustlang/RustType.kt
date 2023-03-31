@@ -249,7 +249,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         }
         is RustType.Application -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }
-            "${this.name}<${args}>"
+            "${this.name}<$args>"
         }
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"

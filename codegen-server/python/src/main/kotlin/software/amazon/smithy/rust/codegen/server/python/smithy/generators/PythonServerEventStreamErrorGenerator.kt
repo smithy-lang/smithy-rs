@@ -33,10 +33,10 @@ class PythonServerEventStreamErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     val shape: UnionShape,
-): ServerOperationErrorGenerator(
+) : ServerOperationErrorGenerator(
     model,
     symbolProvider,
-    shape
+    shape,
 ) {
     private val errorSymbol = symbolProvider.symbolForEventStreamError(shape)
     private val errors = shape.eventStreamErrors().map {
@@ -63,7 +63,7 @@ class PythonServerEventStreamErrorGenerator(
                             return Ok(Self::${symbol.name}(it));
                         }    
                         """,
-                        symbol
+                        symbol,
                     )
                 }
                 writer.rustTemplate(
@@ -75,7 +75,7 @@ class PythonServerEventStreamErrorGenerator(
                         )
                     ))
                     """,
-                    "PyO3" to pyO3
+                    "PyO3" to pyO3,
                 )
             }
         }
@@ -94,7 +94,7 @@ class PythonServerEventStreamErrorGenerator(
                                 Err(err) => err.into_py(py),
                             }
                             """,
-                            "PyO3" to pyO3
+                            "PyO3" to pyO3,
                         )
                     }
                 }

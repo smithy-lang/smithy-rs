@@ -168,7 +168,7 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
         is PythonType.AsyncIterator -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Application -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }
-            "${this.name}[${args}]"
+            "${this.name}[$args]"
         }
         is PythonType.Callable -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }

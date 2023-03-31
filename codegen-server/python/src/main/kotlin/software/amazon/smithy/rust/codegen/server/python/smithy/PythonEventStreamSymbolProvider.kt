@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
  */
 class PythonEventStreamSymbolProvider(
     private val runtimeConfig: RuntimeConfig,
-    base: RustSymbolProvider
+    base: RustSymbolProvider,
 ) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
@@ -93,10 +93,9 @@ class PythonEventStreamSymbolProvider(
         data class EventStreamSymbol(val innerT: RustType, val errorT: RustType)
 
         fun parseSymbol(symbol: Symbol): EventStreamSymbol {
-            check(
-                symbol.references.size >= 2
-            ) { "`PythonEventStreamSymbolProvider` adds inner type and error type as references to resulting symbol" }
-
+            check(symbol.references.size >= 2) {
+                "`PythonEventStreamSymbolProvider` adds inner type and error type as references to resulting symbol"
+            }
             val innerT = symbol.references[0].symbol.rustType()
             val errorT = symbol.references[1].symbol.rustType()
             return EventStreamSymbol(innerT, errorT)
