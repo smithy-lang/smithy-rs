@@ -218,6 +218,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Bool = std.resolve("primitive::bool")
         val TryFrom = stdConvert.resolve("TryFrom")
         val Vec = std.resolve("vec::Vec")
+        val Arc = std.resolve("sync::Arc")
+        val Send = std.resolve("marker::Send")
+        val Sync = std.resolve("marker::Sync")
 
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")

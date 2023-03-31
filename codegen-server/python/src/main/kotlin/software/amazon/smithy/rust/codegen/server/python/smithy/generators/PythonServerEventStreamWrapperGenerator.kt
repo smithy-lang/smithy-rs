@@ -63,14 +63,29 @@ class PythonServerEventStreamWrapperGenerator(
     private val containerName = shape.container.name
     private val memberName = shape.memberName.toPascalCase()
 
-    private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
-    private val smithyPython = PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType()
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
-    private val pyO3Asyncio = PythonServerCargoDependency.PyO3Asyncio.toType()
-    private val tokio = PythonServerCargoDependency.Tokio.toType()
-    private val futures = PythonServerCargoDependency.Futures.toType()
-    private val parkingLot = PythonServerCargoDependency.ParkingLot.toType()
-    private val tracing = PythonServerCargoDependency.Tracing.toType()
+    private val codegenScope =
+        arrayOf(
+            "Inner" to innerT,
+            "Error" to errorT,
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+            "Tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "PyO3" to pyO3,
+            "PyO3Asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "Futures" to PythonServerCargoDependency.Futures.toType(),
+            "Mutex" to PythonServerCargoDependency.ParkingLot.toType().resolve("Mutex"),
+            "AsyncMutex" to PythonServerCargoDependency.Tokio.toType().resolve("sync::Mutex"),
+            "Send" to RuntimeType.Send,
+            "Sync" to RuntimeType.Sync,
+            "Option" to RuntimeType.Option,
+            "Arc" to RuntimeType.Arc,
+            "Body" to RuntimeType.sdkBody(runtimeConfig),
+            "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
+            "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
+            "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
+            "MessageStreamAdapter" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamAdapter"),
+        )
 
     fun render(writer: RustWriter) {
         if (shape.isOutputEventStream(model)) {
@@ -87,11 +102,9 @@ class PythonServerEventStreamWrapperGenerator(
         containerMeta.render(writer)
         writer.rustBlock("struct $name") {
             writer.rustTemplate(
-                "inner: std::sync::Arc<#{Mutex}<Option<#{Wrapped}<#{Inner}, #{Error}>>>>",
-                "Mutex" to parkingLot.resolve("Mutex"),
+                "inner: #{Arc}<#{Mutex}<#{Option}<#{Wrapped}<#{Inner}, #{Error}>>>>",
+                *codegenScope,
                 "Wrapped" to wrappedT,
-                "Inner" to innerT,
-                "Error" to errorT,
             )
         }
 
@@ -100,22 +113,17 @@ class PythonServerEventStreamWrapperGenerator(
                 """
                 pub fn into_body_stream(
                     self,
-                    marshaller: impl #{MarshallMessage}<Input = #{Output}> + Send + Sync + 'static,
-                    error_marshaller: impl #{MarshallMessage}<Input = #{Error}> + Send + Sync + 'static,
-                    signer: impl #{SignMessage} + Send + Sync + 'static,
-                ) -> #{MessageStreamAdapter}<#{Output}, #{Error}> {
+                    marshaller: impl #{MarshallMessage}<Input = #{Inner}> + #{Send} + #{Sync} + 'static,
+                    error_marshaller: impl #{MarshallMessage}<Input = #{Error}> + #{Send} + #{Sync} + 'static,
+                    signer: impl #{SignMessage} + #{Send} + #{Sync} + 'static,
+                ) -> #{MessageStreamAdapter}<#{Inner}, #{Error}> {
                     let mut inner = self.inner.lock();
                     let inner = inner.take().expect("stream is already gone");
                     inner.into_body_stream(marshaller, error_marshaller, signer)
                 }
                 """,
-                "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
-                "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
-                "MessageStreamAdapter" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamAdapter"),
-                "Body" to RuntimeType.sdkBody(runtimeConfig),
+                *codegenScope,
                 "Wrapped" to wrappedT,
-                "Output" to innerT,
-                "Error" to errorT,
             )
         }
 
@@ -154,7 +162,7 @@ class PythonServerEventStreamWrapperGenerator(
                         }))
                     });
             
-                    Ok($name { inner: std::sync::Arc::new(#{Mutex}::new(Some(stream.into()))) })
+                    Ok($name { inner: #{Arc}::new(#{Mutex}::new(Some(stream.into()))) })
                 }
             }
             
@@ -164,14 +172,7 @@ class PythonServerEventStreamWrapperGenerator(
                 }
             }
             """,
-            "Mutex" to parkingLot.resolve("Mutex"),
-            "SmithyPython" to smithyPython,
-            "Tracing" to tracing,
-            "PyO3" to pyO3,
-            "PyO3Asyncio" to pyO3Asyncio,
-            "Error" to errorT,
-            "Inner" to innerT,
-            "Futures" to futures,
+            *codegenScope,
         )
     }
 
@@ -183,11 +184,9 @@ class PythonServerEventStreamWrapperGenerator(
         containerMeta.render(writer)
         writer.rustBlock("struct $name") {
             writer.rustTemplate(
-                "inner: std::sync::Arc<#{Mutex}<#{Wrapped}<#{Inner}, #{Error}>>>",
-                "Mutex" to tokio.resolve("sync::Mutex"),
+                "inner: #{Arc}<#{AsyncMutex}<#{Wrapped}<#{Inner}, #{Error}>>>",
+                *codegenScope,
                 "Wrapped" to wrappedT,
-                "Inner" to innerT,
-                "Error" to errorT,
             )
         }
 
@@ -195,20 +194,16 @@ class PythonServerEventStreamWrapperGenerator(
             writer.rustTemplate(
                 """
                 pub fn new(
-                    unmarshaller: impl #{UnmarshallMessage}<Output = #{Output}, Error = #{Error}> + Send + Sync + 'static, 
+                    unmarshaller: impl #{UnmarshallMessage}<Output = #{Inner}, Error = #{Error}> + #{Send} + #{Sync} + 'static, 
                     body: #{Body}
                 ) -> $name {
                     let inner = #{Wrapped}::new(unmarshaller, body);
-                    let inner = std::sync::Arc::new(#{Mutex}::new(inner));
+                    let inner = #{Arc}::new(#{AsyncMutex}::new(inner));
                     $name { inner }
                 }
                 """,
-                "Mutex" to tokio.resolve("sync::Mutex"),
-                "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
-                "Body" to RuntimeType.sdkBody(runtimeConfig),
+                *codegenScope,
                 "Wrapped" to wrappedT,
-                "Output" to innerT,
-                "Error" to errorT,
             )
         }
 
@@ -226,7 +221,7 @@ class PythonServerEventStreamWrapperGenerator(
                         let mut inner = body.lock().await;
                         let next = inner.recv().await;
                         match next {
-                            Ok(Some(data)) => Ok(#{PyO3}::Python::with_gil(|py| pyo3::IntoPy::into_py(data, py))),
+                            Ok(Some(data)) => Ok(#{PyO3}::Python::with_gil(|py| #{PyO3}::IntoPy::into_py(data, py))),
                             Ok(None) => Err(#{PyO3}::exceptions::PyStopAsyncIteration::new_err("stream exhausted")),
                             Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Err(service_err.into_err().into()), 
                             Err(err) => Err(#{PyO3}::exceptions::PyRuntimeError::new_err(err.to_string())),
@@ -235,9 +230,7 @@ class PythonServerEventStreamWrapperGenerator(
                     Ok(Some(fut.into()))
                 }
                 """,
-                "PyO3" to pyO3,
-                "PyO3Asyncio" to pyO3Asyncio,
-                "SmithyHttp" to smithyHttp,
+                *codegenScope,
             )
         }
     }
