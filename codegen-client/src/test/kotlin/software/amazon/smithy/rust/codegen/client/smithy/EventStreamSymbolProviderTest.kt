@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSetting
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -60,8 +61,17 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Opaque("EventStreamSender<crate::types::SomeStream, crate::types::error::SomeStreamError>", "aws_smithy_http::event_stream")
-        outputType shouldBe RustType.Opaque("Receiver<crate::types::SomeStream, crate::types::error::SomeStreamError>", "aws_smithy_http::event_stream")
+        val someStream = RustType.Opaque("SomeStream", "crate::types")
+        val someStreamError = RustType.Opaque("SomeStreamError", "crate::types::error")
+
+        inputType shouldBe RustType.Application(
+            RuntimeType.eventStreamSender(TestRuntimeConfig).toSymbol().rustType(),
+            listOf(someStream, someStreamError)
+        )
+        outputType shouldBe RustType.Application(
+            RuntimeType.eventStreamReceiver(TestRuntimeConfig).toSymbol().rustType(),
+            listOf(someStream, someStreamError)
+        )
     }
 
     @Test
