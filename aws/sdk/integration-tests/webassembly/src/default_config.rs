@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::retry::RetryConfig;
 use aws_credential_types::Credentials;
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::{retry::RetryConfig, timeout::TimeoutConfig};
 use aws_types::region::Region;
 use std::future::Future;
-
-use crate::adapter::Adapter;
 
 pub(crate) fn get_default_config() -> impl Future<Output = aws_config::SdkConfig> {
     aws_config::from_env()
@@ -21,7 +18,6 @@ pub(crate) fn get_default_config() -> impl Future<Output = aws_config::SdkConfig
         ))
         .timeout_config(TimeoutConfig::disabled())
         .retry_config(RetryConfig::disabled())
-        .http_connector(Adapter::to_http_connector())
         .load()
 }
 

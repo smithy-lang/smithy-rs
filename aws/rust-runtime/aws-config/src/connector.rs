@@ -44,7 +44,34 @@ pub fn default_connector(
 }
 
 /// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(not(feature = "rustls"))]
+#[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+pub fn default_connector(
+    settings: &ConnectorSettings,
+    sleep: Option<Arc<dyn AsyncSleep>>,
+) -> Option<DynConnector> {
+    let hyper = base(settings, sleep).build(aws_smithy_client::conns::native_tls());
+    Some(DynConnector::new(hyper))
+}
+
+/// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
+#[cfg(all(
+    target_family = "wasm",
+    target_os = "wasi",
+    not(any(feature = "rustls", feature = "native-tls"))
+))]
+pub fn default_connector(
+    _settings: &ConnectorSettings,
+    _sleep: Option<Arc<dyn AsyncSleep>>,
+) -> Option<DynConnector> {
+    Some(DynConnector::new(crate::wasi_adapter::Adapter::default()))
+}
+
+/// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
+#[cfg(not(any(
+    all(target_family = "wasm", target_os = "wasi"),
+    feature = "rustls",
+    feature = "native-tls"
+)))]
 pub fn default_connector(
     _settings: &ConnectorSettings,
     _sleep: Option<Arc<dyn AsyncSleep>>,

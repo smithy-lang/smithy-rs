@@ -3,18 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub async fn s3_list_buckets() {
+use aws_sdk_s3::operation::list_buckets::ListBucketsOutput;
+
+pub async fn s3_list_buckets() -> ListBucketsOutput {
     use aws_sdk_s3::Client;
 
     use crate::default_config::get_default_config;
 
     let shared_config = get_default_config().await;
     let client = Client::new(&shared_config);
-    let result = client.list_buckets().send().await.unwrap();
-    assert_eq!(result.buckets().unwrap().len(), 2)
+    client.list_buckets().send().await.unwrap()
 }
 
 #[tokio::test]
 pub async fn test_s3_list_buckets() {
-    s3_list_buckets().await
+    let result = s3_list_buckets().await;
+    assert!(result.buckets().unwrap().len() > 0);
 }

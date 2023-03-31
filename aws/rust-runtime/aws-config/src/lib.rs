@@ -127,6 +127,8 @@ pub mod sso;
 pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
+#[cfg(all(target_family = "wasm", target_os = "wasi"))]
+pub mod wasi_adapter;
 pub mod web_identity_token;
 
 /// Create an environment loader for AWS Configuration

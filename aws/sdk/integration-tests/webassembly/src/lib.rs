@@ -3,11 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod adapter;
 mod default_config;
 mod list_buckets;
 
-#[tokio::main(flavor = "current_thread")]
-pub async fn main() {
-    crate::list_buckets::s3_list_buckets().await
+#[no_mangle]
+pub extern "C" fn run() {
+    std::panic::set_hook(Box::new(move |panic_info| {
+        println!("Internal unhandled panic:\n{:?}!", panic_info);
+        std::process::exit(1);
+    }));
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    rt.block_on(async move {
+        let result = crate::list_buckets::s3_list_buckets().await;
+        println!("result: {:?}", result);
+    });
 }
