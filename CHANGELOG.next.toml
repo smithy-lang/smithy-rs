@@ -74,3 +74,9 @@ message = "Add support for omitting session token in canonical requests for SigV
 references = ["smithy-rs#2473"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "martinjlowm"
+
+[[aws-sdk-rust]]
+message = "Add `into_segments` method to `AggregatedBytes`, for zero-copy conversions."
+references = ["smithy-rs#2525"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "parker-timmerman"
