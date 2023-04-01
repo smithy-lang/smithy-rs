@@ -8,3 +8,12 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+aws-types = { path = "../aws-types" }
+aws-credential-types = { path = "../aws-credential-types" }
+aws-sigv4 = { path = "../aws-sigv4" }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
+tracing = "0.1"
+
+[dev-dependencies]
+tracing-test = "0.2.1"

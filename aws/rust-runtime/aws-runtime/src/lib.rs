@@ -12,3 +12,9 @@
     rust_2018_idioms,
     unreachable_pub
 )]
+
+/// Supporting code for authentication in the AWS SDK.
+pub mod auth;
+
+/// Supporting code for identity in the AWS SDK.
+pub mod identity;

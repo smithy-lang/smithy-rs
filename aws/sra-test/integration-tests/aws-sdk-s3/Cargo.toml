@@ -10,13 +10,13 @@ aws-credential-types = { path = "../../../rust-runtime/aws-credential-types", fe
 aws-http = { path = "../../../rust-runtime/aws-http" }
 aws-sigv4 = { path = "../../../rust-runtime/aws-sigv4" }
 aws-types = { path = "../../../rust-runtime/aws-types" }
-aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3" }
+aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3", features = ["test-util"] }
 aws-smithy-async = { path = "../../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client" }
 aws-smithy-types = { path = "../../../../rust-runtime/aws-smithy-types" }
 aws-smithy-http = { path = "../../../../rust-runtime/aws-smithy-http" }
-aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime" }
-aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api" }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
