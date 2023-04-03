@@ -44,10 +44,6 @@ pub enum RequestRejection {
 
     PrimitiveParse(crate::Error),
 
-    IntParse(crate::Error),
-    FloatParse(crate::Error),
-    BoolParse(crate::Error),
-
     ConstraintViolation(String),
 }
 
@@ -81,9 +77,6 @@ convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeseria
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
-convert_to_request_rejection!(std::str::ParseBoolError, BoolParse);
-convert_to_request_rejection!(std::num::ParseFloatError, FloatParse);
-convert_to_request_rejection!(std::num::ParseIntError, IntParse);
 convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
 
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
