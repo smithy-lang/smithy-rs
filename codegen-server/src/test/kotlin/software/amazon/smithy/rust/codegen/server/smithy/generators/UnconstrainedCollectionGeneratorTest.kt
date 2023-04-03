@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -52,7 +53,13 @@ class UnconstrainedCollectionGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(
+                project,
+                model,
+                symbolProvider,
+                this,
+                ServerRestJsonProtocol(codegenContext),
+            )
         }
 
         project.withModule(ServerRustModule.ConstrainedModule) {
