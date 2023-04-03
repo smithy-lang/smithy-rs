@@ -22,7 +22,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
 
 pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self) -> BoxFallibleFut<()>;
+    fn dispatch_events(&self);
 }
 
 pub trait RequestSerializer: Send + Sync + Debug {
@@ -39,7 +39,13 @@ pub trait ResponseDeserializer: Send + Sync + Debug {
 }
 
 pub trait Connection: Send + Sync + Debug {
-    fn call(&self, request: &mut HttpRequest, cfg: &ConfigBag) -> BoxFallibleFut<HttpResponse>;
+    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse>;
+}
+
+impl Connection for Box<dyn Connection> {
+    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse> {
+        (**self).call(request)
+    }
 }
 
 pub trait RetryStrategy: Send + Sync + Debug {

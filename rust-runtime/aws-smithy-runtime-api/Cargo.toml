@@ -10,10 +10,10 @@ repository = "https://github.com/awslabs/smithy-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-http = { path = "../aws-smithy-http" }
-tokio = { version = "1.25", features = ["sync"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
 http = "0.2.3"
+tokio = { version = "1.25", features = ["sync"] }
 
 [package.metadata.docs.rs]
 all-features = true

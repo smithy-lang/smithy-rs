@@ -57,12 +57,16 @@ class ServiceRuntimePluginGenerator(
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
+            "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
+            "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
             "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "StaticUriEndpointResolver" to runtimeApi.resolve("client::endpoints::StaticUriEndpointResolver"),
             "TestConnection" to runtime.resolve("client::connections::test_connection::TestConnection"),
+            "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
 
@@ -103,10 +107,25 @@ class ServiceRuntimePluginGenerator(
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
 
-                    // TODO(RuntimePlugins): Use the connector from Config
-                    cfg.set_connection(#{TestConnection}::new(vec![]));
+                    // TODO(RuntimePlugins): Replace this with the correct long-term solution
+                    let sleep_impl = self.handle.conf.sleep_impl();
+                    let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
+                            .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
+                            .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
+                            .unwrap_or_else(|| Box::new(#{TestConnection}::new(vec![])) as _);
+                    cfg.set_connection(connection);
 
                     // TODO(RuntimePlugins): Add the TraceProbe to the config bag
+                    cfg.set_trace_probe({
+                        ##[derive(Debug)]
+                        struct StubTraceProbe;
+                        impl #{TraceProbe} for StubTraceProbe {
+                            fn dispatch_events(&self) {
+                                // no-op
+                            }
+                        }
+                        StubTraceProbe
+                    });
 
                     #{additional_config}
                     Ok(())

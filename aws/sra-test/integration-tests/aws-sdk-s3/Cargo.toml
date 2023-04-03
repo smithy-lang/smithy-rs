@@ -12,7 +12,7 @@ aws-sigv4 = { path = "../../../rust-runtime/aws-sigv4" }
 aws-types = { path = "../../../rust-runtime/aws-types" }
 aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3", features = ["test-util"] }
 aws-smithy-async = { path = "../../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
-aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client" }
+aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 aws-smithy-types = { path = "../../../../rust-runtime/aws-smithy-types" }
 aws-smithy-http = { path = "../../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }

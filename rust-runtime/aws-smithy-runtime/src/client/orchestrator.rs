@@ -86,8 +86,7 @@ pub async fn invoke(
 
         let handling_phase = Phase::response_handling(context)
             .include_mut(|ctx| interceptors.modify_before_completion(ctx, cfg))?;
-        let trace_probe = cfg.trace_probe();
-        trace_probe.dispatch_events();
+        cfg.trace_probe().dispatch_events();
 
         break handling_phase.include(|ctx| interceptors.read_after_execution(ctx, cfg))?;
     };
@@ -125,9 +124,9 @@ async fn make_an_attempt(
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
     let call_result = {
-        let tx_req = context.request_mut().expect("request has been set");
+        let request = context.take_request().expect("request has been set");
         let connection = cfg.connection();
-        connection.call(tx_req, cfg).await
+        connection.call(request).await
     };
 
     let mut context = Phase::dispatch(context)
