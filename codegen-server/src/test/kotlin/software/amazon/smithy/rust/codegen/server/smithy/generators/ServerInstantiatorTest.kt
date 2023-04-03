@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -141,9 +142,10 @@ class ServerInstantiatorTest {
         val project = TestWorkspace.testProject()
 
         project.withModule(ServerRustModule.Model) {
-            structure.serverRenderWithModelBuilder(project, model, symbolProvider, this)
-            inner.serverRenderWithModelBuilder(project, model, symbolProvider, this)
-            nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            val protocol = ServerRestJsonProtocol(codegenContext)
+            structure.serverRenderWithModelBuilder(project, model, symbolProvider, this, protocol)
+            inner.serverRenderWithModelBuilder(project, model, symbolProvider, this, protocol)
+            nestedStruct.serverRenderWithModelBuilder(project, model, symbolProvider, this, protocol)
             UnionGenerator(model, symbolProvider, this, union).render()
 
             withInlineModule(RustModule.inlineTests(), null) {
