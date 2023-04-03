@@ -8,6 +8,8 @@ from diff_lib import get_cmd_output, get_cmd_status, eprint, running_in_docker_b
     OUTPUT_PATH
 
 
+CURRENT_BRANCH = 'current'
+BASE_BRANCH = 'base'
 # This script runs `cargo semver-checks` against a previous version of codegen
 def main(skip_generation=False):
     if len(sys.argv) != 3:
@@ -25,9 +27,9 @@ def main(skip_generation=False):
         sys.exit(1)
 
     if not skip_generation:
-        checkout_commit_and_generate(head_commit_sha, 'current', targets=['aws:sdk'])
-        checkout_commit_and_generate(base_commit_sha, 'base', targets=['aws:sdk'])
-    get_cmd_output('git checkout current')
+        checkout_commit_and_generate(head_commit_sha, CURRENT_BRANCH, targets=['aws:sdk'])
+        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'])
+    get_cmd_output(f'git checkout {CURRENT_BRANCH}')
     sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
 
@@ -36,7 +38,7 @@ def main(skip_generation=False):
         eprint(f'checking {path}...', end='')
         if get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
             (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
-                                    f'--baseline-rev {base_commit_sha} '
+                                    f'--baseline-rev {BASE_BRANCH} '
                                     # in order to get semver-checks to work with publish-false crates, need to specify
                                     # package and manifest path explicitly
                                     f'--manifest-path {path}/Cargo.toml '
