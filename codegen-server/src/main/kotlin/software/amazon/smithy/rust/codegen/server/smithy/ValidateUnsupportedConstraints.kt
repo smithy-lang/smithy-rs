@@ -262,7 +262,7 @@ fun validateUnsupportedConstraints(
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
 
-    // 5. `@uniqueItems` cannot reach a map shape.
+    // 4. `@uniqueItems` cannot reach a map shape.
     // See https://github.com/awslabs/smithy/issues/1567.
     val mapShapeReachableFromUniqueItemsListShapeSet = walker
         .walkShapes(service)
