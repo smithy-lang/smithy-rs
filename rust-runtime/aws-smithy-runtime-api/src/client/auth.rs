@@ -3,7 +3,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod orchestrator;
-
-/// Smithy connector runtime plugins
-pub mod connections;
+pub mod identity_resolver;
+pub mod option_resolver;

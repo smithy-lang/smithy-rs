@@ -206,7 +206,7 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
+        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
@@ -249,6 +249,12 @@ data class CargoDependency(
             CratesIo("0.3.16"),
             DependencyScope.Dev,
             features = setOf("env-filter", "json"),
+        )
+        val TracingTest: CargoDependency = CargoDependency(
+            "tracing-test",
+            CratesIo("0.2.4"),
+            DependencyScope.Dev,
+            features = setOf("no-env-filter"),
         )
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
