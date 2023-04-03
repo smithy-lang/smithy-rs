@@ -7,11 +7,13 @@
 //! [`crate::proto::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
 //! [`RequestRejection::XmlDeserialize`].
 
+use std::num::TryFromIntError;
+
 use strum_macros::Display;
 
 #[derive(Debug, Display)]
 pub enum ResponseRejection {
-    InvalidHttpStatusCode,
+    InvalidHttpStatusCode(TryFromIntError),
     Build(crate::Error),
     Serialization(crate::Error),
     Http(crate::Error),

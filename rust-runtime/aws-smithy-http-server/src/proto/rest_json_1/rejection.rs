@@ -47,6 +47,8 @@
 //!
 //! Consult `crate::proto::$protocolName::rejection` for rejection types for other protocols.
 
+use std::num::TryFromIntError;
+
 use strum_macros::Display;
 
 use crate::rejection::MissingContentTypeReason;
@@ -58,7 +60,7 @@ pub enum ResponseRejection {
     /// Used when the service implementer provides an integer outside the 100-999 range for a
     /// member targeted by `httpResponseCode`.
     /// See <https://github.com/awslabs/smithy/issues/1116>.
-    InvalidHttpStatusCode,
+    InvalidHttpStatusCode(TryFromIntError),
 
     /// Used when an invalid HTTP header value (a value that cannot be parsed as an
     /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
