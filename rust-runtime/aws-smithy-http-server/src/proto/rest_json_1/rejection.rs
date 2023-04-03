@@ -113,6 +113,8 @@ pub enum RequestRejection {
     HttpBody(crate::Error),
 
     /// Used when checking the `Content-Type` header.
+    /// This is bubbled up in the generated SDK when calling
+    /// [`crate::protocols::content_type_header_classifier`] in `from_request`.
     MissingContentType(MissingContentTypeReason),
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
