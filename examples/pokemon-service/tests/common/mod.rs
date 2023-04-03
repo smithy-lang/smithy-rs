@@ -14,10 +14,8 @@ use pokemon_service_client::{Builder, Client, Config};
 use pokemon_service_common::{rewrite_base_url, ChildDrop};
 
 pub async fn run_server() -> ChildDrop {
-    let child = Command::cargo_bin("pokemon-service")
-        .unwrap()
-        .spawn()
-        .unwrap();
+    let crate_name = std::env::var("CARGO_PKG_NAME").unwrap();
+    let child = Command::cargo_bin(crate_name).unwrap().spawn().unwrap();
 
     sleep(Duration::from_millis(500)).await;
 
