@@ -65,7 +65,8 @@ pin_project! {
         // Also a streaming body
         Dyn {
             #[pin]
-            inner: BoxBody
+            inner: BoxBody,
+            hint: Option<Bytes>
         },
 
         /// When a streaming body is transferred out to a stream parser, the body is replaced with
@@ -92,7 +93,10 @@ impl SdkBody {
     /// Construct an SdkBody from a Boxed implementation of http::Body
     pub fn from_dyn(body: BoxBody) -> Self {
         Self {
-            inner: Inner::Dyn { inner: body },
+            inner: Inner::Dyn {
+                inner: body,
+                hint: None,
+            },
             rebuild: None,
         }
     }
@@ -145,7 +149,9 @@ impl SdkBody {
                 }
             }
             InnerProj::Streaming { inner: body } => body.poll_data(cx).map_err(|e| e.into()),
-            InnerProj::Dyn { inner: box_body } => box_body.poll_data(cx),
+            InnerProj::Dyn {
+                inner: box_body, ..
+            } => box_body.poll_data(cx),
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
@@ -160,6 +166,7 @@ impl SdkBody {
         match &self.inner {
             Inner::Once { inner: Some(b) } => Some(b),
             Inner::Once { inner: None } => Some(&[]),
+            Inner::Dyn { hint: Some(b), .. } => Some(b),
             _ => None,
         }
     }
@@ -190,6 +197,17 @@ impl SdkBody {
         } else {
             f(self)
         }
+    }
+
+    pub fn add_bytes_hint(mut self, hint: Bytes) -> Self {
+        let bytes_hint = match &mut self.inner {
+            Inner::Dyn { hint, .. } => Some(hint),
+            _else => None,
+        };
+        if let Some(ptr) = bytes_hint {
+            *ptr = Some(hint);
+        }
+        self
     }
 }
 
@@ -262,7 +280,9 @@ impl http_body::Body for SdkBody {
             Inner::Once { inner: None } => true,
             Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
             Inner::Streaming { inner: hyper_body } => hyper_body.is_end_stream(),
-            Inner::Dyn { inner: box_body } => box_body.is_end_stream(),
+            Inner::Dyn {
+                inner: box_body, ..
+            } => box_body.is_end_stream(),
             Inner::Taken => true,
         }
     }
@@ -272,7 +292,9 @@ impl http_body::Body for SdkBody {
             Inner::Once { inner: None } => SizeHint::with_exact(0),
             Inner::Once { inner: Some(bytes) } => SizeHint::with_exact(bytes.len() as u64),
             Inner::Streaming { inner: hyper_body } => hyper_body.size_hint(),
-            Inner::Dyn { inner: box_body } => box_body.size_hint(),
+            Inner::Dyn {
+                inner: box_body, ..
+            } => box_body.size_hint(),
             Inner::Taken => SizeHint::new(),
         }
     }
