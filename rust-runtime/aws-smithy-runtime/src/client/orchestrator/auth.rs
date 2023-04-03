@@ -45,7 +45,7 @@ pub(super) async fn orchestrate_auth(
             return dispatch_phase.include_mut(|ctx| {
                 let request = ctx.request_mut()?;
                 request_signer.sign_request(request, &identity, cfg)?;
-                return Result::<_, BoxError>::Ok(());
+                Result::<_, BoxError>::Ok(())
             });
         }
     }
