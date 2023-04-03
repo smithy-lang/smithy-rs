@@ -185,12 +185,6 @@ jobs:
           };
           console.log("data:", data);
           return data;
-    - name: debug output
-      run: echo "${{ steps.check-breaking-label.outputs }}"
-    - name: debug output
-      run: echo "${{ steps.check-breaking-label.outputs.result }}"
-    - name: debug output
-      run: echo "${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}"
     - name: Run semver check
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -199,7 +193,6 @@ jobs:
     - name: print help message
       if: failure()
       run: echo "::error::This pull request contains breaking changes. Please add the `breaking-changes` label and a changelog entry"
-
 
   test-rust-windows:
     name: Rust Tests on Windows
