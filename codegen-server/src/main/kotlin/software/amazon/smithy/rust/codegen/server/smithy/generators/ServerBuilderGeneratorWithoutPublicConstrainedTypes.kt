@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.withInMemoryInlineModule
 
 /**
@@ -49,6 +49,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+    protocol: ServerProtocol,
 ) {
     companion object {
         /**
@@ -85,7 +86,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
+        "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,

@@ -154,10 +154,9 @@ impl RequestSpec {
     /// So this ranking of routes implements some basic pattern conflict disambiguation with some
     /// common sense. It's also the same behavior that [the TypeScript sSDK is implementing].
     ///
-    /// TODO(https://github.com/awslabs/smithy/issues/1029#issuecomment-1002683552): Once Smithy
-    /// updates the spec to define the behavior, update our implementation.
-    ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
+    // TODO(https://github.com/awslabs/smithy/issues/1029#issuecomment-1002683552): Once Smithy
+    // updates the spec to define the behavior, update our implementation.
     pub(crate) fn rank(&self) -> usize {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
