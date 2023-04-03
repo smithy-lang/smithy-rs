@@ -177,7 +177,6 @@ COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/ma
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
 COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
 COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
-COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/

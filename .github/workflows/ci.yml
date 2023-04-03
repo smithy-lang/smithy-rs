@@ -173,24 +173,29 @@ jobs:
       with:
         script: |
           const response = await github.rest.pulls.get({
-            pull_number: ${{ inputs.pull_number }},
+            pull_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
           });
           const labels = response.data.labels.map(l => l.name);
-          const is_breaking = labels.contains("breaking-change");
+          const isBreaking = labels.includes("breaking-change");
           const data = {
             labels,
             isBreaking
           };
           console.log("data:", data);
           return data;
+    - name: debug output
+      run: echo "${{ steps.check-breaking-label.outputs }}"
+    - name: debug output
+      run: echo "${{ steps.check-breaking-label.outputs.result }}"
+    - name: debug output
+      run: echo "${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}"
     - name: Run semver check
       uses: ./smithy-rs/.github/actions/docker-build
-      continue-on-error: ${{ steps.check-breaking-label.outputs.result.isBreaking }}
       with:
         action: check-semver
-        action-arguments: ${{ inputs.base_revision }}
+        action-arguments: ${{ github.event.pull_request.base.sha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
     - name: print help message
       if: failure()
       run: echo "::error::This pull request contains breaking changes. Please add the `breaking-changes` label and a changelog entry"
