@@ -15,31 +15,37 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
+target_codegen_client = 'codegen-client-test'
+target_codegen_server = 'codegen-server-test'
+target_aws_sdk = 'aws:sdk'
+
 
 def generate_and_commit_generated_code(revision_sha, targets=None):
-    targets = targets or ['codegen-client-test', 'codegen-server-test', 'aws:sdk']
+    targets = targets or [target_codegen_client, target_codegen_server, target_aws_sdk]
     # Clean the build artifacts before continuing
     get_cmd_output("rm -rf aws/sdk/build")
-    if 'codegen-server-test' in targets:
+    if target_codegen_server in targets:
         get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
     get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
     tasks = ' '.join([f'{t}:assemble' for t in targets])
     get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
-    if 'codegen-server-test' in targets:
+    if target_codegen_server in targets:
         get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
 
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
     get_cmd_output(f"mkdir {OUTPUT_PATH}")
-    if 'aws:sdk' in targets:
+    if target_aws_sdk in targets:
         get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-    for target in ['codegen-client', 'codegen-server']:
+    for target in [target_codegen_client, target_codegen_server]:
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
-            if target == 'codegen-server-test':
-                get_cmd_output(f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/", check=False)
+            if target == target_codegen_server:
+                get_cmd_output(
+                    f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
+                    check=False)
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -58,9 +64,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
 
     get_cmd_output(f"git add -f {OUTPUT_PATH}")
     get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
-        f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
-        f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
-        f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
+                   f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
+                   f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
+                   f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
 
 
 def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whitespace):
@@ -166,6 +172,7 @@ def get_cmd_output(command, cwd=None, check=True, **kwargs):
         raise Exception(f"failed to run '{command}.\n{stdout}\n{stderr}")
 
     return result.returncode, stdout, stderr
+
 
 # Runs a shell command and returns its exit status
 def get_cmd_status(command):
