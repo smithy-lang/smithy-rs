@@ -9,7 +9,6 @@ use crate::rejection::MissingContentTypeReason;
 
 #[derive(Debug, Display)]
 pub enum ResponseRejection {
-    InvalidHttpStatusCode,
     Serialization(crate::Error),
     Http(crate::Error),
 }
