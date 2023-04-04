@@ -7,6 +7,7 @@
 
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use bytes::Bytes;
 use http::{Request, Response};
 use std::task::{Context, Poll};
 use tower::Service;
@@ -31,19 +32,15 @@ impl Service<Request<SdkBody>> for Adapter {
     fn call(&mut self, req: Request<SdkBody>) -> Self::Future {
         println!("Adapter: sending request...");
         let client = wasi_http::DefaultClient::new(None);
-        let (parts, body) = req.into_parts();
-        let body = match body.bytes() {
-            Some(value) => value.to_vec(),
-            None => Vec::new(),
-        };
-        let req = Request::from_parts(parts, body);
-        let res = client.handle(req).unwrap();
-        let (parts, body) = res.into_parts();
-        let body = if body.is_empty() {
-            SdkBody::empty()
-        } else {
-            SdkBody::from(body)
-        };
-        Box::pin(async move { Ok(Response::<SdkBody>::from_parts(parts, body)) })
+        // Right now only synchronous calls can be made through WASI
+        let fut = client.handle(req.map(|body| match body.bytes() {
+            Some(value) => Bytes::copy_from_slice(value),
+            None => Bytes::new(),
+        }));
+        Box::pin(async move {
+            Ok(fut
+                .map_err(|err| ConnectorError::other(err.into(), None))?
+                .map(SdkBody::from))
+        })
     }
 }
