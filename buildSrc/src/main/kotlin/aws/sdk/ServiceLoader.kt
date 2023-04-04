@@ -36,10 +36,10 @@ class AwsServices(
         (
             services.map(AwsService::module).map { "sdk/$it" } +
                 CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
-                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
-                examples
+                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" }
             // Root tests should not be included since they can't be part of the root Cargo workspace
-            // in order to test differences in Cargo features.
+            // in order to test differences in Cargo features. Examples should not be included either
+            // because each example itself is a workspace.
             ).toSortedSet()
     }
 
@@ -78,6 +78,16 @@ class AwsServices(
                 false
             }
         }
+
+    /**
+     * Returns a sorted set of members included in the workspace.
+     */
+    fun includedInWorkspace() = allModules
+
+    /**
+     * Returns a list of crates excluded from the workspace.
+     */
+    fun excludedFromWorkspace() = examples + rootTests.map(RootTest::manifestName)
 }
 
 /**
