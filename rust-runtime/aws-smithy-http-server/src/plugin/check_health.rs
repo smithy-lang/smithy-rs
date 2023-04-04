@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::future::Ready;
+
 use futures_util::Future;
 use http::StatusCode;
 use hyper::{Body, Request, Response};
@@ -22,6 +24,14 @@ pub struct CheckHealthLayer<H> {
 impl<H> CheckHealthLayer<H> {
     pub fn new(ping_handler: H) -> Self {
         CheckHealthLayer { ping_handler }
+    }
+}
+
+pub type DefaultHandler<E> = fn(Request<Body>) -> Ready<Result<Response<BoxBody>, E>>;
+
+impl CheckHealthLayer<()> {
+    pub fn with_default_handler<E>() -> CheckHealthLayer<DefaultHandler<E>> {
+        CheckHealthLayer::new(default_ping_handler)
     }
 }
 
@@ -76,11 +86,11 @@ where
 }
 
 /// A handler that returns `200 OK` with an empty body.
-pub async fn default_ping_handler<E>(_req: Request<Body>) -> Result<Response<BoxBody>, E> {
+fn default_ping_handler<E>(_req: Request<Body>) -> Ready<Result<Response<BoxBody>, E>> {
     let response = Response::builder()
         .status(StatusCode::OK)
         .body(body::boxed(Body::empty()))
         .expect("Couldn't construct response");
 
-    Ok::<_, E>(response)
+    std::future::ready(Ok::<_, E>(response))
 }
