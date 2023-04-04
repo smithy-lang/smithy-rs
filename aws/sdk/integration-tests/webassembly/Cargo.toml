@@ -18,6 +18,7 @@ crate-type = ["cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0"
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
@@ -28,3 +29,4 @@ aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 http = "0.2.8"
 tokio = { version = "1.24.2", features = ["macros", "rt"] }
 tower = "0.4.13"
+wasi = "0.11.0"
