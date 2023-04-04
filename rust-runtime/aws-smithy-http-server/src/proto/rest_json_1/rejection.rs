@@ -143,14 +143,6 @@ pub enum RequestRejection {
     /// into "primitive" types.
     PrimitiveParse(crate::Error),
 
-    // The following three variants are used when failing to deserialize strings from a URL query
-    // string and URI path labels into "primitive" types.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
-    // conflated into the `PrimitiveParse` variant above after this issue is resolved.
-    IntParse(crate::Error),
-    FloatParse(crate::Error),
-    BoolParse(crate::Error),
-
     /// Used when consuming the input struct builder, and constraint violations occur.
     // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
     // directly in the code-generated SDK instead of in this crate.
@@ -194,9 +186,6 @@ convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeEr
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
-convert_to_request_rejection!(std::str::ParseBoolError, BoolParse);
-convert_to_request_rejection!(std::num::ParseFloatError, FloatParse);
-convert_to_request_rejection!(std::num::ParseIntError, IntParse);
 convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
 
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {

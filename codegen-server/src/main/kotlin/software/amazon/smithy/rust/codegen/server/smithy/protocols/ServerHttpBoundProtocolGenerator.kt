@@ -1121,17 +1121,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         check(target is NumberShape || target is BooleanShape)
                         rustTemplate(
                             """
-                            let value = std::str::FromStr::from_str(value)?;
+                            let value = <_ as #{PrimitiveParse}>::parse_smithy_primitive(value)?;
                             """,
-                            *codegenScope,
+                            "PrimitiveParse" to RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                         )
                     }
                 }
-                rust(
-                    """
-                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """,
-                )
+                rust("Ok(${symbolProvider.wrapOptional(binding.member, "value")})")
             }
         }
     }
