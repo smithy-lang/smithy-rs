@@ -1,0 +1,5 @@
+port_range = {from = 443, to = 443}
+protocol = 6
+rule_action = "Allow"
+rule_number = 0
+egress = true

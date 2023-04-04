@@ -1,13 +1,13 @@
-
- use std::{
+use std::{
+    collections::HashMap,
     convert::Infallible,
-    path::{Path, PathBuf}, collections::HashMap,
+    path::{Path, PathBuf},
 };
 
 use aws_sdk_batch::model::ComputeEnvironmentOrder;
-use aws_sdk_ec2::model::{TagSpecification, Tag};
+use aws_sdk_ec2::model::{RequestLaunchTemplateData, Tag, TagSpecification};
 use compiletime_benchmark::force_dry_run;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{spawn, task::JoinError};
 
 macro_rules! base_request {
@@ -53,51 +53,63 @@ macro_rules! iam_request {
     };
 }
 
-const DRY_RUN_FLAG_IS_SET: &'static str = "Request would have succeeded, but DryRun flag is set.";
-
-fn common_tag<T: DeserializeOwned>() -> T {
-    toml::from_str(include_str!("../../config/common/tag.toml")).unwrap()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), JoinError> {
     let conf = aws_config::load_from_env().await;
-    let tags: HashMap<String, String> = {
-        toml::from_str(include_str!("../../config/common/tag.toml")).unwrap()
-    };
-    
-    {
+    let tags: HashMap<String, String> =
+        { toml::from_str(include_str!("../../config/common/tag.toml")).unwrap() };
+
+    let tup = {
         let client = aws_sdk_ec2::Client::new(&conf);
         let (
-            create_launch_template ,
-            create_subnet ,
-            authorize_security_group_egress ,
-            create_key_pair ,
+            create_launch_template,
+            create_subnet,
+            authorize_security_group_egress,
+            create_key_pair,
+            create_security_group,
+        ) = ec2_request!(
+            client,
+            create_launch_template,
+            create_subnet,
+            authorize_security_group_egress,
+            create_key_pair,
             create_security_group
-        ) = ec2_request!(client, 
-            create_launch_template ,
-            create_subnet ,        
-            authorize_security_group_egress ,
-            create_key_pair ,
-            create_security_group);
-    
-        create_launch_template.send();
-        create_subnet.send();
-        create_key_pair.send();
-        create_security_group.send();
+        );
+        let key = create_key_pair.send().await;
+        let create_launch_template = {
+            let out = key.unwrap();
+
+            create_launch_template
+                .set_launch_template_data(
+                    RequestLaunchTemplateData::builder()
+                        .key_name(out.key_name())
+                        .build(),
+                )
+        };
         
+        std::future::join!(
+            create_launch_template.send(),
+            create_subnet.send(),
+            authorize_security_group_egress.send(),
+            create_security_group.send(),
+        )
+        .await
     };
-    
+
     {
         let batch = aws_sdk_batch::Client::new(&conf);
-        let (register_job_definition, create_compute_environment, create_job_queue) = batch_request!(batch, register_job_definition, create_compute_environment, create_job_queue);
-        
+        let (register_job_definition, create_compute_environment, create_job_queue) = batch_request!(
+            batch,
+            register_job_definition,
+            create_compute_environment,
+            create_job_queue
+        );
     };
 
     {
         let client = aws_sdk_iam::Client::new(&conf);
         iam_request!(client, create_user);
     };
-    
+
     Ok(())
 }
