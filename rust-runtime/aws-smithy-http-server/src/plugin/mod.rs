@@ -118,6 +118,7 @@
 //! ```
 //!
 
+mod check_health;
 mod closure;
 mod either;
 mod filter;
