@@ -20,7 +20,13 @@ use crate::body::BoxBody;
 
 use super::Either;
 
-struct CheckHealthLayer;
+pub struct CheckHealthLayer;
+
+impl CheckHealthLayer {
+    pub fn new() -> Self {
+        CheckHealthLayer
+    }
+}
 
 impl<S> Layer<S> for CheckHealthLayer {
     type Service = CheckHealthService<S>;
@@ -30,12 +36,13 @@ impl<S> Layer<S> for CheckHealthLayer {
     }
 }
 
-struct CheckHealthService<S> {
+#[derive(Clone)]
+pub struct CheckHealthService<S> {
     inner: S,
 }
 
 pin_project! {
-    struct CheckHealthFuture<E, F>{
+    pub struct CheckHealthFuture<E, F>{
         #[pin]
         inner: Either<PingFuture<E>, F>
     }
@@ -98,6 +105,7 @@ impl<E, F: Future<Output = Result<Response<BoxBody>, E>>> Future for CheckHealth
 impl<S> Service<Request<Body>> for CheckHealthService<S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
+    S::Future: std::marker::Send + 'static,
 {
     type Response = S::Response;
 

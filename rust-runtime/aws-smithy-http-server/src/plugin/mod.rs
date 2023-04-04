@@ -129,6 +129,7 @@ mod stack;
 
 use crate::operation::Operation;
 
+pub use check_health::CheckHealthLayer;
 pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
 pub use either::Either;
 pub use filter::{filter_by_operation_name, FilterByOperationName};
