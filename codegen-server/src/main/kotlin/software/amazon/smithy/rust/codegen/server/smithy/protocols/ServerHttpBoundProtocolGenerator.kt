@@ -135,6 +135,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "ResponseRejection" to protocol.responseRejection(runtimeConfig),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
+        "Tracing" to RuntimeType.Tracing,
     )
 
     fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
@@ -251,17 +252,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // Implement `into_response` for output types.
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
 
+        // All `ResponseRejection`s are errors; the service owners are to blame. So we centrally log them here
+        // to let them know.
         rustTemplate(
             """
             impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
                 fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                     match #{serialize_response}(self) {
                         Ok(response) => response,
-                        Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        Err(e) => {
+                            #{Tracing}::error!(error = %e, "failed to serialize response");
+                            #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        }
                     }
                 }
             }
-            """.trimIndent(),
+            """,
             *codegenScope,
             "O" to outputSymbol,
             "Marker" to protocol.markerStruct(),
@@ -278,7 +284,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                                 response
                             },
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            Err(e) => {
+                                #{Tracing}::error!(error = %e, "failed to serialize response");
+                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            }
                         }
                     }
                 }
