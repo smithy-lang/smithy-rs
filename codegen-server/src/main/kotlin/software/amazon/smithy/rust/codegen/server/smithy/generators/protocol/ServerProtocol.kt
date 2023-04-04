@@ -121,7 +121,7 @@ fun jsonParserGenerator(
 class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
-    private val additionalParserCustomizations: List<JsonParserCustomization>,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
@@ -185,7 +185,7 @@ private fun restRouterType(runtimeConfig: RuntimeConfig) =
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
-    private val additionalParserCustomizations: List<JsonParserCustomization>,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
