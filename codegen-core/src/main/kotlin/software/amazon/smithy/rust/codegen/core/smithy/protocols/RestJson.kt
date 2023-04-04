@@ -89,11 +89,10 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
         listOf("x-amzn-errortype" to errorShape.id.toString())
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
