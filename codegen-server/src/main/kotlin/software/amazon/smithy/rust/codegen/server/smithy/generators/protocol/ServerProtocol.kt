@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -32,6 +31,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
