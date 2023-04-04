@@ -390,7 +390,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         errorSymbol: Symbol,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
+        val structuredDataSerializer = protocol.structuredDataSerializer()
         withBlock("match error {", "}") {
             val errors = operationShape.operationErrors(model)
             errors.forEach {
@@ -612,7 +612,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         bindings: List<HttpBindingDescriptor>,
     ) {
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
-        val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust(
             "let mut input = #T::default();",

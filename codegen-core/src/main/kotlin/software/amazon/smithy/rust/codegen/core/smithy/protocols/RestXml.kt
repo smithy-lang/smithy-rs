@@ -40,13 +40,11 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return RestXmlParserGenerator(codegenContext, restXmlErrors)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        RestXmlParserGenerator(codegenContext, restXmlErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
-    }
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
