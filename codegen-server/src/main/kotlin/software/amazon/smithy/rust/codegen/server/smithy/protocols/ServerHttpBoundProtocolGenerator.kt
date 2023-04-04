@@ -52,7 +52,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDesc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -80,7 +79,7 @@ import java.util.logging.Logger
 /**
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
- * See `ServerRestJson.kt` for more info.
+ * See [ServerRestJsonFactory] for more info.
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
@@ -89,13 +88,7 @@ class ServerHttpBoundProtocolGenerator(
     codegenContext,
     protocol,
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
-) {
-    // Define suffixes for operation input / output / error wrappers
-    companion object {
-        const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
-        const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
-    }
-}
+)
 
 /*
  * Generate all operation input parsers and output serializers for streaming and
@@ -171,6 +164,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
+        // This checks for the expected `Content-Type` header if the `@httpPayload` trait is present, as dictated by
+        // the core Smithy library, which _does not_ require deserializing the payload.
+        // If no members have `@httpPayload`, the expected `Content-Type` header as dictated _by the protocol_ is
+        // checked later on for non-streaming operations, in `serverRenderShapeParser`: that check _does_ require at
+        // least buffering the entire payload, since the check must only be performed if the payload is empty.
         val verifyRequestContentTypeHeader = writable {
             operationShape
                 .inputShape(model)
@@ -179,12 +177,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 ?.let { payload ->
                     val target = model.expectShape(payload.target)
                     if (!target.isBlobShape || target.hasTrait<MediaTypeTrait>()) {
-                        val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
-                            ?.let { "Some(${it.dq()})" } ?: "None"
+                        // `null` is only returned by Smithy when there are no members, but we know there's at least
+                        // the one with `@httpPayload`, so `!!` is safe here.
+                        val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
                         rustTemplate(
                             """
-                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType).is_err() {
-                                return Err(#{RuntimeError}::UnsupportedMediaType)
+                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), Some("$expectedRequestContentType")).is_err() {
+                                return Err(#{RuntimeError}::UnsupportedMediaType);
                             }
                             """,
                             *codegenScope,
@@ -622,30 +621,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         rust("let (parts, body) = request.into_parts();")
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
+
         if (parser != null) {
-            rustTemplate(
-                """
-                let bytes = #{Hyper}::body::to_bytes(body).await?;
-                if !bytes.is_empty() {
-                """,
-                *codegenScope,
-            )
-            if (protocol is RestJson) {
+            // `null` is only returned by Smithy when there are no members, but we know there's at least one, since
+            // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
+            val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
+            rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("$expectedRequestContentType"))?;
+                    input = #{parser}(bytes.as_ref(), input)?;
                     """,
                     *codegenScope,
+                    "parser" to parser,
                 )
             }
-            rustTemplate(
-                """
-                input = #{parser}(bytes.as_ref(), input)?;
-                }
-                """,
-                *codegenScope,
-                "parser" to parser,
-            )
         }
         for (binding in bindings) {
             val member = binding.member
@@ -1145,6 +1136,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      * Returns the error type of the function that deserializes a non-streaming HTTP payload (a byte slab) into the
      * shape targeted by the `httpPayload` trait.
      */
+    // TODO This should not live here. Plus, only some protocols support `@httpPayload`.
     private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): Symbol {
         check(binding.location == HttpLocation.PAYLOAD)
 

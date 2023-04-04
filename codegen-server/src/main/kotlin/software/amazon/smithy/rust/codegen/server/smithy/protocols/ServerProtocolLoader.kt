@@ -9,6 +9,7 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.protocols.traits.Rpcv2Trait
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
@@ -24,6 +25,7 @@ class ServerProtocolLoader(supportedProtocols: ProtocolMap<ServerProtocolGenerat
             RestXmlTrait.ID to ServerRestXmlFactory(),
             AwsJson1_0Trait.ID to ServerAwsJsonFactory(AwsJsonVersion.Json10),
             AwsJson1_1Trait.ID to ServerAwsJsonFactory(AwsJsonVersion.Json11),
+            Rpcv2Trait.ID to ServerRpcV2Factory(),
         )
     }
 }

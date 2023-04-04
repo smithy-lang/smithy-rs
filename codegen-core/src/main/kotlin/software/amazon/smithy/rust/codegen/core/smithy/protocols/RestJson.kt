@@ -109,10 +109,10 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
                 }
                 """,

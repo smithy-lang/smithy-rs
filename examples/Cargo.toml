@@ -6,7 +6,7 @@ members = [
     "pokemon-service-tls",
     "pokemon-service-lambda",
     "pokemon-service-server-sdk",
-    "pokemon-service-client"
+    "pokemon-service-client",
 ]
 
 [profile.release]

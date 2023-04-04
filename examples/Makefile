@@ -3,16 +3,23 @@ CUR_DIR := $(shell pwd)
 GRADLE := $(SRC_DIR)/gradlew
 SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
+RPCV2_SDK_DST := $(CUR_DIR)/rpcv2-server-sdk
+RPCV2_CLIENT_DST := $(CUR_DIR)/rpcv2-pokemon-client
+
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-server-sdk/rust-server-codegen
 CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen
+RPCV2_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/rpcv2/rust-server-codegen
+RPCV2_CLIENT_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/rpcv2-pokemon-client/rust-client-codegen
 
 all: codegen
 
 codegen:
-	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' :codegen-client-test:assemble :codegen-server-test:assemble
-	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
+	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client,rpcv2,rpcv2-pokemon-client' :codegen-client-test:clean :codegen-server-test:clean :codegen-client-test:assemble :codegen-server-test:assemble
+	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(RPCV2_SDK_DST) $(RPCV2_CLIENT_DST)
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
+	cp -av $(RPCV2_SDK_SRC)/* $(RPCV2_SDK_DST)/
+	cp -av $(RPCV2_CLIENT_SRC)/* $(RPCV2_CLIENT_DST)/
 
 build: codegen
 	cargo build
@@ -39,6 +46,6 @@ lambda_invoke:
 	cargo lambda invoke pokemon-service-lambda --data-file pokemon-service/tests/fixtures/example-apigw-request.json
 
 distclean: clean
-	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
+	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(RPCV2_SDK_DST) $(RPCV2_CLIENT_DST) Cargo.lock
 
 .PHONY: all

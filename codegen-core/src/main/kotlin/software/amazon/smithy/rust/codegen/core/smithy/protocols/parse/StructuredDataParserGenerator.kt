@@ -12,8 +12,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 interface StructuredDataParserGenerator {
     /**
-     * Generate a parse function for a given targeted as a payload.
+     * Generate a parse function for a given shape targeted with `@httpPayload`.
      * Entry point for payload-based parsing.
+     *
      * Roughly:
      * ```rust
      * fn parse_my_struct(input: &[u8]) -> Result<MyStruct, XmlDecodeError> {
@@ -49,6 +50,7 @@ interface StructuredDataParserGenerator {
 
     /**
      * Generate a parser for a server operation input structure
+     *
      * ```rust
      * fn deser_operation_crate_operation_my_operation_input(
      *    value: &[u8], builder: my_operation_input::Builder

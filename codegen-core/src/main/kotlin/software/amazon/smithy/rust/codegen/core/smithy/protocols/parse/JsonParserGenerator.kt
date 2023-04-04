@@ -68,8 +68,6 @@ sealed class JsonParserSection(name: String) : Section(name) {
  */
 typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
-data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
-
 class JsonParserGenerator(
     private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
@@ -415,16 +413,16 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
-        val keyTarget = model.expectShape(shape.key.target) as StringShape
+        val keyTarget = model.expectShape(shape.key.target, StringShape::class.java)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnSymbolToParse = returnSymbolToParse(shape)
+        val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
         val parser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 """
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "ReturnType" to returnSymbolToParse.symbol,
+                "ReturnType" to returnSymbol,
                 *codegenScope,
             ) {
                 startObjectOrNull {
@@ -445,7 +443,8 @@ class JsonParserGenerator(
                                     match value {
                                         Some(value) => { map.insert(key, value); }
                                         None => return Err(#{Error}::custom("dense map cannot contain null values"))
-                                            }""",
+                                    }
+                                    """,
                                     *codegenScope,
                                 )
                             }
@@ -460,8 +459,8 @@ class JsonParserGenerator(
                             }
                         }
                     }
-                    if (returnSymbolToParse.isUnconstrained) {
-                        rust("Ok(Some(#{T}(map)))", returnSymbolToParse.symbol)
+                    if (returnUnconstrainedType) {
+                        rust("Ok(Some(#{T}(map)))", returnSymbol)
                     } else {
                         rust("Ok(Some(map))")
                     }

@@ -219,6 +219,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val TryFrom = stdConvert.resolve("TryFrom")
         val Vec = std.resolve("vec::Vec")
 
+        // primitive types
+        val StaticStr = RuntimeType("&'static str")
+
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
         val Http = CargoDependency.Http.toType()
@@ -235,6 +238,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()
         val Regex = CargoDependency.Regex.toType()
+        val Serde= CargoDependency.Serde.toType()
+        val SerdeDeserialize = Serde.resolve("Deserialize")
         val Tokio = CargoDependency.Tokio.toType()
         val TokioStream = CargoDependency.TokioStream.toType()
         val Tower = CargoDependency.Tower.toType()
@@ -246,6 +251,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
+        fun smithyCbor(runtimeConfig: RuntimeConfig) = CargoDependency.smithyCbor(runtimeConfig).toType()
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
         fun smithyClient(runtimeConfig: RuntimeConfig) = CargoDependency.smithyClient(runtimeConfig).toType()
         fun smithyClientTestUtil(runtimeConfig: RuntimeConfig) = CargoDependency.smithyClient(runtimeConfig)

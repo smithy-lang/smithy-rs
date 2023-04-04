@@ -105,7 +105,6 @@ class ServerProtocolTestGenerator(
         "Tower" to RuntimeType.Tower,
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
         "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
-        "Router" to ServerRuntimeType.router(codegenContext.runtimeConfig),
     )
 
     sealed class TestCase {

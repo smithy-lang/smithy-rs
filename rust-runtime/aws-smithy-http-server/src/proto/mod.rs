@@ -9,6 +9,7 @@ pub mod aws_json_11;
 pub mod rest;
 pub mod rest_json_1;
 pub mod rest_xml;
+pub mod rpc_v2;
 
 #[cfg(test)]
 pub mod test_helpers {
