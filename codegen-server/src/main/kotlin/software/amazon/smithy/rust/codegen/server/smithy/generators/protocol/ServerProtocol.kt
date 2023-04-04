@@ -133,7 +133,6 @@ class ServerAwsJsonProtocol(
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
         jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName, additionalParserCustomizations)
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName)
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
