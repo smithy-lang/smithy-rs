@@ -150,6 +150,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "ResponseRejection" to protocol.responseRejection(runtimeConfig),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
+        "Tracing" to RuntimeType.Tracing,
     )
 
     fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
@@ -266,17 +267,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // Implement `into_response` for output types.
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
 
+        // All `ResponseRejection`s are errors; the service owners are to blame. So we centrally log them here
+        // to let them know.
         rustTemplate(
             """
             impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
                 fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                     match #{serialize_response}(self) {
                         Ok(response) => response,
-                        Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        Err(e) => {
+                            #{Tracing}::error!(error = %e, "failed to serialize response");
+                            #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        }
                     }
                 }
             }
-            """.trimIndent(),
+            """,
             *codegenScope,
             "O" to outputSymbol,
             "Marker" to protocol.markerStruct(),
@@ -293,7 +299,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                                 response
                             },
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            Err(e) => {
+                                #{Tracing}::error!(error = %e, "failed to serialize response");
+                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            }
                         }
                     }
                 }
@@ -454,17 +463,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        // Fallback to the default code of `@http`, 200.
+        // Fallback to the default code of `@http`, which should be 200.
         val httpTraitDefaultStatusCode = HttpTrait
             .builder().method("GET").uri(UriPattern.parse("/")) /* Required to build */
             .build()
             .code
+        check(httpTraitDefaultStatusCode == 200)
         val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
                 serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
             }
-            // no binding, use http's
+            // No binding, use `@http`.
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
@@ -570,46 +580,42 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun serverRenderHttpResponseCode(
-        defaultCode: Int,
-    ): Writable {
-        return writable {
-            rustTemplate(
-                """
-                let status = $defaultCode;
-                let http_status: u16 = status.try_into()
-                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
-                builder = builder.status(http_status);
-                """.trimIndent(),
-                *codegenScope,
-            )
+    private fun serverRenderHttpResponseCode(defaultCode: Int) = writable {
+        check(defaultCode in 100..999) {
+            """
+           Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
+           "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
+           """.replace("\n", "").trimIndent()
         }
+        rustTemplate(
+            """
+            let http_status: u16 = $defaultCode;
+            builder = builder.status(http_status);
+            """,
+            *codegenScope,
+        )
     }
 
     private fun serverRenderResponseCodeBinding(
         binding: HttpBindingDescriptor,
+        /** This is the status code to fall back on if the member shape bound with `@httpResponseCode` is not
+         * `@required` and the user did not provide a value for it at runtime. **/
         fallbackStatusCode: Int,
     ): Writable {
         check(binding.location == HttpLocation.RESPONSE_CODE)
 
         return writable {
             val memberName = symbolProvider.toMemberName(binding.member)
-            rust("let status = output.$memberName")
-            if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                rustTemplate(
-                    """
-                    .unwrap_or($fallbackStatusCode)
-                    """.trimIndent(),
-                    *codegenScope,
-                )
+            withBlock("let status = output.$memberName", ";") {
+                if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                    rust(".unwrap_or($fallbackStatusCode)")
+                }
             }
             rustTemplate(
                 """
-                ;
-                let http_status: u16 = status.try_into()
-                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
+                let http_status: u16 = status.try_into().map_err(#{ResponseRejection}::InvalidHttpStatusCode)?;
                 builder = builder.status(http_status);
-                """.trimIndent(),
+                """,
                 *codegenScope,
             )
         }
