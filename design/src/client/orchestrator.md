@@ -17,10 +17,10 @@ This process is also referred to as the "request/response lifecycle." In this ex
 In addition to the above steps, the orchestrator must also handle:
 
 - **Endpoint resolution:** figuring out which URL to send a request to.
-- **Authentication, identity resolution, and request signing:** Figuring out is sending the request, their credentials, and how should we insert the credentials into a request.
+- **Authentication, identity resolution, and request signing:** Figuring out who is sending the request, their credentials, and how we should insert the credentials into a request.
 - **Interceptors**: Running lifecycle hooks at each point in the request/response lifecycle.
 - **Runtime Plugins:** Resolving configuration from config builders.
-- **Retries:** Categorizing response from services and deciding whether to retry and how long to wait before doing so.
+- **Retries:** Categorizing responses from services and deciding whether to retry and how long to wait before doing so.
 - **Trace Probes:** A [sink] for events that occur during the request/response lifecycle.
 
 ## How is an orchestrator configured?
@@ -33,7 +33,7 @@ While the structure of an orchestrator is fixed, the actions it takes during its
     - **What can they do?**
         - They can set configuration to be used by the orchestrator or in interceptors.
         - They can set interceptors.
-    - **Are they user-definable?** No. At present, only smithy maintainers may define these.
+    - **Are they user-definable?** No. At present, only smithy-rs maintainers may define these.
 - **Interceptors**:
     - **When can these be set?** Any time before calling `orchestrate`.
     - **When are they called by the orchestrator?** At each step in the request-response lifecycle.
