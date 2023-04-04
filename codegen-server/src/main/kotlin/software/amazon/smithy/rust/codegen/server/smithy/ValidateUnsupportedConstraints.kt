@@ -158,8 +158,6 @@ data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
     Throwable(message = messages.joinToString("\n") { it.message })
 
-private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
-
 /**
  * Validate that all constrained operations have the shape [validationExceptionShapeId] shape attached to their errors.
  */
@@ -280,7 +278,7 @@ fun validateUnsupportedConstraints(
         .toSet()
 
     val messages =
-        unsupportedLengthTraitOnStreamingBlobShapeSet.map {
+        (unsupportedLengthTraitOnStreamingBlobShapeSet.map {
             it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
         } +
             unsupportedConstraintShapeReachableViaAnEventStreamSet.map {
@@ -289,7 +287,17 @@ fun validateUnsupportedConstraints(
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             mapShapeReachableFromUniqueItemsListShapeSet.map {
                 it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
-            }
+            }).toMutableList()
+
+    if (messages.isEmpty() && codegenConfig.ignoreUnsupportedConstraints) {
+        messages += LogMessage(
+            Level.SEVERE,
+            """
+            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no 
+            effect. All the constraint traits used in the model are well-supported, please remove this flag.
+            """.trimIndent().replace("\n", " ")
+        )
+    }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }

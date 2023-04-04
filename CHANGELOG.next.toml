@@ -80,3 +80,9 @@ message = "Add `into_segments` method to `AggregatedBytes`, for zero-copy conver
 references = ["smithy-rs#2525"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "parker-timmerman"
+
+[[smithy-rs]]
+message = "Code generation will abort if the `ignoreUnsupportedConstraints` codegen flag has no effect, that is, if all constraint traits used in your model are well-supported. Please remove the flag in such case."
+references = ["smithy-rs#2539"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
