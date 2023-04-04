@@ -8,11 +8,17 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
-    extension::OperationExtensionExt, instrumentation::InstrumentExt, plugin::PluginPipeline,
-    request::request_id::ServerRequestIdProviderLayer, AddExtensionLayer,
+    body::BoxBody,
+    extension::OperationExtensionExt,
+    instrumentation::InstrumentExt,
+    plugin::CheckHealthLayer,
+    plugin::{default_ping_handler, PluginPipeline},
+    request::request_id::ServerRequestIdProviderLayer,
+    AddExtensionLayer,
 };
 use clap::Parser;
 
+use hyper::{Body, Request, Response, StatusCode};
 use plugin::PrintExt;
 use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
@@ -63,6 +69,7 @@ pub async fn main() {
     let app = app
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())))
+        .layer(&CheckHealthLayer::new(default_ping_handler))
         // Add request IDs
         .layer(&ServerRequestIdProviderLayer::new());
 
