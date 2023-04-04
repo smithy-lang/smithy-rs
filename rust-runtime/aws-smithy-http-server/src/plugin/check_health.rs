@@ -3,115 +3,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::future::Ready;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::Context;
-use std::task::Poll;
-
 use futures_util::Future;
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use pin_project_lite::pin_project;
 use tower::Layer;
 use tower::Service;
 
+use crate::body;
 use crate::body::BoxBody;
 
 use super::Either;
 
-pub struct CheckHealthLayer;
+#[derive(Clone)]
+pub struct CheckHealthLayer<H> {
+    ping_handler: H,
+}
 
-impl CheckHealthLayer {
-    pub fn new() -> Self {
-        CheckHealthLayer
+impl<H> CheckHealthLayer<H> {
+    pub fn new(ping_handler: H) -> Self {
+        CheckHealthLayer { ping_handler }
     }
 }
 
-impl<S> Layer<S> for CheckHealthLayer {
-    type Service = CheckHealthService<S>;
+impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
+    type Service = CheckHealthService<H, S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        CheckHealthService { inner }
+        CheckHealthService {
+            inner,
+            layer: self.clone(),
+        }
     }
 }
 
 #[derive(Clone)]
-pub struct CheckHealthService<S> {
+pub struct CheckHealthService<H, S> {
     inner: S,
+    layer: CheckHealthLayer<H>,
 }
 
-pin_project! {
-    pub struct CheckHealthFuture<E, F>{
-        #[pin]
-        inner: Either<PingFuture<E>, F>
-    }
-}
-
-pin_project! {
-    struct PingFuture<E> {
-        #[pin]
-        inner: Ready<Response<BoxBody>>,
-        pd: PhantomData<E>
-    }
-}
-
-impl<E> PingFuture<E> {
-    fn new() -> Self {
-        let response = Response::builder()
-            .status(StatusCode::OK)
-            .body(crate::body::boxed(Body::empty()))
-            .expect("Couldn't construct response");
-
-        Self {
-            inner: std::future::ready(response),
-            pd: PhantomData,
-        }
-    }
-}
-
-impl<E> Future for PingFuture<E> {
-    type Output = Result<Response<BoxBody>, E>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx).map(Ok)
-    }
-}
-
-impl<E, F> CheckHealthFuture<E, F> {
-    fn ping() -> Self {
-        Self {
-            inner: Either::Left {
-                value: PingFuture::new(),
-            },
-        }
-    }
-
-    fn service_call(inner: F) -> Self {
-        Self {
-            inner: Either::Right { value: inner },
-        }
-    }
-}
-
-impl<E, F: Future<Output = Result<Response<BoxBody>, E>>> Future for CheckHealthFuture<E, F> {
-    type Output = F::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx)
-    }
-}
-
-impl<S> Service<Request<Body>> for CheckHealthService<S>
+impl<H, HandlerFuture, S> Service<Request<Body>> for CheckHealthService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
     S::Future: std::marker::Send + 'static,
+    HandlerFuture: Future<Output = Result<Response<BoxBody>, S::Error>>,
+    H: Fn(Request<Body>) -> HandlerFuture,
 {
     type Response = S::Response;
 
     type Error = S::Error;
 
-    type Future = CheckHealthFuture<S::Error, S::Future>;
+    type Future = Either<HandlerFuture, S::Future>;
 
     fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -122,9 +64,23 @@ where
         let mut service = std::mem::replace(&mut self.inner, clone);
 
         if req.uri() == "/ping" {
-            CheckHealthFuture::ping()
+            Either::Left {
+                value: (self.layer.ping_handler)(req),
+            }
         } else {
-            CheckHealthFuture::service_call(service.call(req))
+            Either::Right {
+                value: service.call(req),
+            }
         }
     }
+}
+
+/// A handler that returns `200 OK` with an empty body.
+pub async fn default_ping_handler<E>(_req: Request<Body>) -> Result<Response<BoxBody>, E> {
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .body(body::boxed(Body::empty()))
+        .expect("Couldn't construct response");
+
+    Ok::<_, E>(response)
 }
