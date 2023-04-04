@@ -14,6 +14,9 @@
   - [Endpoint Resolution](smithy/endpoint.md)
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
+- [Client](./client/overview.md)
+  - [What is the 'orchestrator' and why does it exist?](./client/orchestrator.md)
+
 - [Server](./server/overview.md)
   - [Middleware](./server/middleware.md)
   - [Instrumentation](./server/instrumentation.md)
