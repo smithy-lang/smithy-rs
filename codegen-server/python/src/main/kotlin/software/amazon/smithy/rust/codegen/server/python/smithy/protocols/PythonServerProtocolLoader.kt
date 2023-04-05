@@ -13,6 +13,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
@@ -53,11 +55,24 @@ class PythonServerAfterDeserializedMemberJsonParserCustomization(private val run
  * Customization class used to force casting a non primitive type into one overriden by a new symbol provider,
  * by explicitly calling `into()` on it.
  */
-class PythonServerAfterDeserializedMemberHttpBoundCustomization() :
+class PythonServerAfterDeserializedMemberServerHttpBoundCustomization() :
     ServerHttpBoundProtocolCustomization() {
     override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
         is ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember -> writable {
             rust(".into()")
+        }
+        else -> emptySection
+    }
+}
+
+/**
+ * Customization class used to force casting a `Vec<DateTime>` into one a Python `Vec<DateTime>`
+ */
+class PythonServerAfterDeserializedMemberHttpBindingCustomization(private val runtimeConfig: RuntimeConfig) :
+    HttpBindingCustomization() {
+    override fun section(section: HttpBindingSection): Writable = when (section) {
+        is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders -> writable {
+            rust(".into_iter().map(#T::from).collect()", PythonServerRuntimeType.dateTime(runtimeConfig).toSymbol())
         }
         else -> emptySection
     }
@@ -74,8 +89,11 @@ class PythonServerProtocolLoader(
                     additionalParserCustomizations = listOf(
                         PythonServerAfterDeserializedMemberJsonParserCustomization(runtimeConfig),
                     ),
-                    additionalHttpBoundCustomizations = listOf(
-                        PythonServerAfterDeserializedMemberHttpBoundCustomization(),
+                    additionalServerHttpBoundProtocolCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                    ),
+                    additionalHttpBindingCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),
                     ),
                 ),
                 AwsJson1_0Trait.ID to ServerAwsJsonFactory(
@@ -83,8 +101,11 @@ class PythonServerProtocolLoader(
                     additionalParserCustomizations = listOf(
                         PythonServerAfterDeserializedMemberJsonParserCustomization(runtimeConfig),
                     ),
-                    additionalHttpBoundCustomizations = listOf(
-                        PythonServerAfterDeserializedMemberHttpBoundCustomization(),
+                    additionalServerHttpBoundProtocolCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                    ),
+                    additionalHttpBindingCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),
                     ),
                 ),
                 AwsJson1_1Trait.ID to ServerAwsJsonFactory(
@@ -92,8 +113,11 @@ class PythonServerProtocolLoader(
                     additionalParserCustomizations = listOf(
                         PythonServerAfterDeserializedMemberJsonParserCustomization(runtimeConfig),
                     ),
-                    additionalHttpBoundCustomizations = listOf(
-                        PythonServerAfterDeserializedMemberHttpBoundCustomization(),
+                    additionalServerHttpBoundProtocolCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                    ),
+                    additionalHttpBindingCustomizations = listOf(
+                        PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),
                     ),
                 ),
             )

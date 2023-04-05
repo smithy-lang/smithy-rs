@@ -46,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -100,10 +101,11 @@ class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
     protocol: ServerProtocol,
     customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
+    additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations),
+    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
 ) {
     // Define suffixes for operation input / output / error wrappers
     companion object {
@@ -120,6 +122,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
     private val customizations: List<ServerHttpBoundProtocolCustomization>,
+    private val additionalHttpBindingCustomizations: List<HttpBindingCustomization>,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
@@ -626,7 +629,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
         val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust(
@@ -1065,7 +1068,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
