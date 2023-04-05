@@ -26,8 +26,9 @@ pub async fn invoke(
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
     let mut cfg = ConfigBag::base();
     let cfg = &mut cfg;
-    let mut interceptors = Interceptors::new();
-    let interceptors = &mut interceptors;
+
+    let interceptors = Interceptors::new();
+    cfg.put(interceptors.clone());
 
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration
@@ -66,7 +67,7 @@ pub async fn invoke(
     let mut context = context;
     let handling_phase = loop {
         let dispatch_phase = Phase::dispatch(context);
-        context = make_an_attempt(dispatch_phase, cfg, interceptors)
+        context = make_an_attempt(dispatch_phase, cfg, &interceptors)
             .await?
             .include(|ctx| interceptors.read_after_attempt(ctx, cfg))?
             .include_mut(|ctx| interceptors.modify_before_attempt_completion(ctx, cfg))?
@@ -100,7 +101,7 @@ pub async fn invoke(
 async fn make_an_attempt(
     dispatch_phase: Phase,
     cfg: &mut ConfigBag,
-    interceptors: &mut Interceptors<HttpRequest, HttpResponse>,
+    interceptors: &Interceptors<HttpRequest, HttpResponse>,
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
     let dispatch_phase = dispatch_phase
         .include(|ctx| interceptors.read_before_attempt(ctx, cfg))?
