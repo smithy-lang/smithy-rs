@@ -583,9 +583,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderHttpResponseCode(defaultCode: Int) = writable {
         check(defaultCode in 100..999) {
             """
-           Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
-           "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
-           """.replace("\n", "").trimIndent()
+            Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
+            "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
+            """.replace("\n", "").trimIndent()
         }
         rustTemplate(
             """
@@ -967,7 +967,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 val timestampFormatType = RuntimeType.parseTimestampFormat(CodegenTarget.SERVER, runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
-                                    let v = #{DateTime}::from_str(&v, #{format})?;
+                                    let v = #{DateTime}::from_str(&v, #{format})?
                                     """.trimIndent(),
                                     *codegenScope,
                                     "format" to timestampFormatType,
@@ -975,6 +975,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 for (customization in customizations) {
                                     customization.section(ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember(it.member))(this)
                                 }
+                                rust(";")
                             }
                             else -> { // Number or boolean.
                                 rust(
@@ -1126,7 +1127,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?;
+                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
@@ -1134,7 +1135,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         } else {
                             rustTemplate(
                                 """
-                                let value = #{DateTime}::from_str(value, #{format})?;
+                                let value = #{DateTime}::from_str(value, #{format})?
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
@@ -1143,6 +1144,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         for (customization in customizations) {
                             customization.section(ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember(binding.member))(this)
                         }
+                        rust(";")
                     }
                     else -> {
                         check(target is NumberShape || target is BooleanShape)
