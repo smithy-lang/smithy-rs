@@ -80,3 +80,15 @@ message = "Add `into_segments` method to `AggregatedBytes`, for zero-copy conver
 references = ["smithy-rs#2525"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "parker-timmerman"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
