@@ -45,7 +45,7 @@ class PythonServerAfterDeserializedMemberJsonParserCustomization(private val run
         is JsonParserSection.AfterDocumentDeserializedMember -> writable {
             rust(".map(#T::from)", PythonServerRuntimeType.document(runtimeConfig).toSymbol())
         }
-        else -> writable {}
+        else -> emptySection
     }
 }
 
@@ -59,6 +59,7 @@ class PythonServerAfterDeserializedMemberHttpBoundCustomization() :
         is ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember -> writable {
             rust(".into()")
         }
+        else -> emptySection
     }
 }
 
