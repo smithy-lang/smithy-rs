@@ -294,7 +294,7 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val memberName = symbolProvider.toMemberName(member)
-        val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
+        val parser = protocol.structuredDataParser().payloadParser(member)
         rustTemplate(
             """
             #{parser}(&message.payload()[..])
@@ -341,7 +341,7 @@ class EventStreamUnmarshallerGenerator(
                     when (codegenTarget) {
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
-                            val parser = protocol.structuredDataParser(operationShape).errorParser(target)
+                            val parser = protocol.structuredDataParser().errorParser(target)
                             if (parser != null) {
                                 rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                                 rustTemplate(
@@ -363,7 +363,7 @@ class EventStreamUnmarshallerGenerator(
 
                         CodegenTarget.SERVER -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
-                            val parser = protocol.structuredDataParser(operationShape).errorParser(target)
+                            val parser = protocol.structuredDataParser().errorParser(target)
                             val mut = if (parser != null) { " mut" } else { "" }
                             rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                             if (parser != null) {

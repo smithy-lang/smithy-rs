@@ -118,7 +118,7 @@ open class ServerCodegenVisitor(
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
-        val (protocol, generator) =
+        val (protocolShape, protocolGeneratorFactory) =
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
@@ -126,7 +126,7 @@ open class ServerCodegenVisitor(
                 ),
             )
                 .protocolFor(context.model, service)
-        protocolGeneratorFactory = generator
+        this.protocolGeneratorFactory = protocolGeneratorFactory
 
         model = codegenDecorator.transformModel(service, baseModel)
 
@@ -145,7 +145,7 @@ open class ServerCodegenVisitor(
             serverSymbolProviders.symbolProvider,
             null,
             service,
-            protocol,
+            protocolShape,
             settings,
             serverSymbolProviders.unconstrainedShapeSymbolProvider,
             serverSymbolProviders.constrainedShapeSymbolProvider,
@@ -169,7 +169,7 @@ open class ServerCodegenVisitor(
             settings.codegenConfig,
             codegenContext.expectModuleDocProvider(),
         )
-        protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+        protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     /**
@@ -315,7 +315,12 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
-            val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+            val serverBuilderGenerator = ServerBuilderGenerator(
+                codegenContext,
+                shape,
+                validationExceptionConversionGenerator,
+                protocolGenerator.protocol,
+            )
             serverBuilderGenerator.render(rustCrate, writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
@@ -336,7 +341,12 @@ open class ServerCodegenVisitor(
 
         if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             val serverBuilderGeneratorWithoutPublicConstrainedTypes =
-                ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator)
+                ServerBuilderGeneratorWithoutPublicConstrainedTypes(
+                    codegenContext,
+                    shape,
+                    validationExceptionConversionGenerator,
+                    protocolGenerator.protocol,
+                )
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(rustCrate, writer)
 
             writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {

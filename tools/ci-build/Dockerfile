@@ -138,6 +138,10 @@ ARG cargo_wasi_version=0.1.27
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-wasi --locked --version ${cargo_wasi_version}
 
+FROM install_rust AS cargo_semver_checks
+ARG cargo_semver_checks_version=0.19.0
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 #
 # Final image
 #
@@ -146,6 +150,7 @@ ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
     yum -y install \
+        bc \
         ca-certificates \
         gcc \
         git \
@@ -173,6 +178,7 @@ COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bi
 COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
 COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
+COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \

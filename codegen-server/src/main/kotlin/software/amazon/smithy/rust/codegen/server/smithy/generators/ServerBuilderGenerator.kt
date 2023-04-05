@@ -46,8 +46,8 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
@@ -92,6 +92,7 @@ class ServerBuilderGenerator(
     val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
+    private val protocol: ServerProtocol,
 ) {
     companion object {
         /**
@@ -148,7 +149,7 @@ class ServerBuilderGenerator(
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
+        "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
@@ -222,7 +223,8 @@ class ServerBuilderGenerator(
             """
             #{Converter:W}
             """,
-            "Converter" to customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(),
+            "Converter" to
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
         )
     }
 

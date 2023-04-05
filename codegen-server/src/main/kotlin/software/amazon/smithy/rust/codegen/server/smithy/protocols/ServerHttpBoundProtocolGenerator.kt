@@ -68,7 +68,6 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
@@ -131,11 +130,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "Regex" to RuntimeType.Regex,
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-        "RuntimeError" to ServerRuntimeType.runtimeError(runtimeConfig),
-        "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
-        "ResponseRejection" to ServerRuntimeType.responseRejection(runtimeConfig),
+        "RuntimeError" to protocol.runtimeError(runtimeConfig),
+        "RequestRejection" to protocol.requestRejection(runtimeConfig),
+        "ResponseRejection" to protocol.responseRejection(runtimeConfig),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
         "http" to RuntimeType.Http,
+        "Tracing" to RuntimeType.Tracing,
     )
 
     fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
@@ -159,12 +159,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
+                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
                         return Err(#{RuntimeError}::NotAcceptable)
                     }
                     """,
@@ -253,17 +252,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // Implement `into_response` for output types.
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
 
+        // All `ResponseRejection`s are errors; the service owners are to blame. So we centrally log them here
+        // to let them know.
         rustTemplate(
             """
             impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
                 fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                     match #{serialize_response}(self) {
                         Ok(response) => response,
-                        Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        Err(e) => {
+                            #{Tracing}::error!(error = %e, "failed to serialize response");
+                            #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                        }
                     }
                 }
             }
-            """.trimIndent(),
+            """,
             *codegenScope,
             "O" to outputSymbol,
             "Marker" to protocol.markerStruct(),
@@ -280,7 +284,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                                 response
                             },
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            Err(e) => {
+                                #{Tracing}::error!(error = %e, "failed to serialize response");
+                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            }
                         }
                     }
                 }
@@ -383,7 +390,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         errorSymbol: Symbol,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
+        val structuredDataSerializer = protocol.structuredDataSerializer()
         withBlock("match error {", "}") {
             val errors = operationShape.operationErrors(model)
             errors.forEach {
@@ -441,17 +448,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        // Fallback to the default code of `@http`, 200.
+        // Fallback to the default code of `@http`, which should be 200.
         val httpTraitDefaultStatusCode = HttpTrait
             .builder().method("GET").uri(UriPattern.parse("/")) /* Required to build */
             .build()
             .code
+        check(httpTraitDefaultStatusCode == 200)
         val httpTraitStatusCode = operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
                 serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
             }
-            // no binding, use http's
+            // No binding, use `@http`.
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
@@ -557,46 +565,42 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun serverRenderHttpResponseCode(
-        defaultCode: Int,
-    ): Writable {
-        return writable {
-            rustTemplate(
-                """
-                let status = $defaultCode;
-                let http_status: u16 = status.try_into()
-                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
-                builder = builder.status(http_status);
-                """.trimIndent(),
-                *codegenScope,
-            )
+    private fun serverRenderHttpResponseCode(defaultCode: Int) = writable {
+        check(defaultCode in 100..999) {
+            """
+           Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
+           "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
+           """.replace("\n", "").trimIndent()
         }
+        rustTemplate(
+            """
+            let http_status: u16 = $defaultCode;
+            builder = builder.status(http_status);
+            """,
+            *codegenScope,
+        )
     }
 
     private fun serverRenderResponseCodeBinding(
         binding: HttpBindingDescriptor,
+        /** This is the status code to fall back on if the member shape bound with `@httpResponseCode` is not
+         * `@required` and the user did not provide a value for it at runtime. **/
         fallbackStatusCode: Int,
     ): Writable {
         check(binding.location == HttpLocation.RESPONSE_CODE)
 
         return writable {
             val memberName = symbolProvider.toMemberName(binding.member)
-            rust("let status = output.$memberName")
-            if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                rustTemplate(
-                    """
-                    .unwrap_or($fallbackStatusCode)
-                    """.trimIndent(),
-                    *codegenScope,
-                )
+            withBlock("let status = output.$memberName", ";") {
+                if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                    rust(".unwrap_or($fallbackStatusCode)")
+                }
             }
             rustTemplate(
                 """
-                ;
-                let http_status: u16 = status.try_into()
-                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
+                let http_status: u16 = status.try_into().map_err(#{ResponseRejection}::InvalidHttpStatusCode)?;
                 builder = builder.status(http_status);
-                """.trimIndent(),
+                """,
                 *codegenScope,
             )
         }
@@ -608,7 +612,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         bindings: List<HttpBindingDescriptor>,
     ) {
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
-        val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust(
             "let mut input = #T::default();",
@@ -1126,17 +1130,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         check(target is NumberShape || target is BooleanShape)
                         rustTemplate(
                             """
-                            let value = std::str::FromStr::from_str(value)?;
+                            let value = <_ as #{PrimitiveParse}>::parse_smithy_primitive(value)?;
                             """,
-                            *codegenScope,
+                            "PrimitiveParse" to RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                         )
                     }
                 }
-                rust(
-                    """
-                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """,
-                )
+                rust("Ok(${symbolProvider.wrapOptional(binding.member, "value")})")
             }
         }
     }
@@ -1149,7 +1149,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         check(binding.location == HttpLocation.PAYLOAD)
 
         if (model.expectShape(binding.member.target) is StringShape) {
-            return ServerRuntimeType.requestRejection(runtimeConfig).toSymbol()
+            return protocol.requestRejection(runtimeConfig).toSymbol()
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {

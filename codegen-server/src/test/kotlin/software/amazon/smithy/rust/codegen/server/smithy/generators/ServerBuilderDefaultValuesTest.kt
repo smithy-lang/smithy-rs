@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
@@ -179,7 +180,12 @@ class ServerBuilderDefaultValuesTest {
                 codegenConfig = ServerCodegenConfig(publicConstrainedTypes = false),
             ),
         )
-        val builderGenerator = ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, struct, SmithyValidationExceptionConversionGenerator(codegenContext))
+        val builderGenerator = ServerBuilderGeneratorWithoutPublicConstrainedTypes(
+            codegenContext,
+            struct,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+            ServerRestJsonProtocol(codegenContext),
+        )
 
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
@@ -197,7 +203,12 @@ class ServerBuilderDefaultValuesTest {
     private fun writeServerBuilderGenerator(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val codegenContext = serverTestCodegenContext(model)
-        val builderGenerator = ServerBuilderGenerator(codegenContext, struct, SmithyValidationExceptionConversionGenerator(codegenContext))
+        val builderGenerator = ServerBuilderGenerator(
+            codegenContext,
+            struct,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+            ServerRestJsonProtocol(codegenContext),
+        )
 
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
