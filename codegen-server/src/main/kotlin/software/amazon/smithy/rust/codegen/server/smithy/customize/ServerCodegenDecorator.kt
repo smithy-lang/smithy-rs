@@ -53,10 +53,8 @@ class CombinedServerCodegenDecorator(private val decorators: List<ServerCodegenD
             decorator.protocols(serviceId, protocolMap)
         }
 
-    override fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator {
-        // We use `firstNotNullOf` instead of `firstNotNullOfOrNull` because the [SmithyValidationExceptionDecorator]
-        // is registered.
-        return orderedDecorators.firstNotNullOf { it.validationExceptionConversion(codegenContext) }
+    override fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator = orderedDecorators.firstNotNullOf {
+        it.validationExceptionConversion(codegenContext)
     }
 
     override fun postprocessValidationExceptionNotAttachedErrorMessage(validationResult: ValidationResult): ValidationResult =

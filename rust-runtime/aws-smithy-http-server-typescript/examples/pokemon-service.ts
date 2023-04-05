@@ -71,13 +71,16 @@ class HandlerImpl implements TsHandlers {
 const app = new App(new HandlerImpl());
 // Start the app 🤘
 const numCPUs = cpus().length / 2;
-const socket = new TsSocket("127.0.0.1", 9090);
+const address ="127.0.0.1";
+const port = 9090;
+const socket = new TsSocket(address, port);
 app.start(socket);
 
 // TODO: This part should be abstracted out and done directly in Rust.
 // We could take an optional number of workers and the socket as input
 // of the App.start() method.
 if (cluster.isPrimary) {
+  console.log(`Listening on ${address}:${port}`);
     // Fork workers.
     for (let i = 0; i < numCPUs; i++) {
         cluster.fork();

@@ -114,7 +114,6 @@ class TsServerCodegenVisitor(
         codegenContext = codegenContext.copy(
             moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
                 codegenContext,
-                // TODO make me TS
                 TsServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
             ),
         )

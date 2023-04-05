@@ -42,7 +42,6 @@ class TsApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyTs" to TsServerCargoDependency.smithyHttpServerTs(runtimeConfig).toType(),
             "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "napi" to TsServerCargoDependency.Napi.toType(),
             "napi_derive" to TsServerCargoDependency.NapiDerive.toType(),
@@ -158,9 +157,8 @@ class TsApplicationGenerator(
         ) {
             rustTemplate(
                 """
-                // #{SmithyTs}::setup_tracing();
                 let plugins = #{SmithyServer}::plugin::PluginPipeline::new();
-                let builder = crate::service::PokemonService::builder_with_plugins(plugins);
+                let builder = crate::service::$serviceName::builder_with_plugins(plugins);
                 """,
                 *codegenScope,
             )
@@ -170,10 +168,9 @@ class TsApplicationGenerator(
             }
             rustTemplate(
                 """
-                let app = builder.build().expect("failed to build instance of PokemonService")
+                let app = builder.build().expect("failed to build instance of $serviceName")
                     .layer(&#{SmithyServer}::AddExtensionLayer::new(self.handlers.clone()));
                 let service = #{tower}::util::BoxCloneService::new(app);
-                // #{SmithyTs}::server::start_hyper_worker(socket, service).expect("failed to start the hyper server");
                 start_hyper_worker(socket, service).expect("failed to start the hyper server");
                 Ok(())
                 """,
@@ -206,13 +203,36 @@ class TsApplicationGenerator(
                 *codegenScope,
             ) {
                 writer.rustTemplate(
-                    // XXX How do I make the new_socket import here?
-                    // In the previous file, it was use aws_smithy_http_server::socket::new_socket;
                     """
-                    Ok(Self(
-                        aws_smithy_http_server::socket::new_socket(address, port, backlog)
-                        .map_err(|e| #{napi}::Error::from_reason(e.to_string()))?,
-                    ))
+                    let socket = Self::new_socket(address, port, backlog)
+                        .map_err(|e| #{napi}::Error::from_reason(e.to_string()))?;
+                    Ok(Self(socket))
+                    """,
+                    *codegenScope,
+                )
+            }
+            writer.rustBlockTemplate(
+                """pub fn new_socket(address: String, port: i32, backlog: Option<i32>) -> Result<#{socket2}::Socket, Box<dyn std::error::Error>> """.trimIndent(),
+                *codegenScope,
+            ) {
+                writer.rustTemplate(
+                    """
+                    let address: std::net::SocketAddr = format!("{}:{}", address, port).parse()?;
+                    let domain = if address.is_ipv6() {
+                        #{socket2}::Domain::IPV6
+                    } else {
+                        #{socket2}::Domain::IPV4
+                    };
+                    let socket = #{socket2}::Socket::new(domain, #{socket2}::Type::STREAM, Some(#{socket2}::Protocol::TCP))?;
+                    // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
+                    // This indicates that further calls to `bind` may allow reuse of local
+                    // addresses. For IPv4 sockets this means that a socket may bind even when
+                    // there's a socket already listening on this port.
+                    socket.set_reuse_port(true)?;
+                    socket.set_reuse_address(true)?;
+                    socket.bind(&address.into())?;
+                    socket.listen(backlog.unwrap_or(1024))?;
+                    Ok(socket)
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -226,8 +246,7 @@ class TsApplicationGenerator(
             )
             Attribute("napi").render(writer)
             writer.rustBlockTemplate(
-                // XXX Can I change the signature to #{napi}::Result<Self>?
-                """pub fn try_clone(&self) -> #{napi}::Result<TsSocket>""".trimIndent(),
+                """pub fn try_clone(&self) -> #{napi}::Result<Self>""".trimIndent(),
                 *codegenScope,
             ) {
                 writer.rustTemplate(
@@ -262,19 +281,17 @@ class TsApplicationGenerator(
 
     private fun renderServer(writer: RustWriter) {
         writer.rustBlockTemplate(
-            // / XXX Check here the aws_smithy_http_server (same issue with new_socket above)
             """pub fn start_hyper_worker(
             socket: &TsSocket,
             app: #{tower}::util::BoxCloneService<
-                #{http}::Request<aws_smithy_http_server::body::Body>,
-                #{http}::Response<aws_smithy_http_server::body::BoxBody>,
+                #{http}::Request<#{SmithyServer}::body::Body>,
+                #{http}::Response<#{SmithyServer}::body::BoxBody>,
                 std::convert::Infallible,
             >,
                 ) -> #{napi}::Result<()>
             """.trimIndent(),
             *codegenScope,
         ) {
-            // XXX Check here IntoMakeService
             writer.rustTemplate(
                 """
                 let server = #{hyper}::Server::from_tcp(
@@ -284,10 +301,8 @@ class TsApplicationGenerator(
                             .expect("Unable to convert socket2::Socket into std::net::TcpListener"),
                 )
                 .expect("Unable to create hyper server from shared socket")
-                .serve(aws_smithy_http_server::routing::IntoMakeService::new(app));
+                .serve(#{SmithyServer}::routing::IntoMakeService::new(app));
 
-                // TODO(https://github.com/awslabs/smithy-rs/issues/2317) Find a better, non-blocking way
-                // to spawn the server.
                 let handle = #{tokio}::runtime::Handle::current();
                 handle.spawn(async move {
                     // Process each socket concurrently.

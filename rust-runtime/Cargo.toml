@@ -11,7 +11,6 @@ members = [
     "aws-smithy-http-auth",
     "aws-smithy-http-server",
     "aws-smithy-http-server-python",
-    "aws-smithy-http-server-typescript",
     "aws-smithy-http-tower",
     "aws-smithy-json",
     "aws-smithy-protocol-test",

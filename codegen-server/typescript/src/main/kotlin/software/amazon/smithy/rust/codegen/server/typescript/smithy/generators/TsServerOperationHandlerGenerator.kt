@@ -13,8 +13,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.typescript.smithy.TsServerCargoDependency
 
 /**
- * The Rust code responsible to run the Typescript business logic is implemented in this class,
- * which inherits from [ServerOperationHandlerGenerator].
+ * The Rust code responsible to run the Typescript business logic is implemented in this class,.
  *
  * We codegenerate all operations handlers (steps usually left to the developer in a pure
  * Rust application), which are built into a `Router` by [TsServerApplicationGenerator].
