@@ -16,7 +16,7 @@ As described in [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/s
 - `TraceProbes`: Configures locations to which SDK metrics are published.
 - `EndpointProviders`: Configures which hostname an SDK will call when making a request.
 - `HTTPClients`: Configures how remote services are called.
-- `IdentityProviders: Configures how users identify themselves to remote services.
+- `IdentityProviders`: Configures how users identify themselves to remote services.
 - `HTTPAuthSchemes` & `AuthSchemeResolver`s: Configures how users authenticate themselves to remote services.
 - `Checksum Algorithms`: Configures how an SDK calculates request and response checksums.
 - `Interceptors`: Configures specific stages of the request execution pipeline.
