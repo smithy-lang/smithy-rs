@@ -3,65 +3,59 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! This module hosts _exactly_ the same as [`crate::proto::rest_json_1::rejection`], expect that
+//! This module hosts _exactly_ the same as [`crate::proto::rest_json_1::rejection`], except that
 //! [`crate::proto::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
 //! [`RequestRejection::XmlDeserialize`].
 
+use crate::rejection::MissingContentTypeReason;
 use std::num::TryFromIntError;
+use thiserror::Error;
 
-use strum_macros::Display;
-
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ResponseRejection {
+    #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
-    Build(crate::Error),
-    Serialization(crate::Error),
-    Http(crate::Error),
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_http::operation::error::BuildError),
+    #[error("error serializing XML-encoded body: {0}")]
+    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    #[error("error building HTTP response: {0}")]
+    HttpBuild(#[from] http::Error),
 }
 
-impl std::error::Error for ResponseRejection {}
-
-convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
-convert_to_response_rejection!(http::Error, Http);
-
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum RequestRejection {
-    HttpBody(crate::Error),
+    #[error("error converting non-streaming body to bytes: {0}")]
+    BufferHttpBodyBytes(crate::Error),
 
-    MissingContentType(MissingContentTypeReason),
+    #[error("expected `Content-Type` header not found: {0}")]
+    MissingContentType(#[from] MissingContentTypeReason),
 
     /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
     /// input it should represent.
-    XmlDeserialize(crate::Error),
+    #[error("error deserializing request HTTP body as XML: {0}")]
+    XmlDeserialize(#[from] aws_smithy_xml::decode::XmlDecodeError),
 
-    HeaderParse(crate::Error),
+    #[error("error binding request HTTP headers: {0}")]
+    HeaderParse(#[from] aws_smithy_http::header::ParseError),
 
+    #[error("request URI does not match pattern because of literal suffix after greedy label was not found")]
     UriPatternGreedyLabelPostfixNotFound,
+    #[error("request URI does not match `@http` URI pattern: {0}")]
     UriPatternMismatch(crate::Error),
 
-    InvalidUtf8(crate::Error),
+    #[error("request URI cannot be percent decoded into valid UTF-8")]
+    PercentEncodedUriNotValidUtf8(#[from] core::str::Utf8Error),
 
-    DateTimeParse(crate::Error),
+    #[error("error parsing timestamp from request URI: {0}")]
+    DateTimeParse(#[from] aws_smithy_types::date_time::DateTimeParseError),
 
-    PrimitiveParse(crate::Error),
+    #[error("error parsing primitive type from request URI: {0}")]
+    PrimitiveParse(#[from] aws_smithy_types::primitive::PrimitiveParseError),
 
+    #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
 }
-
-#[derive(Debug, Display)]
-pub enum MissingContentTypeReason {
-    HeadersTakenByAnotherExtractor,
-    NoContentTypeHeader,
-    ToStrError(http::header::ToStrError),
-    MimeParseError(mime::FromStrError),
-    UnexpectedMimeType {
-        expected_mime: Option<mime::Mime>,
-        found_mime: Option<mime::Mime>,
-    },
-}
-
-impl std::error::Error for RequestRejection {}
 
 impl From<std::convert::Infallible> for RequestRejection {
     fn from(_err: std::convert::Infallible) -> Self {
@@ -69,26 +63,11 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-impl From<MissingContentTypeReason> for RequestRejection {
-    fn from(e: MissingContentTypeReason) -> Self {
-        Self::MissingContentType(e)
-    }
-}
-
-convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeserialize);
-convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
-convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
-convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
-convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
-
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
         Self::UriPatternMismatch(crate::Error::new(err.to_owned()))
     }
 }
 
-convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
-
-convert_to_request_rejection!(hyper::Error, HttpBody);
-
-convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
+convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);
