@@ -257,6 +257,6 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
                 rust(".map(|x| x.into())")
             }
         }
-        else -> writable {}
+        else -> emptySection
     }
 }
