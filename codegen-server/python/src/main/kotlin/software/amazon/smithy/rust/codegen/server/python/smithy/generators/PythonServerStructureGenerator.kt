@@ -58,6 +58,9 @@ class PythonServerStructureGenerator(
         writer.rustTemplate("#{ConstructorSignature:W}", "ConstructorSignature" to renderConstructorSignature())
         super.renderStructure()
         renderPyO3Methods()
+        if (!shape.hasTrait<ErrorTrait>()) {
+            renderPyBoxTraits()
+        }
     }
 
     override fun renderStructureMember(
@@ -96,6 +99,25 @@ class PythonServerStructureGenerator(
             """,
             "BodySignature" to renderStructSignatureMembers(),
             "BodyMembers" to renderStructBodyMembers(),
+        )
+    }
+
+    private fun renderPyBoxTraits() {
+        writer.rustTemplate(
+            """
+            impl<'source> #{pyo3}::FromPyObject<'source> for std::boxed::Box<$name> {
+                fn extract(ob: &'source #{pyo3}::PyAny) -> #{pyo3}::PyResult<Self> {
+                    ob.extract::<$name>().map(Box::new)
+                }
+            }
+
+            impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for std::boxed::Box<$name> {
+                fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject {
+                    (*self).into_py(py)
+                }
+            }
+            """,
+            "pyo3" to pyO3,
         )
     }
 

@@ -54,13 +54,34 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2476)
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+        ),
+        // Fails with
+        // java.lang.IllegalStateException: The two inline modules have the same name but different attributes on them.
         // CodegenTest(
-        //     "aws.protocoltests.json#JsonProtocol",
-        //     "json_rpc11",
+        //     "aws.protocoltests.restjson.validation#RestJsonValidation",
+        //     "rest_json_validation",
+        //     // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
+        //     // See https://github.com/awslabs/smithy-rs/issues/1401.
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
-        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        // Fails because we need to customize the constraint traits to allow converting from Python
+        // wrappers to their inner type.
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
     )
 }
 
