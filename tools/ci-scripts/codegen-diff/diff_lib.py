@@ -20,6 +20,21 @@ target_codegen_server = 'codegen-server-test'
 target_aws_sdk = 'aws:sdk'
 
 
+def running_in_docker_build():
+    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
+
+
+def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
+    if running_in_docker_build():
+        eprint(f"Fetching base revision {revision_sha} from GitHub...")
+        run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {revision_sha}")
+
+    # Generate code for HEAD
+    eprint(f"Creating temporary branch {branch_name} with generated code for {revision_sha}")
+    run(f"git checkout {revision_sha} -B {branch_name}")
+    generate_and_commit_generated_code(revision_sha, targets)
+
+
 def generate_and_commit_generated_code(revision_sha, targets=None):
     targets = targets or [target_codegen_client, target_codegen_server, target_aws_sdk]
     # Clean the build artifacts before continuing
@@ -170,12 +185,14 @@ def run(command, shell=False, check=True):
 
 
 # Returns (status, stdout, stderr) from a shell command
-def get_cmd_output(command, cwd=None, check=True, **kwargs):
+def get_cmd_output(command, cwd=None, check=True, quiet=False, **kwargs):
     if isinstance(command, str):
-        eprint(f"running {command}")
+        if not quiet:
+            eprint(f"running {command}")
         command = shlex.split(command)
     else:
-        eprint(f"running {' '.join(command)}")
+        if not quiet:
+            eprint(f"running {' '.join(command)}")
 
     result = subprocess.run(
         command,
