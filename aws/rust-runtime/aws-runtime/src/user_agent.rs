@@ -4,9 +4,8 @@
  */
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorContext, InterceptorError,
-};
+use aws_smithy_runtime_api::client::interceptors::error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
@@ -14,9 +13,40 @@ use aws_types::os_shim_internal::Env;
 use http::header::{InvalidHeaderValue, USER_AGENT};
 use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
+use std::fmt;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
+
+#[derive(Debug)]
+enum UserAgentInterceptorError {
+    MissingApiMetadata,
+    InvalidHeaderValue(InvalidHeaderValue),
+}
+
+impl std::error::Error for UserAgentInterceptorError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidHeaderValue(source) => Some(source),
+            Self::MissingApiMetadata => None,
+        }
+    }
+}
+
+impl fmt::Display for UserAgentInterceptorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::InvalidHeaderValue(_) => "AwsUserAgent generated an invalid HTTP header value. This is a bug. Please file an issue.",
+            Self::MissingApiMetadata => "The UserAgentInterceptor requires ApiMetadata to be set before the request is made. This is a bug. Please file an issue.",
+        })
+    }
+}
+
+impl From<InvalidHeaderValue> for UserAgentInterceptorError {
+    fn from(err: InvalidHeaderValue) -> Self {
+        UserAgentInterceptorError::InvalidHeaderValue(err)
+    }
+}
 
 /// Generates and attaches the AWS SDK's user agent to a HTTP request
 #[non_exhaustive]
@@ -30,7 +60,9 @@ impl UserAgentInterceptor {
     }
 }
 
-fn header_values(ua: &AwsUserAgent) -> Result<(HeaderValue, HeaderValue), InvalidHeaderValue> {
+fn header_values(
+    ua: &AwsUserAgent,
+) -> Result<(HeaderValue, HeaderValue), UserAgentInterceptorError> {
     // Pay attention to the extremely subtle difference between ua_header and aws_ua_header below...
     Ok((
         HeaderValue::try_from(ua.ua_header())?,
@@ -43,11 +75,10 @@ impl Interceptor<HttpRequest, HttpResponse> for UserAgentInterceptor {
         &self,
         context: &mut InterceptorContext<HttpRequest, HttpResponse>,
         cfg: &mut ConfigBag,
-    ) -> Result<(), InterceptorError> {
-        let api_metadata = cfg.get::<ApiMetadata>()
-            .ok_or_else(|| InterceptorError::modify_before_signing(
-                "The UserAgentInterceptor requires ApiMetadata to be set before the request is made. This is a bug. Please file an issue."
-            ))?;
+    ) -> Result<(), BoxError> {
+        let api_metadata = cfg
+            .get::<ApiMetadata>()
+            .ok_or(UserAgentInterceptorError::MissingApiMetadata)?;
 
         // Allow for overriding the user agent by an earlier interceptor (so, for example,
         // tests can use `AwsUserAgent::for_tests()`) by attempting to grab one out of the
@@ -66,10 +97,7 @@ impl Interceptor<HttpRequest, HttpResponse> for UserAgentInterceptor {
             });
 
         let headers = context.request_mut()?.headers_mut();
-        let (user_agent, x_amz_user_agent) = header_values(&ua).map_err(|err| {
-            InterceptorError::modify_before_signing(err)
-                .context("AwsUserAgent generated an invalid HTTP header value (this is a bug)")
-        })?;
+        let (user_agent, x_amz_user_agent) = header_values(&ua)?;
         headers.append(USER_AGENT, user_agent);
         headers.append(X_AMZ_USER_AGENT, x_amz_user_agent);
         Ok(())
@@ -192,7 +220,7 @@ mod tests {
         let error = format!(
             "{}",
             DisplayErrorContext(
-                interceptor
+                &*interceptor
                     .modify_before_signing(&mut context, &mut config)
                     .expect_err("it should error")
             )

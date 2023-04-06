@@ -17,9 +17,7 @@ use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
 use aws_smithy_runtime_api::client::endpoints::StaticUriEndpointResolver;
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorContext, InterceptorError, Interceptors,
-};
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
 };
@@ -142,7 +140,7 @@ async fn sra_manual_test() {
                     &self,
                     _context: &InterceptorContext<HttpRequest, HttpResponse>,
                     cfg: &mut ConfigBag,
-                ) -> Result<(), InterceptorError> {
+                ) -> Result<(), BoxError> {
                     let mut signing_config =
                         cfg.get::<SigV4OperationSigningConfig>().unwrap().clone();
                     signing_config.signing_options.request_timestamp =
