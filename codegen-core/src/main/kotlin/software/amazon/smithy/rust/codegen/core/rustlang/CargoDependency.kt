@@ -16,6 +16,7 @@ import java.nio.file.Path
 sealed class DependencyScope {
     object Dev : DependencyScope()
     object Compile : DependencyScope()
+    object Build : DependencyScope()
 }
 
 sealed class DependencyLocation
