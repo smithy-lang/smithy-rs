@@ -70,14 +70,21 @@ private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodege
             }
 
             is ServiceRuntimePluginSection.AdditionalConfig -> {
+                section.putConfigValue(this) {
+                    rustTemplate("#{SigningService}::from_static(self.handle.conf.signing_service())", *codegenScope)
+                }
                 rustTemplate(
                     """
-                    cfg.put(#{SigningService}::from_static(self.handle.conf.signing_service()));
                     if let Some(region) = self.handle.conf.region() {
-                        cfg.put(#{SigningRegion}::from(region.clone()));
+                        #{put_signing_region}
                     }
                     """,
                     *codegenScope,
+                    "put_signing_region" to writable {
+                        section.putConfigValue(this) {
+                            rustTemplate("#{SigningRegion}::from(region.clone())", *codegenScope)
+                        }
+                    },
                 )
             }
 

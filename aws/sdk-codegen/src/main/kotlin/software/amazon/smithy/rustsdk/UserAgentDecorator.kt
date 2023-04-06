@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -101,24 +100,16 @@ class UserAgentDecorator : ClientCodegenDecorator {
     private class AddApiMetadataIntoConfigBag(codegenContext: ClientCodegenContext) :
         ServiceRuntimePluginCustomization() {
         private val runtimeConfig = codegenContext.runtimeConfig
-        private val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                rustTemplate(
-                    """
-                    ${section.configBagName}.put(#{API_METADATA}.clone());
-                    ${section.configBagName}.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
-                        .expect("interceptors set")
-                        .register_client_interceptor(std::sync::Arc::new(#{UserAgentInterceptor}::new()) as _);
-                    """,
-                    "API_METADATA" to ClientRustModule.Meta.toType().resolve("API_METADATA"),
-                    "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                    "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                    "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
-                    "UserAgentInterceptor" to awsRuntime.resolve("user_agent::UserAgentInterceptor"),
-                )
+                section.putConfigValue(this) {
+                    rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                }
+                section.registerInterceptor(runtimeConfig, this) {
+                    rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                }
             }
         }
     }
