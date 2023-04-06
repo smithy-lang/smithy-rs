@@ -40,6 +40,7 @@ object CrateSet {
     val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + listOf(
         "aws-smithy-http-server",
         "aws-smithy-http-server-python",
+        "aws-smithy-http-server-typescript",
     )
 
     val ENTIRE_SMITHY_RUNTIME = (AWS_SDK_SMITHY_RUNTIME + SERVER_SMITHY_RUNTIME).toSortedSet()
