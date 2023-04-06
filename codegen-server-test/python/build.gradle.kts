@@ -66,8 +66,7 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
-        // Fails with
-        // java.lang.IllegalStateException: The two inline modules have the same name but different attributes on them.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
         // CodegenTest(
         //     "aws.protocoltests.restjson.validation#RestJsonValidation",
         //     "rest_json_validation",
@@ -75,13 +74,31 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
         //     // See https://github.com/awslabs/smithy-rs/issues/1401.
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
-        // Fails because we need to customize the constraint traits to allow converting from Python
-        // wrappers to their inner type.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
+        // CodegenTest(
+        //     "com.amazonaws.constraints#ConstraintsService",
+        //     "constraints",
+        //     imports = listOf("$commonModels/constraints.smithy"),
+        // ),
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
+        // CodegenTest(
+        //     "com.amazonaws.constraints#ConstraintsService",
+        //     "constraints_without_public_constrained_types",
+        //     imports = listOf("$commonModels/constraints.smithy"),
+        //     extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        // ),
         CodegenTest(
-            "com.amazonaws.constraints#ConstraintsService",
-            "constraints",
-            imports = listOf("$commonModels/constraints.smithy"),
+            "com.amazonaws.constraints#UniqueItemsService",
+            "unique_items",
+            imports = listOf("$commonModels/unique-items.smithy"),
         ),
+        CodegenTest(
+            "naming_obs_structs#NamingObstacleCourseStructs",
+            "naming_test_structs",
+            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+        ),
+        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
+        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
     )
 }
 
