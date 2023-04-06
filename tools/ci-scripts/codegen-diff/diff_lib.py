@@ -15,6 +15,10 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
+target_codegen_client = 'codegen-client-test'
+target_codegen_server = 'codegen-server-test'
+target_aws_sdk = 'aws:sdk'
+
 
 def running_in_docker_build():
     return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
@@ -32,28 +36,28 @@ def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
 
 
 def generate_and_commit_generated_code(revision_sha, targets=None):
-    targets = targets or ['codegen-client-test', 'codegen-server-test', 'aws:sdk']
+    targets = targets or [target_codegen_client, target_codegen_server, target_aws_sdk]
     # Clean the build artifacts before continuing
     get_cmd_output("rm -rf aws/sdk/build")
-    if 'codegen-server-test' in targets:
+    if target_codegen_server in targets:
         get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
     get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
     tasks = ' '.join([f'{t}:assemble' for t in targets])
     get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
-    if 'codegen-server-test' in targets:
+    if target_codegen_server in targets:
         get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
 
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
     get_cmd_output(f"mkdir {OUTPUT_PATH}")
-    if 'aws:sdk' in targets:
+    if target_aws_sdk in targets:
         get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-    for target in ['codegen-client', 'codegen-server']:
+    for target in [target_codegen_client, target_codegen_server]:
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
-            if target == 'codegen-server-test':
+            if target == target_codegen_server:
                 get_cmd_output(
                     f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
                     check=False)

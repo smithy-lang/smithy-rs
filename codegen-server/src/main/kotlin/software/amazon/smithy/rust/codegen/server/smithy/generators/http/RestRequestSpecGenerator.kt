@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.http
+package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -15,10 +15,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 
 /**
  * [RestRequestSpecGenerator] generates a restJson1 or restXml specific `RequestSpec`. Both protocols are routed the same.
- *
- * This class has to live in the `codegen-core` subproject instead of in the `codegen-server` subproject because it is used
- * by the implementations of the `serverRouterRequestSpec` of the [Protocol] interface, which is used by both subprojects
- * (even though only the `codegen-server` subproject calls `serverRouterRequestSpec`).
  */
 class RestRequestSpecGenerator(
     private val httpBindingResolver: HttpBindingResolver,

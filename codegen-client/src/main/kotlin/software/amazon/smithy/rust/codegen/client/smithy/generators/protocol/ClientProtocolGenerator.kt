@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -50,26 +51,28 @@ open class ClientProtocolGenerator(
         // TODO(enableNewSmithyRuntime): Remove the `inputWriter` since `make_operation` generation is going away
         inputWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>,
+        codegenDecorator: ClientCodegenDecorator,
     ) {
+        val operationCustomizations = codegenDecorator.operationCustomizations(codegenContext, operationShape, emptyList())
         val inputShape = operationShape.inputShape(model)
 
         // impl OperationInputShape { ... }
         inputWriter.implBlock(symbolProvider.toSymbol(inputShape)) {
             writeCustomizations(
-                customizations,
-                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
+                operationCustomizations,
+                OperationSection.InputImpl(operationCustomizations, operationShape, inputShape, protocol),
             )
-            makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
+            makeOperationGenerator.generateMakeOperation(this, operationShape, operationCustomizations)
         }
 
-        renderOperationStruct(operationWriter, operationShape, customizations)
+        renderOperationStruct(operationWriter, operationShape, operationCustomizations, codegenDecorator)
     }
 
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>,
+        operationCustomizations: List<OperationCustomization>,
+        codegenDecorator: ClientCodegenDecorator,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -89,17 +92,22 @@ open class ClientProtocolGenerator(
                 rust("Self")
             }
 
-            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
+            writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))
         }
-        traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, operationCustomizations)
 
         if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-            OperationRuntimePluginGenerator(codegenContext).render(operationWriter, operationName)
+            OperationRuntimePluginGenerator(codegenContext).render(
+                operationWriter,
+                operationShape,
+                operationName,
+                codegenDecorator.operationRuntimePluginCustomizations(codegenContext, emptyList()),
+            )
 
             ResponseDeserializerGenerator(codegenContext, protocol)
-                .render(operationWriter, operationShape, customizations)
+                .render(operationWriter, operationShape, operationCustomizations)
             RequestSerializerGenerator(codegenContext, protocol, bodyGenerator)
-                .render(operationWriter, operationShape, customizations)
+                .render(operationWriter, operationShape, operationCustomizations)
         }
     }
 }

@@ -3,31 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use strum_macros::Display;
-
 use crate::rejection::MissingContentTypeReason;
+use thiserror::Error;
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ResponseRejection {
-    InvalidHttpStatusCode,
-    Serialization(crate::Error),
-    Http(crate::Error),
+    #[error("error serializing JSON-encoded body: {0}")]
+    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    #[error("error building HTTP response: {0}")]
+    HttpBuild(#[from] http::Error),
 }
 
-impl std::error::Error for ResponseRejection {}
-
-convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
-convert_to_response_rejection!(http::Error, Http);
-
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum RequestRejection {
-    HttpBody(crate::Error),
-    MissingContentType(MissingContentTypeReason),
-    JsonDeserialize(crate::Error),
+    #[error("error converting non-streaming body to bytes: {0}")]
+    BufferHttpBodyBytes(crate::Error),
+    #[error("expected `Content-Type` header not found: {0}")]
+    MissingContentType(#[from] MissingContentTypeReason),
+    #[error("error deserializing request HTTP body as JSON: {0}")]
+    JsonDeserialize(#[from] aws_smithy_json::deserialize::error::DeserializeError),
+    #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
 }
-
-impl std::error::Error for RequestRejection {}
 
 impl From<std::convert::Infallible> for RequestRejection {
     fn from(_err: std::convert::Infallible) -> Self {
@@ -35,14 +32,5 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-impl From<MissingContentTypeReason> for RequestRejection {
-    fn from(e: MissingContentTypeReason) -> Self {
-        Self::MissingContentType(e)
-    }
-}
-
-convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
-
-convert_to_request_rejection!(hyper::Error, HttpBody);
-
-convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
+convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);
