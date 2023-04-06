@@ -1,11 +1,6 @@
-RFC: Client configuration for the orchestrator
-=======================
+Client configuration for the orchestrator
 
-> Status: RFC
->
-> Applies to: client
-
-This RFC proposes two areas of improvement for configuring an SDK client:
+This document discusses two areas of improvement for configuring an SDK client:
 - Support for operation-level configuration
 - Support for runtime components required by the orchestrator
 
@@ -16,37 +11,24 @@ As described in [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/s
 - `TraceProbes`: Configures locations to which SDK metrics are published.
 - `EndpointProviders`: Configures which hostname an SDK will call when making a request.
 - `HTTPClients`: Configures how remote services are called.
-- `IdentityProviders: Configures how users identify themselves to remote services.
+- `IdentityProviders`: Configures how users identify themselves to remote services.
 - `HTTPAuthSchemes` & `AuthSchemeResolver`s: Configures how users authenticate themselves to remote services.
 - `Checksum Algorithms`: Configures how an SDK calculates request and response checksums.
 - `Interceptors`: Configures specific stages of the request execution pipeline.
 
-However, not all of these components are covered by the public APIs for configuring them, and for those that are, they do not appear under exactly the same names, e.g. [endpoint_url](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.endpoint_url) and [retry_config](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.retry_config). This RFC proposes allowing users to configure the above components either by keeping current APIs or adding new ones.
+However, not all of these components are covered by the public APIs for configuring them, and for those that are, they do not appear under exactly the same names, e.g. [endpoint_url](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.endpoint_url) and [retry_config](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.retry_config). We will allow users to configure the above components either by keeping current APIs or adding new ones.
 
-What this RFC does NOT cover:
-- Interceptors: A future RFC will provide a detailed description of this feature
-- Step-by-step instructions for how to migrate current default runtime components to the orchestrator
+There are a lot of moving parts and this document is expected to evolve as we discover the implementation details.
 
-Terminology
------------
-
-- Component: An interface coupled with its default implementations to enable an SDK client functionality.
-- Fluent Client: A code generated Client that has methods for each service operation on it. A fluent builder is generated alongside it to make construction easier.
-- Operation: A high-level abstraction representing an interaction between an SDK Client and a remote service.
-- Orchestrator: The code within an SDK client that handles the process of making requests and receiving responses from remote services.
-- Remote Service: A remote API that a user wants to use. Communication with a remote service usually happens over HTTP. The remote service is usually, but not necessarily, an AWS service.
-- SDK Client: A client generated for the AWS SDK, allowing users to make requests to remote services.
-
-
-The user experience if this RFC is implemented
-----------------------------------------------
+The user experience if this design is implemented
+-------------------------------------------------
 
 
 ### Operation-level configuration
 
 Currently, users are able to customize runtime configuration at multiple levels. `SdkConfig` is used to configure settings for all services, while a service config (e.g., `aws_sdk_s3::config::Config`) is used to configure settings for a specific service client.
 
-With this RFC, users will be able to go one step further and override configuration for a single operation invocation:
+With this design, users will be able to go one step further and override configuration for a single operation invocation:
 ```rust
 let sdk_config = aws_config::from_env().load().await;
 let s3_client = aws_sdk_s3::client::Client::new(&sdk_config);
@@ -67,7 +49,7 @@ The main benefit of this approach is simplicity for users. The only change requi
 
 While `ConfigLoader`, `SdkConfig`, and service configs allow users to configure the necessary runtime components for today's `Tower`-based infrastructure, they do not cover all of the components required for the orchestrator to perform its job.
 
-The following table shows for each runtime component (the left column), what method on `ConfigLoader`, `sdk_config::Builder`, and service config builder (e.g. `aws_sdk_s3::config::Builder`) are currently available (the middle column) and what new method will be available on those types as proposed by the RFC (the right column).
+The following table shows for each runtime component (the left column), what method on `ConfigLoader`, `sdk_config::Builder`, and service config builder (e.g. `aws_sdk_s3::config::Builder`) are currently available (the middle column) and what new method will be available on those types as proposed by the design (the right column).
 
 | Runtime component | Today's builder method | Proposed builder method |
 | :-: | --- | --- |
@@ -87,9 +69,9 @@ The proposed methods generally take a type that implements [the corresponding tr
 
 We also marked "No change" for `Checksum Algorithms` because it should not be arbitrarily configurable at the service level config. Today, operations that support a predefined set of checksum algorithms expose the `checksum_algorithm` method through their fluent builders.
 
-How to actually implement this RFC
-----------------------------------
-Implementing this RFC is tied to [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0034_smithy_orchestrator.md). In that RFC, applying client configuration means putting runtime components and required function parameters into a type map for `aws_smithy_runtime::client::orchestrator::invoke` to use.
+How to actually implement this design
+-------------------------------------
+Implementing this design is tied to [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0034_smithy_orchestrator.md). In that RFC, applying client configuration means putting runtime components and required function parameters into a type map for `aws_smithy_runtime::client::orchestrator::invoke` to use.
 
 This section covers three parts:
 - Where we store operation-level config
@@ -129,7 +111,7 @@ The relations between the types can be illustrated in the following diagram:
 
 The `aws_sdk_s3::config::Config` type on the left stores the service-level configuration, which implicitly includes/shadows the AWS-level configuration. `Config` is accessible via `Handle` from a fluent builder `ListBucketsFluentBuilder`, which holds the operation level config.
 
-After the `send` method is called on the `fluent_builder` variable and before it internally calls `aws_smithy_runtime::client::orchestrator::invoke`, the fields in `self.handle.conf` and those in `self.config_override` will be put into a type map. How this is done exactly is an implementation detail outside the scope of the RFC, but we have been working on [send_v2](https://github.com/awslabs/smithy-rs/blob/b023426d1cfd05e1fd9eef2f92a21cad58b93b86/codegen-client/src/main/kotlin/software/amazon/smithy/rust/codegen/client/smithy/generators/client/FluentClientGenerator.kt#L331-L347) to allow for a gradual transition.
+After the `send` method is called on the `fluent_builder` variable and before it internally calls `aws_smithy_runtime::client::orchestrator::invoke`, the fields in `self.handle.conf` and those in `self.config_override` will be put into a type map (we have been working on [send_v2](https://github.com/awslabs/smithy-rs/blob/b023426d1cfd05e1fd9eef2f92a21cad58b93b86/codegen-client/src/main/kotlin/software/amazon/smithy/rust/codegen/client/smithy/generators/client/FluentClientGenerator.kt#L331-L347) to allow for a gradual transition).
 
 We use the `aws_smithy_runtime_api::config_bag::ConfigBag` type as the type map, and we have defined a trait called `aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin` that allows trait implementors to add key-value pairs to `ConfigBag`. The `RuntimePlugin` trait is defined as follows:
 ```rust
@@ -234,26 +216,11 @@ impl aws_smithy_runtime_api::client::orchestrator::EndpointResolver for DefaultR
 }
 ```
 
-Other runtime components have different requirements for their migration to the orchestrator world. A detailed roadmap for each of them is beyond the scope of this RFC.
+Other runtime components have different requirements for their migration to the orchestrator world. The general refactoring pattern involves moving logic out of `make_operation` and the associated `Tower` layer, and placing it in a struct that implements the relevant trait defined in `aws_smithy_runtime_api::client::orchestrator`.
 
-However, the general refactoring pattern involves moving logic out of `make_operation` and the associated `Tower` layer, and placing it in a struct that implements the relevant trait defined in `aws_smithy_runtime_api::client::orchestrator`.
-
-Changes checklist
------------------
-
-- [ ] Put client configuration into `ConfigBag` by either of the two
-	- [ ] Implementing RuntimePlugin for service configs and service config builders
-	- [ ] Updating `ConfigLoader`, `SdkConfig`, and service configs to be backed by `ConfigBag`
-- [ ] Decide whether `aws_smithy_runtime_api::client::orchestrator::TraceProbe` should be supported when users can already set up `tracing::Subscriber` in the SDK
-- [ ] Integrate the default implementation for `aws_smithy_runtime_api::client::orchestrator::RetryStrategy` with the orchestrator
-- [ ] Integrate the default implementation for `aws_smithy_runtime_api::client::orchestrator::EndpointResolver` with the orchestrator
-- [ ] Integrate the default implementation for `aws_smithy_runtime_api::client::orchestrator::Connection` with the orchestrator
-- [ ] Integrate the default implementation for `aws_smithy_runtime_api::client::orchestrator::IdentityResolvers` with the orchestrator
-- [ ] Integrate the default implementations for `aws_smithy_runtime_api::client::orchestrator::HttpAuthSchemes` and `aws_smithy_runtime_api::client::orchestrator::AuthOptionResolver` with the orchestrator
-
-Appendix: Exposing `.runtime_plugin` through config types
----------------------------------------------------------
-Alternatively, a `runtime_plugin` method could be added to `ConfigLoader`, `SdkConfig`, and service configs. The method would look like this:
+Alternative: Exposing `.runtime_plugin` through config types
+------------------------------------------------------------
+A `runtime_plugin` method could be added to `ConfigLoader`, `SdkConfig`, and service configs. The method would look like this:
 ```rust
 pub fn runtime_plugin(
     mut self,

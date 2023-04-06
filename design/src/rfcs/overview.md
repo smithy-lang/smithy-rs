@@ -44,4 +44,3 @@
 - [RFC-0032: Better Constraint Violations](./rfc0032_better_constraint_violations.md)
 - [RFC-0033: Improving access to request IDs in SDK clients](./rfc0033_improve_sdk_request_id_access.md)
 - [RFC-0034: Smithy Orchestrator](./rfc0034_smithy_orchestrator.md)
-- [RFC-0035: Client configuration for the orchestrator](./rfc0035_client_configuration_for_orchestrator.md)

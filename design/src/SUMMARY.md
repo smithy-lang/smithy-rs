@@ -57,7 +57,6 @@
   - [RFC-0032: Better Constraint Violations](./rfcs/rfc0032_better_constraint_violations.md)
   - [RFC-0033: Improving access to request IDs in SDK clients](./rfcs/rfc0033_improve_sdk_request_id_access.md)
   - [RFC-0034: Smithy Orchestrator](./rfcs/rfc0034_smithy_orchestrator.md)
-  - [RFC-0035: Client configuration for the orchestrator](./rfcs/rfc0035_client_configuration_for_orchestrator.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
