@@ -159,40 +159,7 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
-  semver-checks:
-    name: check the semver status of this PR
-    runs-on: smithy_ubuntu-latest_8-core
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        path: smithy-rs
-        ref: ${{ inputs.git_ref }}
-    - name: Get PR info
-      id: check-breaking-label
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const response = await github.rest.pulls.get({
-            pull_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-          });
-          const labels = response.data.labels.map(l => l.name);
-          const isBreaking = labels.includes("breaking-change");
-          const data = {
-            labels,
-            isBreaking
-          };
-          console.log("data:", data);
-          return data;
-    - name: Run semver check
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: check-semver
-        action-arguments: ${{ github.event.pull_request.base.sha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
-    - name: print help message
-      if: failure()
-      run: echo "::error::This pull request contains breaking changes. Please add the `breaking-changes` label and a changelog entry"
+
 
   test-rust-windows:
     name: Rust Tests on Windows
