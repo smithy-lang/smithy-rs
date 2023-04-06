@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -17,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -25,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * Inserts a UserAgent configuration into the operation
@@ -45,8 +49,16 @@ class UserAgentDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + UserAgentFeature(codegenContext)
+        return baseCustomizations + UserAgentMutateOpRequest(codegenContext)
     }
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            it + listOf(AddApiMetadataIntoConfigBag(codegenContext))
+        }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return listOf(
@@ -86,8 +98,34 @@ class UserAgentDecorator : ClientCodegenDecorator {
         }
     }
 
-    private class UserAgentFeature(
-        private val codegenContext: ClientCodegenContext,
+    private class AddApiMetadataIntoConfigBag(codegenContext: ClientCodegenContext) :
+        ServiceRuntimePluginCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+        private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
+
+        override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+            if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+                rustTemplate(
+                    """
+                    ${section.configBagName}.put(#{API_METADATA}.clone());
+                    ${section.configBagName}.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
+                        .expect("interceptors set")
+                        .register_client_interceptor(std::sync::Arc::new(#{UserAgentInterceptor}::new()) as _);
+                    """,
+                    "API_METADATA" to ClientRustModule.Meta.toType().resolve("API_METADATA"),
+                    "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
+                    "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
+                    "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
+                    "UserAgentInterceptor" to awsRuntime.resolve("user_agent::UserAgentInterceptor"),
+                )
+            }
+        }
+    }
+
+    // TODO(enableNewSmithyRuntime): Remove this customization class
+    private class UserAgentMutateOpRequest(
+        codegenContext: ClientCodegenContext,
     ) : OperationCustomization() {
         private val runtimeConfig = codegenContext.runtimeConfig
 

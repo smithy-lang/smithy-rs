@@ -14,6 +14,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 #[derive(Debug)]
 pub struct InterceptorError {
     kind: ErrorKind,
+    context: Option<String>,
     source: Option<BoxError>,
 }
 
@@ -24,6 +25,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeExecution,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -33,6 +35,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeSerialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -42,6 +45,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeSerialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -51,6 +55,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterSerialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -60,6 +65,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeRetryLoop,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -69,6 +75,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeAttempt,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -78,6 +85,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeSigning,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -87,6 +95,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeSigning,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -96,6 +105,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterSigning,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -105,6 +115,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeTransmit,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -114,6 +125,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeTransmit,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -123,6 +135,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterTransmit,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -132,6 +145,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeDeserialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -141,6 +155,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadBeforeDeserialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -150,6 +165,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterDeserialization,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -159,6 +175,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeAttemptCompletion,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -168,6 +185,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterAttempt,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -177,6 +195,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ModifyBeforeCompletion,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -186,6 +205,7 @@ impl InterceptorError {
     ) -> Self {
         Self {
             kind: ErrorKind::ReadAfterExecution,
+            context: None,
             source: Some(source.into()),
         }
     }
@@ -193,6 +213,7 @@ impl InterceptorError {
     pub fn invalid_request_access() -> Self {
         Self {
             kind: ErrorKind::InvalidRequestAccess,
+            context: None,
             source: None,
         }
     }
@@ -200,6 +221,7 @@ impl InterceptorError {
     pub fn invalid_response_access() -> Self {
         Self {
             kind: ErrorKind::InvalidResponseAccess,
+            context: None,
             source: None,
         }
     }
@@ -207,6 +229,7 @@ impl InterceptorError {
     pub fn invalid_input_access() -> Self {
         Self {
             kind: ErrorKind::InvalidInputAccess,
+            context: None,
             source: None,
         }
     }
@@ -214,8 +237,15 @@ impl InterceptorError {
     pub fn invalid_output_access() -> Self {
         Self {
             kind: ErrorKind::InvalidOutputAccess,
+            context: None,
             source: None,
         }
+    }
+
+    /// Attach additional context to the error
+    pub fn context(mut self, context: impl Into<String>) -> Self {
+        self.context = Some(context.into());
+        self
     }
 }
 
@@ -344,7 +374,11 @@ impl fmt::Display for InterceptorError {
                 f,
                 "tried to access the output before response deserialization"
             ),
+        }?;
+        if let Some(context) = &self.context {
+            write!(f, ": {context}")?;
         }
+        Ok(())
     }
 }
 
