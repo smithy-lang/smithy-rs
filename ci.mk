@@ -120,6 +120,10 @@ generate-codegen-diff:
 check-deterministic-codegen:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-semver
+check-semver:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: generate-smithy-rs-release
 generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
