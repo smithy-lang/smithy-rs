@@ -10,6 +10,8 @@ object CrateSet {
         "aws-endpoint",
         "aws-http",
         "aws-hyper",
+        "aws-runtime",
+        "aws-runtime-api",
         "aws-sig-auth",
         "aws-sigv4",
         "aws-types",
