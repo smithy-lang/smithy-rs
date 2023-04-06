@@ -88,7 +88,7 @@ if (cluster.isPrimary) {
 }
 
 process.on("unhandledRejection", err => {
-    console.error("Unahandled")
+    console.error("Unhandled")
     console.error(err)
 })
 process.on("uncaughtException", err => {

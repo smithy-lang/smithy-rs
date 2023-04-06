@@ -41,6 +41,3 @@ mod test_helpers;
 
 #[doc(hidden)]
 pub mod proto;
-
-#[cfg(feature = "shared-socket")]
-pub mod socket;

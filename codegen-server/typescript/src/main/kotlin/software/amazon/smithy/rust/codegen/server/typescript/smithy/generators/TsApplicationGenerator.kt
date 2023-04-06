@@ -62,8 +62,7 @@ class TsApplicationGenerator(
         renderHandlers(writer)
         renderApp(writer)
 
-        // TODO Move these to be runtime once "#1377: Re-export napi symbols from dependencies
-        //  (https://github.com/napi-rs/napi-rs/issues/1377) is solved.
+        // TODO(https://github.com/napi-rs/napi-rs/issues/1377) Move these to be part of the runtime crate.
         renderSocket(writer)
         renderServer(writer)
     }
@@ -263,19 +262,16 @@ class TsApplicationGenerator(
         }
 
         writer.rustBlock("impl TsSocket") {
-            writer.rustBlockTemplate(
-                """pub fn to_raw_socket(&self) -> #{napi}::Result<#{socket2}::Socket>""".trimIndent(),
+            writer.rustTemplate(
+                """pub fn to_raw_socket(&self) -> #{napi}::Result<#{socket2}::Socket> {
+                self.0
+                 .try_clone()
+                 .map_err(|e| #{napi}::Error::from_reason(e.to_string()))
+                }
+
+                """.trimIndent(),
                 *codegenScope,
-            ) {
-                writer.rustTemplate(
-                    """
-                    self.0
-                     .try_clone()
-                     .map_err(|e| #{napi}::Error::from_reason(e.to_string()))
-                    """.trimIndent(),
-                    *codegenScope,
-                )
-            }
+            )
         }
     }
 
