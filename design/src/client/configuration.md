@@ -1,4 +1,5 @@
 Client configuration for the orchestrator
+-----------------------------------------
 
 This document discusses two areas of improvement for configuring an SDK client:
 - Support for operation-level configuration
@@ -18,11 +19,10 @@ As described in [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/s
 
 However, not all of these components are covered by the public APIs for configuring them, and for those that are, they do not appear under exactly the same names, e.g. [endpoint_url](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.endpoint_url) and [retry_config](https://docs.rs/aws-config/0.54.1/aws_config/struct.ConfigLoader.html#method.retry_config). We will allow users to configure the above components either by keeping current APIs or adding new ones.
 
-There are a lot of moving parts and this document is expected to evolve as we discover the implementation details.
+There are still a lot of moving parts and this document is expected to evolve as we discover the implementation details.
 
 The user experience if this design is implemented
 -------------------------------------------------
-
 
 ### Operation-level configuration
 
