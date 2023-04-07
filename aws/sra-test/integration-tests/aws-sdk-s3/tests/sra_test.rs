@@ -7,6 +7,7 @@ use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
+use aws_runtime::recursion_detection::RecursionDetectionInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::operation::list_objects_v2::{
@@ -155,6 +156,7 @@ async fn sra_manual_test() {
             cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
                 .expect("interceptors set")
                 .register_client_interceptor(Arc::new(UserAgentInterceptor::new()) as _)
+                .register_client_interceptor(Arc::new(RecursionDetectionInterceptor::new()) as _)
                 .register_client_interceptor(Arc::new(OverrideSigningTimeInterceptor) as _);
             Ok(())
         }
