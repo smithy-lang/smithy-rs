@@ -7,8 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -38,7 +41,28 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String) : ServiceRuntimePluginSection("AdditionalConfig")
+    data class AdditionalConfig(val configBagName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+        /** Adds a value to the config bag */
+        fun putConfigValue(writer: RustWriter, value: Writable) {
+            writer.rust("$configBagName.put(#T);", value)
+        }
+
+        /** Generates the code to register an interceptor */
+        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+            writer.rustTemplate(
+                """
+                $configBagName.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
+                    .expect("interceptors set")
+                    .register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                """,
+                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
+                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
+                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
+                "interceptor" to interceptor,
+            )
+        }
+    }
 }
 typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimePluginSection>
 
