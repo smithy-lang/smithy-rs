@@ -173,6 +173,13 @@ sealed class RustType {
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 
+    /**
+     * Represents application of a Rust type with the given arguments.
+     *
+     * For example, we can represent `HashMap<String, i64>` as
+     * `RustType.Application(RustType.Opaque("HashMap"), listOf(RustType.String, RustType.Integer(64)))`.
+     * This helps us to separate the type and the arguments which is useful in methods like [qualifiedName].
+     */
     data class Application(val type: RustType, val args: List<RustType>) : RustType() {
         override val name = type.name
         override val namespace = type.namespace
