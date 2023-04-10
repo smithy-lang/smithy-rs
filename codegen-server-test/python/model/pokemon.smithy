@@ -1,18 +1,17 @@
 /// TODO(https://github.com/awslabs/smithy-rs/issues/1508)
-/// $econcile this model with the main one living inside codegen-server-test/model/pokemon.smithy
+/// Reconcile this model with the main one living inside codegen-server-test/model/pokemon.smithy
 /// once the Python implementation supports Streaming and Union shapes.
 $version: "1.0"
 
 namespace com.aws.example.python
 
 use aws.protocols#restJson1
+use com.aws.example#CheckHealth
+use com.aws.example#DoNothing
+use com.aws.example#GetServerStatistics
 use com.aws.example#PokemonSpecies
 use com.aws.example#Storage
-use com.aws.example#GetServerStatistics
-use com.aws.example#DoNothing
-use com.aws.example#CheckHealth
 use smithy.framework#ValidationException
-
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -26,81 +25,85 @@ service PokemonService {
         CapturePokemon
         CheckHealth
         StreamPokemonRadio
-    ],
+    ]
 }
 
 /// Capture Pokémons via event streams.
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemon {
-    input: CapturePokemonEventsInput,
-    output: CapturePokemonEventsOutput,
-    errors: [UnsupportedRegionError, ThrottlingError, ValidationException]
+    input: CapturePokemonEventsInput
+    output: CapturePokemonEventsOutput
+    errors: [
+        UnsupportedRegionError
+        ThrottlingError
+        ValidationException
+    ]
 }
 
 @input
 structure CapturePokemonEventsInput {
     @httpPayload
-    events: AttemptCapturingPokemonEvent,
-
+    events: AttemptCapturingPokemonEvent
     @httpLabel
     @required
-    region: String,
+    region: String
 }
 
 @output
 structure CapturePokemonEventsOutput {
     @httpPayload
-    events: CapturePokemonEvents,
+    events: CapturePokemonEvents
 }
 
 @streaming
 union AttemptCapturingPokemonEvent {
-    event: CapturingEvent,
-    masterball_unsuccessful: MasterBallUnsuccessful,
+    event: CapturingEvent
+    masterball_unsuccessful: MasterBallUnsuccessful
 }
 
 structure CapturingEvent {
     @eventPayload
-    payload: CapturingPayload,
+    payload: CapturingPayload
 }
 
 structure CapturingPayload {
-    name: String,
-    pokeball: String,
+    name: String
+    pokeball: String
 }
 
 @streaming
 union CapturePokemonEvents {
-    event: CaptureEvent,
-    invalid_pokeball: InvalidPokeballError,
-    throttlingError: ThrottlingError,
+    event: CaptureEvent
+    invalid_pokeball: InvalidPokeballError
+    throttlingError: ThrottlingError
 }
 
 structure CaptureEvent {
     @eventHeader
-    name: String,
+    name: String
     @eventHeader
-    captured: Boolean,
+    captured: Boolean
     @eventHeader
-    shiny: Boolean,
+    shiny: Boolean
     @eventPayload
-    pokedex_update: Blob,
+    pokedex_update: Blob
 }
 
 @error("server")
 structure UnsupportedRegionError {
     @required
-    region: String,
+    region: String
 }
 
 @error("client")
 structure InvalidPokeballError {
     @required
-    pokeball: String,
+    pokeball: String
 }
+
 @error("server")
 structure MasterBallUnsuccessful {
-    message: String,
+    message: String
 }
 
 @error("client")
