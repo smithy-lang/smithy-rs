@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-config = "0.54.1"
-aws-sdk-batch = "0.24.0"
-aws-sdk-cloudcontrol = "0.24.0"
-aws-sdk-ec2 = "0.24.0"
-aws-sdk-iam = "0.24.0"
-aws-sdk-resourceexplorer2 = "0.2.0"
+aws-config = { path = "../../serde-aws-sdk/sdk/aws-config" }
+aws-sdk-batch = { path = "../../serde-aws-sdk/sdk/aws-sdk-batch" }
+aws-sdk-cloudcontrol = { path = "../../serde-aws-sdk/sdk/aws-sdk-cloudcontrol" }
+aws-sdk-ec2 = { path = "../../serde-aws-sdk/sdk/aws-sdk-ec2" }
+aws-sdk-iam = { path = "../../serde-aws-sdk/sdk/aws-sdk-iam" }
+aws-sdk-resourceexplorer2 = { path = "../../serde-aws-sdk/sdk/aws-sdk-resourceexplorer2" }
 env_logger = "0.10.0"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
