@@ -92,9 +92,3 @@ message = "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningPa
 references = ["smithy-rs#2562"]
 meta = { "breaking" = false, "tada" = true, "bug" = true }
 author = "Velfi"
-
-[[smithy-rs]]
-message = "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningParams` so that it will no longer print sensitive information."
-references = ["smithy-rs#2562"]
-meta = { "breaking" = false, "tada" = true, "bug" = true, "target" = "client"}
-author = "Velfi"
