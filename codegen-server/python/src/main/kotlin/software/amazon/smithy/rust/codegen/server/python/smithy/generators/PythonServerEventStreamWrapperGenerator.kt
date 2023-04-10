@@ -73,7 +73,7 @@ class PythonServerEventStreamWrapperGenerator(
             "Tracing" to PythonServerCargoDependency.Tracing.toType(),
             "PyO3" to pyO3,
             "PyO3Asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
-            "Futures" to PythonServerCargoDependency.Futures.toType(),
+            "TokioStream" to PythonServerCargoDependency.TokioStream.toType(),
             "Mutex" to PythonServerCargoDependency.ParkingLot.toType().resolve("Mutex"),
             "AsyncMutex" to PythonServerCargoDependency.Tokio.toType().resolve("sync::Mutex"),
             "Send" to RuntimeType.Send,
@@ -131,10 +131,10 @@ class PythonServerEventStreamWrapperGenerator(
             """
             impl<'source> #{PyO3}::FromPyObject<'source> for $name {
                 fn extract(obj: &'source #{PyO3}::PyAny) -> #{PyO3}::PyResult<Self> {
-                    use #{Futures}::StreamExt;
+                    use #{TokioStream}::StreamExt;
                     let stream = #{PyO3Asyncio}::tokio::into_stream_v1(obj)?;
                     let stream = stream.filter_map(|res| {
-                        #{Futures}::future::ready(#{PyO3}::Python::with_gil(|py| {
+                        #{PyO3}::Python::with_gil(|py| {
                             // TODO(EventStreamImprovements): Add `InternalServerError` variant to all event streaming 
                             //                                errors and return that variant in case of errors here? 
                             match res {
@@ -159,7 +159,7 @@ class PythonServerEventStreamWrapperGenerator(
                                     }
                                 }
                             }
-                        }))
+                        })
                     });
             
                     Ok($name { inner: #{Arc}::new(#{Mutex}::new(Some(stream.into()))) })

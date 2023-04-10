@@ -84,7 +84,7 @@ class PythonEventStreamSymbolProvider(
             .addReference(innerSymbol)
             .addReference(error)
             .addDependency(CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"))
-            .addDependency(PythonServerCargoDependency.Futures)
+            .addDependency(PythonServerCargoDependency.TokioStream)
             .addDependency(PythonServerCargoDependency.PyO3Asyncio.withFeature("unstable-streams"))
             .build()
     }
