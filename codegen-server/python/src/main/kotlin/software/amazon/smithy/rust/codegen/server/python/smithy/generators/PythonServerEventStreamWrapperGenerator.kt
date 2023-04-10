@@ -118,7 +118,11 @@ class PythonServerEventStreamWrapperGenerator(
                     signer: impl #{SignMessage} + #{Send} + #{Sync} + 'static,
                 ) -> #{MessageStreamAdapter}<#{Inner}, #{Error}> {
                     let mut inner = self.inner.lock();
-                    let inner = inner.take().expect("stream is already gone");
+                    let inner = inner.take().expect(
+                        "attempted to reuse an event stream. \
+                         that means you kept a reference to an event stream and tried to reuse it in another request, \
+                         event streams are request scoped and shouldn't be used outside of their bounded request scope"
+                    );
                     inner.into_body_stream(marshaller, error_marshaller, signer)
                 }
                 """,
