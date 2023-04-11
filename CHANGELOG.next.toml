@@ -80,3 +80,15 @@ message = "Add `into_segments` method to `AggregatedBytes`, for zero-copy conver
 references = ["smithy-rs#2525"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "parker-timmerman"
+
+[[aws-sdk-rust]]
+message = "Fix but where an incorrect endpoint was produced for WriteGetObjectResponse"
+references = ["smithy-rs#781", "aws-sdk-rust#781"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningParams` so that it will no longer print sensitive information."
+references = ["smithy-rs#2562"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "Velfi"
