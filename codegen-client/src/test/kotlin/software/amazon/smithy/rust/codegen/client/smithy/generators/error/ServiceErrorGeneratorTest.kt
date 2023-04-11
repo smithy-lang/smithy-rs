@@ -16,39 +16,38 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class ServiceErrorGeneratorTest {
     private val model = """
-            namespace com.example
+        namespace com.example
 
-            use aws.protocols#restJson1
+        use aws.protocols#restJson1
 
-            @restJson1
-            service HelloService {
-                operations: [SayHello],
-                version: "1"
-            }
+        @restJson1
+        service HelloService {
+            operations: [SayHello],
+            version: "1"
+        }
 
-            @http(uri: "/", method: "POST")
-            operation SayHello {
-                input: EmptyStruct,
-                output: EmptyStruct,
-                errors: [SorryBusy, CanYouRepeatThat, MeDeprecated]
-            }
+        @http(uri: "/", method: "POST")
+        operation SayHello {
+            input: EmptyStruct,
+            output: EmptyStruct,
+            errors: [SorryBusy, CanYouRepeatThat, MeDeprecated]
+        }
 
-            structure EmptyStruct { }
+        structure EmptyStruct { }
 
-            @error("server")
-            structure SorryBusy { }
+        @error("server")
+        structure SorryBusy { }
 
-            @error("client")
-            structure CanYouRepeatThat { }
+        @error("client")
+        structure CanYouRepeatThat { }
 
-            @error("client")
-            @deprecated
-            structure MeDeprecated { }
-        """.asSmithyModel()
+        @error("client")
+        @deprecated
+        structure MeDeprecated { }
+    """.asSmithyModel()
 
     @Test
     fun `top level errors are send + sync`() {
-
         clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.integrationTest("validate_errors") {
                 rust(
