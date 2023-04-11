@@ -1,5 +1,5 @@
 Client configuration for the orchestrator
------------------------------------------
+=========================================
 
 This document discusses two areas of improvement for configuring an SDK client:
 - Support for operation-level configuration
