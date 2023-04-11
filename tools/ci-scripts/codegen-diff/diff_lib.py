@@ -15,6 +15,8 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
+PYTHON_EXAMPLES_PATH = "rust-runtime/aws-smithy-http-server-python/examples"
+
 target_codegen_client = 'codegen-client-test'
 target_codegen_server = 'codegen-server-test'
 target_aws_sdk = 'aws:sdk'
@@ -40,14 +42,14 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
     # Clean the build artifacts before continuing
     get_cmd_output("rm -rf aws/sdk/build")
     if target_codegen_server in targets:
-        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
+        get_cmd_output("make distclean", shell=True, cwd=PYTHON_EXAMPLES_PATH)
     get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
     tasks = ' '.join([f'{t}:assemble' for t in targets])
     get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
     if target_codegen_server in targets:
-        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
+        get_cmd_output("make build", shell=True, check=False, cwd=PYTHON_EXAMPLES_PATH)
         get_cmd_output(f"./gradlew --rerun-tasks codegen-server-test:typescript:assemble")
 
     # Move generated code into codegen-diff/ directory
@@ -60,7 +62,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
                 get_cmd_output(
-                    f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
+                    f"mv {PYTHON_EXAMPLES_PATH}/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
                     check=False)
                 get_cmd_output(
                     f"mv codegen-server-test/typescript/build/smithyprojections/codegen-server-test-typescript {OUTPUT_PATH}/",
