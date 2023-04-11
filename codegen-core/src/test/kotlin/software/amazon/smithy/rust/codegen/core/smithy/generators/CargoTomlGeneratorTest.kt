@@ -47,7 +47,7 @@ class CargoTomlGeneratorTest {
     fun `check serde features`() {
         val project = TestWorkspace.testProject()
         /*
-        ["target.'cfg(aws_sdk_unstable)'.dependencies".serde]
+        [target.'cfg(aws_sdk_unstable)'.dependencies.serde]
         version = "1.0"
         features = ["derive"]
         serde-serialize = ["aws-smithy-types/serde-serialize"]
