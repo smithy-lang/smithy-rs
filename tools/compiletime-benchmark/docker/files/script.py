@@ -22,6 +22,7 @@ def main(file: str):
     df = pl.DataFrame(stack)
     # converts it to markdown file
     df.to_pandas().to_markdown(file.replace(".txt", ".md"))
+    df.write_csv(file.replace(".txt", ".csv"))
 
 
 main("unoptimized.txt")

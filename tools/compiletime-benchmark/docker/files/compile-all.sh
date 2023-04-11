@@ -5,6 +5,7 @@
 
 git clone https://github.com/awslabs/smithy-rs.git
 cd smithy-rs
+git checkout $TARGET_COMMIT_HASH
 
 ./gradlew :aws:sdk:cargoCheck
 WORKDIR=pwd
@@ -27,3 +28,12 @@ for i in $(ls $PATH_TO_GENERATED_SDK); do
 done
 
 python3 script.py
+
+# uploads the results to some where...
+# I think we should just upload them to github or something but I will pretend that it uploads to a S3 bucket
+S3_BUCKETT="s3://my-bucket/$S3_KEY/$COMMIT_HASH/"
+aws s3 cp ./unoptimized.md $S3_BUCKETT &
+aws s3 cp ./optimized.md $S3_BUCKETT &
+aws s3 cp ./unoptimized.csv $S3_BUCKETT &
+aws s3 cp ./optimized.csv $S3_BUCKETT &
+wait
