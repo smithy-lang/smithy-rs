@@ -35,6 +35,7 @@ pin_project! {
         // In the event of retry, this function will be called to generate a new body. See
         // [`try_clone()`](SdkBody::try_clone)
         rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
+        bytes_contents: Option<Bytes>
     }
 }
 
@@ -94,6 +95,7 @@ impl SdkBody {
         Self {
             inner: Inner::Dyn { inner: body },
             rebuild: None,
+            bytes_contents: None,
         }
     }
 
@@ -110,6 +112,7 @@ impl SdkBody {
         SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
+            bytes_contents: initial.bytes_contents,
         }
     }
 
@@ -119,6 +122,7 @@ impl SdkBody {
         Self {
             inner: Inner::Taken,
             rebuild: None,
+            bytes_contents: None,
         }
     }
 
@@ -127,6 +131,7 @@ impl SdkBody {
         Self {
             inner: Inner::Once { inner: None },
             rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
+            bytes_contents: None,
         }
     }
 
@@ -157,10 +162,9 @@ impl SdkBody {
     /// If this SdkBody is NOT streaming, this will return the byte slab
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
-        match &self.inner {
-            Inner::Once { inner: Some(b) } => Some(b),
-            Inner::Once { inner: None } => Some(&[]),
-            _ => None,
+        match &self.bytes_contents {
+            Some(b) => Some(b),
+            None => None,
         }
     }
 
@@ -172,6 +176,7 @@ impl SdkBody {
             Self {
                 inner: next,
                 rebuild: self.rebuild.clone(),
+                bytes_contents: self.bytes_contents.clone(),
             }
         })
     }
@@ -191,6 +196,22 @@ impl SdkBody {
             f(self)
         }
     }
+
+    /// Given a function to modify an `SdkBody`, run that function against this `SdkBody` before
+    /// returning the result. **This function MUST NOT alter the contents of the body.**
+    pub fn map_preserve_contents(
+        self,
+        f: impl Fn(SdkBody) -> SdkBody + Sync + Send + 'static,
+    ) -> SdkBody {
+        let contents = self.bytes_contents.clone();
+        let mut out = if self.rebuild.is_some() {
+            SdkBody::retryable(move || f(self.try_clone().unwrap()))
+        } else {
+            f(self)
+        };
+        out.bytes_contents = contents;
+        out
+    }
 }
 
 impl From<&str> for SdkBody {
@@ -201,6 +222,7 @@ impl From<&str> for SdkBody {
 
 impl From<Bytes> for SdkBody {
     fn from(bytes: Bytes) -> Self {
+        let b = bytes.clone();
         SdkBody {
             inner: Inner::Once {
                 inner: Some(bytes.clone()),
@@ -208,6 +230,7 @@ impl From<Bytes> for SdkBody {
             rebuild: Some(Arc::new(move || Inner::Once {
                 inner: Some(bytes.clone()),
             })),
+            bytes_contents: Some(b),
         }
     }
 }
@@ -217,6 +240,7 @@ impl From<hyper::Body> for SdkBody {
         SdkBody {
             inner: Inner::Streaming { inner: body },
             rebuild: None,
+            bytes_contents: None,
         }
     }
 }
@@ -288,6 +312,15 @@ mod test {
     fn valid_size_hint() {
         assert_eq!(SdkBody::from("hello").size_hint().exact(), Some(5));
         assert_eq!(SdkBody::from("").size_hint().exact(), Some(0));
+    }
+
+    #[test]
+    fn map_preserve_preserves_bytes_hint() {
+        let initial = SdkBody::from("hello!");
+        assert_eq!(initial.bytes(), Some(b"hello!".as_slice()));
+
+        let new_body = initial.map_preserve_contents(|body| SdkBody::from_dyn(BoxBody::new(body)));
+        assert_eq!(new_body.bytes(), Some(b"hello!".as_slice()));
     }
 
     #[allow(clippy::bool_assert_comparison)]
