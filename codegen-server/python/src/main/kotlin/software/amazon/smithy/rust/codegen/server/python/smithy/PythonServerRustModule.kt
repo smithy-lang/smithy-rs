@@ -15,6 +15,7 @@ object PythonServerRustModule {
     val PythonModuleExport = RustModule.public("python_module_export")
     val PythonOperationAdapter = RustModule.public("python_operation_adaptor")
     val PythonServerApplication = RustModule.public("python_server_application")
+    val PythonEventStream = RustModule.public("python_event_stream")
 }
 
 class PythonServerModuleDocProvider(private val base: ModuleDocProvider) : ModuleDocProvider {
@@ -23,8 +24,8 @@ class PythonServerModuleDocProvider(private val base: ModuleDocProvider) : Modul
         return when (module) {
             PythonServerRustModule.PythonModuleExport -> strDoc("Export PyO3 symbols in the shared library")
             PythonServerRustModule.PythonServerApplication -> strDoc("Python server and application implementation.")
-            // TODO(ServerTeam): Document this module (I don't have context)
-            PythonServerRustModule.PythonOperationAdapter -> null
+            PythonServerRustModule.PythonOperationAdapter -> strDoc("Operation adapters that delegate to Python handlers.")
+            PythonServerRustModule.PythonEventStream -> strDoc("Python wrapper types for event streams.")
             else -> base.docsWriter(module)
         }
     }
