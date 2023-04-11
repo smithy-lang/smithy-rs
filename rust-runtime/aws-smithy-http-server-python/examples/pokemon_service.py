@@ -8,18 +8,24 @@ import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Callable, Awaitable
+from typing import Dict, Any, List, Optional, Callable, Awaitable, AsyncIterator
 
 from pokemon_service_server_sdk import App
 from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.aws_lambda import LambdaContext
-from pokemon_service_server_sdk.error import ResourceNotFoundException
+from pokemon_service_server_sdk.error import (
+    ResourceNotFoundException,
+    UnsupportedRegionError,
+    MasterBallUnsuccessful,
+    InvalidPokeballError,
+)
 from pokemon_service_server_sdk.input import (
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
+    CapturePokemonInput,
 )
 from pokemon_service_server_sdk.logging import TracingHandler
 from pokemon_service_server_sdk.middleware import (
@@ -27,13 +33,19 @@ from pokemon_service_server_sdk.middleware import (
     Response,
     Request,
 )
-from pokemon_service_server_sdk.model import FlavorText, Language
+from pokemon_service_server_sdk.model import (
+    CapturePokemonEvents,
+    CaptureEvent,
+    FlavorText,
+    Language,
+)
 from pokemon_service_server_sdk.output import (
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
+    CapturePokemonOutput,
 )
 from pokemon_service_server_sdk.types import ByteStream
 
@@ -244,12 +256,165 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
     return CheckHealthOutput()
 
 
+###########################################################
+# Event streams
+############################################################
+# An event stream is an abstraction that allows multiple messages to be sent asynchronously
+# between a client and server. Event streams support both duplex and simplex streaming.
+# You can find more details about event streaming in Smithy Spec:
+# https://smithy.io/2.0/spec/streaming.html#event-streams
+#
+# Event streams modeled as asynchronous Python generators, that means:
+# For receiving, you can use `async for` to iterate incoming events from the client and you can
+# `break` from the loop if you want to stop receiving events.
+# For sending, you can use `yield` to sent an event to the client and you can `return` from your
+# generator function to stop `yield`ing events.
+#
+# Event streams also has a concept of "Modeled Errors" and those events are considered as
+# terminal errors and they stop the event stream. They are modeled as exceptions in Python.
+# Incoming event streams can raise modeled exceptions to terminate the event stream and you can
+# catch those errors by wrapping incoming streams in a `try-except` block, and you can also raise
+# a modeled error to terminate event stream.
+# See Smithy Spec for more information about modeled errors:
+# https://smithy.io/2.0/spec/streaming.html#modeled-errors-in-event-streams
+#
+# Depending on your use case, your functions usually should look like:
+#
+# Receiving only:
+# ```python
+# def receiving(input: Input) -> Output:
+#     # Initial message handling...
+#
+#     async def events(input):
+#         try:
+#             async for event in input.events:
+#                 # Handle incoming `event`...
+#                 # `input.events` will gracefully stop if client stops sending events,
+#                 # you can also `break` if you want to stop receiving
+#         except YourModeledError as err:
+#             # Handle modeled error...
+#             # The stream is terminated
+#
+#     # Return immediately and let your generator run in background,
+#     # you can also have initial messages and send them here
+#     return Output(events=events(input), initial="value")
+# ```
+#
+# Sending only:
+# ```python
+# def sending(input: Input) -> Output:
+#     # Initial message handling...
+#
+#     async def events(input):
+#         while True:
+#             # You can send values by `yield`ing them...
+#             yield some_value
+#
+#             # You can just `break` the loop to stop sending events gracefully
+#             if some_cond:
+#                 break
+#
+#             # You can also stop sending events by raising modeled errors
+#             if some_other_cond:
+#                 raise YourModeledError(...)
+#
+#     # Return immediately and let your generator run in background,
+#     # you can also have initial messages and send them here
+#     return Output(events=events(input), initial="value")
+# ```
+#
+# Both receiving and sending:
+# ```python
+# def bidirectional(input: Input) -> Output:
+#     # Initial message handling...
+#
+#     async def events(input):
+#         try:
+#             async for event in input.events:
+#                 # Handle incoming `event`...
+#                 # `input.events` will gracefully stop if client stops sending events,
+#                 # you can also `break` if you want to stop receiving
+#
+#                 # Send some event to the client by `yield`ing them, or stop sending events
+#                 # by `break`ing the loop or raising modeled errors
+#                 yield outgoing
+#         except YourModeledError as err:
+#             # Handle modeled error...
+#             # The stream is terminated
+#
+#     # Return immediately and let your generator run in background,
+#     # you can also have initial messages and send them here
+#     return Output(events=events(input), initial="value")
+# ```
+#
+# You can see an example implementation of a duplex streaming for capturing a Pokemon,
+# you can find Smithy model in `codegen-server-test/python/model/pokemon.smithy`.
+@app.capture_pokemon
+def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
+    # You can have initial messages that provides an opportunity for a client or server to
+    # provide metadata about an event stream before transmitting events.
+    # See Smithy spec for more details: https://smithy.io/2.0/spec/streaming.html#initial-messages
+    if input.region != "Kanto":
+        raise UnsupportedRegionError(input.region)
+
+    # Here is your event stream, which is an `async` Python function that can `await` on incoming
+    # events and `yield` to sent an event
+    async def events(input: CapturePokemonInput) -> AsyncIterator[CapturePokemonEvents]:
+        # We're wrapping incoming event stream with a `try-catch` block to catch modeled errors
+        try:
+            # Asynchronously iterate through incoming events
+            async for incoming in input.events:
+                # `incoming` is an union of all possible non-error types from your Smithy model.
+                # You can use `is_{variant}` and `as_{variant}` methods to inspect incoming message
+                if incoming.is_event():
+                    event = incoming.as_event()
+                    payload = event.payload
+                    # You can ignore incoming messages just by `continue`ing the loop
+                    if not payload:
+                        logging.debug("no payload provided, ignoring the event")
+                        continue
+
+                    name = payload.name or "<unknown>"
+                    pokeball = payload.pokeball or "<unknown>"
+                    # You can terminate the stream by raising modeled errors
+                    if pokeball not in ["Master Ball", "Fast Ball"]:
+                        raise InvalidPokeballError(pokeball)
+
+                    # Outgoing type is also an union of all possible non-error types from
+                    # your Smithy model. You can construct the variant you want by calling
+                    # constructor functions for your variant:
+                    outgoing_event = CapturePokemonEvents.event(
+                        CaptureEvent(
+                            name=name,
+                            captured=random.choice([True, False]),
+                            shiny=random.choice([True, False]),
+                        )
+                    )
+                    # You can `yield` your outgoing type to sent an event to the client
+                    yield outgoing_event
+                else:
+                    # You can stop receiving incoming events by just `break`ing the loop
+                    logging.error("unknown event")
+                    break
+        # You can catch modeled errors and act accordingly, they will terminate the event stream
+        except MasterBallUnsuccessful as err:
+            logging.error(f"masterball unsuccessful: {err}")
+
+        # Here event stream is going to be completed because we stopped receiving events and we'll
+        # no longer `yield` new values and this asynchronous Python generator will end here
+        logging.debug("done")
+
+    # You should immediately return your output here, your asynchronous Python generator will
+    # run in background without blocking your threads.
+    return CapturePokemonOutput(events=events(input))
+
+
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
 async def stream_pokemon_radio(
     _: StreamPokemonRadioInput, context: Context
 ) -> StreamPokemonRadioOutput:
-    import aiohttp # type: ignore
+    import aiohttp
 
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
