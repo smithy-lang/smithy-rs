@@ -53,8 +53,7 @@ macro_rules! iam_request {
     };
 }
 
-#[tokio::main]
-async fn main() -> Result<(), JoinError> {
+pub async fn main() -> Result<(), JoinError> {
     let conf = aws_config::load_from_env().await;
     let tags: HashMap<String, String> =
         { toml::from_str(include_str!("../../config/common/tag.toml")).unwrap() };

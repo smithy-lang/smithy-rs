@@ -2,8 +2,7 @@ use aws_sdk_resourceexplorer2::output::SearchOutput;
 use compiletime_benchmark::common_tag;
 use tokio;
 
-#[tokio::main]
-async fn main() {
+pub async fn remove() {
     let conf = aws_config::load_from_env().await;
     let cc_client = aws_sdk_cloudcontrol::Client::new(&conf);
     let re2_client = aws_sdk_resourceexplorer2::Client::new(&conf);

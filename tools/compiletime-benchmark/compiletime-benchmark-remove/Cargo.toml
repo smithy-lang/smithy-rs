@@ -1,0 +1,16 @@
+[package]
+name = "compiletime-benchmark-remove"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-sdk-cloudcontrol = { features = ["serde-serialize", "serde-deserialize"], path ="./serde-aws-sdk/sdk/cloudcontrol" }
+aws-sdk-resourceexplorer2 = { features = ["serde-serialize", "serde-deserialize"], path ="./serde-aws-sdk/sdk/resourceexplorer2" }
+aws-config = { features = ["serde-serialize", "serde-deserialize"], path ="./serde-aws-sdk/sdk/aws-config" }
+env_logger = "0.10.0"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.91"
+tokio = { version = "1.25.0", features = ["tokio-macros", "macros", "rt-multi-thread"] }
+toml = "0.7.1"
