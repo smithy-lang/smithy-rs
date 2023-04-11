@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.ConstrainedPythonBlobGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEventStreamErrorGenerator
@@ -43,7 +45,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreat
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.withModuleOrWithStructureBuilderModule
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -255,6 +259,23 @@ class PythonServerCodegenVisitor(
         if (shape.isEventStream(model)) {
             rustCrate.withModule(PythonServerRustModule.PythonEventStream) {
                 PythonServerEventStreamWrapperGenerator(codegenContext, shape).render(this)
+            }
+        }
+    }
+
+    override fun blobShape(shape: BlobShape) {
+        logger.info("[python-server-codegen] Generating a service $shape")
+        super.blobShape(shape)
+
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.Model, shape, codegenContext) {
+                ConstrainedPythonBlobGenerator(
+                    codegenContext,
+                    rustCrate.createInlineModuleCreator(),
+                    this,
+                    shape,
+                    validationExceptionConversionGenerator,
+                ).render()
             }
         }
     }
