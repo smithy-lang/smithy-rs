@@ -5,17 +5,26 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
+import software.amazon.smithy.rust.codegen.server.smithy.generators.TraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 
 class ConstrainedPythonBlobGenerator(
@@ -26,11 +35,31 @@ class ConstrainedPythonBlobGenerator(
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val constraintViolationSymbolProvider =
+        with(codegenContext.constraintViolationSymbolProvider) {
+            if (publicConstrainedTypes) {
+                this
+            } else {
+                PubCrateConstraintViolationSymbolProvider(this)
+            }
+        }
+    val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
+    private val blobConstraintsInfo: List<BlobLength> = listOf(LengthTrait::class.java)
+        .mapNotNull { shape.getTrait(it).orNull() }
+        .map { BlobLength(it) }
+    private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        val blobType = PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType()
+        renderFrom(symbol, blobType)
+        renderTryFrom(symbol, blobType)
+    }
+
+    fun renderFrom(symbol: Symbol, blobType: RustType) {
         val name = symbol.name
-        val inner = PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
+        val inner = blobType.render()
         writer.rustTemplate(
             """
             impl #{From}<$inner> for #{MaybeConstrained} {
@@ -44,15 +73,28 @@ class ConstrainedPythonBlobGenerator(
                     value.into_inner().into()
                 }
             }
-
-            impl #{From}<$inner> for $name {
-                fn from(value: $inner) -> Self {
-                    value.into()
-                }
-            }
             """,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "From" to RuntimeType.From,
+        )
+    }
+
+    fun renderTryFrom(symbol: Symbol, blobType: RustType) {
+        val name = symbol.name
+        val inner = blobType.render()
+        writer.rustTemplate(
+            """
+            impl #{TryFrom}<$inner> for $name {
+                type Error = #{ConstraintViolation};
+
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                    value.try_into()
+                }
+            }
+            """,
+            "TryFrom" to RuntimeType.TryFrom,
+            "ConstraintViolation" to constraintViolation,
+            "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
         )
     }
 }

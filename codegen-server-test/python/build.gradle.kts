@@ -74,19 +74,17 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
         //     // See https://github.com/awslabs/smithy-rs/issues/1401.
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
-        // CodegenTest(
-        //     "com.amazonaws.constraints#ConstraintsService",
-        //     "constraints",
-        //     imports = listOf("$commonModels/constraints.smithy"),
-        // ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
-        // CodegenTest(
-        //     "com.amazonaws.constraints#ConstraintsService",
-        //     "constraints_without_public_constrained_types",
-        //     imports = listOf("$commonModels/constraints.smithy"),
-        //     extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
-        // ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_without_public_constrained_types",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        ),
         CodegenTest(
             "com.amazonaws.constraints#UniqueItemsService",
             "unique_items",
