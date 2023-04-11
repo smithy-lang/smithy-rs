@@ -9,7 +9,6 @@ use http::HeaderMap;
 
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
-#[allow(clippy::result_large_err)]
 pub fn content_type_header_empty_body_no_modeled_input(headers: &HeaderMap) -> Result<(), MissingContentTypeReason> {
     if headers.contains_key(http::header::CONTENT_TYPE) {
         let found_mime = parse_content_type(headers)?;
@@ -22,7 +21,6 @@ pub fn content_type_header_empty_body_no_modeled_input(headers: &HeaderMap) -> R
     }
 }
 
-#[allow(clippy::result_large_err)]
 fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentTypeReason> {
     headers
         .get(http::header::CONTENT_TYPE)
@@ -34,7 +32,7 @@ fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentT
 }
 
 /// Checks that the content-type in request headers is valid
-#[allow(deprecated, clippy::result_large_err)]
+#[allow(deprecated)]
 pub fn content_type_header_classifier(
     headers: &HeaderMap,
     expected_content_type: Option<&'static str>,

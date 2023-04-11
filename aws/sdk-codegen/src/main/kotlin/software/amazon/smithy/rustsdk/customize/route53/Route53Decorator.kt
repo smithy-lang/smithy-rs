@@ -26,19 +26,26 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 import java.util.logging.Logger
 
+val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
+
 class Route53Decorator : ClientCodegenDecorator {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
     private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
-        ModelTransformer.create().mapShapes(model) { shape ->
-            shape.letIf(isResourceId(shape)) {
-                logger.info("Adding TrimResourceId trait to $shape")
-                (shape as MemberShape).toBuilder().addTrait(TrimResourceId()).build()
+    private fun applies(service: ServiceShape) = service.id == Route53
+
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return model.letIf(applies(service)) {
+            ModelTransformer.create().mapShapes(model) { shape ->
+                shape.letIf(isResourceId(shape)) {
+                    logger.info("Adding TrimResourceId trait to $shape")
+                    (shape as MemberShape).toBuilder().addTrait(TrimResourceId()).build()
+                }
             }
         }
+    }
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -49,9 +56,7 @@ class Route53Decorator : ClientCodegenDecorator {
             operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
             baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
-        } else {
-            baseCustomizations
-        }
+        } else baseCustomizations
     }
 
     private fun isResourceId(shape: Shape): Boolean {

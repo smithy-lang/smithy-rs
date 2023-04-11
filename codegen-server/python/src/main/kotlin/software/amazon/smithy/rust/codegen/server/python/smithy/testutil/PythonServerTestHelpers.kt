@@ -13,9 +13,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import java.io.File
 import java.nio.file.Path
@@ -27,13 +25,10 @@ fun generatePythonServerPluginContext(model: Model) =
     generatePluginContext(model, runtimeConfig = TestRuntimeConfig)
 
 fun executePythonServerCodegenVisitor(pluginCtx: PluginContext) {
-    val codegenDecorator =
+    val codegenDecorator: CombinedServerCodegenDecorator =
         CombinedServerCodegenDecorator.fromClasspath(
             pluginCtx,
-            *DECORATORS,
-            ServerRequiredCustomizations(),
-            SmithyValidationExceptionDecorator(),
-            CustomValidationExceptionWithReasonDecorator(),
+            CombinedServerCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
         )
     PythonServerCodegenVisitor(pluginCtx, codegenDecorator).execute()
 }

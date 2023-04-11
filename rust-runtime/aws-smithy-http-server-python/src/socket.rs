@@ -20,12 +20,7 @@ use std::net::SocketAddr;
 /// computing capacity of the host.
 ///
 /// [GIL]: https://wiki.python.org/moin/GlobalInterpreterLock
-///
-/// :param address str:
-/// :param port int:
-/// :param backlog typing.Optional\[int\]:
-/// :rtype None:
-#[pyclass(text_signature = "($self, address, port, backlog=None)")]
+#[pyclass]
 #[derive(Debug)]
 pub struct PySocket {
     pub(crate) inner: Socket,
@@ -54,8 +49,7 @@ impl PySocket {
 
     /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
-    ///
-    /// :rtype PySocket:
+    #[pyo3(text_signature = "($self, socket, worker_number)")]
     pub fn try_clone(&self) -> PyResult<PySocket> {
         let copied = self.inner.try_clone()?;
         Ok(PySocket { inner: copied })

@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -55,7 +54,7 @@ open class MakeOperationGenerator(
             ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
 
     private val codegenScope = arrayOf(
-        "config" to ClientRustModule.Config,
+        "config" to RuntimeType.Config,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "http" to RuntimeType.Http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
@@ -88,7 +87,6 @@ open class MakeOperationGenerator(
         Attribute.AllowClippyLetAndReturn.render(implBlockWriter)
         // Allows builders that don’t consume the input borrow
         Attribute.AllowClippyNeedlessBorrow.render(implBlockWriter)
-
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,

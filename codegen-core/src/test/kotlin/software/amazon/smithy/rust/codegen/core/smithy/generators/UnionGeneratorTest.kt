@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -116,7 +117,7 @@ class UnionGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
-        project.moduleFor(model.lookup("test#Nested")) {
+        project.withModule(ModelsModule) {
             UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()

@@ -33,16 +33,13 @@ private val UploadMultipartPart: ShapeId = ShapeId.from("com.amazonaws.glacier#U
 private val Applies = setOf(UploadArchive, UploadMultipartPart)
 
 class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    private val glacierChecksums = RuntimeType.forInlineDependency(
-        InlineAwsDependency.forRustFile(
-            "glacier_checksums",
-            additionalDependency = TreeHashDependencies.toTypedArray(),
-        ),
-    )
-
+    private val glacierChecksums = RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("glacier_checksums"))
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
+                TreeHashDependencies.forEach { dep ->
+                    addDependency(dep)
+                }
                 rustTemplate(
                     """
                     #{glacier_checksums}::add_checksum_treehash(
@@ -52,7 +49,6 @@ class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustom
                     "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError(),
                 )
             }
-
             else -> emptySection
         }
     }

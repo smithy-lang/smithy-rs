@@ -134,7 +134,7 @@ impl<'a> JsonObjectWriter<'a> {
     }
 
     /// Starts a value with the given `key`.
-    pub fn key(&mut self, key: &str) -> JsonValueWriter<'_> {
+    pub fn key(&mut self, key: &str) -> JsonValueWriter {
         if self.started {
             self.json.push(',');
         }
@@ -168,7 +168,7 @@ impl<'a> JsonArrayWriter<'a> {
     }
 
     /// Starts a new value in the array.
-    pub fn value(&mut self) -> JsonValueWriter<'_> {
+    pub fn value(&mut self) -> JsonValueWriter {
         self.comma_delimit();
         JsonValueWriter::new(self.json)
     }

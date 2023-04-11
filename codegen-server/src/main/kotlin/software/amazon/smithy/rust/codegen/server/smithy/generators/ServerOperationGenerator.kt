@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 class ServerOperationGenerator(
-    private val operation: OperationShape,
     codegenContext: CodegenContext,
+    private val operation: OperationShape,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =

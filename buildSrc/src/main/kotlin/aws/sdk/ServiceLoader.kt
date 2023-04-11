@@ -135,9 +135,9 @@ fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membersh
         serviceMembership.exclusions.forEach { disabledService ->
             check(baseModules.contains(disabledService)) {
                 "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-                    baseModules.joinToString(
-                        "\n ",
-                    )
+                baseModules.joinToString(
+                    "\n ",
+                )
                 }"
             }
         }
@@ -206,9 +206,7 @@ fun parseMembership(rawList: String): Membership {
     }
 
     val conflictingMembers = inclusions.intersect(exclusions)
-    require(conflictingMembers.isEmpty()) {
-        "$conflictingMembers specified both for inclusion and exclusion in $rawList"
-    }
+    require(conflictingMembers.isEmpty()) { "$conflictingMembers specified both for inclusion and exclusion in $rawList" }
 
     return Membership(inclusions, exclusions)
 }

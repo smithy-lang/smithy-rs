@@ -18,7 +18,7 @@ pub fn write_html(
 ) -> Result<()> {
     for (page_num, page) in pages.iter().enumerate() {
         let file_path = file_path(output_dir, page_num);
-        let mut file = fs::File::create(file_path)?;
+        let mut file = fs::File::create(&file_path)?;
 
         write_header(&mut file, title.as_deref(), subtitle.as_deref(), pages)?;
         for (file_num, page_file) in page.files.iter().enumerate() {

@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -61,11 +62,10 @@ private class TestProtocolTraitImplGenerator(
                 fn parse(&self, _response: &#{Response}<#{Bytes}>) -> Self::Output {
                     ${operationWriter.escape(correctResponse)}
                 }
-            }
-            """,
+                    }""",
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
-            "Error" to symbolProvider.symbolForOperationError(operationShape),
+            "Error" to operationShape.errorSymbol(symbolProvider),
             "Response" to RuntimeType.HttpResponse,
             "Bytes" to RuntimeType.Bytes,
         )
@@ -92,7 +92,7 @@ private class TestProtocolMakeOperationGenerator(
 
 // A stubbed test protocol to do enable testing intentionally broken protocols
 private class TestProtocolGenerator(
-    codegenContext: ClientCodegenContext,
+    codegenContext: CodegenContext,
     protocol: Protocol,
     httpRequestBuilder: String,
     body: String,
@@ -220,7 +220,7 @@ class ProtocolTestGeneratorTest {
     private fun testService(
         httpRequestBuilder: String,
         body: String = "${correctBody.dq()}.to_string()",
-        correctResponse: String = """Ok(crate::operation::say_hello::SayHelloOutput::builder().value("hey there!").build())""",
+        correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val codegenDecorator = object : ClientCodegenDecorator {
             override val name: String = "mock"
@@ -256,7 +256,7 @@ class ProtocolTestGeneratorTest {
                 .header("X-Greeting", "Hi")
                 .method("POST")
                 """,
-                correctResponse = "Ok(crate::operation::say_hello::SayHelloOutput::builder().build())",
+                correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())",
             )
         }
 

@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 private fun HttpChecksumTrait.requestValidationModeMember(
@@ -32,16 +31,12 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
-    private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime
-
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations.letIf(applies(codegenContext)) {
-        it + HttpResponseChecksumCustomization(codegenContext, operation)
+    ): List<OperationCustomization> {
+        return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
 }
 

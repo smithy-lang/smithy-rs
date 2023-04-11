@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Errors related to endpoint resolution and validation
-
 use std::error::Error;
 use std::fmt;
 
@@ -61,8 +59,6 @@ pub(super) enum InvalidEndpointErrorKind {
     },
 }
 
-/// An error that occurs when an endpoint is found to be invalid. This usually occurs due to an
-/// incomplete URI.
 #[derive(Debug)]
 pub struct InvalidEndpointError {
     pub(super) kind: InvalidEndpointErrorKind,

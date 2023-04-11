@@ -3,14 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![allow(clippy::derive_partial_eq_without_eq)]
-#![warn(
-    // missing_docs,
-    rustdoc::missing_crate_level_docs,
-    unreachable_pub,
-    rust_2018_idioms
-)]
-
 //! Abstractions for the Smithy AWS Query protocol
 
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
@@ -33,7 +25,7 @@ impl<'a> QueryWriter<'a> {
         QueryWriter { output }
     }
 
-    pub fn prefix(&mut self, prefix: &'a str) -> QueryValueWriter<'_> {
+    pub fn prefix(&mut self, prefix: &'a str) -> QueryValueWriter {
         QueryValueWriter::new(self.output, Cow::Borrowed(prefix))
     }
 
@@ -70,7 +62,7 @@ impl<'a> QueryMapWriter<'a> {
         }
     }
 
-    pub fn entry(&mut self, key: &str) -> QueryValueWriter<'_> {
+    pub fn entry(&mut self, key: &str) -> QueryValueWriter {
         let entry = if self.flatten { "" } else { ".entry" };
         write!(
             &mut self.output,
@@ -123,7 +115,7 @@ impl<'a> QueryListWriter<'a> {
         }
     }
 
-    pub fn entry(&mut self) -> QueryValueWriter<'_> {
+    pub fn entry(&mut self) -> QueryValueWriter {
         let value_name = if self.flatten {
             format!("{}.{}", self.prefix, self.next_index)
         } else if self.member_override.is_some() {
@@ -162,7 +154,7 @@ impl<'a> QueryValueWriter<'a> {
     }
 
     /// Starts a new prefix.
-    pub fn prefix(&mut self, prefix: &'a str) -> QueryValueWriter<'_> {
+    pub fn prefix(&mut self, prefix: &'a str) -> QueryValueWriter {
         QueryValueWriter::new(
             self.output,
             Cow::Owned(format!("{}.{}", self.prefix, prefix)),

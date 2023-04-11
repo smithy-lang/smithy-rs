@@ -7,22 +7,18 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedMetaModule
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
@@ -58,7 +54,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -69,22 +65,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
 
-        rustCrate.withModule(codegenContext.featureGatedPrimitivesModule()) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
-            if (!codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                pubUseSmithyErrorTypes(codegenContext)(this)
-            }
-        }
-        if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-            rustCrate.withModule(ClientRustModule.Error) {
-                pubUseSmithyErrorTypes(codegenContext)(this)
-            }
-        }
-
-        codegenContext.featureGatedMetaModule().also { metaModule ->
-            rustCrate.withModule(metaModule) {
-                CrateVersionCustomization.extras(rustCrate, metaModule)
-            }
-        }
+        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
     }
 }

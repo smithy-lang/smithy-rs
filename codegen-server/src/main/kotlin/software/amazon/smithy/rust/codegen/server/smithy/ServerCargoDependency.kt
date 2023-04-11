@@ -17,12 +17,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 object ServerCargoDependency {
     val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1"))
     val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
+    val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val Mime: CargoDependency = CargoDependency("mime", CratesIo("0.3"))
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.13"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
-    val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
+    val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
     val HyperDev: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), DependencyScope.Dev)
 

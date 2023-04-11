@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
-import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -43,9 +42,7 @@ fun StructureShape.expectMember(member: String): MemberShape =
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
-fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or {
-    this.getMember("Message")
-}.orNull()
+fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
@@ -140,9 +137,3 @@ fun Shape.isPrimitive(): Boolean {
         else -> false
     }
 }
-
-/** Convert a string to a ShapeId */
-fun String.shapeId() = ShapeId.from(this)
-
-/** Returns the service name, or a default value if the service doesn't have a title trait */
-fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default

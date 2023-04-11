@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import java.util.logging.Level
 
 internal class ValidateUnsupportedConstraintsAreNotUsedTest {
@@ -27,6 +26,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         namespace test
 
         service TestService {
+            version: "123",
             operations: [TestOperation]
         }
 
@@ -53,11 +53,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
         val service = model.lookup<ServiceShape>("test#TestService")
-        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
-            model,
-            service,
-            SmithyValidationExceptionConversionGenerator.SHAPE_ID,
-        )
+        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model, service)
 
         validationResult.messages shouldHaveSize 1
 
@@ -73,6 +69,39 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             ```
         """.trimIndent()
+    }
+
+    @Test
+    fun `it should detect when unsupported constraint traits on member shapes are used`() {
+        val model =
+            """
+            $baseModel
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String
+            }
+            """.asSmithyModel()
+        val validationResult = validateModel(model)
+
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].message shouldContain "The member shape `test#TestInputOutput\$lengthString` has the constraint trait `smithy.api#length` attached"
+    }
+
+    @Test
+    fun `it should not detect when the required trait on a member shape is used`() {
+        val model =
+            """
+            $baseModel
+
+            structure TestInputOutput {
+                @required
+                string: String
+            }
+            """.asSmithyModel()
+        val validationResult = validateModel(model)
+
+        validationResult.messages shouldHaveSize 0
     }
 
     private val constraintTraitOnStreamingBlobShapeModel =
@@ -150,49 +179,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 """.trimIndent().replace("\n", " ")
             it.message shouldNotContain "If you want to go ahead and generate the server SDK ignoring unsupported constraint traits"
         }
-    }
-
-    private val mapShapeReachableFromUniqueItemsListShapeModel =
-        """
-        $baseModel
-
-        structure TestInputOutput {
-            uniqueItemsList: UniqueItemsList
-        }
-
-        @uniqueItems
-        list UniqueItemsList {
-            member: Map
-        }
-
-        map Map {
-            key: String
-            value: String
-        }
-        """.asSmithyModel()
-
-    @Test
-    fun `it should detect when a map shape is reachable from a uniqueItems list shape`() {
-        val validationResult = validateModel(mapShapeReachableFromUniqueItemsListShapeModel)
-
-        validationResult.messages shouldHaveSize 1
-        validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain(
-            """
-            The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
-            `@uniqueItems` trait attached.
-            """.trimIndent().replace("\n", " ")
-            )
-    }
-
-    @Test
-    fun `it should abort when a map shape is reachable from a uniqueItems list shape, despite opting into ignoreUnsupportedConstraintTraits`() {
-        val validationResult = validateModel(
-            mapShapeReachableFromUniqueItemsListShapeModel,
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
-
-        validationResult.shouldAbort shouldBe true
     }
 
     @Test

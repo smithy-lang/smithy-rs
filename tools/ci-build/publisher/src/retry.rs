@@ -51,7 +51,7 @@ where
                     }
                     ErrorClass::Retry => {
                         info!(
-                            "{} failed on attempt {} with retryable error: {:?}. Will retry after {:?}",
+                            "{} failed on attempt {} with retryable error: {}. Will retry after {:?}",
                             what, attempt, err.into(), backoff
                         );
                     }

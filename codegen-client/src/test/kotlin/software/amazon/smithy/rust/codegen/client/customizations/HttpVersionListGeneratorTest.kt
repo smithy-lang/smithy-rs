@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
@@ -62,7 +61,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
+                        let op = $moduleName::operation::SayHello::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");
@@ -113,7 +112,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
+                        let op = $moduleName::operation::SayHello::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");
@@ -171,8 +170,8 @@ internal class HttpVersionListGeneratorTest {
 
         clientIntegrationTest(
             model,
-            IntegrationTestParams(addModuleToEventStreamAllowList = true),
-            additionalDecorators = listOf(FakeSigningDecorator()),
+            listOf(FakeSigningDecorator()),
+            addModuleToEventStreamAllowList = true,
         ) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_eventstream_http") {
@@ -181,7 +180,7 @@ internal class HttpVersionListGeneratorTest {
                     """
                     async fn test_http_version_list_defaults() {
                         let conf = $moduleName::Config::builder().build();
-                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
+                        let op = $moduleName::operation::SayHello::builder()
                             .build().expect("valid operation")
                             .make_operation(&conf).await.unwrap();
                         let properties = op.properties();
@@ -205,9 +204,7 @@ class FakeSigningDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.filterNot {
-            it is EventStreamSigningConfig
-        } + FakeSigningConfig(codegenContext.runtimeConfig)
+        return baseCustomizations.filterNot { it is EventStreamSigningConfig } + FakeSigningConfig(codegenContext.runtimeConfig)
     }
 }
 

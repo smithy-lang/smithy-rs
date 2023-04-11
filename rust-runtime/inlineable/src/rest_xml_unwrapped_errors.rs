@@ -6,7 +6,6 @@
 //! Error abstractions for `noErrorWrapping`. Code generators should either inline this file
 //! or its companion `rest_xml_wrapped_errors.rs` for code generation
 
-use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 use aws_smithy_xml::decode::{try_data, Document, ScopedDecoder, XmlDecodeError};
 use std::convert::TryFrom;
 
@@ -27,27 +26,30 @@ pub fn error_scope<'a, 'b>(
     Ok(scoped)
 }
 
-pub fn parse_error_metadata(body: &[u8]) -> Result<ErrorMetadataBuilder, XmlDecodeError> {
+pub fn parse_generic_error(body: &[u8]) -> Result<aws_smithy_types::Error, XmlDecodeError> {
     let mut doc = Document::try_from(body)?;
     let mut root = doc.root_element()?;
-    let mut builder = ErrorMetadata::builder();
+    let mut err = aws_smithy_types::Error::builder();
     while let Some(mut tag) = root.next_tag() {
         match tag.start_el().local() {
             "Code" => {
-                builder = builder.code(try_data(&mut tag)?);
+                err.code(try_data(&mut tag)?);
             }
             "Message" => {
-                builder = builder.message(try_data(&mut tag)?);
+                err.message(try_data(&mut tag)?);
+            }
+            "RequestId" => {
+                err.request_id(try_data(&mut tag)?);
             }
             _ => {}
         }
     }
-    Ok(builder)
+    Ok(err.build())
 }
 
 #[cfg(test)]
 mod test {
-    use super::{body_is_error, parse_error_metadata};
+    use super::{body_is_error, parse_generic_error};
 
     #[test]
     fn parse_unwrapped_error() {
@@ -59,7 +61,8 @@ mod test {
     <RequestId>foo-id</RequestId>
 </Error>"#;
         assert!(body_is_error(xml).unwrap());
-        let parsed = parse_error_metadata(xml).expect("valid xml").build();
+        let parsed = parse_generic_error(xml).expect("valid xml");
+        assert_eq!(parsed.request_id(), Some("foo-id"));
         assert_eq!(parsed.message(), Some("Hi"));
         assert_eq!(parsed.code(), Some("InvalidGreeting"));
     }

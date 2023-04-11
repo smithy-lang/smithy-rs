@@ -13,11 +13,10 @@ include(":codegen-server:python")
 include(":codegen-server-test")
 include(":codegen-server-test:python")
 include(":rust-runtime")
-include(":aws:rust-runtime")
-include(":aws:sdk")
-include(":aws:sdk-adhoc-test")
 include(":aws:sdk-codegen")
-include(":aws:sra-test")
+include(":aws:sdk-adhoc-test")
+include(":aws:sdk")
+include(":aws:rust-runtime")
 
 pluginManagement {
     val smithyGradlePluginVersion: String by settings

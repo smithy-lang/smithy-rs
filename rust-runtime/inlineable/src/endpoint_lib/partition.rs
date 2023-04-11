@@ -574,10 +574,8 @@ mod test {
     #[test]
     fn resolve_partitions() {
         let mut resolver = PartitionResolver::empty();
-        let new_suffix = PartitionOutputOverride {
-            dns_suffix: Some("mars.aws".into()),
-            ..Default::default()
-        };
+        let mut new_suffix = PartitionOutputOverride::default();
+        new_suffix.dns_suffix = Some("mars.aws".into());
         resolver.add_partition(PartitionMetadata {
             id: "aws".into(),
             region_regex: Regex::new("^(us|eu|ap|sa|ca|me|af)-\\w+-\\d+$").unwrap(),

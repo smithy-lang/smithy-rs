@@ -21,7 +21,7 @@ private val allowedClippyLints = listOf(
     // Sometimes operations are named the same as our module e.g. output leading to `output::output`.
     "module_inception",
 
-    // Currently, we don't re-case acronyms in models, e.g. `SSEVersion`.
+    // Currently, we don't recase acronyms in models, e.g. `SSEVersion`.
     "upper_case_acronyms",
 
     // Large errors trigger this warning, we are unlikely to optimize this case currently.
@@ -34,7 +34,9 @@ private val allowedClippyLints = listOf(
     "should_implement_trait",
 
     // Protocol tests use silly names like `baz`, don't flag that.
-    "disallowed_names",
+    // TODO(msrv_upgrade): switch
+    "blacklisted_name",
+    // "disallowed_names",
 
     // Forcing use of `vec![]` can make codegen harder in some cases.
     "vec_init_then_push",
@@ -46,10 +48,12 @@ private val allowedClippyLints = listOf(
     "needless_return",
 
     // For backwards compatibility, we often don't derive Eq
-    "derive_partial_eq_without_eq",
+    // TODO(msrv_upgrade): enable
+    // "derive_partial_eq_without_eq",
 
     // Keeping errors small in a backwards compatible way is challenging
-    "result_large_err",
+    // TODO(msrv_upgrade): enable
+    // "result_large_err",
 )
 
 private val allowedRustdocLints = listOf(

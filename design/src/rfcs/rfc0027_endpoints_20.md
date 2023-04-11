@@ -523,7 +523,7 @@ Changes checklist
 - [x] Add a Smithy endpoint resolver to the service config, with a default that loads the default endpoint resolver.
 - [x] Update `SdkConfig` to accept a URI instead of an implementation of `ResolveAwsEndpoint`. This change can be done
   standalone.
-- [x] Remove/deprecate the `ResolveAwsEndpoint` trait and replace it with the vanilla Smithy trait. Potentially, provide
+- [ ] Remove/deprecate the `ResolveAwsEndpoint` trait and replace it with the vanilla Smithy trait. Potentially, provide
   a bridge.
 - [x] Update `make_operation` to write a [`smithy::Endpoint`](#the-endpoint-struct) into the property bag
 - [x] Update AWS Endpoint middleware to work off of a [`smithy::Endpoint`](#the-endpoint-struct)

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
@@ -12,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -24,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -65,8 +68,9 @@ class RequestBindingGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
+    private fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(symbolProvider)
     private val httpBindingGenerator =
-        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
+        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
     private val index = HttpBindingIndex.of(model)
     private val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
 
@@ -127,7 +131,7 @@ class RequestBindingGenerator(
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdFmt.resolve("Write").toSymbol(), null)
         writer.rustBlockTemplate(
-            "fn uri_base(_input: &#{Input}, output: &mut String) -> std::result::Result<(), #{BuildError}>",
+            "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
             *codegenScope,
         ) {
             httpTrait.uri.labels.map { label ->
@@ -273,7 +277,7 @@ class RequestBindingGenerator(
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_timestamp"))
                 "&$func($targetName, ${writer.format(timestampFormatType)})?"
             }
@@ -314,7 +318,7 @@ class RequestBindingGenerator(
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 val func = format(RuntimeType.labelFormat(runtimeConfig, "fmt_timestamp"))
                 rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
             }
