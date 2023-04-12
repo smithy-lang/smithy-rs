@@ -50,6 +50,3 @@ target/
 
 # IDEs
 .idea/
-
-serde-aws-sdk/
-
