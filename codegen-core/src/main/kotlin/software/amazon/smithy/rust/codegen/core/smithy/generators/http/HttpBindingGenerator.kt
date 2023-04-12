@@ -356,9 +356,7 @@ class HttpBindingGenerator(
             rustType to targetShape
         }
         val parsedValue = safeName()
-        // We only check for the type name to allow other implementations that are swapping symbols like
-        // Python to execute the right branch and not fall back to the string deserialization.
-        if (coreType.name == dateTime.name) {
+        if (coreShape.isTimestampShape()) {
             val timestampFormat =
                 index.determineTimestampFormat(
                     memberShape,
