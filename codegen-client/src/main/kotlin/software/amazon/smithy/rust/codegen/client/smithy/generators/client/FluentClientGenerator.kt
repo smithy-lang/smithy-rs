@@ -269,7 +269,7 @@ class FluentClientGenerator(
             val outputType = symbolProvider.toSymbol(operation.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operation)
             val inputBuilderType = symbolProvider.symbolForBuilder(input)
-            val fnName = clientOperationFnName(operation, symbolProvider),
+            val fnName = clientOperationFnName(operation, symbolProvider)
             // Have to use fully-qualified result here or else it could conflict with an op named Result
             // Have to use fully-qualified result here or else it could conflict with an op named Result
             rustTemplate(
