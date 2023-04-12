@@ -47,11 +47,11 @@ class CargoTomlGeneratorTest {
     fun `check serde features`() {
         val project = TestWorkspace.testProject()
         /*
-        ["target.'cfg(aws_sdk_unstable)'.dependencies".serde]
-        version = "1.0"
-        features = ["derive"]
-        serde-serialize = ["aws-smithy-types/serde-serialize"]
-        serde-deserialize = ["aws-smithy-types/serde-deserialize"]
+            [target.'cfg(aws_sdk_unstable)'.dependencies.serde]
+            version = "1.0"
+            features = ["derive"]
+            serde-serialize = ["aws-smithy-types/serde-serialize"]
+            serde-deserialize = ["aws-smithy-types/serde-deserialize"]
         */
         project.lib {
             addDependency(CargoMetadata)
@@ -64,7 +64,7 @@ class CargoTomlGeneratorTest {
 
                 let features = &metadata.root_package().expect("missing root package").features;
 
-                assert_eq!(features.get("aws-aws-smithy-types"), Some(vec!["serde-serialize", "serde-deserialize"]));
+                assert_eq!(features.get("aws-aws-smithy-types"), Some(vec!["serde-serialize".to_string(), "serde-deserialize".to_string()]));
                 """,
             )
         }
