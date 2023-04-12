@@ -9,17 +9,20 @@ use std::task::{Context, Poll};
 use futures_util::Future;
 use http::StatusCode;
 use hyper::{Body, Request, Response};
+use tower::layer::util::Stack;
 use tower::{util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body;
 use crate::body::BoxBody;
+use crate::operation::Operation;
 
-use super::Either;
+use super::{Either, Plugin, PluginPipeline, PluginStack};
 
+/// A [`tower::Layer`] used to apply [`CheckHealthService`].
 #[derive(Clone)]
-pub struct CheckHealthLayer<H> {
+pub struct CheckHealthLayer<PingHandler> {
     health_check_uri: &'static str,
-    ping_handler: H,
+    ping_handler: PingHandler,
 }
 
 impl<H> CheckHealthLayer<H> {
@@ -51,6 +54,7 @@ impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
     }
 }
 
+/// A middleware [`Service`] responsible for handling health check requests.
 #[derive(Clone)]
 pub struct CheckHealthService<H, S> {
     inner: S,
@@ -99,4 +103,49 @@ fn default_ping_handler<E>(_req: Request<Body>) -> Ready<Result<Response<BoxBody
         .expect("Couldn't construct response");
 
     std::future::ready(Ok::<_, E>(response))
+}
+
+pub struct CheckHealthPlugin<H> {
+    layer: CheckHealthLayer<H>,
+}
+
+impl<H> CheckHealthPlugin<H> {
+    fn new(health_check_uri: &'static str, ping_handler: H) -> Self {
+        CheckHealthPlugin {
+            layer: CheckHealthLayer::new(health_check_uri, ping_handler),
+        }
+    }
+}
+
+impl<Protocol, Op, S, L, H> Plugin<Protocol, Op, S, L> for CheckHealthPlugin<H>
+where
+    H: Clone,
+{
+    type Service = S;
+
+    type Layer = Stack<L, CheckHealthLayer<H>>;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        input.layer(self.layer.clone())
+    }
+}
+
+/// An extension trait for applying [`CheckHealthLayer`] to all operations in a service.
+pub trait CheckHealthExt<H, CurrentPlugins> {
+    /// Applies a [`CheckHealthLayer`] to all operations.
+    fn check_health(
+        self,
+        health_check_uri: &'static str,
+        ping_handler: H,
+    ) -> PluginPipeline<PluginStack<CheckHealthPlugin<H>, CurrentPlugins>>;
+}
+
+impl<H, CurrentPlugins> CheckHealthExt<H, CurrentPlugins> for PluginPipeline<CurrentPlugins> {
+    fn check_health(
+        self,
+        health_check_uri: &'static str,
+        ping_handler: H,
+    ) -> PluginPipeline<PluginStack<CheckHealthPlugin<H>, CurrentPlugins>> {
+        self.push(CheckHealthPlugin::new(health_check_uri, ping_handler))
+    }
 }
