@@ -64,7 +64,7 @@ class CargoTomlGeneratorTest {
 
                 let features = &metadata.root_package().expect("missing root package").features;
 
-                assert_eq!(features.get("aws-aws-smithy-types"), Some(&vec!["serde-serialize".to_string(), "serde-deserialize".to_string()]));
+                assert_eq!(features.get("aws-smithy-types"), Some(&vec!["serde-serialize".to_string(), "serde-deserialize".to_string()]));
                 """,
             )
         }
