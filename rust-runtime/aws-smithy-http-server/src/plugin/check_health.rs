@@ -4,14 +4,12 @@
  */
 
 use std::future::Ready;
+use std::task::{Context, Poll};
 
 use futures_util::Future;
 use http::StatusCode;
 use hyper::{Body, Request, Response};
-use tower::util::Oneshot;
-use tower::Layer;
-use tower::Service;
-use tower::ServiceExt;
+use tower::{util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body;
 use crate::body::BoxBody;
@@ -67,8 +65,9 @@ where
 
     type Future = Either<HandlerFuture, Oneshot<S, Request<Body>>>;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // The check that the service is ready is done by `Oneshot` below.
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
