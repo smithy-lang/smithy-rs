@@ -313,8 +313,10 @@ class FluentClientGenerator(
                 /// This function replaces the parameter with new one.
                 /// It is useful when you want to replace the existing data with de-serialized data.
                 /// ```rust
-                /// let deserialized_parameters: $inputBuilderType  = serde_json::from_str(parameters_written_in_json).unwrap();
-                /// let outcome: #{OperationOutput} = client.$fnName().set_fields(&deserialized_parameters).send().await;
+                /// async {
+                ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(parameters_written_in_json).unwrap();
+                ///     let outcome: #{OperationOutput} = client.$fnName().set_fields(&deserialized_parameters).send().await;
+                /// }
                 /// ```
                 pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
                     self.inner = data;
