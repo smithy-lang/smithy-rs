@@ -8,8 +8,10 @@ use std::future::Ready;
 use futures_util::Future;
 use http::StatusCode;
 use hyper::{Body, Request, Response};
+use tower::util::Oneshot;
 use tower::Layer;
 use tower::Service;
+use tower::ServiceExt;
 
 use crate::body;
 use crate::body::BoxBody;
@@ -63,23 +65,23 @@ where
 
     type Error = S::Error;
 
-    type Future = Either<HandlerFuture, S::Future>;
+    type Future = Either<HandlerFuture, Oneshot<S, Request<Body>>>;
 
     fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let clone = self.inner.clone();
-        let mut service = std::mem::replace(&mut self.inner, clone);
-
         if req.uri() == "/ping" {
             Either::Left {
                 value: (self.layer.ping_handler)(req),
             }
         } else {
+            let clone = self.inner.clone();
+            let service = std::mem::replace(&mut self.inner, clone);
+
             Either::Right {
-                value: service.call(req),
+                value: service.oneshot(req),
             }
         }
     }
