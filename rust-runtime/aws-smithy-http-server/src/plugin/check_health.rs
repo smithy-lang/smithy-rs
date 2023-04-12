@@ -18,12 +18,16 @@ use super::Either;
 
 #[derive(Clone)]
 pub struct CheckHealthLayer<H> {
+    health_check_uri: &'static str,
     ping_handler: H,
 }
 
 impl<H> CheckHealthLayer<H> {
-    pub fn new(ping_handler: H) -> Self {
-        CheckHealthLayer { ping_handler }
+    pub fn new(health_check_uri: &'static str, ping_handler: H) -> Self {
+        CheckHealthLayer {
+            health_check_uri,
+            ping_handler,
+        }
     }
 }
 
@@ -31,7 +35,8 @@ pub type DefaultHandler<E> = fn(Request<Body>) -> Ready<Result<Response<BoxBody>
 
 impl CheckHealthLayer<()> {
     pub fn with_default_handler<E>() -> CheckHealthLayer<DefaultHandler<E>> {
-        CheckHealthLayer::new(default_ping_handler)
+        const DEFAULT_HEALTH_CHECK_URI: &str = "/ping";
+        CheckHealthLayer::new(DEFAULT_HEALTH_CHECK_URI, default_ping_handler)
     }
 }
 
@@ -71,7 +76,7 @@ where
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        if req.uri() == "/ping" {
+        if req.uri() == self.layer.health_check_uri {
             Either::Left {
                 value: (self.layer.ping_handler)(req),
             }
