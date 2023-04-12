@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -49,6 +50,7 @@ class ServerBuilderGeneratorTest {
                 codegenContext,
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
+                ServerRestJsonProtocol(codegenContext),
             )
 
             builderGenerator.render(project, writer)

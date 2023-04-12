@@ -42,20 +42,19 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         Ec2QuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_error_metadata(response.body().as_ref())", ec2QueryErrors)
+                rust("#T::parse_error_metadata(response_body)", ec2QueryErrors)
             }
         }
 

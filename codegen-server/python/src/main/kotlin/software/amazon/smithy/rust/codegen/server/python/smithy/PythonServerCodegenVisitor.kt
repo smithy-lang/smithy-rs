@@ -1,4 +1,3 @@
-
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -9,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -22,9 +22,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEventStreamErrorGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEventStreamWrapperGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -37,7 +40,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
@@ -102,11 +104,15 @@ class PythonServerCodegenVisitor(
         )
 
         // Override `codegenContext` which carries the various symbol providers.
+        val moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
+            codegenContext,
+            PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+        )
         codegenContext =
             ServerCodegenContext(
                 model,
                 serverSymbolProviders.symbolProvider,
-                null,
+                moduleDocProvider,
                 service,
                 protocol,
                 settings,
@@ -115,13 +121,6 @@ class PythonServerCodegenVisitor(
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
-
-        codegenContext = codegenContext.copy(
-            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
-                codegenContext,
-                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
-            ),
-        )
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(
@@ -208,9 +207,13 @@ class PythonServerCodegenVisitor(
 
         if (shape.isEventStream()) {
             rustCrate.withModule(ServerRustModule.Error) {
-                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+                PythonServerEventStreamErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
             }
         }
+    }
+
+    override fun protocolTests() {
+        logger.warning("[python-server-codegen] Protocol tests are disabled for this language")
     }
 
     /**
@@ -223,21 +226,36 @@ class PythonServerCodegenVisitor(
      * - Python operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
+        super.serviceShape(shape)
+
         logger.info("[python-server-codegen] Generating a service $shape")
-        PythonServerServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
-            codegenContext,
-        )
-            .render()
+
+        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        rustCrate.withModule(PythonServerRustModule.PythonServerApplication) {
+            PythonApplicationGenerator(codegenContext, serverProtocol)
+                .render(this)
+        }
     }
 
     override fun operationShape(shape: OperationShape) {
         super.operationShape(shape)
+
         rustCrate.withModule(PythonServerRustModule.PythonOperationAdapter) {
             PythonServerOperationHandlerGenerator(codegenContext, shape).render(this)
+        }
+
+        rustCrate.withModule(ServerRustModule.Error) {
+            PythonServerOperationErrorGenerator(codegenContext.model, codegenContext.symbolProvider, shape).render(this)
+        }
+    }
+
+    override fun memberShape(shape: MemberShape) {
+        super.memberShape(shape)
+
+        if (shape.isEventStream(model)) {
+            rustCrate.withModule(PythonServerRustModule.PythonEventStream) {
+                PythonServerEventStreamWrapperGenerator(codegenContext, shape).render(this)
+            }
         }
     }
 }

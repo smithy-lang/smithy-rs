@@ -16,7 +16,8 @@ import java.nio.file.Path
 sealed class DependencyScope {
     object Dev : DependencyScope()
     object Compile : DependencyScope()
-    object CfgUnstable : DependencyScope()
+    object CfgUnstable : DependencyScope()    
+    object Build : DependencyScope()
 }
 
 sealed class DependencyLocation
@@ -207,7 +208,7 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
+        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
@@ -251,6 +252,12 @@ data class CargoDependency(
             DependencyScope.Dev,
             features = setOf("env-filter", "json"),
         )
+        val TracingTest: CargoDependency = CargoDependency(
+            "tracing-test",
+            CratesIo("0.2.4"),
+            DependencyScope.Dev,
+            features = setOf("no-env-filter"),
+        )
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
@@ -267,6 +274,8 @@ data class CargoDependency(
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
 
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
+        fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
+        fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 

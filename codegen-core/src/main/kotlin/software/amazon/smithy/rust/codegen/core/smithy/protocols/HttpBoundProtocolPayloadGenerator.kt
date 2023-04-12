@@ -102,7 +102,7 @@ class HttpBoundProtocolPayloadGenerator(
         val payloadMemberName = httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, self, serializerGenerator.operationInputSerializer(operationShape))
         } else {
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
@@ -113,7 +113,7 @@ class HttpBoundProtocolPayloadGenerator(
         val payloadMemberName = httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, self, serializerGenerator.operationOutputSerializer(operationShape))
         } else {
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
@@ -126,7 +126,7 @@ class HttpBoundProtocolPayloadGenerator(
         operationShape: OperationShape,
         payloadMemberName: String,
     ) {
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+        val serializerGenerator = protocol.structuredDataSerializer()
 
         if (operationShape.isEventStream(model)) {
             if (operationShape.isInputEventStream(model) && target == CodegenTarget.CLIENT) {
