@@ -253,7 +253,6 @@ private fun renderCustomizableOperationSendMethod(
     val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
-
     val codegenScope = arrayOf(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),

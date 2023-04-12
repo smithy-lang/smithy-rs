@@ -212,7 +212,7 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("This is the datatype returned when calling `Builder::build()`.")
-        writer.rustInline("pub type OutputShape = #T;", structureSymbol)
+        writer.rustInline("##[allow(dead_code)] pub type OutputShape = #T;", structureSymbol)
         writer.docs("A builder for #D.", structureSymbol)
         metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
