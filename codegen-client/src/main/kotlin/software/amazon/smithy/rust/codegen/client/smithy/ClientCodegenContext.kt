@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 
 /**
@@ -23,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 data class ClientCodegenContext(
     override val model: Model,
     override val symbolProvider: RustSymbolProvider,
-    override val moduleDocProvider: ModuleDocProvider?,
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
     override val settings: ClientRustSettings,
@@ -31,5 +29,5 @@ data class ClientCodegenContext(
     // decorator
     val rootDecorator: ClientCodegenDecorator,
 ) : CodegenContext(
-    model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
+    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
 )

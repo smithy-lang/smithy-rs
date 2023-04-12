@@ -9,10 +9,11 @@ use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_client::Client as CoreClient;
 use aws_smithy_http::body::SdkBody;
 use http::Uri;
-use qldbsession::config::{Config, Credentials, Region};
 use qldbsession::middleware::DefaultMiddleware;
-use qldbsession::operation::send_command::SendCommandInput;
-use qldbsession::types::StartSessionRequest;
+use qldbsession::model::StartSessionRequest;
+use qldbsession::operation::SendCommand;
+use qldbsession::Credentials;
+use qldbsession::{Config, Region};
 use std::time::{Duration, UNIX_EPOCH};
 pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
@@ -45,7 +46,7 @@ async fn signv4_use_correct_service_name() {
         .credentials_provider(Credentials::for_tests())
         .build();
 
-    let mut op = SendCommandInput::builder()
+    let mut op = SendCommand::builder()
         .start_session(
             StartSessionRequest::builder()
                 .ledger_name("not-real-ledger")

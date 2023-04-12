@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -22,16 +23,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
-import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
 /**
  * The [ConstraintViolationSymbolProvider] returns, for a given constrained
@@ -68,6 +68,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructu
  */
 class ConstraintViolationSymbolProvider(
     private val base: RustSymbolProvider,
+    private val model: Model,
     private val publicConstrainedTypes: Boolean,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
@@ -79,31 +80,17 @@ class ConstraintViolationSymbolProvider(
 
     private fun Shape.shapeModule(): RustModule.LeafModule {
         val documentation = if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
-            val symbol = base.toSymbol(this)
-            "See [`${this.contextName(serviceShape)}`]($symbol)."
+            "See [`${this.contextName(serviceShape)}`]."
         } else {
-            ""
+            null
         }
-
-        val syntheticTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>()
-
-        val (module, name) = if (syntheticTrait != null) {
-            // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
-            // that is a descendant of the module that contains the extracted shape itself.
-            val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, publicConstrainedTypes)!!
-            val name = syntheticTrait.member.memberName
-            Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
-        } else {
-            // Need to use the context name so we get the correct name for maps.
-            Pair(ServerRustModule.Model, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
-        }
-
         return RustModule.new(
-            name = name,
+            // Need to use the context name so we get the correct name for maps.
+            name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
             visibility = visibility,
-            parent = module,
+            parent = ModelsModule,
             inline = true,
-            documentationOverride = documentation,
+            documentation = documentation,
         )
     }
 

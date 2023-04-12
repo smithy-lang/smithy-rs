@@ -53,7 +53,7 @@ impl From<EscapeErrorKind> for EscapeError {
 }
 
 /// Escapes a string for embedding in a JSON string value.
-pub(crate) fn escape_string(value: &str) -> Cow<'_, str> {
+pub fn escape_string(value: &str) -> Cow<str> {
     let bytes = value.as_bytes();
     for (index, byte) in bytes.iter().enumerate() {
         match byte {
@@ -94,7 +94,7 @@ fn escape_string_inner(start: &[u8], rest: &[u8]) -> String {
 
 /// Unescapes a JSON-escaped string.
 /// If there are no escape sequences, it directly returns the reference.
-pub(crate) fn unescape_string(value: &str) -> Result<Cow<'_, str>, EscapeError> {
+pub fn unescape_string(value: &str) -> Result<Cow<str>, EscapeError> {
     let bytes = value.as_bytes();
     for (index, byte) in bytes.iter().enumerate() {
         if *byte == b'\\' {

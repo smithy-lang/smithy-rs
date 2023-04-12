@@ -71,7 +71,6 @@ mod test {
     use super::*;
     use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 
-    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn parse_simple_url() {
         let url = "https://control.vpce-1a2b3c4d-5e6f.s3.us-west-2.vpce.amazonaws.com";
@@ -93,7 +92,6 @@ mod test {
         assert_eq!(url.scheme(), "https");
     }
 
-    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn parse_url_with_port() {
         let url = "http://localhost:8000/path";

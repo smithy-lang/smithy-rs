@@ -389,7 +389,7 @@ mod tests {
             let res = changelog.validate();
             assert!(res.is_ok());
             if let Err(e) = res {
-                panic!("some error has been produced {e:?}");
+                assert!(false, "some error has been produced {e:?}");
             }
             assert_eq!(changelog.smithy_rs[1].meta.target, Some(SdkAffected::All));
         }

@@ -19,5 +19,5 @@ class ClientCustomizations : ClientCodegenDecorator {
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator(codegenContext)
+    ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator()
 }

@@ -20,11 +20,3 @@ for test_dir in tests/*; do
         cargo check --all-targets --all-features --manifest-path "${test_dir}/Cargo.toml"
     fi
 done
-
-# TODO(CrateReorganization): Uncomment when cleaning up `enableNewCrateOrganizationScheme`
-# large_file_count="$(find sdk -iname '*.rs' -type f -size +1M | wc -l | bc)"
-# if [[ "${large_file_count}" != "0" ]]; then
-#     echo "Found ${large_file_count} generated code files larger than 1 MB:"
-#     find sdk -iname '*.rs' -type f -size +1M
-#     exit 1
-# fi

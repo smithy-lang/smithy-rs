@@ -20,11 +20,10 @@ pushd tools/ci-cdk/canary-lambda
 # The canary-lambda doesn't have a Cargo.toml in a fresh checkout of smithy-rs, so generate one before checks
 pushd ../canary-runner
 echo "${C_YELLOW}## Generating Cargo.toml for the canary-lambda...${C_RESET}"
-cargo run -- build-bundle --manifest-only --canary-path ../canary-lambda --sdk-path "${SDK_PATH}" --musl
+cargo run -- build-bundle --manifest-only --canary-path ../canary-lambda --sdk-path "${SDK_PATH}"
 popd
 
-# Note: This only checks the `latest` canary, and not any previous version features
 echo "${C_YELLOW}## Running 'cargo clippy' for the canary-lambda...${C_RESET}"
-cargo clippy
+cargo clippy --all-features
 
 popd

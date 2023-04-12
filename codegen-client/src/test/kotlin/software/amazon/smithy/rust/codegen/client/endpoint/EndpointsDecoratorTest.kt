@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
@@ -124,8 +123,8 @@ class EndpointsDecoratorTest {
     fun `set an endpoint in the property bag`() {
         val testDir = clientIntegrationTest(
             model,
-            // Just run integration tests.
-            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
+            // just run integration tests
+            command = { "cargo test --test *".runWithWarnings(it) },
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
@@ -134,7 +133,7 @@ class EndpointsDecoratorTest {
                     """
                     async fn endpoint_params_are_set() {
                             let conf = $moduleName::Config::builder().a_string_param("hello").a_bool_param(false).build();
-                            let operation = $moduleName::operation::test_operation::TestOperationInput::builder()
+                            let operation = $moduleName::operation::TestOperation::builder()
                                 .bucket("bucket-name").build().expect("input is valid")
                                 .make_operation(&conf).await.expect("valid operation");
                             use $moduleName::endpoint::{Params};

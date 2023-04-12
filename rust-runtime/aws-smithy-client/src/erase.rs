@@ -61,7 +61,6 @@ where
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
-            reconnect_mode: self.reconnect_mode,
         }
     }
 }
@@ -102,7 +101,6 @@ where
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
-            reconnect_mode: self.reconnect_mode,
         }
     }
 

@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -144,9 +143,7 @@ fun defaultValue(
                 .entries
                 .filter { entry -> entry.value == value }
                 .map { entry ->
-                    EnumMemberModel.toEnumVariantName(
-                        symbolProvider,
-                        target,
+                    symbolProvider.toEnumVariantName(
                         EnumDefinition.builder().name(entry.key).value(entry.value.toString()).build(),
                     )!!
                 }

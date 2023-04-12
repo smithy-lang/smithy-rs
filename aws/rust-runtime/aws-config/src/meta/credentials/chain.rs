@@ -174,10 +174,11 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(300)),
         );
         match timeout.await {
-            Ok(_) => panic!("provide_credentials completed before timeout future"),
+            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
             Err(_err) => match chain.fallback_on_interrupt() {
                 Some(actual) => assert_eq!(actual, expected),
-                None => panic!(
+                None => assert!(
+                    false,
                     "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
                 ),
             },
@@ -207,10 +208,11 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)),
         );
         match timeout.await {
-            Ok(_) => panic!("provide_credentials completed before timeout future"),
+            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
             Err(_err) => match chain.fallback_on_interrupt() {
                 Some(actual) => assert_eq!(actual, expected),
-                None => panic!(
+                None => assert!(
+                    false,
                     "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
                 ),
             },

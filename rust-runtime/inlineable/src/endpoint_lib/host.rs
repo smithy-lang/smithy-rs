@@ -40,7 +40,6 @@ mod test {
         super::is_valid_host_label(label, allow_dots, &mut DiagnosticCollector::new())
     }
 
-    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn basic_cases() {
         assert_eq!(is_valid_host_label("", false), false);
@@ -58,7 +57,6 @@ mod test {
         );
     }
 
-    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn start_bounds() {
         assert_eq!(is_valid_host_label("-foo", false), false);

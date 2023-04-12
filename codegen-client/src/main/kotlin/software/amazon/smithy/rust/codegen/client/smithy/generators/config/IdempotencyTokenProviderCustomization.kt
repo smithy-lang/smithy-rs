@@ -63,9 +63,7 @@ class IdempotencyTokenProviderCustomization : NamedCustomization<ServiceConfig>(
                 rust("make_token: self.make_token.unwrap_or_else(#T::default_provider),", RuntimeType.IdempotencyToken)
             }
 
-            is ServiceConfig.DefaultForTests -> writable {
-                rust("""${section.configBuilderRef}.set_make_token(Some("00000000-0000-4000-8000-000000000000".into()));""")
-            }
+            is ServiceConfig.DefaultForTests -> writable { rust("""${section.configBuilderRef}.set_make_token(Some("00000000-0000-4000-8000-000000000000".into()));""") }
 
             else -> writable { }
         }

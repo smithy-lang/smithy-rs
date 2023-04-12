@@ -7,120 +7,30 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.Model
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
-import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
-    private class TestSymbolProvider(model: Model) :
-        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, TestRustSymbolProviderConfig))
-    private val emptyConfig = RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap())
-
-    @Test
-    fun `structs are escaped`() {
-        val model = """
-            namespace test
-            structure Self {}
-        """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
-        val symbol = provider.toSymbol(model.lookup("test#Self"))
-        symbol.name shouldBe "SelfValue"
-    }
-
-    private fun mappingTest(config: RustReservedWordConfig, model: Model, id: String, test: (String) -> Unit) {
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), config)
-        val symbol = provider.toMemberName(model.lookup("test#Container\$$id"))
-        test(symbol)
-    }
-
-    @Test
-    fun `structs member names are mapped via config`() {
-        val config = emptyConfig.copy(
-            structureMemberMap = mapOf(
-                "name_to_map" to "mapped_name",
-                "NameToMap" to "MappedName",
-            ),
-        )
-        var model = """
-            namespace test
-            structure Container {
-                name_to_map: String
-            }
-        """.asSmithyModel()
-        mappingTest(config, model, "name_to_map") { memberName ->
-            memberName shouldBe "mapped_name"
+    class Stub : RustSymbolProvider {
+        override fun config(): SymbolVisitorConfig {
+            PANIC("")
         }
 
-        model = """
-            namespace test
-            enum Container {
-                NameToMap = "NameToMap"
-            }
-        """.asSmithyModel(smithyVersion = "2.0")
-        mappingTest(config, model, "NameToMap") { memberName ->
-            // Container was not a struct, so the field keeps its old name
-            memberName shouldBe "NameToMap"
+        override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+            return definition.name.orNull()?.let { MaybeRenamed(it.toPascalCase(), null) }
         }
 
-        model = """
-            namespace test
-            union Container {
-                NameToMap: String
-            }
-        """.asSmithyModel()
-        mappingTest(config, model, "NameToMap") { memberName ->
-            // Container was not a struct, so the field keeps its old name
-            memberName shouldBe "NameToMap"
-        }
-    }
-
-    @Test
-    fun `union member names are mapped via config`() {
-        val config = emptyConfig.copy(
-            unionMemberMap = mapOf(
-                "name_to_map" to "mapped_name",
-                "NameToMap" to "MappedName",
-            ),
-        )
-
-        var model = """
-            namespace test
-            union Container {
-                NameToMap: String
-            }
-        """.asSmithyModel()
-        mappingTest(config, model, "NameToMap") { memberName ->
-            memberName shouldBe "MappedName"
-        }
-
-        model = """
-            namespace test
-            structure Container {
-                name_to_map: String
-            }
-        """.asSmithyModel()
-        mappingTest(config, model, "name_to_map") { memberName ->
-            // Container was not a union, so the field keeps its old name
-            memberName shouldBe "name_to_map"
-        }
-
-        model = """
-            namespace test
-            enum Container {
-                NameToMap = "NameToMap"
-            }
-        """.asSmithyModel(smithyVersion = "2.0")
-        mappingTest(config, model, "NameToMap") { memberName ->
-            // Container was not a union, so the field keeps its old name
-            memberName shouldBe "NameToMap"
+        override fun toSymbol(shape: Shape): Symbol {
+            return Symbol.builder().name(shape.id.name).build()
         }
     }
 
@@ -131,8 +41,8 @@ internal class RustReservedWordSymbolProviderTest {
             structure container {
                 async: String
             }
-        """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
+        """.trimMargin().asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(Stub(), model)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -144,31 +54,6 @@ internal class RustReservedWordSymbolProviderTest {
 
     @Test
     fun `enum variant names are updated to avoid conflicts`() {
-        val model = """
-            namespace foo
-            @enum([{ name: "dontcare", value: "dontcare" }]) string Container
-        """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(
-            TestSymbolProvider(model),
-            reservedWordConfig = emptyConfig.copy(
-                enumMemberMap = mapOf(
-                    "Unknown" to "UnknownValue",
-                    "UnknownValue" to "UnknownValue_",
-                ),
-            ),
-        )
-
-        fun expectEnumRename(original: String, expected: MaybeRenamed) {
-            val symbol = provider.toSymbol(
-                MemberShape.builder()
-                    .id(ShapeId.fromParts("foo", "Container").withMember(original))
-                    .target("smithy.api#String")
-                    .build(),
-            )
-            symbol.name shouldBe expected.name
-            symbol.renamedFrom() shouldBe expected.renamedFrom
-        }
-
         expectEnumRename("Unknown", MaybeRenamed("UnknownValue", "Unknown"))
         expectEnumRename("UnknownValue", MaybeRenamed("UnknownValue_", "UnknownValue"))
         expectEnumRename("UnknownOther", MaybeRenamed("UnknownOther", null))
@@ -177,5 +62,11 @@ internal class RustReservedWordSymbolProviderTest {
         expectEnumRename("SelfValue", MaybeRenamed("SelfValue_", "SelfValue"))
         expectEnumRename("SelfOther", MaybeRenamed("SelfOther", null))
         expectEnumRename("SELF", MaybeRenamed("SelfValue", "Self"))
+    }
+
+    private fun expectEnumRename(original: String, expected: MaybeRenamed) {
+        val model = "namespace foo".asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(Stub(), model)
+        provider.toEnumVariantName(EnumDefinition.builder().name(original).value("foo").build()) shouldBe expected
     }
 }

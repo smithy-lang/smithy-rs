@@ -3,7 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::sync::Arc;
+
+use aws_sdk_sts::operation::AssumeRole;
+use aws_sdk_sts::{Config, Credentials};
+use aws_types::region::Region;
+
 use super::repr::{self, BaseProvider};
+
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
@@ -12,12 +19,9 @@ use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
 use aws_sdk_sts::middleware::DefaultMiddleware;
-use aws_sdk_sts::operation::assume_role::AssumeRoleInput;
-use aws_sdk_sts::{config::Credentials, Config};
 use aws_smithy_client::erase::DynConnector;
-use aws_types::region::Region;
+
 use std::fmt::Debug;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub(super) struct AssumeRoleProvider {
@@ -47,7 +51,7 @@ impl AssumeRoleProvider {
             .as_ref()
             .cloned()
             .unwrap_or_else(|| sts::util::default_session_name("assume-role-from-profile"));
-        let operation = AssumeRoleInput::builder()
+        let operation = AssumeRole::builder()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)

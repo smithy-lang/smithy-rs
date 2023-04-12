@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerEnumGeneratorTest {
@@ -41,11 +40,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        ServerEnumGenerator(
-            codegenContext,
-            shape,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render(writer)
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -58,14 +53,10 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        ServerEnumGenerator(
-            codegenContext,
-            shape,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render(writer)
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.compileAndTest(
             """
-            // Check no `Unknown` variant.
+            // check no unknown
             let instance = InstanceType::T2Micro;
             match instance {
                 InstanceType::T2Micro => (),
@@ -77,11 +68,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        ServerEnumGenerator(
-            codegenContext,
-            shape,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render(writer)
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }

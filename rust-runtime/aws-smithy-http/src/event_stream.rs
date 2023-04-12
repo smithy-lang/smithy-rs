@@ -10,7 +10,6 @@ use std::error::Error as StdError;
 mod receiver;
 mod sender;
 
-/// A generic, boxed error that's `Send`, `Sync`, and `'static`.
 pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 
 #[doc(inline)]

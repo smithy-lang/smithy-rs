@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -28,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
  */
 class ConstrainedShapeSymbolMetadataProvider(
     private val base: RustSymbolProvider,
+    private val model: Model,
     private val constrainedTypes: Boolean,
 ) : SymbolMetadataProvider(base) {
 

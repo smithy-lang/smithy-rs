@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolute
@@ -73,7 +72,7 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
-        is LibRsSection.Body -> testDependenciesOnly {
+        is LibRsSection.Body -> writable {
             if (hasTests) {
                 val smithyClient = CargoDependency.smithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
@@ -82,7 +81,7 @@ class IntegrationTestDependencies(
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
-                addDependency(Tracing.toDevDependency())
+                addDependency(Tracing)
                 addDependency(TracingSubscriber)
             }
             if (hasBenches) {
@@ -92,7 +91,6 @@ class IntegrationTestDependencies(
                 serviceSpecific.section(section)(this)
             }
         }
-
         else -> emptySection
     }
 
@@ -116,8 +114,8 @@ class S3TestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStd)
-            addDependency(BytesUtils.toDevDependency())
-            addDependency(FastRand.toDevDependency())
+            addDependency(BytesUtils)
+            addDependency(FastRand)
             addDependency(HdrHistogram)
             addDependency(Smol)
             addDependency(TempFile)

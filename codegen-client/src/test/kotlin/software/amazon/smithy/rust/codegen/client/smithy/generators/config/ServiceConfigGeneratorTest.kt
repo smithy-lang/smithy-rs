@@ -8,8 +8,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -94,9 +94,7 @@ internal class ServiceConfigGeneratorTest {
                     }
                     ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
                     ServiceConfig.BuilderImpl -> emptySection
-                    ServiceConfig.BuilderBuild -> writable {
-                        rust("config_field: self.config_field.unwrap_or_default(),")
-                    }
+                    ServiceConfig.BuilderBuild -> writable { rust("config_field: self.config_field.unwrap_or_default(),") }
                     else -> emptySection
                 }
             }
@@ -104,7 +102,7 @@ internal class ServiceConfigGeneratorTest {
         val sut = ServiceConfigGenerator(listOf(ServiceCustomizer()))
         val symbolProvider = testSymbolProvider("namespace empty".asSmithyModel())
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ClientRustModule.Config) {
+        project.withModule(RustModule.Config) {
             sut.render(this)
             unitTest(
                 "set_config_fields",

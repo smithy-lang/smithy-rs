@@ -26,6 +26,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -37,13 +38,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -166,7 +168,6 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to runtimeConfig.serializationError(),
@@ -176,6 +177,9 @@ class JsonSerializerGenerator(
         "ByteSlab" to RuntimeType.ByteSlab,
     )
     private val serializerUtil = SerializerUtil(model)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val jsonSerModule = RustModule.private("json_ser")
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
@@ -183,16 +187,12 @@ class JsonSerializerGenerator(
      * This function is only used by the server, the client uses directly [serializeStructure].
      */
     private fun serverSerializer(
+        fnName: String,
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
         makeSection: (StructureShape, String) -> JsonSerializerSection,
-        error: Boolean,
     ): RuntimeType {
-        val suffix = when (error) {
-            true -> "error"
-            else -> "output"
-        }
-        return protocolFunctions.serializeFn(structureShape, fnNameSuffix = suffix) { fnName ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
@@ -209,8 +209,9 @@ class JsonSerializerGenerator(
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
+        val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target)
-        return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> std::result::Result<#{ByteSlab}, #{Error}>",
                 *codegenScope,
@@ -229,8 +230,9 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unsetpayload") { fnName ->
+    override fun unsetStructure(structure: StructureShape): RuntimeType {
+        val fnName = "rest_json_unsetpayload"
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -240,6 +242,7 @@ class JsonSerializerGenerator(
                 *codegenScope,
             )
         }
+    }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there is no JSON body.
@@ -249,7 +252,8 @@ class JsonSerializerGenerator(
         }
 
         val inputShape = operationShape.inputShape(model)
-        return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
+        val fnName = symbolProvider.serializeFunctionName(operationShape)
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
@@ -265,7 +269,8 @@ class JsonSerializerGenerator(
     }
 
     override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
+        val fnName = "serialize_document"
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
@@ -297,7 +302,8 @@ class JsonSerializerGenerator(
         val httpDocumentMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
 
         val outputShape = operationShape.outputShape(model)
-        return serverSerializer(outputShape, httpDocumentMembers, JsonSerializerSection::OutputStruct, error = false)
+        val fnName = symbolProvider.serializeFunctionName(outputShape)
+        return serverSerializer(fnName, outputShape, httpDocumentMembers, JsonSerializerSection::OutputStruct)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -305,15 +311,17 @@ class JsonSerializerGenerator(
         val includedMembers =
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
-        return serverSerializer(errorShape, includedMembers, JsonSerializerSection::ServerError, error = true)
+        val fnName = symbolProvider.serializeFunctionName(errorShape)
+        return serverSerializer(fnName, errorShape, includedMembers, JsonSerializerSection::ServerError)
     }
 
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
+        val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
+        val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
@@ -397,11 +405,12 @@ class JsonSerializerGenerator(
 
             is TimestampShape -> {
                 val timestampFormat =
-                    httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS, model)
-                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                    httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rustTemplate(
-                    "$writer.date_time(${value.asRef()}, #{FormatType})?;",
+                    "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
                     "FormatType" to timestampFormatType,
+                    "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                 )
             }
 
@@ -481,8 +490,9 @@ class JsonSerializerGenerator(
     }
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
+        val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
+        val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,

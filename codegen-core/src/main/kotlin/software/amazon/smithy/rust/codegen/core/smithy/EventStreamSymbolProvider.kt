@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -13,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -27,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 class EventStreamSymbolProvider(
     private val runtimeConfig: RuntimeConfig,
     base: RustSymbolProvider,
+    private val model: Model,
     private val target: CodegenTarget,
 ) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
@@ -46,7 +49,7 @@ class EventStreamSymbolProvider(
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
                     RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
                 } else {
-                    symbolForEventStreamError(unionShape)
+                    unionShape.eventStreamErrorSymbol(this).toSymbol()
                 }
                 val errorFmt = error.rustType().render(fullyQualified = true)
                 val innerFmt = initial.rustType().stripOuter<RustType.Option>().render(fullyQualified = true)

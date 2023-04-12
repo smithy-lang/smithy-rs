@@ -23,17 +23,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
-import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
@@ -49,7 +48,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  */
 class UnconstrainedUnionGenerator(
     val codegenContext: ServerCodegenContext,
-    private val inlineModuleCreator: InlineModuleCreator,
+    private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape,
 ) {
@@ -77,7 +76,7 @@ class UnconstrainedUnionGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        inlineModuleCreator(symbol) {
+        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]
@@ -133,16 +132,11 @@ class UnconstrainedUnionGenerator(
         } else {
             Visibility.PUBCRATE
         }
-
-        inlineModuleCreator(
-            constraintViolationSymbol,
+        modelsModuleWriter.withInlineModule(
+            constraintViolationSymbol.module(),
         ) {
             Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
-            rustBlock(
-                """
-                ##[allow(clippy::enum_variant_names)]
-                pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName""",
-            ) {
+            rustBlock("pub${if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else ""} enum $constraintViolationName") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
@@ -177,8 +171,8 @@ class UnconstrainedUnionGenerator(
 
         val constraintViolationSymbol =
             constraintViolationSymbolProvider.toSymbol(targetShape)
-                // Box this constraint violation symbol if necessary.
-                .letIf(constraintViolation.forMember.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                // If the corresponding union's member is boxed, box this constraint violation symbol too.
+                .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
                     it.makeRustBoxed()
                 }
 
@@ -207,14 +201,9 @@ class UnconstrainedUnionGenerator(
                                     (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {
-                                "(*unconstrained)" to ".map(Box::new)"
+                                "(*unconstrained)" to ".map(Box::new).map_err(Box::new)"
                             } else {
                                 "unconstrained" to ""
-                            }
-                            val boxErr = if (member.hasTrait<ConstraintViolationRustBoxTrait>()) {
-                                ".map_err(Box::new)"
-                            } else {
-                                ""
                             }
 
                             if (resolveToNonPublicConstrainedType) {
@@ -228,7 +217,8 @@ class UnconstrainedUnionGenerator(
                                     """
                                     {
                                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
-                                            .try_into()$boxIt$boxErr
+                                            .try_into()
+                                            $boxIt
                                             .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                         constrained.into()
                                     }
@@ -241,7 +231,6 @@ class UnconstrainedUnionGenerator(
                                     $unconstrainedVar
                                         .try_into()
                                         $boxIt
-                                        $boxErr
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?
                                     """,
                                 )

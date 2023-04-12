@@ -21,6 +21,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -35,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -94,7 +95,6 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithyQuery = RuntimeType.smithyQuery(runtimeConfig)
     private val serdeUtil = SerializerUtil(model)
-    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
@@ -102,6 +102,8 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         "QueryWriter" to smithyQuery.resolve("QueryWriter"),
         "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
     )
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val querySerModule = RustModule.private("query_ser")
 
     abstract val protocolName: String
     abstract fun MemberShape.queryKeyName(prioritizedFallback: String? = null): String
@@ -122,8 +124,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
+        val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
-        return protocolFunctions.serializeFn(inputShape, fnNameSuffix = "input") { fnName ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
@@ -163,8 +166,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         if (context.shape.members().isEmpty()) {
             return
         }
+        val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
+        val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
             Attribute.AllowUnusedMut.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
@@ -235,7 +239,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
-                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))
@@ -308,8 +312,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
+        val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
+        val unionSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
             Attribute.AllowUnusedMut.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",

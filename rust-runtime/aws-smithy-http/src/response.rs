@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Types for response parsing.
-
 use crate::operation;
 use bytes::Bytes;
 
@@ -67,10 +65,7 @@ pub trait ParseHttpResponse {
 /// `ParseStrictResponse` enables operations that _never_ need to stream the body incrementally to
 /// have cleaner implementations. There is a blanket implementation
 pub trait ParseStrictResponse {
-    /// The type returned by this parser.
     type Output;
-
-    /// Parse an [`http::Response<Bytes>`] into `Self::Output`.
     fn parse(&self, response: &http::Response<Bytes>) -> Self::Output;
 }
 
@@ -96,8 +91,8 @@ mod test {
 
     #[test]
     fn supports_streaming_body() {
-        struct S3GetObject {
-            _body: SdkBody,
+        pub struct S3GetObject {
+            pub body: SdkBody,
         }
 
         struct S3GetObjectParser;
@@ -108,7 +103,7 @@ mod test {
             fn parse_unloaded(&self, response: &mut operation::Response) -> Option<Self::Output> {
                 // For responses that pass on the body, use mem::take to leave behind an empty body
                 let body = mem::replace(response.http_mut().body_mut(), SdkBody::taken());
-                Some(S3GetObject { _body: body })
+                Some(S3GetObject { body })
             }
 
             fn parse_loaded(&self, _response: &http::Response<Bytes>) -> Self::Output {

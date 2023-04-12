@@ -10,12 +10,11 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope.Compile
-import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope.Dev
 
 class CodegenDelegatorTest {
     @Test
     fun testMergeDependencyFeatures() {
-        val merged =
+        val merged = mergeDependencyFeatures(
             listOf(
                 CargoDependency("A", CratesIo("1"), Compile, optional = false, features = setOf()),
                 CargoDependency("A", CratesIo("1"), Compile, optional = false, features = setOf("f1")),
@@ -27,27 +26,13 @@ class CodegenDelegatorTest {
 
                 CargoDependency("C", CratesIo("3"), Compile, optional = true, features = setOf()),
                 CargoDependency("C", CratesIo("3"), Compile, optional = true, features = setOf()),
-            ).shuffled().mergeDependencyFeatures()
+            ).shuffled(),
+        )
 
         merged shouldBe setOf(
             CargoDependency("A", CratesIo("1"), Compile, optional = false, features = setOf("f1", "f2")),
             CargoDependency("B", CratesIo("2"), Compile, optional = false, features = setOf()),
             CargoDependency("C", CratesIo("3"), Compile, optional = true, features = setOf()),
-        )
-    }
-
-    @Test
-    fun testMergeIdenticalFeatures() {
-        val merged = listOf(
-            CargoDependency("A", CratesIo("1"), Compile),
-            CargoDependency("A", CratesIo("1"), Dev),
-            CargoDependency("B", CratesIo("1"), Compile),
-            CargoDependency("B", CratesIo("1"), Dev, features = setOf("a", "b")),
-        ).mergeIdenticalTestDependencies()
-        merged shouldBe setOf(
-            CargoDependency("A", CratesIo("1"), Compile),
-            CargoDependency("B", CratesIo("1"), Compile),
-            CargoDependency("B", CratesIo("1"), Dev, features = setOf("a", "b")),
         )
     }
 }

@@ -10,10 +10,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -43,31 +42,23 @@ class RecursiveShapesIntegrationTest {
                  third: SecondTree
             }
         """.asSmithyModel()
-
         val check = { input: Model ->
-            val symbolProvider = testSymbolProvider(model)
-            val project = TestWorkspace.testProject(symbolProvider)
             val structures = listOf("Expr", "SecondTree").map { input.lookup<StructureShape>("com.example#$it") }
-            structures.forEach { struct ->
-                project.moduleFor(struct) {
-                    StructureGenerator(input, symbolProvider, this, struct, emptyList()).render()
-                }
+            val writer = RustWriter.forModule("model")
+            val symbolProvider = testSymbolProvider(input)
+            structures.forEach {
+                StructureGenerator(input, symbolProvider, writer, it).render()
             }
-            input.lookup<UnionShape>("com.example#Atom").also { atom ->
-                project.moduleFor(atom) {
-                    UnionGenerator(input, symbolProvider, this, atom).render()
-                }
-            }
-            project
+            UnionGenerator(input, symbolProvider, writer, input.lookup("com.example#Atom")).render()
+            writer
         }
-        val unmodifiedProject = check(model)
+        val unmodifiedWriter = check(model)
         val output = assertThrows<CommandFailed> {
-            unmodifiedProject.compileAndTest(expectFailure = true)
+            unmodifiedWriter.compileAndTest(expectFailure = true)
         }
-        // THIS IS A LOAD-BEARING shouldContain! If the compiler error changes then this will break!
-        output.message shouldContain "have infinite size"
+        output.message shouldContain "has infinite size"
 
-        val fixedProject = check(RecursiveShapeBoxer().transform(model))
-        fixedProject.compileAndTest()
+        val fixedWriter = check(RecursiveShapeBoxer.transform(model))
+        fixedWriter.compileAndTest()
     }
 }

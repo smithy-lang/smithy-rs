@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -19,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
@@ -60,6 +62,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  */
 class PubCrateConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
+    private val model: Model,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
@@ -71,7 +74,7 @@ class PubCrateConstrainedShapeSymbolProvider(
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
             visibility = Visibility.PUBCRATE,
-            parent = ServerRustModule.ConstrainedModule,
+            parent = ConstrainedModule,
             inline = true,
         )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
@@ -107,7 +110,7 @@ class PubCrateConstrainedShapeSymbolProvider(
                         handleRustBoxing(targetSymbol, shape),
                         shape,
                         nullableIndex,
-                        base.config.nullabilityCheckMode,
+                        base.config().nullabilityCheckMode,
                     )
                 }
             }

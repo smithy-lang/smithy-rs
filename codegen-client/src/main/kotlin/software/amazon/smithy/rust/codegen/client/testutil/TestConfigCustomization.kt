@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.client.testutil
 
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -74,7 +74,7 @@ fun validateConfigCustomizations(
 fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDelegator): TestWriterDelegator {
     val customizations = listOf(stubConfigCustomization("a")) + customization + stubConfigCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
-    project.withModule(ClientRustModule.Config) {
+    project.withModule(RustModule.Config) {
         generator.render(this)
         unitTest(
             "config_send_sync",
