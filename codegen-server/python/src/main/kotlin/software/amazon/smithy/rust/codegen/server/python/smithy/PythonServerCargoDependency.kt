@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
@@ -15,8 +16,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  * For a dependency that is used in the client, or in both the client and the server, use [CargoDependency] directly.
  */
 object PythonServerCargoDependency {
-    val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.17"))
-    val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.17"), features = setOf("attributes", "tokio-runtime"))
+    val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.18"))
+    val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.18"), features = setOf("attributes", "tokio-runtime"))
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.12"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
@@ -28,4 +29,5 @@ object PythonServerCargoDependency {
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
     fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")
+    fun smithyHttpServerPythonBuild(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python", scope = DependencyScope.Build)
 }

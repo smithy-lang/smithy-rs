@@ -469,6 +469,7 @@ class RustWriter private constructor(
                     devDependenciesOnly = true,
                 )
                 fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }

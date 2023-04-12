@@ -96,6 +96,8 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
+    fun runtimeCratesPath(): String? = runtimeCrateLocation.path
+
     fun smithyRuntimeCrate(
         runtimeCrateName: String,
         optional: Boolean = false,

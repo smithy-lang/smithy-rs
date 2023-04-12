@@ -104,6 +104,21 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
+tasks.register("stubs") {
+    description = "Generate Python stubs for all models"
+    dependsOn("assemble")
+
+    doLast {
+        allCodegenTests.forEach { test ->
+            val crateDir = "$buildDir/$workingDirUnderBuildDir/${test.module}/$pluginName"
+            val moduleName = test.module.replace("-", "_")
+            exec {
+                commandLine("bash", "$crateDir/stubgen.sh", moduleName, "$crateDir/Cargo.toml", "$crateDir/python/$moduleName")
+            }
+        }
+    }
+}
+
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 

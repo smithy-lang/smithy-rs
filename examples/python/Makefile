@@ -31,18 +31,19 @@ build-wheel: ensure-maturin
 build-wheel-release: ensure-maturin
 	cd $(SERVER_SDK_DST) && maturin build --out $(WHEELS) --compatibility linux --release
 
-install-wheel:
+install:
 	find $(WHEELS) -type f -name '*.whl' | xargs python3 -m pip install --user --force-reinstall
 
 generate-stubs:
-	python3 $(CUR_DIR)/stubgen.py pokemon_service_server_sdk $(SERVER_SDK_DST)/python/pokemon_service_server_sdk
+	bash $(SERVER_SDK_DST)/stubgen.sh pokemon_service_server_sdk $(SERVER_SDK_DST)/Cargo.toml $(SERVER_SDK_DST)/python/pokemon_service_server_sdk
 
 build: codegen
+	$(MAKE) generate-stubs
 	$(MAKE) build-wheel
-	$(MAKE) install-wheel
+
+release: codegen
 	$(MAKE) generate-stubs
 	$(MAKE) build-wheel-release
-	$(MAKE) install-wheel
 
 run: build
 	python3 $(CUR_DIR)/pokemon_service.py
@@ -50,10 +51,7 @@ run: build
 py-check: build
 	python3 -m mypy pokemon_service.py
 
-py-test:
-	python3 stubgen_test.py
-
-test: build py-check py-test
+test: build py-check
 	cargo test
 
 clippy: codegen
