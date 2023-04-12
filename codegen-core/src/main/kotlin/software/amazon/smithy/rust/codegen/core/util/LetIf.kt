@@ -10,7 +10,9 @@ package software.amazon.smithy.rust.codegen.core.util
 fun <T> T.letIf(cond: Boolean, f: (T) -> T): T {
     return if (cond) {
         f(this)
-    } else this
+    } else {
+        this
+    }
 }
 
 fun <T> List<T>.extendIf(condition: Boolean, f: () -> T) = if (condition) {

@@ -5,6 +5,7 @@
 
 //! Protocol-agnostic types for smithy-rs.
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
@@ -27,5 +28,5 @@ pub mod timeout;
 pub use blob::Blob;
 pub use date_time::DateTime;
 pub use document::Document;
-pub use error::Error;
+pub use error::ErrorMetadata;
 pub use number::Number;

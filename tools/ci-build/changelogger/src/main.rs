@@ -65,6 +65,7 @@ mod tests {
                 source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
                 release_manifest_output: Some(PathBuf::from("some-manifest")),
+                current_release_versions_manifest: None,
                 previous_release_versions_manifest: None,
                 date_override: None,
                 smithy_rs_location: None,
@@ -97,6 +98,7 @@ mod tests {
                 source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
                 release_manifest_output: None,
+                current_release_versions_manifest: None,
                 previous_release_versions_manifest: None,
                 date_override: None,
                 smithy_rs_location: None,
@@ -127,6 +129,7 @@ mod tests {
                 source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
                 release_manifest_output: None,
+                current_release_versions_manifest: None,
                 previous_release_versions_manifest: Some(PathBuf::from("path/to/versions.toml")),
                 date_override: None,
                 smithy_rs_location: None,
@@ -145,6 +148,43 @@ mod tests {
                 "some-changelog",
                 "--previous-release-versions-manifest",
                 "path/to/versions.toml"
+            ])
+            .unwrap()
+        );
+
+        assert_eq!(
+            Args::Render(RenderArgs {
+                change_set: ChangeSet::AwsSdk,
+                independent_versioning: true,
+                source: vec![PathBuf::from("fromplace")],
+                source_to_truncate: PathBuf::from("fromplace"),
+                changelog_output: PathBuf::from("some-changelog"),
+                release_manifest_output: None,
+                current_release_versions_manifest: Some(PathBuf::from(
+                    "path/to/current/versions.toml"
+                )),
+                previous_release_versions_manifest: Some(PathBuf::from(
+                    "path/to/previous/versions.toml"
+                )),
+                date_override: None,
+                smithy_rs_location: None,
+            }),
+            Args::try_parse_from([
+                "./changelogger",
+                "render",
+                "--change-set",
+                "aws-sdk",
+                "--independent-versioning",
+                "--source",
+                "fromplace",
+                "--source-to-truncate",
+                "fromplace",
+                "--changelog-output",
+                "some-changelog",
+                "--current-release-versions-manifest",
+                "path/to/current/versions.toml",
+                "--previous-release-versions-manifest",
+                "path/to/previous/versions.toml"
             ])
             .unwrap()
         );

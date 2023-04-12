@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.62.1
+  rust_version: 1.66.1
 
 name: Release smithy-rs
 run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
@@ -18,8 +18,8 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: | 
-          The SHA of the git commit that you want to release.  
+        description: |
+          The SHA of the git commit that you want to release.
           You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
         required: true
         type: string
@@ -75,8 +75,8 @@ jobs:
     # We need `always` here otherwise this job won't run if the previous job has been skipped
     # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
     if: |
-      always() && 
-      needs.acquire-base-image.result == 'success' && 
+      always() &&
+      needs.acquire-base-image.result == 'success' &&
       (needs.release-ci.result == 'success' || needs.release-ci.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
@@ -87,6 +87,7 @@ jobs:
       with:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Get or create release branch
       id: branch-push
       shell: bash
@@ -112,11 +113,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+      commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
     steps:
     - uses: actions/checkout@v3
       with:
-        ref: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+        ref: ${{ inputs.commit_sha }}
         path: smithy-rs
+        fetch-depth: 0
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Upgrade gradle.properties
       uses: ./smithy-rs/.github/actions/docker-build
@@ -131,13 +134,30 @@ jobs:
       shell: bash
       env:
         SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -x
+
         # For debugging purposes
         git status
-        # The file was actually changed, we need to commit the changes
-        git diff-index --quiet HEAD || { git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}" && git push origin; }
+
+        if ! git diff-index --quiet HEAD; then
+          # gradle.properties was changed, we need to commit and push the diff
+          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
+
+          # This will fail if we tried to release from a non-HEAD commit on the release branch.
+          # The only scenario where we would try to release a non-HEAD commit from the release branch is
+          # to retry a release action execution that failed due to a transient issue.
+          # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
+          # should already be the expected one.
+          git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+
+          echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
+        else
+          echo "commit_sha=${RELEASE_COMMIT_SHA}" > $GITHUB_OUTPUT
+        fi
 
   release:
     name: Release
@@ -158,7 +178,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
-        ref: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
+        ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -170,9 +190,20 @@ jobs:
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
+      id: push-changelog
+      env:
+        RELEASE_BRANCH_NAME: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
       run: |
-        echo "Pushing release commits..."
-        git push origin
+        if ! git diff-index --quiet HEAD; then
+          echo "Pushing release commits..."
+          # This will fail if we tried to release from a non-HEAD commit on the release branch.
+          # The only scenario where we would try to release a non-HEAD commit from the release branch is
+          # to retry a release action execution that failed due to a transient issue.
+          # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
+          # been processed.
+          git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+        fi
+        echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
     - name: Tag release
       uses: actions/github-script@v6
       with:
@@ -182,7 +213,8 @@ jobs:
           await createReleaseScript({
             github,
             isDryRun: ${{ inputs.dry_run }},
-            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
+            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
           });
     - name: Publish to crates.io
       shell: bash
@@ -232,7 +264,7 @@ jobs:
       shell: bash
       run: |
         set -eux
-        
+
         # This will fail if other commits have been pushed to `main` after `commit_sha`
         # In particular, this will ALWAYS fail if you are creating a new release series from
         # a commit that is not the current tip of `main`.
