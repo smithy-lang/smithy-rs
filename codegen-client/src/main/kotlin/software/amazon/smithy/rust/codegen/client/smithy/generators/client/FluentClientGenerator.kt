@@ -269,7 +269,7 @@ class FluentClientGenerator(
             val outputType = symbolProvider.toSymbol(operation.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operation)
             val inputBuilderType = symbolProvider.symbolForBuilder(input)
-            // val operationFnName = clientOperationFnName(operation, symbolProvider),
+            val fnName = clientOperationFnName(operation, symbolProvider),
             // Have to use fully-qualified result here or else it could conflict with an op named Result
             // Have to use fully-qualified result here or else it could conflict with an op named Result
             rustTemplate(
@@ -314,7 +314,7 @@ class FluentClientGenerator(
                 /// It is useful when you want to replace the existing data with de-serialized data.
                 /// ```rust
                 /// let deserialized_parameters: $inputBuilderType  = serde_json::from_str(parameters_written_in_json).unwrap();
-                /// let outcome: #{OperationOutput} = client.asdf()}().set_fields(&deserialized_parameters).send().await;
+                /// let outcome: #{OperationOutput} = client.$fnName().set_fields(&deserialized_parameters).send().await;
                 /// ```
                 pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
                     self.inner = data;
