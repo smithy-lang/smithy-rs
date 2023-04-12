@@ -4,9 +4,9 @@
  */
 
 use crate::Number;
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 use serde::Deserialize;
-#[cfg(all(aws_sdk_unstable, feature = "serialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -19,12 +19,12 @@ use std::collections::HashMap;
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(aws_sdk_unstable, feature = "serialize"), derive(Serialize))]
-#[cfg_attr(all(aws_sdk_unstable, feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(all(aws_sdk_unstable, feature = "serde-serialize"), derive(Serialize))]
+#[cfg_attr(all(aws_sdk_unstable, feature = "serde-deserialize"), derive(Deserialize))]
 #[cfg_attr(
     any(
-        all(aws_sdk_unstable, feature = "deserialize"),
-        all(aws_sdk_unstable, feature = "serialize")
+        all(aws_sdk_unstable, feature = "serde-deserialize"),
+        all(aws_sdk_unstable, feature = "serde-serialize")
     ),
     serde(untagged)
 )]
@@ -89,16 +89,16 @@ impl From<i32> for Document {
 
 #[cfg(test)]
 mod test {
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
     use crate::Document;
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
     use crate::Number;
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
     use std::collections::HashMap;
 
     /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
     #[test]
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
     fn serialize_json() {
         use crate::Document;
         use crate::Number;

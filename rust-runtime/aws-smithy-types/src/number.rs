@@ -11,12 +11,12 @@ use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(all(aws_sdk_unstable, feature = "deserialize"), derive(Deserialize))]
-#[cfg_attr(all(aws_sdk_unstable, feature = "serialize"), derive(Serialize))]
+#[cfg_attr(all(aws_sdk_unstable, feature = "serde-deserialize"), derive(Deserialize))]
+#[cfg_attr(all(aws_sdk_unstable, feature = "serde-serialize"), derive(Serialize))]
 #[cfg_attr(
     any(
-        all(aws_sdk_unstable, feature = "deserialize"),
-        all(aws_sdk_unstable, feature = "serialize")
+        all(aws_sdk_unstable, feature = "serde-deserialize"),
+        all(aws_sdk_unstable, feature = "serde-serialize")
     ),
     serde(untagged)
 )]
@@ -455,7 +455,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
+    #[cfg(all(test, aws_sdk_unstable, feature = "serde-deserialize", feature = "serde-serialize"))]
     /// ensures that numbers are deserialized as expected
     /// 0 <= PosInt
     /// 0 > NegInt
