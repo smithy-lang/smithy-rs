@@ -48,7 +48,7 @@ impl Number {
         match self {
             Number::PosInt(v) => v as f32,
             Number::NegInt(v) => v as f32,
-            Number::Float(v) => v,
+            Number::Float(v) => v as f32,
         }
     }
 }
