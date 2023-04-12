@@ -325,7 +325,7 @@ class JsonSerializerGenerator(
                 pub fn $fnName(
                     #{AllowUnusedVariables:W} object: &mut #{JsonObjectWriter},
                     #{AllowUnusedVariables:W} input: &#{StructureSymbol},
-                ) -> Result<(), #{Error}>  
+                ) -> Result<(), #{Error}>
                 """,
                 "StructureSymbol" to symbolProvider.toSymbol(context.shape),
                 "AllowUnusedVariables" to allowUnusedVariables,

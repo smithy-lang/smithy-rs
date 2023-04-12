@@ -104,14 +104,30 @@ impl<'de> Deserialize<'de> for Blob {
 }
 
 #[cfg(test)]
-#[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
+#[cfg(all(
+    aws_sdk_unstable,
+    feature = "serde-serialize",
+    feature = "serde-deserialize"
+))]
 mod test {
-    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
+    #[cfg(all(
+        aws_sdk_unstable,
+        feature = "serde-serialize",
+        feature = "serde-deserialize"
+    ))]
     use crate::Blob;
-    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
+    #[cfg(all(
+        aws_sdk_unstable,
+        feature = "serde-serialize",
+        feature = "serde-deserialize"
+    ))]
     use std::collections::HashMap;
 
-    #[cfg(all(aws_sdk_unstable, feature = "serde-serialize", feature = "serde-deserialize"))]
+    #[cfg(all(
+        aws_sdk_unstable,
+        feature = "serde-serialize",
+        feature = "serde-deserialize"
+    ))]
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
     #[derive(Deserialize, Serialize, Debug, PartialEq)]

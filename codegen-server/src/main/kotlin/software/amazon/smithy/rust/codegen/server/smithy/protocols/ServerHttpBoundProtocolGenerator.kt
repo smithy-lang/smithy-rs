@@ -568,9 +568,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderHttpResponseCode(defaultCode: Int) = writable {
         check(defaultCode in 100..999) {
             """
-           Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
-           "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
-           """.replace("\n", "").trimIndent()
+            Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
+            "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
+            """.replace("\n", "").trimIndent()
         }
         rustTemplate(
             """

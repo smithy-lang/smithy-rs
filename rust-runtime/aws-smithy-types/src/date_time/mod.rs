@@ -557,7 +557,12 @@ mod test {
         );
     }
 
-    #[cfg(all(test, aws_sdk_unstable, feature = "serde-deserialize", feature = "serde-serialize"))]
+    #[cfg(all(
+        test,
+        aws_sdk_unstable,
+        feature = "serde-deserialize",
+        feature = "serde-serialize"
+    ))]
     #[test]
     fn human_readable_datetime() {
         use serde::{Deserialize, Serialize};
@@ -576,7 +581,12 @@ mod test {
     }
 
     /// checks that they are serialized into tuples
-    #[cfg(all(test, aws_sdk_unstable, feature = "serde-deserialize", feature = "serde-serialize"))]
+    #[cfg(all(
+        test,
+        aws_sdk_unstable,
+        feature = "serde-deserialize",
+        feature = "serde-serialize"
+    ))]
     #[test]
     fn not_human_readable_datetime() {
         let cbor = ciborium::value::Value::Array(vec![
