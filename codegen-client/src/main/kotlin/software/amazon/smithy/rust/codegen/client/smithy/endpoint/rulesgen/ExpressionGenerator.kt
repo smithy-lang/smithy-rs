@@ -49,9 +49,13 @@ class ExpressionGenerator(
         }
 
         override fun visitRef(ref: Reference) = writable {
-            rust(ref.name.rustName())
             if (ownership == Ownership.Owned) {
-                rust(".to_owned()")
+                when (ref.type()) {
+                    is Type.Bool -> rust("*${ref.name.rustName()}")
+                    else -> rust("${ref.name.rustName()}.to_owned()")
+                }
+            } else {
+                rust(ref.name.rustName())
             }
         }
 
@@ -61,10 +65,17 @@ class ExpressionGenerator(
                 getAttr.path.toList().forEach { part ->
                     when (part) {
                         is GetAttr.Part.Key -> rust(".${part.key().rustName()}()")
-                        is GetAttr.Part.Index -> rust(".get(${part.index()}).cloned()") // we end up with Option<&&T>, we need to get to Option<&T>
+                        is GetAttr.Part.Index -> {
+                            if (part.index() == 0) {
+                                // In this case, `.first()` is more idiomatic and `.get(0)` triggers lint warnings
+                                rust(".first().cloned()")
+                            } else {
+                                rust(".get(${part.index()}).cloned()") // we end up with Option<&&T>, we need to get to Option<&T>
+                            }
+                        }
                     }
                 }
-                if (ownership == Ownership.Owned) {
+                if (ownership == Ownership.Owned && getAttr.type() != Type.bool()) {
                     if (getAttr.type() is Type.Option) {
                         rust(".map(|t|t.to_owned())")
                     } else {

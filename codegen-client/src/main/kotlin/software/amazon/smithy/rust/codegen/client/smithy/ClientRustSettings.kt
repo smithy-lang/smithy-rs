@@ -18,12 +18,12 @@ import java.util.Optional
 /**
  * [ClientRustSettings] and [ClientCodegenConfig] classes.
  *
- * These are specializations of [RustSettings] and [CodegenConfig] for the `rust-codegen` client Smithy plugin. Refer
- * to the documentation of those for the inherited properties.
+ * These are specializations of [CoreRustSettings] and [CodegenConfig] for the `rust-client-codegen`
+ * client Smithy plugin. Refer to the documentation of those for the inherited properties.
  */
 
 /**
- * Settings used by [RustCodegenPlugin].
+ * Settings used by [RustClientCodegenPlugin].
  */
 data class ClientRustSettings(
     override val service: ShapeId,
@@ -86,6 +86,8 @@ data class ClientCodegenConfig(
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
+    // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
+    val enableNewSmithyRuntime: Boolean = defaultEnableNewSmithyRuntime,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -94,6 +96,7 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
+        private const val defaultEnableNewSmithyRuntime = false
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -106,12 +109,12 @@ data class ClientCodegenConfig(
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
+                    enableNewSmithyRuntime = node.get().getBooleanMemberOrDefault("enableNewSmithyRuntime", defaultEnableNewSmithyRuntime),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = defaultEventStreamAllowList,
                 )
             }
     }

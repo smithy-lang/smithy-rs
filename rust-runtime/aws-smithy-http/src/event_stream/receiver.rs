@@ -111,6 +111,7 @@ enum ReceiverErrorKind {
     UnexpectedTrailerFrame,
 }
 
+/// An error that occurs within an event stream receiver.
 #[derive(Debug)]
 pub struct ReceiverError {
     kind: ReceiverErrorKind,
@@ -140,7 +141,7 @@ impl StdError for ReceiverError {}
 /// Receives Smithy-modeled messages out of an Event Stream.
 #[derive(Debug)]
 pub struct Receiver<T, E> {
-    unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E> + Send>,
+    unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E> + Send + Sync>,
     decoder: MessageFrameDecoder,
     buffer: RecvBuf,
     body: SdkBody,
@@ -155,7 +156,7 @@ pub struct Receiver<T, E> {
 impl<T, E> Receiver<T, E> {
     /// Creates a new `Receiver` with the given message unmarshaller and SDK body.
     pub fn new(
-        unmarshaller: impl UnmarshallMessage<Output = T, Error = E> + Send + 'static,
+        unmarshaller: impl UnmarshallMessage<Output = T, Error = E> + Send + Sync + 'static,
         body: SdkBody,
     ) -> Self {
         Receiver {
@@ -190,11 +191,11 @@ impl<T, E> Receiver<T, E> {
                 .map_err(|err| SdkError::dispatch_failure(ConnectorError::io(err)))?;
             let buffer = mem::replace(&mut self.buffer, RecvBuf::Empty);
             if let Some(frame) = next_frame {
-                self.buffer = buffer.with_partial(frame.into_data().ok_or_else(|| {
-                    SdkError::response_error(
+                self.buffer = buffer.with_partial(frame.into_data().or_else(|_| {
+                    Err(SdkError::response_error(
                         ReceiverError::unexpected_trailer_frame(),
                         RawMessage::Invalid(None),
-                    )
+                    ))
                 })?);
             } else {
                 self.buffer = buffer.ended();
@@ -298,6 +299,7 @@ mod tests {
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshalledMessage};
     use bytes::Bytes;
+    use http::HeaderValue;
     use http_body::Frame;
     use http_body_util::StreamBody;
     use std::error::Error as StdError;
@@ -576,10 +578,10 @@ mod tests {
         );
     }
 
-    fn assert_send<T: Send>() {}
+    fn assert_send_and_sync<T: Send + Sync>() {}
 
     #[tokio::test]
-    async fn receiver_is_send() {
-        assert_send::<Receiver<(), ()>>();
+    async fn receiver_is_send_and_sync() {
+        assert_send_and_sync::<Receiver<(), ()>>();
     }
 }

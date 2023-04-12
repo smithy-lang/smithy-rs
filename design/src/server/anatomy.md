@@ -301,7 +301,7 @@ where
 
 When we `GetPokemonService::from_handler` or `GetPokemonService::from_service`, the model service produced, `S`, will meet the constraints above.
 
-There is an associated `Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
+There is an associated `Layer`, `UpgradeLayer<P, Op>` which constructs `Upgrade` from a service.
 
 The upgrade procedure is finalized by the application of the `Layer` `L`, referenced in `Operation<S, L>`. In this way the entire upgrade procedure takes an `Operation<S, L>` and returns a HTTP service.
 
@@ -648,7 +648,7 @@ stateDiagram-v2
     Op1 --> Op2 : Plugin#colon;#colon;map
 ```
 
-An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs).
+An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
 
 The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
 This constraint is in place to ensure that all handlers are upgraded using the same set of plugins.

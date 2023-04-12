@@ -7,6 +7,7 @@ use crate::{bounds, erase, retry, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use aws_smithy_types::retry::ReconnectMode;
 use aws_smithy_types::timeout::{OperationTimeoutConfig, TimeoutConfig};
 use std::sync::Arc;
 
@@ -37,6 +38,12 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
     retry_policy: MaybeRequiresSleep<R>,
     operation_timeout_config: Option<OperationTimeoutConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    reconnect_mode: Option<ReconnectMode>,
+}
+
+/// transitional default: disable this behavior by default
+const fn default_reconnect_mode() -> ReconnectMode {
+    ReconnectMode::ReuseAllConnections
 }
 
 impl<C, M> Default for Builder<C, M>
@@ -55,6 +62,7 @@ where
             ),
             operation_timeout_config: None,
             sleep_impl: default_async_sleep(),
+            reconnect_mode: Some(default_reconnect_mode()),
         }
     }
 }
@@ -95,8 +103,9 @@ const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 70;
 
 /// Returns default HTTP client settings for hyper.
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-fn default_hyper_builder() -> hyper::client::Builder {
-    let mut builder = hyper::client::Builder::default();
+fn default_hyper_builder() -> hyper_util::client::legacy::Builder {
+    use hyper_util::rt::TokioExecutor;
+    let mut builder = hyper_util::client::legacy::Builder::new(TokioExecutor::new());
     builder.pool_max_idle_per_host(DEFAULT_MAX_IDLE_CONNECTIONS);
     builder
 }
@@ -173,6 +182,7 @@ impl<M, R> Builder<(), M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode,
         }
     }
 
@@ -229,6 +239,7 @@ impl<C, R> Builder<C, (), R> {
             operation_timeout_config: self.operation_timeout_config,
             middleware,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode,
         }
     }
 
@@ -280,12 +291,14 @@ impl<C, M> Builder<C, M, retry::Standard> {
             operation_timeout_config: self.operation_timeout_config,
             middleware: self.middleware,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode,
         }
     }
 }
 
 impl<C, M> Builder<C, M> {
-    /// Set the standard retry policy's configuration.
+    /// Set the standard retry policy's configuration. When `config` is `None`,
+    /// the default retry policy will be used.
     pub fn set_retry_config(&mut self, config: Option<retry::Config>) -> &mut Self {
         let config = config.unwrap_or_default();
         self.retry_policy =
@@ -299,7 +312,8 @@ impl<C, M> Builder<C, M> {
         self
     }
 
-    /// Set operation timeout config for the client.
+    /// Set operation timeout config for the client. If `operation_timeout_config` is
+    /// `None`, timeouts will be disabled.
     pub fn set_operation_timeout_config(
         &mut self,
         operation_timeout_config: Option<OperationTimeoutConfig>,
@@ -345,6 +359,7 @@ impl<C, M, R> Builder<C, M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode,
         }
     }
 
@@ -359,7 +374,39 @@ impl<C, M, R> Builder<C, M, R> {
             retry_policy: self.retry_policy,
             operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode,
         }
+    }
+
+    /// Set the [`ReconnectMode`] for the retry strategy
+    ///
+    /// By default, no reconnection occurs.
+    ///
+    /// When enabled and a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host.
+    pub fn reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
+        self.set_reconnect_mode(Some(reconnect_mode));
+        self
+    }
+
+    /// Set the [`ReconnectMode`] for the retry strategy
+    ///
+    /// By default, no reconnection occurs.
+    ///
+    /// When enabled and a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host.
+    pub fn set_reconnect_mode(&mut self, reconnect_mode: Option<ReconnectMode>) -> &mut Self {
+        self.reconnect_mode = reconnect_mode;
+        self
+    }
+
+    /// Enable reconnection on transient errors
+    ///
+    /// By default, when a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host but may increase the load on
+    /// the server.
+    pub fn reconnect_on_transient_errors(self) -> Self {
+        self.reconnect_mode(ReconnectMode::ReconnectOnTransientError)
     }
 
     /// Build a Smithy service [`Client`].
@@ -390,6 +437,7 @@ impl<C, M, R> Builder<C, M, R> {
             middleware: self.middleware,
             operation_timeout_config,
             sleep_impl: self.sleep_impl,
+            reconnect_mode: self.reconnect_mode.unwrap_or(default_reconnect_mode()),
         }
     }
 }

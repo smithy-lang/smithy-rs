@@ -10,8 +10,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rulesengine.language.Endpoint
+import software.amazon.smithy.rulesengine.language.eval.Scope
+import software.amazon.smithy.rulesengine.language.eval.Type
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
 import software.amazon.smithy.rulesengine.testutil.TestDiscovery
@@ -20,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.End
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -30,7 +34,8 @@ import java.util.stream.Stream
 class EndpointResolverGeneratorTest {
     companion object {
         @JvmStatic
-        fun testSuites(): Stream<TestDiscovery.RulesTestSuite> = TestDiscovery().testSuites()
+        fun testSuites(): Stream<TestDiscovery.RulesTestSuite> =
+            TestDiscovery().testSuites().map { it.ruleSet().typecheck(); it }
     }
 
     // for tests, load partitions.json from smithy—for real usage, this file will be inserted at codegen time
@@ -59,7 +64,8 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                TestRuntimeConfig,
+                codegenContext = testClientCodegenContext(model = Model.builder().build()),
+                endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
         }
@@ -84,7 +90,8 @@ class EndpointResolverGeneratorTest {
                 paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
-                TestRuntimeConfig,
+                codegenContext = testClientCodegenContext(Model.builder().build()),
+                endpointCustomizations = listOf(),
             )
             testGenerator.generate()(this)
         }
@@ -105,6 +112,9 @@ class EndpointResolverGeneratorTest {
                 hashMapOf("signingName" to Literal.of("service"), "signingScope" to Literal.of("{Region}")),
             )
             .build()
+        val scope = Scope<Type>()
+        scope.insert("Region", Type.string())
+        endpoint.typeCheck(scope)
         val generator = EndpointResolverGenerator(listOf(), TestRuntimeConfig)
         TestWorkspace.testProject().unitTest {
             rustTemplate(

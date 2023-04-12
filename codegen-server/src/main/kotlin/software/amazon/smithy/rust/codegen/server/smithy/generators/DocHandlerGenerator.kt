@@ -12,16 +12,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
-import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
 /**
-Generates a stub for use within documentation.
+ * Generates a handler implementation stub for use within documentation.
  */
 class DocHandlerGenerator(
     codegenContext: CodegenContext,
@@ -31,41 +29,25 @@ class DocHandlerGenerator(
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val crateName = codegenContext.moduleUseName()
 
     private val inputSymbol = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputSymbol = symbolProvider.toSymbol(operation.outputShape(model))
-    private val errorSymbol = operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
-
-    /**
-     * Returns the imports required for the function signature
-     */
-    fun docSignatureImports(): Writable = writable {
-        if (operation.errors.isNotEmpty()) {
-            rust("$commentToken use $crateName::${ErrorsModule.name}::${errorSymbol.name};")
-        }
-        rust(
-            """
-            $commentToken use $crateName::${InputsModule.name}::${inputSymbol.name};
-            $commentToken use $crateName::${OutputsModule.name}::${outputSymbol.name};
-            """.trimIndent(),
-        )
-    }
+    private val errorSymbol = symbolProvider.symbolForOperationError(operation)
 
     /**
      * Returns the function signature for an operation handler implementation. Used in the documentation.
      */
     fun docSignature(): Writable {
         val outputT = if (operation.errors.isEmpty()) {
-            outputSymbol.name
+            "${OutputModule.name}::${outputSymbol.name}"
         } else {
-            "Result<${outputSymbol.name}, ${errorSymbol.name}>"
+            "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
         }
 
         return writable {
             rust(
                 """
-                $commentToken async fn $handlerName(input: ${inputSymbol.name}) -> $outputT {
+                $commentToken async fn $handlerName(input: ${InputModule.name}::${inputSymbol.name}) -> $outputT {
                 $commentToken     todo!()
                 $commentToken }
                 """.trimIndent(),
@@ -74,13 +56,12 @@ class DocHandlerGenerator(
     }
 
     fun render(writer: RustWriter) {
+        // This assumes that the `error` (if applicable) `input`, and `output` modules have been imported by the
+        // caller and hence are in scope.
         writer.rustTemplate(
             """
-            #{Docs:W}
-            $commentToken
             #{Handler:W}
             """,
-            "Docs" to docSignatureImports(),
             "Handler" to docSignature(),
         )
     }

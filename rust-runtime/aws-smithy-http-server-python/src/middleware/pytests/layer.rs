@@ -253,6 +253,7 @@ fn simple_request(body: &'static str) -> Request<Body> {
         .expect("could not create request")
 }
 
+#[allow(clippy::type_complexity)]
 fn spawn_service<L, E>(
     layer: L,
 ) -> (
@@ -306,7 +307,7 @@ fn py_handler(code: &str) -> PyMiddlewareHandler {
             .get_item("middleware")
             .expect("your handler must be named `middleware`")
             .into();
-        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
+        PyMiddlewareHandler::new(py, handler)
     })
     .unwrap()
 }

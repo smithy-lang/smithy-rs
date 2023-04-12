@@ -8,14 +8,13 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.eval.Type
-import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
-import software.amazon.smithy.rulesengine.language.syntax.fn.Function
 import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
@@ -24,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Expre
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.comment
@@ -128,6 +128,19 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         "EndpointError" to types.resolveEndpointError,
         "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
     )
+
+    private val allowLintsForResolver = listOf(
+        // we generate if x { if y { if z { ... } } }
+        "clippy::collapsible_if",
+        // we generate `if (true) == expr { ... }`
+        "clippy::bool_comparison",
+        // we generate `if !(a == b)`
+        "clippy::nonminimal_bool",
+        // we generate `if x == "" { ... }`
+        "clippy::comparison_to_empty",
+        // we generate `if let Some(_) = ... { ... }`
+        "clippy::redundant_pattern_matching",
+    )
     private val context = Context(registry, runtimeConfig)
 
     companion object {
@@ -151,7 +164,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
         // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
-        return RuntimeType.forInlineFun("DefaultResolver", EndpointsModule) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Endpoint) {
             rustTemplate(
                 """
                 /// The default endpoint resolver
@@ -189,7 +202,8 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
+        return RuntimeType.forInlineFun("resolve_endpoint", EndpointImpl) {
+            Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
                 pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
@@ -207,7 +221,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
     private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) = writable {
         endpointRuleSet.parameters.toList().forEach {
-            Attribute.AllowUnused.render(this)
+            Attribute.AllowUnusedVariables.render(this)
             rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
         }
         generateRulesList(endpointRuleSet.rules)(this)
@@ -220,7 +234,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         }
         if (!isExhaustive(rules.last())) {
             // it's hard to figure out if these are always needed or not
-            Attribute.Custom("allow(unreachable_code)").render(this)
+            Attribute.AllowUnreachableCode.render(this)
             rustTemplate(
                 """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
                 *codegenScope,
@@ -270,14 +284,12 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 // 2. the RHS returns a boolean which we need to gate on
                 // 3. the RHS is infallible (e.g. uriEncode)
                 val resultName =
-                    (condition.result.orNull() ?: (fn as? Reference)?.name ?: Identifier.of("_")).rustName()
+                    (condition.result.orNull() ?: (fn as? Reference)?.name)?.rustName() ?: "_"
                 val target = generator.generate(fn)
                 val next = generateRuleInternal(rule, rest)
                 when {
-                    fn.type() is Type.Option ||
-                        // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
-                        (fn as Function).name == "substring" -> {
-                        Attribute.AllowUnused.render(this)
+                    fn.type() is Type.Option -> {
+                        Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",
                             "target" to target,

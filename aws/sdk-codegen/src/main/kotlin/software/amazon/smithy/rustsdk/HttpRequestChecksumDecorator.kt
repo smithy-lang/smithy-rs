@@ -8,14 +8,12 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -24,11 +22,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuild
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
     InlineAwsDependency.forRustFile(
-        "http_body_checksum", visibility = Visibility.PUBLIC,
+        "http_body_checksum", visibility = Visibility.PUBCRATE,
         CargoDependency.Http,
         CargoDependency.HttpBody,
         CargoDependency.smithyHttp(this),
@@ -39,20 +38,21 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
     ),
 )
 
-class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
+
+    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
+    private fun applies(codegenContext: ClientCodegenContext): Boolean =
+        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
+    ): List<OperationCustomization> = baseCustomizations.letIf(applies(codegenContext)) {
+        it + HttpRequestChecksumCustomization(codegenContext, operation)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(

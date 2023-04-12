@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 class ServerOperationGenerator(
-    codegenContext: CodegenContext,
     private val operation: OperationShape,
+    codegenContext: CodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
@@ -37,7 +37,7 @@ class ServerOperationGenerator(
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
         } else {
-            // Name comes from [ServerCombinedErrorGenerator].
+            // Name comes from [ServerOperationErrorGenerator].
             rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
         }
     }

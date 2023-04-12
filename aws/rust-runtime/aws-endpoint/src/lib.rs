@@ -3,86 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[doc(hidden)]
-pub mod partition;
+#![allow(clippy::derive_partial_eq_without_eq)]
 
-#[doc(hidden)]
-pub use partition::Partition;
-#[doc(hidden)]
-pub use partition::PartitionResolver;
-use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
 
-use aws_smithy_http::endpoint::error::ResolveEndpointError;
-use aws_smithy_http::endpoint::ResolveEndpoint;
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
 use aws_smithy_types::endpoint::Endpoint as SmithyEndpoint;
 use aws_smithy_types::Document;
+
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
-use std::error::Error;
-use std::fmt;
-use std::sync::Arc;
-
-pub use aws_types::endpoint::{AwsEndpoint, BoxError, CredentialScope, ResolveAwsEndpoint};
-
-#[doc(hidden)]
-pub struct Params {
-    region: Option<Region>,
-}
-
-impl Params {
-    pub fn new(region: Option<Region>) -> Self {
-        Self { region }
-    }
-}
-
-#[doc(hidden)]
-pub struct EndpointShim(Arc<dyn ResolveAwsEndpoint>);
-impl EndpointShim {
-    pub fn from_resolver(resolver: impl ResolveAwsEndpoint + 'static) -> Self {
-        Self(Arc::new(resolver))
-    }
-
-    pub fn from_arc(arc: Arc<dyn ResolveAwsEndpoint>) -> Self {
-        Self(arc)
-    }
-}
-
-impl ResolveEndpoint<Params> for EndpointShim {
-    fn resolve_endpoint(&self, params: &Params) -> Result<SmithyEndpoint, ResolveEndpointError> {
-        let aws_endpoint = self
-            .0
-            .resolve_endpoint(
-                params
-                    .region
-                    .as_ref()
-                    .ok_or_else(|| ResolveEndpointError::message("no region in params"))?,
-            )
-            .map_err(|err| {
-                ResolveEndpointError::message("failure resolving endpoint").with_source(Some(err))
-            })?;
-        let uri = aws_endpoint.endpoint().uri();
-        let mut auth_scheme =
-            HashMap::from([("name".to_string(), Document::String("sigv4".into()))]);
-        if let Some(region) = aws_endpoint.credential_scope().region() {
-            auth_scheme.insert(
-                "signingRegion".to_string(),
-                region.as_ref().to_string().into(),
-            );
-        }
-        if let Some(service) = aws_endpoint.credential_scope().service() {
-            auth_scheme.insert(
-                "signingName".to_string(),
-                service.as_ref().to_string().into(),
-            );
-        }
-        Ok(SmithyEndpoint::builder()
-            .url(uri.to_string())
-            .property("authSchemes", vec![Document::Object(auth_scheme)])
-            .build())
-    }
-}
 
 /// Middleware Stage to add authentication information from a Smithy endpoint into the property bag
 ///
@@ -96,7 +28,7 @@ pub struct AwsAuthStage;
 #[derive(Debug)]
 enum AwsAuthStageErrorKind {
     NoEndpointResolver,
-    EndpointResolutionError(BoxError),
+    EndpointResolutionError(Box<dyn Error + Send + Sync>),
 }
 
 #[derive(Debug)]
@@ -166,18 +98,29 @@ fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Err
         None => return Ok((None, None)),
         _other => return Err("expected an array for authSchemes".into()),
     };
-    let v4 = auth_schemes
+    let auth_schemes = auth_schemes
         .iter()
         .flat_map(|doc| match doc {
-            Document::Object(map)
-                if map.get("name") == Some(&Document::String("sigv4".to_string())) =>
-            {
-                Some(map)
-            }
+            Document::Object(map) => Some(map),
             _ => None,
         })
-        .next()
-        .ok_or("could not find v4 as an acceptable auth scheme (the SDK does not support Bearer Auth at this time)")?;
+        .map(|it| {
+            let name = match it.get("name") {
+                Some(Document::String(s)) => Some(s.as_str()),
+                _ => None,
+            };
+            (name, it)
+        });
+    let (_, v4) = auth_schemes
+        .clone()
+        .find(|(name, _doc)| name.as_deref() == Some("sigv4"))
+        .ok_or_else(|| {
+            format!(
+                "No auth schemes were supported. The Rust SDK only supports sigv4. \
+                The authentication schemes supported by this endpoint were: {:?}",
+                auth_schemes.flat_map(|(name, _)| name).collect::<Vec<_>>()
+            )
+        })?;
 
     let signing_scope = match v4.get("signingRegion") {
         Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
@@ -194,41 +137,33 @@ fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Err
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
-    use http::header::HOST;
+    use std::collections::HashMap;
 
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::endpoint::ResolveEndpoint;
     use aws_smithy_http::middleware::MapRequest;
     use aws_smithy_http::operation;
-    use aws_types::endpoint::CredentialScope;
+    use aws_smithy_types::endpoint::Endpoint;
+    use aws_smithy_types::Document;
+    use http::header::HOST;
+
     use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
 
-    use crate::partition::endpoint::{Metadata, Protocol, SignatureVersion};
-    use crate::{AwsAuthStage, EndpointShim, Params};
+    use crate::AwsAuthStage;
 
     #[test]
     fn default_endpoint_updates_request() {
-        let provider = Arc::new(Metadata {
-            uri_template: "kinesis.{region}.amazonaws.com",
-            protocol: Protocol::Https,
-            credential_scope: Default::default(),
-            signature_versions: SignatureVersion::V4,
-        });
+        let endpoint = Endpoint::builder()
+            .url("kinesis.us-east-1.amazon.com")
+            .build();
         let req = http::Request::new(SdkBody::from(""));
         let region = Region::new("us-east-1");
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
-            props.insert(region.clone());
+            props.insert(SigningRegion::from(region.clone()));
             props.insert(SigningService::from_static("kinesis"));
-            props.insert(
-                EndpointShim::from_arc(provider)
-                    .resolve_endpoint(&Params::new(Some(region.clone())))
-                    .unwrap(),
-            );
+            props.insert(endpoint);
         };
         let req = AwsAuthStage.apply(req).expect("should succeed");
         assert_eq!(req.properties().get(), Some(&SigningRegion::from(region)));
@@ -239,36 +174,40 @@ mod test {
 
         assert!(req.http().headers().get(HOST).is_none());
         assert!(
-            req.properties()
-                .get::<aws_smithy_types::endpoint::Endpoint>()
-                .is_some(),
+            req.properties().get::<Endpoint>().is_some(),
             "Endpoint middleware MUST leave the result in the bag"
         );
     }
 
     #[test]
     fn sets_service_override_when_set() {
-        let provider = Arc::new(Metadata {
-            uri_template: "www.service.com",
-            protocol: Protocol::Http,
-            credential_scope: CredentialScope::builder()
-                .service(SigningService::from_static("qldb-override"))
-                .region(SigningRegion::from_static("us-east-override"))
-                .build(),
-            signature_versions: SignatureVersion::V4,
-        });
+        let endpoint = Endpoint::builder()
+            .url("kinesis.us-east-override.amazon.com")
+            .property(
+                "authSchemes",
+                vec![Document::Object({
+                    let mut out = HashMap::new();
+                    out.insert("name".to_string(), "sigv4".to_string().into());
+                    out.insert(
+                        "signingName".to_string(),
+                        "qldb-override".to_string().into(),
+                    );
+                    out.insert(
+                        "signingRegion".to_string(),
+                        "us-east-override".to_string().into(),
+                    );
+                    out
+                })],
+            )
+            .build();
         let req = http::Request::new(SdkBody::from(""));
         let region = Region::new("us-east-1");
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
-            props.insert(region.clone());
+            props.insert(region);
             props.insert(SigningService::from_static("qldb"));
-            props.insert(
-                EndpointShim::from_arc(provider)
-                    .resolve_endpoint(&Params::new(Some(region)))
-                    .unwrap(),
-            );
+            props.insert(endpoint);
         };
         let req = AwsAuthStage.apply(req).expect("should succeed");
         assert_eq!(
@@ -283,30 +222,18 @@ mod test {
 
     #[test]
     fn supports_fallback_when_scope_is_unset() {
-        let provider = Arc::new(Metadata {
-            uri_template: "www.service.com",
-            protocol: Protocol::Http,
-            credential_scope: CredentialScope::builder().build(),
-            signature_versions: SignatureVersion::V4,
-        });
+        let endpoint = Endpoint::builder().url("www.service.com").build();
         let req = http::Request::new(SdkBody::from(""));
-        let region = Region::new("us-east-1");
+        let region = SigningRegion::from_static("us-east-1");
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
             props.insert(region.clone());
             props.insert(SigningService::from_static("qldb"));
-            props.insert(
-                EndpointShim::from_arc(provider)
-                    .resolve_endpoint(&Params::new(Some(region)))
-                    .unwrap(),
-            );
+            props.insert(endpoint);
         };
         let req = AwsAuthStage.apply(req).expect("should succeed");
-        assert_eq!(
-            req.properties().get(),
-            Some(&SigningRegion::from(Region::new("us-east-1")))
-        );
+        assert_eq!(req.properties().get(), Some(&region));
         assert_eq!(
             req.properties().get(),
             Some(&SigningService::from_static("qldb"))

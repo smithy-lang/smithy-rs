@@ -26,11 +26,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -51,6 +51,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -62,7 +63,6 @@ import software.amazon.smithy.rust.codegen.core.util.isPrimitive
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
  * The type of HTTP message from which we are (de)serializing the HTTP-bound data.
@@ -90,7 +90,7 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
 }
 
-typealias HttpBindingCustomization = NamedSectionGenerator<HttpBindingSection>
+typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
 
 /**
  * This class generates Rust functions that (de)serialize data from/to an HTTP message.
@@ -115,19 +115,16 @@ class HttpBindingGenerator(
     private val codegenContext: CodegenContext,
     private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
     private val customizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
     private val model = codegenContext.model
-    private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val dateTime = RuntimeType.dateTime(runtimeConfig).toSymbol().rustType()
-    private val httpSerdeModule = RustModule.private("http_serde")
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     /**
      * Generate a function to deserialize [binding] from HTTP headers.
@@ -144,8 +141,7 @@ class HttpBindingGenerator(
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-        val fnName = "deser_header_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+        return protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "header") { fnName ->
             rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.Http,
@@ -163,10 +159,9 @@ class HttpBindingGenerator(
         val outputSymbol = symbolProvider.toSymbol(binding.member)
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
-        val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
-        val inner = RuntimeType.forInlineFun("${fnName}_inner", httpSerdeModule) {
+        val inner = protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "inner") { fnName ->
             rustBlock(
-                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
+                "pub fn $fnName(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.Http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil,
@@ -175,7 +170,7 @@ class HttpBindingGenerator(
             }
         }
         val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+        return protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "prefix_header") { fnName ->
             rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.Http,
@@ -210,26 +205,25 @@ class HttpBindingGenerator(
      */
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorT: RuntimeType,
+        errorSymbol: Symbol,
         // Deserialize a single structure, union or document member marked as a payload
         payloadParser: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
-        val fnName = "deser_payload_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+        return protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "payload") { fnName ->
             if (binding.member.isStreaming(model)) {
                 val outputT = symbolProvider.toSymbol(binding.member)
                 rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
-                    errorT,
+                    errorSymbol,
                 ) {
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
                     if (target is UnionShape) {
-                        bindEventStreamOutput(operationShape, target)
+                        bindEventStreamOutput(operationShape, outputT, target)
                     } else {
                         deserializeStreamingBody(binding)
                     }
@@ -238,10 +232,10 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
+                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorSymbol) {
                     deserializePayloadBody(
                         binding,
-                        errorT,
+                        errorSymbol,
                         structuredHandler = payloadParser,
                         httpMessageType,
                     )
@@ -250,23 +244,22 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, outputT: Symbol, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             codegenContext,
             operationShape,
             targetShape,
-            builderSymbol,
         ).render()
+        val receiver = outputT.rustType().qualifiedName()
         rustTemplate(
             """
             let unmarshaller = #{unmarshallerConstructorFn}();
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok(#{Receiver}::new(unmarshaller, body))
+            Ok($receiver::new(unmarshaller, body))
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
-            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
         )
     }
 
@@ -286,7 +279,7 @@ class HttpBindingGenerator(
 
     private fun RustWriter.deserializePayloadBody(
         binding: HttpBindingDescriptor,
-        errorSymbol: RuntimeType,
+        errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ) {
@@ -367,7 +360,7 @@ class HttpBindingGenerator(
                     HttpBinding.Location.HEADER,
                     defaultTimestampFormat,
                 )
-            val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+            val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
             rust(
                 "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
@@ -455,15 +448,6 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a unique name for the deserializer function for a given [operationShape] and HTTP binding.
-     */
-    // Rename here technically not required, operations and members cannot be renamed.
-    private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
-        "${
-        operationShape.id.getName(service).toSnakeCase()
-        }_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
-
-    /**
      * Returns a function to set headers on an HTTP message for the given [shape].
      * Returns null if no headers need to be set.
      *
@@ -488,8 +472,7 @@ class HttpBindingGenerator(
             return null
         }
 
-        val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+        return protocolFunctions.serializeFn(shape, fnNameSuffix = "headers") { fnName ->
             // If the shape is an operation shape, the input symbol of the generated function is the input or output
             // shape, which is the shape holding the header-bound data.
             val shapeSymbol = symbolProvider.toSymbol(
@@ -650,12 +633,13 @@ class HttpBindingGenerator(
                 let $safeName = $formatted;
                 if !$safeName.is_empty() {
                     let header_value = $safeName;
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_field_error:W}
                     })?;
                     builder = builder.header("$headerName", header_value);
                 }
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_field_error" to renderErrorMessage("header_value"),
             )
         }
@@ -690,21 +674,22 @@ class HttpBindingGenerator(
                         #{invalid_header_name:W}
                     })?;
                     let header_value = ${
-                headerFmtFun(
-                    this,
-                    valueTargetShape,
-                    timestampFormat,
-                    "v",
-                    isMultiValuedHeader = false,
-                )
+                    headerFmtFun(
+                        this,
+                        valueTargetShape,
+                        timestampFormat,
+                        "v",
+                        isMultiValuedHeader = false,
+                    )
                 };
-                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_header_value:W}
                     })?;
                     builder = builder.header(header_name, header_value);
                 }
 
                 """,
+                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_header_name" to OperationBuildError(runtimeConfig).invalidField(memberName) {
                     rust("""format!("`{k}` cannot be used as a header name: {err}")""")
                 },
@@ -746,14 +731,14 @@ class HttpBindingGenerator(
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.base64Encode(runtimeConfig))
-                    "$func(&$targetName)"
+                    "$func($targetName)"
                 } else {
                     quoteValue("$targetName.as_str()")
                 }
             }
 
             target.isTimestampShape -> {
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
                 quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
 

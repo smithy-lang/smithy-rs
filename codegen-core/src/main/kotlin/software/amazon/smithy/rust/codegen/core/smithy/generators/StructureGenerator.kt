@@ -6,16 +6,13 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -25,43 +22,64 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
-fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
-    rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
-        block()
-    }
+/** StructureGenerator customization sections */
+sealed class StructureSection(name: String) : Section(name) {
+    abstract val shape: StructureShape
+
+    /** Hook to add additional fields to the structure */
+    data class AdditionalFields(override val shape: StructureShape) : StructureSection("AdditionalFields")
+
+    /** Hook to add additional fields to the `Debug` impl */
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
+        StructureSection("AdditionalDebugFields")
+
+    /** Hook to add additional trait impls to the structure */
+    data class AdditionalTraitImpls(override val shape: StructureShape, val structName: String) :
+        StructureSection("AdditionalTraitImpls")
 }
+
+/** Customizations for StructureGenerator */
+abstract class StructureCustomization : NamedCustomization<StructureSection>()
 
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
+    private val customizations: List<StructureCustomization>,
 ) {
+    companion object {
+        /** Reserved struct member names */
+        val structureMemberNameMap: Map<String, String> = mapOf(
+            "build" to "build_value",
+            "builder" to "builder_value",
+            "default" to "default_value",
+        )
+    }
+
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
-    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
+    private val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    protected val name = symbolProvider.toSymbol(shape).name
+    protected val name: String = symbolProvider.toSymbol(shape).name
 
-    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
+    fun render() {
         renderStructure()
-        errorTrait?.also { errorTrait ->
-            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
-        }
     }
 
     /**
@@ -79,7 +97,9 @@ open class StructureGenerator(
             }.toSet().sorted()
         return if (lifetimes.isNotEmpty()) {
             "<${lifetimes.joinToString { "'$it" }}>"
-        } else ""
+        } else {
+            ""
+        }
     }
 
     /**
@@ -98,6 +118,7 @@ open class StructureGenerator(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
+                writeCustomizations(customizations, StructureSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
             }
         }
@@ -110,7 +131,7 @@ open class StructureGenerator(
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
+                writer.renderMemberDoc(member, memberSymbol)
                 writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
                 val returnType = when {
@@ -119,7 +140,7 @@ open class StructureGenerator(
                     memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
-                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
                     when {
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
@@ -150,12 +171,15 @@ open class StructureGenerator(
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
+            writeCustomizations(customizations, StructureSection.AdditionalFields(shape))
         }
 
         renderStructureImpl()
-        if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
+        if (!containerMeta.hasDebugDerive()) {
             renderDebugImpl()
         }
+
+        writer.writeCustomizations(customizations, StructureSection.AdditionalTraitImpls(shape, name))
     }
 
     protected fun RustWriter.forEachMember(

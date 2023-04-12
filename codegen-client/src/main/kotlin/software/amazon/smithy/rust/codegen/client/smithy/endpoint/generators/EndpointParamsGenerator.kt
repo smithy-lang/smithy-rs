@@ -8,11 +8,12 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 import software.amazon.smithy.rulesengine.language.eval.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -27,10 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Clone
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Debug
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Default
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.PartialEq
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -38,34 +35,19 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-/**
- * The module containing all endpoint resolution machinery. Module layout:
- * ```
- * crate::endpoints::
- *  struct Params // Endpoint parameter struct
- *  struct ParamsBuilder // Builder for Params
- *  enum InvalidParams
- *  DefaultResolver // struct implementing the endpoint resolver based on the provided rules for the service
- *  internal // private module containing the endpoints library functions, the private version of the default resolver
- *      endpoints_lib::{endpoints_fn*, ...}
- *      fn default_resolver(params: &Params, partition_metadata: &PartitionMetadata, error_collector: &mut ErrorCollector)
- * ```
- */
-val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functionality")
-
 // internals contains the actual resolver function
-val EndpointsImpl = RustModule.private("internals", "Endpoints internals", parent = EndpointsModule)
+val EndpointImpl = RustModule.private("internals", parent = ClientRustModule.Endpoint)
 
 val EndpointTests = RustModule.new(
     "test",
     visibility = Visibility.PRIVATE,
-    documentation = "Generated endpoint tests",
-    parent = EndpointsModule,
+    parent = ClientRustModule.Endpoint,
     inline = true,
-).copy(rustMetadata = RustMetadata.TestModule)
+    documentationOverride = "",
+).cfgTest()
 
 // stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
-val EndpointsStdLib = RustModule.private("endpoint_lib", "Endpoints standard library functions")
+val EndpointStdLib = RustModule.private("endpoint_lib")
 
 /** Endpoint Parameters generator.
  *
@@ -132,15 +114,15 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
     }
 
-    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", EndpointsModule) {
+    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.Endpoint) {
         generateEndpointsStruct(this)
     }
 
-    private fun endpointsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", EndpointsModule) {
+    private fun endpointsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Endpoint) {
         generateEndpointParamsBuilder(this)
     }
 
-    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", EndpointsModule) {
+    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Endpoint) {
         rust(
             """
             /// An error that occurred during endpoint resolution
@@ -175,7 +157,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         // Ensure that fields can be added in the future
         Attribute.NonExhaustive.render(writer)
         // Automatically implement standard Rust functionality
-        Attribute.Derives(setOf(Debug, PartialEq, Clone)).render(writer)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)).render(writer)
         // Generate the struct block:
         /*
             pub struct Params {
@@ -238,7 +220,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
 
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
-        Attribute.Derives(setOf(Debug, Default, PartialEq, Clone)).render(rustWriter)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(rustWriter)
         rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
@@ -255,10 +237,11 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
                 "ParamsError" to paramsError(),
             ) {
                 val params = writable {
+                    Attribute.AllowClippyUnnecessaryLazyEvaluations.render(this)
                     rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
                         parameters.toList().forEach { parameter ->
                             rust("${parameter.memberName()}: self.${parameter.memberName()}")
-                            parameter.default.orNull()?.also { default -> rust(".or(Some(${value(default)}))") }
+                            parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
                             if (parameter.isRequired) {
                                 rustTemplate(
                                     ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",

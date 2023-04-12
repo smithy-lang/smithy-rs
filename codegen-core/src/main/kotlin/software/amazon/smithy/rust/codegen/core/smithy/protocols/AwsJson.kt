@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
@@ -13,18 +14,17 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -48,10 +48,25 @@ class AwsJsonHttpBindingResolver(
         .uri(UriPattern.parse("/"))
         .build()
 
-    private fun bindings(shape: ToShapeId) =
-        shape.let { model.expectShape(it.toShapeId()) }.members()
-            .map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
+    private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
+        val members = shape.let { model.expectShape(it.toShapeId()) }.members()
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
+        if (members.size > 1 && members.any { it.isStreaming(model) }) {
+            throw CodegenException(
+                "We only support one payload member if that payload contains a streaming member." +
+                    "Tracking issue to relax this constraint: https://github.com/awslabs/smithy-rs/issues/2237",
+            )
+        }
+
+        return members.map {
+            if (it.isStreaming(model)) {
+                HttpBindingDescriptor(it, HttpLocation.PAYLOAD, "document")
+            } else {
+                HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document")
+            }
+        }
             .toList()
+    }
 
     override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
 
@@ -85,13 +100,13 @@ class AwsJsonSerializerGenerator(
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
         var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
-            val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
-            serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
+            serializer = protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
                 rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
@@ -111,14 +126,12 @@ open class AwsJson(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
-    private val jsonDeserModule = RustModule.private("json_deser")
 
     val version: AwsJsonVersion get() = awsJsonVersion
 
@@ -130,37 +143,35 @@ open class AwsJson(
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            builderSymbolFn(codegenContext.symbolProvider),
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response.body(), response.headers())
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
                 *errorScope,
             )
         }
 
-    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
                 }
                 """,
                 *errorScope,

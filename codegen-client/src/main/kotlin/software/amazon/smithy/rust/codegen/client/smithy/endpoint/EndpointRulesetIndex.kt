@@ -17,15 +17,19 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Index to ensure that endpoint rulesets are parsed only once
  */
-internal class EndpointRulesetIndex : KnowledgeIndex {
+class EndpointRulesetIndex : KnowledgeIndex {
 
     private val ruleSets: ConcurrentHashMap<ServiceShape, EndpointRuleSet?> = ConcurrentHashMap()
 
     fun endpointRulesForService(serviceShape: ServiceShape) = ruleSets.computeIfAbsent(
         serviceShape,
-    ) { serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typecheck() } }
+    ) {
+        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
+            ?.also { it.typecheck() }
+    }
 
-    fun endpointTests(serviceShape: ServiceShape) = serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()
+    fun endpointTests(serviceShape: ServiceShape) =
+        serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()
 
     companion object {
         fun of(model: Model): EndpointRulesetIndex {

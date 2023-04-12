@@ -34,6 +34,7 @@ use crate::build_bundle::BuildBundleArgs;
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
+
 lazy_static::lazy_static! {
     // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
     // for older versions of the SDK since the canary is in the smithy-rs repository and will
@@ -58,6 +59,10 @@ lazy_static::lazy_static! {
 
 #[derive(Debug, Parser, Eq, PartialEq)]
 pub struct RunArgs {
+    /// Rust version
+    #[clap(long)]
+    pub rust_version: Option<String>,
+
     /// Version of the SDK to compile the canary against
     #[clap(
         long,
@@ -98,6 +103,7 @@ pub struct RunArgs {
 
 #[derive(Debug)]
 struct Options {
+    rust_version: Option<String>,
     sdk_release_tag: Option<ReleaseTag>,
     sdk_path: Option<PathBuf>,
     musl: bool,
@@ -129,6 +135,7 @@ impl Options {
             )
             .context("read cdk output")?;
             Ok(Options {
+                rust_version: run_opt.rust_version,
                 sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
@@ -138,6 +145,7 @@ impl Options {
             })
         } else {
             Ok(Options {
+                rust_version: run_opt.rust_version,
                 sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
@@ -276,15 +284,18 @@ fn use_correct_revision(smithy_rs: &dyn Git, sdk_release_tag: &ReleaseTag) -> Re
 
 /// Returns the path to the compiled bundle zip file
 async fn build_bundle(options: &Options) -> Result<PathBuf> {
-    Ok(crate::build_bundle::build_bundle(BuildBundleArgs {
+    let build_args = BuildBundleArgs {
         canary_path: None,
+        rust_version: options.rust_version.clone(),
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
         musl: options.musl,
         manifest_only: false,
-    })
-    .await?
-    .expect("manifest_only set to false, so there must be a bundle path"))
+    };
+    info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
+    Ok(crate::build_bundle::build_bundle(build_args)
+        .await?
+        .expect("manifest_only set to false, so there must be a bundle path"))
 }
 
 async fn upload_bundle(
@@ -334,6 +345,7 @@ async fn create_lambda_fn(
         .environment(
             Environment::builder()
                 .variables("RUST_BACKTRACE", "1")
+                .variables("RUST_LOG", "info")
                 .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
                 .variables(
                     "CANARY_EXPECTED_TRANSCRIBE_RESULT",

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_config::SdkConfig;
 use canary::{get_canaries_to_run, CanaryEnv};
 use lambda_runtime::{Context as LambdaContext, Error};
 use serde_json::{json, Value};
@@ -18,35 +19,18 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_texray::TeXRayLayer;
 
-/// Conditionally include the module based on the $version feature gate
-///
-/// When the module is not included, an `mk_canary` function will be generated that returns `None`.
-macro_rules! canary_module {
-    ($name: ident, since: $version: expr) => {
-        #[cfg(feature = $version)]
-        mod $name;
-
-        #[cfg(not(feature = $version))]
-        mod $name {
-            pub(crate) fn mk_canary(
-                _clients: &crate::canary::Clients,
-                _env: &crate::canary::CanaryEnv,
-            ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
-                tracing::warn!(concat!(
-                    stringify!($name),
-                    " is disabled because it is not supported by this version of the SDK."
-                ));
-                None
-            }
-        }
-    };
-}
-
 mod canary;
 
-mod s3_canary;
-canary_module!(paginator_canary, since: "v0.4.1");
-mod transcribe_canary;
+#[cfg(feature = "latest")]
+mod latest;
+#[cfg(feature = "latest")]
+pub(crate) use latest as current_canary;
+
+// NOTE: This module can be deleted 3 releases after release-2023-01-26
+#[cfg(feature = "release-2023-01-26")]
+mod release_2023_01_26;
+#[cfg(feature = "release-2023-01-26")]
+pub(crate) use release_2023_01_26 as current_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -62,7 +46,7 @@ async fn main() -> Result<(), Error> {
     let local = env::args().any(|arg| arg == "--local");
     let main_handler = LambdaMain::new().await;
     if local {
-        let result = lambda_main(main_handler.clients)
+        let result = lambda_main(main_handler.sdk_config)
             .instrument(tracing_texray::examine(info_span!("run_canaries")))
             .await?;
         if result
@@ -88,13 +72,13 @@ async fn main() -> Result<(), Error> {
 // Enables us to keep the clients alive between successive Lambda executions.
 // Not because we need to for this use-case, but to demonstrate how to.
 struct LambdaMain {
-    clients: canary::Clients,
+    sdk_config: SdkConfig,
 }
 
 impl LambdaMain {
     async fn new() -> Self {
         Self {
-            clients: canary::Clients::initialize().await,
+            sdk_config: aws_config::load_from_env().await,
         }
     }
 }
@@ -104,17 +88,17 @@ impl lambda_runtime::Handler<Value, Value> for LambdaMain {
     type Fut = Pin<Box<dyn Future<Output = Result<Value, Error>>>>;
 
     fn call(&self, _: Value, _: LambdaContext) -> Self::Fut {
-        Box::pin(lambda_main(self.clients.clone()))
+        Box::pin(lambda_main(self.sdk_config.clone()))
     }
 }
 
-async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
+async fn lambda_main(sdk_config: SdkConfig) -> Result<Value, Error> {
     // Load necessary parameters from environment variables
     let env = CanaryEnv::from_env();
     info!("Env: {:#?}", env);
 
     // Get list of canaries to run and spawn them
-    let canaries = get_canaries_to_run(clients, env);
+    let canaries = get_canaries_to_run(sdk_config, env);
     let join_handles = canaries
         .into_iter()
         .map(|(name, future)| (name, tokio::spawn(future)))

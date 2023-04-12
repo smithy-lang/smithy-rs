@@ -10,13 +10,16 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.testutil.TestClientRustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class EventStreamSymbolProviderTest {
@@ -45,7 +48,11 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(
+            TestRuntimeConfig,
+            SymbolVisitor(testClientRustSettings(), model, service, TestClientRustSymbolProviderConfig),
+            CodegenTarget.CLIENT,
+        )
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
@@ -54,8 +61,17 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Opaque("EventStreamSender<crate::model::SomeStream, crate::error::SomeStreamError>", "aws_smithy_http::event_stream")
-        outputType shouldBe RustType.Opaque("Receiver<crate::model::SomeStream, crate::error::SomeStreamError>", "aws_smithy_http::event_stream")
+        val someStream = RustType.Opaque("SomeStream", "crate::types")
+        val someStreamError = RustType.Opaque("SomeStreamError", "crate::types::error")
+
+        inputType shouldBe RustType.Application(
+            RuntimeType.eventStreamSender(TestRuntimeConfig).toSymbol().rustType(),
+            listOf(someStream, someStreamError),
+        )
+        outputType shouldBe RustType.Application(
+            RuntimeType.eventStreamReceiver(TestRuntimeConfig).toSymbol().rustType(),
+            listOf(someStream, someStreamError),
+        )
     }
 
     @Test
@@ -81,7 +97,11 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
+        val provider = EventStreamSymbolProvider(
+            TestRuntimeConfig,
+            SymbolVisitor(testClientRustSettings(), model, service, TestClientRustSymbolProviderConfig),
+            CodegenTarget.CLIENT,
+        )
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
@@ -90,7 +110,7 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::model"))
-        outputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::model"))
+        inputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::types"))
+        outputType shouldBe RustType.Option(RustType.Opaque("NotStreaming", "crate::types"))
     }
 }

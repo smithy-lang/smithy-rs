@@ -59,7 +59,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
                     checksum.update(data);
                     Poll::Ready(Some(Ok(frame)))
                 } else {
-                    if let Some(trailers) = frame.into_trailers() {
+                    if let Ok(trailers) = frame.into_trailers() {
                         let checksum_headers = this
                             .checksum
                             .take()

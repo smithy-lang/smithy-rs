@@ -4,15 +4,19 @@ name = "polly-tests"
 version = "0.1.0"
 authors = ["John DiSanti <jdisanti@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-polly = { path = "../../build/aws-sdk/sdk/polly" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 bytes = "1.0.0"
 http = "0.2.0"
-tokio = { version = "1.8.4", features = ["full"]}
+tokio = { version = "1.23.1", features = ["full"]}
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

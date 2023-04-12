@@ -43,7 +43,6 @@
 
 mod canonical_request;
 mod error;
-mod query_writer;
 mod settings;
 mod sign;
 mod uri_path_normalization;
@@ -54,7 +53,7 @@ pub(crate) mod test;
 
 pub use error::SigningError;
 pub use settings::{
-    PayloadChecksumKind, PercentEncodingMode, SignatureLocation, SigningParams, SigningSettings,
-    UriPathNormalizationMode,
+    PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignatureLocation, SigningParams,
+    SigningSettings, UriPathNormalizationMode,
 };
 pub use sign::{sign, SignableBody, SignableRequest};

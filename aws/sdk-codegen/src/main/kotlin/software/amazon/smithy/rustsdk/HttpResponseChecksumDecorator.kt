@@ -8,20 +8,20 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun HttpChecksumTrait.requestValidationModeMember(
+fun HttpChecksumTrait.requestValidationModeMember(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
 ): MemberShape? {
@@ -29,20 +29,21 @@ private fun HttpChecksumTrait.requestValidationModeMember(
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
 }
 
-class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class HttpResponseChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
+
+    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
+    private fun applies(codegenContext: ClientCodegenContext, operationShape: OperationShape): Boolean =
+        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
+    ): List<OperationCustomization> = baseCustomizations.letIf(applies(codegenContext, operation)) {
+        it + HttpResponseChecksumCustomization(codegenContext, operation)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 // This generator was implemented based on this spec:

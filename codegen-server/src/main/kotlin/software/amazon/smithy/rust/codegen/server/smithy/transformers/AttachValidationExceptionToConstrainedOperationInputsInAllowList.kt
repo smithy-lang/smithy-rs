@@ -6,13 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
 /**
@@ -50,8 +51,7 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
         )
 
     fun transform(model: Model): Model {
-        val walker = Walker(model)
-
+        val walker = DirectedWalker(model)
         val operationsWithConstrainedInputWithoutValidationException = model.serviceShapes
             .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
             .flatMap { it.operations }
@@ -61,11 +61,11 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
                 walker.walkShapes(operationShape.inputShape(model))
                     .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
             }
-            .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }
+            .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {
-                shape.toBuilder().addError("smithy.framework#ValidationException").build()
+                shape.toBuilder().addError(SmithyValidationExceptionConversionGenerator.SHAPE_ID).build()
             } else {
                 shape
             }

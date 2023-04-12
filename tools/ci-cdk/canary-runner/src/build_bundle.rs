@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -64,7 +65,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("v0.4.1").unwrap(), // first version to add support for paginators
+        ReleaseTag::from_str("release-2023-01-26").unwrap(), // last version before the crate reorg
     ];
 }
 
@@ -73,6 +74,10 @@ pub struct BuildBundleArgs {
     /// Canary Lambda source code path (defaults to current directory)
     #[clap(long)]
     pub canary_path: Option<PathBuf>,
+
+    /// Rust version
+    #[clap(long)]
+    pub rust_version: Option<String>,
 
     /// SDK release tag to use for crate version numbers
     #[clap(
@@ -110,11 +115,18 @@ enum CrateSource {
 fn enabled_features(crate_source: &CrateSource) -> Vec<String> {
     let mut enabled = Vec::new();
     if let CrateSource::VersionsManifest { release_tag, .. } = crate_source {
+        // we want to select the newest module specified after this release
         for notable in NOTABLE_SDK_RELEASE_TAGS.iter() {
-            if notable < release_tag {
+            tracing::debug!(release_tag = ?release_tag, notable = ?notable, "considering if release tag came before notable release");
+            if release_tag <= notable {
+                tracing::debug!("selecting {} as chosen release", notable);
                 enabled.push(notable.as_str().into());
+                break;
             }
         }
+    }
+    if enabled.is_empty() {
+        enabled.push("latest".into());
     }
     enabled
 }
@@ -153,11 +165,12 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
         }
     }
     write!(output, "\n[features]\n").unwrap();
+    writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
         writeln!(
             output,
             "\"{release_tag}\" = []",
-            release_tag = release_tag.as_str().replace('-', "_")
+            release_tag = release_tag.as_str()
         )
         .unwrap();
     }
@@ -182,17 +195,42 @@ fn sha1_file(path: &Path) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
+fn name_bundle(
+    bin_path: &Path,
+    rust_version: Option<&str>,
+    sdk_release_tag: Option<&ReleaseTag>,
+) -> Result<String> {
+    name_hashed_bundle(&sha1_file(bin_path)?, rust_version, sdk_release_tag)
+}
+
+fn name_hashed_bundle(
+    bin_hash: &str,
+    rust_version: Option<&str>,
+    sdk_release_tag: Option<&ReleaseTag>,
+) -> Result<String> {
+    // The Lambda name must be less than 64 characters, so truncate the hash a bit
+    let bin_hash = &bin_hash[..24];
+    // Lambda function names can't have periods in them
+    let rust_version = rust_version.map(|s| s.replace('.', ""));
+    let rust_version = rust_version.as_deref().unwrap_or("unknown");
+    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace('-', ""));
+    let sdk_release_tag = sdk_release_tag.as_deref().unwrap_or("untagged");
+    Ok(format!(
+        "canary-{sdk_release_tag}-{rust_version}-{bin_hash}.zip"
+    ))
+}
+
 pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     let canary_path = opt
         .canary_path
         .unwrap_or_else(|| std::env::current_dir().expect("current dir"));
 
     // Determine the SDK crate source from CLI args
-    let crate_source = match (opt.sdk_path, opt.sdk_release_tag) {
+    let crate_source = match (opt.sdk_path, &opt.sdk_release_tag) {
         (Some(sdk_path), None) => CrateSource::Path(sdk_path),
         (None, Some(release_tag)) => CrateSource::VersionsManifest {
-            versions: VersionsManifest::from_github_tag(&release_tag).await?,
-            release_tag,
+            versions: VersionsManifest::from_github_tag(release_tag).await?,
+            release_tag: release_tag.clone(),
         },
         _ => unreachable!("clap should have validated against this"),
     };
@@ -225,8 +263,11 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             path.join("release")
         };
         let bin_path = target_path.join("bootstrap");
-        let bin_hash = sha1_file(&bin_path)?;
-        let bundle_path = target_path.join(format!("canary-lambda-{bin_hash}.zip"));
+        let bundle_path = target_path.join(name_bundle(
+            &bin_path,
+            opt.rust_version.as_deref(),
+            opt.sdk_release_tag.as_ref(),
+        )?);
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
@@ -280,6 +321,7 @@ mod tests {
         assert_eq!(
             Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
+                rust_version: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: false,
@@ -291,12 +333,12 @@ mod tests {
                 "--sdk-release-tag",
                 "release-2022-07-26"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
             Args::BuildBundle(BuildBundleArgs {
                 canary_path: Some("some-canary-path".into()),
+                rust_version: None,
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
@@ -310,12 +352,12 @@ mod tests {
                 "--canary-path",
                 "some-canary-path"
             ])
-            .ok()
             .expect("valid args")
         );
         assert_eq!(
             Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
+                rust_version: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: true,
@@ -329,7 +371,27 @@ mod tests {
                 "--musl",
                 "--manifest-only"
             ])
-            .ok()
+            .expect("valid args")
+        );
+        assert_eq!(
+            Args::BuildBundle(BuildBundleArgs {
+                canary_path: Some("some-canary-path".into()),
+                rust_version: Some("stable".into()),
+                sdk_release_tag: None,
+                sdk_path: Some("some-sdk-path".into()),
+                musl: false,
+                manifest_only: false,
+            }),
+            Args::try_parse_from([
+                "./canary-runner",
+                "build-bundle",
+                "--rust-version",
+                "stable",
+                "--sdk-path",
+                "some-sdk-path",
+                "--canary-path",
+                "some-canary-path"
+            ])
             .expect("valid args")
         );
     }
@@ -371,14 +433,16 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 aws-config = { path = "some/sdk/path/aws-config" }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 
 [features]
-"v0.4.1" = []
-default = []
+latest = []
+"release-2023-01-26" = []
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
         );
@@ -433,14 +497,16 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
+reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 aws-config = "0.46.0"
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
 aws-sdk-transcribestreaming = "0.16.0"
 
 [features]
-"v0.4.1" = []
-default = ["v0.4.1"]
+latest = []
+"release-2023-01-26" = []
+default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
                 versions: VersionsManifest {
@@ -457,9 +523,80 @@ default = ["v0.4.1"]
                     .collect(),
                     release: None,
                 },
-                release_tag: ReleaseTag::from_str("release-2022-07-26").unwrap(),
+                release_tag: ReleaseTag::from_str("release-2023-05-26").unwrap(),
             })
             .expect("success")
+        );
+    }
+
+    #[test]
+    fn test_name_hashed_bundle() {
+        fn check(expected: &str, actual: &str) {
+            assert!(
+                expected.len() < 64,
+                "Lambda function name must be less than 64 characters"
+            );
+            assert_eq!(expected, actual);
+        }
+        check(
+            "canary-release20221216-1621-7ae6085d2105d5d1e13b10f8.zip",
+            &name_hashed_bundle(
+                "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
+                Some("1.62.1"),
+                Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
+            )
+            .unwrap(),
+        );
+        check(
+            "canary-untagged-1621-7ae6085d2105d5d1e13b10f8.zip",
+            &name_hashed_bundle(
+                "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
+                Some("1.62.1"),
+                None,
+            )
+            .unwrap(),
+        );
+        check(
+            "canary-release20221216-unknown-7ae6085d2105d5d1e13b10f8.zip",
+            &name_hashed_bundle(
+                "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
+                None,
+                Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
+            )
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_notable_versions() {
+        let versions = VersionsManifest {
+            smithy_rs_revision: "some-revision-smithy-rs".into(),
+            aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+            manual_interventions: Default::default(),
+            crates: [].into_iter().collect(),
+            release: None,
+        };
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-02-23".parse().unwrap(),
+            }),
+            vec!["latest".to_string()]
+        );
+
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-01-26".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
+        );
+        assert_eq!(
+            enabled_features(&CrateSource::VersionsManifest {
+                versions,
+                release_tag: "release-2023-01-13".parse().unwrap(),
+            }),
+            vec!["release-2023-01-26".to_string()]
         );
     }
 }

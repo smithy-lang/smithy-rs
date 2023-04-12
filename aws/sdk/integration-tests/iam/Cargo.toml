@@ -4,10 +4,14 @@ name = "iam-tests"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-endpoint = { path = "../../build/aws-sdk/sdk/aws-endpoint"}
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam" }
@@ -15,5 +19,5 @@ aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", featur
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 bytes = "1.0.0"
 http = "0.2.0"
-tokio = { version = "1.8.4", features = ["full", "test-util"]}
+tokio = { version = "1.23.1", features = ["full", "test-util"]}
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

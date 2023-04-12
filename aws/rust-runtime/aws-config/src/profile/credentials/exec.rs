@@ -3,25 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::Arc;
-
-use aws_sdk_sts::operation::AssumeRole;
-use aws_sdk_sts::{Config, Credentials};
-use aws_types::region::Region;
-
 use super::repr::{self, BaseProvider};
-
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
+#[cfg(feature = "credentials-sso")]
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
+use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
 use aws_sdk_sts::middleware::DefaultMiddleware;
+use aws_sdk_sts::operation::assume_role::AssumeRoleInput;
+use aws_sdk_sts::{config::Credentials, Config};
 use aws_smithy_client::erase::DynConnector;
-use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
-
+use aws_types::region::Region;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub(super) struct AssumeRoleProvider {
@@ -41,7 +38,7 @@ impl AssumeRoleProvider {
         &self,
         input_credentials: Credentials,
         client_config: &ClientConfiguration,
-    ) -> credentials::Result {
+    ) -> provider::Result {
         let config = Config::builder()
             .credentials_provider(input_credentials)
             .region(client_config.region.clone())
@@ -51,7 +48,7 @@ impl AssumeRoleProvider {
             .as_ref()
             .cloned()
             .unwrap_or_else(|| sts::util::default_session_name("assume-role-from-profile"));
-        let operation = AssumeRole::builder()
+        let operation = AssumeRoleInput::builder()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)
@@ -121,19 +118,29 @@ impl ProviderChain {
                     .build();
                 Arc::new(provider)
             }
+            #[allow(unused_variables)]
             BaseProvider::Sso {
                 sso_account_id,
                 sso_region,
                 sso_role_name,
                 sso_start_url,
             } => {
-                let sso_config = SsoConfig {
-                    account_id: sso_account_id.to_string(),
-                    role_name: sso_role_name.to_string(),
-                    start_url: sso_start_url.to_string(),
-                    region: Region::new(sso_region.to_string()),
-                };
-                Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                #[cfg(feature = "credentials-sso")]
+                {
+                    let sso_config = SsoConfig {
+                        account_id: sso_account_id.to_string(),
+                        role_name: sso_role_name.to_string(),
+                        start_url: sso_start_url.to_string(),
+                        region: Region::new(sso_region.to_string()),
+                    };
+                    Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                }
+                #[cfg(not(feature = "credentials-sso"))]
+                {
+                    Err(ProfileFileError::UnknownProvider {
+                        name: "sso".to_string(),
+                    })?
+                }
             }
         };
         tracing::info!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());
@@ -157,7 +164,7 @@ pub(super) mod named {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use aws_types::credentials::ProvideCredentials;
+    use aws_credential_types::provider::ProvideCredentials;
     use std::borrow::Cow;
 
     #[derive(Debug)]
@@ -197,7 +204,7 @@ mod test {
     use crate::provider_config::ProviderConfig;
     use crate::test_case::no_traffic_connector;
 
-    use aws_types::Credentials;
+    use aws_credential_types::Credentials;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -206,7 +213,7 @@ mod test {
         let mut base = HashMap::new();
         base.insert(
             "Environment".into(),
-            Arc::new(Credentials::new("key", "secret", None, None, "test")) as _,
+            Arc::new(Credentials::for_tests()) as _,
         );
         let provider = NamedProviderFactory::new(base);
         assert!(provider.provider("environment").is_some());

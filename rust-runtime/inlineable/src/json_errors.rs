@@ -5,8 +5,7 @@
 
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
-use aws_smithy_types::Error as SmithyError;
-use bytes::Bytes;
+use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 use http::header::ToStrError;
 use http::{HeaderMap, HeaderValue};
 use std::borrow::Cow;
@@ -82,56 +81,47 @@ fn error_type_from_header(headers: &HeaderMap<HeaderValue>) -> Result<Option<&st
         .transpose()
 }
 
-fn request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str> {
-    headers
-        .get("X-Amzn-Requestid")
-        .and_then(|v| v.to_str().ok())
-}
-
-pub fn parse_generic_error(
-    payload: &Bytes,
+pub fn parse_error_metadata(
+    payload: &[u8],
     headers: &HeaderMap<HeaderValue>,
-) -> Result<SmithyError, DeserializeError> {
-    let ErrorBody { code, message } = parse_error_body(payload.as_ref())?;
+) -> Result<ErrorMetadataBuilder, DeserializeError> {
+    let ErrorBody { code, message } = parse_error_body(payload)?;
 
-    let mut err_builder = SmithyError::builder();
+    let mut err_builder = ErrorMetadata::builder();
     if let Some(code) = error_type_from_header(headers)
         .map_err(|_| DeserializeError::custom("X-Amzn-Errortype header was not valid UTF-8"))?
         .or(code.as_deref())
         .map(sanitize_error_code)
     {
-        err_builder.code(code);
+        err_builder = err_builder.code(code);
     }
     if let Some(message) = message {
-        err_builder.message(message);
+        err_builder = err_builder.message(message);
     }
-    if let Some(request_id) = request_id(headers) {
-        err_builder.request_id(request_id);
-    }
-    Ok(err_builder.build())
+    Ok(err_builder)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::json_errors::{parse_error_body, parse_generic_error, sanitize_error_code};
+    use crate::json_errors::{parse_error_body, parse_error_metadata, sanitize_error_code};
     use aws_smithy_types::Error;
     use bytes::Bytes;
     use std::borrow::Cow;
 
     #[test]
-    fn generic_error() {
+    fn error_metadata() {
         let response = http::Response::builder()
-            .header("X-Amzn-Requestid", "1234")
             .body(Bytes::from_static(
                 br#"{ "__type": "FooError", "message": "Go to foo" }"#,
             ))
             .unwrap();
         assert_eq!(
-            parse_generic_error(response.body(), response.headers()).unwrap(),
+            parse_error_metadata(response.body(), response.headers())
+                .unwrap()
+                .build(),
             Error::builder()
                 .code("FooError")
                 .message("Go to foo")
-                .request_id("1234")
                 .build()
         )
     }
@@ -209,7 +199,9 @@ mod test {
             ))
             .unwrap();
         assert_eq!(
-            parse_generic_error(response.body(), response.headers()).unwrap(),
+            parse_error_metadata(response.body(), response.headers())
+                .unwrap()
+                .build(),
             Error::builder()
                 .code("ResourceNotFoundException")
                 .message("Functions from 'us-west-2' are not reachable from us-east-1")

@@ -57,7 +57,7 @@ impl PathBody {
     }
 }
 
-/// Builder for creating [`ByteStreams`](crate::byte_stream::ByteStream) from a file/path, with full control over advanced options.
+/// Builder for creating [`ByteStreams`](ByteStream) from a file/path, with full control over advanced options.
 ///
 /// Example usage:
 /// ```no_run
@@ -83,8 +83,9 @@ impl PathBody {
 /// }
 /// # }
 /// ```
+#[allow(missing_debug_implementations)]
 pub struct FsBuilder {
-    file: Option<tokio::fs::File>,
+    file: Option<File>,
     path: Option<PathBuf>,
     length: Option<Length>,
     buffer_size: usize,
@@ -98,6 +99,7 @@ impl Default for FsBuilder {
 }
 
 /// The length (in bytes) to read. Determines whether or not a short read counts as an error.
+#[allow(missing_debug_implementations)]
 pub enum Length {
     /// Read this number of bytes exactly. Returns an error if the file is smaller than expected.
     Exact(u64),
@@ -134,7 +136,7 @@ impl FsBuilder {
     ///
     /// NOTE: The resulting ByteStream (after calling [build](FsBuilder::build)) will not be a retryable ByteStream.
     /// For a ByteStream that can be retried in the case of upstream failures, use [`FsBuilder::path`](FsBuilder::path).
-    pub fn file(mut self, file: tokio::fs::File) -> Self {
+    pub fn file(mut self, file: File) -> Self {
         self.file = Some(file);
         self
     }
@@ -166,7 +168,7 @@ impl FsBuilder {
         self
     }
 
-    /// Returns a [`ByteStream`](crate::byte_stream::ByteStream) from this builder.
+    /// Returns a [`ByteStream`](ByteStream) from this builder.
     pub async fn build(self) -> Result<ByteStream, Error> {
         if self.path.is_some() && self.file.is_some() {
             panic!("The 'file' and 'path' options on an FsBuilder are mutually exclusive but both were set. Please set only one")
@@ -208,7 +210,7 @@ impl FsBuilder {
         } else if let Some(mut file) = self.file {
             // When starting from a `File`, we need to do our own seeking
             if offset != 0 {
-                let _s = file.seek(std::io::SeekFrom::Start(offset)).await?;
+                let _s = file.seek(io::SeekFrom::Start(offset)).await?;
             }
 
             let body = SdkBody::from_body(PathBody::from_file(file, length, buffer_size));
@@ -232,7 +234,7 @@ impl FsBuilder {
 enum State {
     Unloaded(PathBuf),
     Loading(Pin<Box<dyn Future<Output = io::Result<File>> + Send + Sync + 'static>>),
-    Loaded(tokio_util::io::ReaderStream<io::Take<File>>),
+    Loaded(ReaderStream<io::Take<File>>),
 }
 
 impl Body for PathBody {
@@ -249,10 +251,10 @@ impl Body for PathBody {
                 State::Unloaded(ref path_buf) => {
                     let buf = path_buf.clone();
                     self.state = State::Loading(Box::pin(async move {
-                        let mut file = tokio::fs::File::open(&buf).await?;
+                        let mut file = File::open(&buf).await?;
 
                         if offset != 0 {
-                            let _s = file.seek(std::io::SeekFrom::Start(offset)).await?;
+                            let _s = file.seek(io::SeekFrom::Start(offset)).await?;
                         }
 
                         Ok(file)
@@ -567,7 +569,7 @@ mod test {
         for i in 0..chunks {
             let length = if i == chunks - 1 {
                 // If we're on the last chunk, the length to read might be less than a whole chunk.
-                // We substract the size of all previous chunks from the total file size to get the
+                // We subtract the size of all previous chunks from the total file size to get the
                 // size of the final chunk.
                 file_size - (i * chunk_size)
             } else {

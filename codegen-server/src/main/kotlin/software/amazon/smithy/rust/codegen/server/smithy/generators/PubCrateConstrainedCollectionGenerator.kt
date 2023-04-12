@@ -7,10 +7,15 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
@@ -35,7 +40,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPubl
  */
 class PubCrateConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
+    private val inlineModuleCreator: InlineModuleCreator,
     val shape: CollectionShape,
 ) {
     private val model = codegenContext.model
@@ -54,25 +59,25 @@ class PubCrateConstrainedCollectionGenerator(
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerConstrainedSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
-            pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+        val innerMemberSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
         } else {
-            constrainedShapeSymbolProvider.toSymbol(innerShape)
+            constrainedShapeSymbolProvider.toSymbol(shape.member)
         }
 
         val codegenScope = arrayOf(
-            "InnerConstrainedSymbol" to innerConstrainedSymbol,
+            "InnerMemberSymbol" to innerMemberSymbol,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "UnconstrainedSymbol" to unconstrainedSymbol,
             "Symbol" to symbol,
             "From" to RuntimeType.From,
         )
 
-        writer.withInlineModule(constrainedSymbol.module()) {
+        inlineModuleCreator(constrainedSymbol) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerConstrainedSymbol}>);
+                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerMemberSymbol}>);
 
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};
@@ -103,11 +108,11 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<#{Symbol}> for $name {
                         fn from(v: #{Symbol}) -> Self {
                             ${
-                    if (innerNeedsConstraining) {
-                        "Self(v.into_iter().map(|item| item.into()).collect())"
-                    } else {
-                        "Self(v)"
-                    }
+                        if (innerNeedsConstraining) {
+                            "Self(v.into_iter().map(|item| item.into()).collect())"
+                        } else {
+                            "Self(v)"
+                        }
                     }
                         }
                     }
@@ -115,11 +120,11 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${
-                    if (innerNeedsConstraining) {
-                        "v.0.into_iter().map(|item| item.into()).collect()"
-                    } else {
-                        "v.0"
-                    }
+                        if (innerNeedsConstraining) {
+                            "v.0.into_iter().map(|item| item.into()).collect()"
+                        } else {
+                            "v.0"
+                        }
                     }
                         }
                     }
@@ -130,22 +135,19 @@ class PubCrateConstrainedCollectionGenerator(
                 val innerNeedsConversion =
                     innerShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
-                rustTemplate(
-                    """
-                    impl #{From}<$name> for #{Symbol} {
-                        fn from(v: $name) -> Self {
-                            ${
-                    if (innerNeedsConversion) {
-                        "v.0.into_iter().map(|item| item.into()).collect()"
-                    } else {
-                        "v.0"
-                    }
-                    }
+                rustBlockTemplate("impl #{From}<$name> for #{Symbol}", *codegenScope) {
+                    rustBlock("fn from(v: $name) -> Self") {
+                        if (innerNeedsConversion) {
+                            withBlock("v.0.into_iter().map(|item| ", ").collect()") {
+                                conditionalBlock("item.map(|item| ", ")", innerMemberSymbol.isOptional()) {
+                                    rust("item.into()")
+                                }
+                            }
+                        } else {
+                            rust("v.0")
                         }
                     }
-                    """,
-                    *codegenScope,
-                )
+                }
             }
         }
     }

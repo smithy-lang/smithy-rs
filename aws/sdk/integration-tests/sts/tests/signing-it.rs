@@ -3,18 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_sts::{Credentials, Region};
+use aws_sdk_sts::config::{Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
 
 #[tokio::test]
 async fn assume_role_signed() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
+    let creds = Credentials::for_tests();
     let (server, request) = capture_request(None);
     let conf = aws_sdk_sts::Config::builder()
         .credentials_provider(creds)
@@ -32,13 +26,7 @@ async fn assume_role_signed() {
 
 #[tokio::test]
 async fn web_identity_unsigned() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
+    let creds = Credentials::for_tests();
     let (server, request) = capture_request(None);
     let conf = aws_sdk_sts::Config::builder()
         .credentials_provider(creds)

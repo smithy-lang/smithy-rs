@@ -54,7 +54,7 @@ use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
     TryFutureExt,
 };
-use http::{request::Parts, Extensions, HeaderMap, Request, StatusCode, Uri};
+use http::{request::Parts, Request, StatusCode};
 
 use crate::{
     body::{empty, BoxBody},
@@ -67,82 +67,14 @@ pub mod extension;
 #[cfg(feature = "aws-lambda")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub mod lambda;
+#[cfg(feature = "request-id")]
+#[cfg_attr(docsrs, doc(cfg(feature = "request-id")))]
+pub mod request_id;
 
 fn internal_server_error() -> http::Response<BoxBody> {
     let mut response = http::Response::new(empty());
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
     response
-}
-
-#[doc(hidden)]
-#[deprecated(
-    since = "0.52.0",
-    note = "This is not used by the new service builder. We use the `http::Parts` struct directly."
-)]
-#[derive(Debug)]
-pub struct RequestParts<B> {
-    uri: Uri,
-    headers: Option<HeaderMap>,
-    extensions: Option<Extensions>,
-    body: Option<B>,
-}
-
-#[allow(deprecated)]
-impl<B> RequestParts<B> {
-    /// Create a new `RequestParts`.
-    ///
-    /// You generally shouldn't need to construct this type yourself, unless
-    /// using extractors outside of axum for example to implement a
-    /// [`tower::Service`].
-    ///
-    /// [`tower::Service`]: https://docs.rs/tower/lastest/tower/trait.Service.html
-    #[doc(hidden)]
-    pub fn new(req: Request<B>) -> Self {
-        let (
-            Parts {
-                uri,
-                headers,
-                extensions,
-                ..
-            },
-            body,
-        ) = req.into_parts();
-
-        RequestParts {
-            uri,
-            headers: Some(headers),
-            extensions: Some(extensions),
-            body: Some(body),
-        }
-    }
-
-    /// Gets a reference to the request headers.
-    ///
-    /// Returns `None` if the headers has been taken by another extractor.
-    #[doc(hidden)]
-    pub fn headers(&self) -> Option<&HeaderMap> {
-        self.headers.as_ref()
-    }
-
-    /// Takes the body out of the request, leaving a `None` in its place.
-    #[doc(hidden)]
-    pub fn take_body(&mut self) -> Option<B> {
-        self.body.take()
-    }
-
-    /// Gets a reference the request URI.
-    #[doc(hidden)]
-    pub fn uri(&self) -> &Uri {
-        &self.uri
-    }
-
-    /// Gets a reference to the request extensions.
-    ///
-    /// Returns `None` if the extensions has been taken by another extractor.
-    #[doc(hidden)]
-    pub fn extensions(&self) -> Option<&Extensions> {
-        self.extensions.as_ref()
-    }
 }
 
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to

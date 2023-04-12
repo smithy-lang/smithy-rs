@@ -9,10 +9,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
-test-util = ["aws-smithy-protocol-test", "serde/derive", "rustls"]
-native-tls = ["client-hyper", "hyper-tls", "rt-tokio"]
-rustls = ["client-hyper", "hyper-rustls", "rt-tokio", "lazy_static"]
-client-hyper = ["hyper", "hyper-util", "aws-smithy-http/client-hyper"]
+client-hyper = ["dep:hyper", "dep:hyper-util", "aws-smithy-http/client-hyper"]
+test-util = ["dep:aws-smithy-protocol-test", "dep:hyper", "hyper?/server", "hyper?/h2", "dep:serde", "serde?/derive", "rustls", "tokio/full"]
+native-tls = ["dep:hyper-tls", "client-hyper", "rt-tokio"]
+rustls = ["dep:hyper-rustls", "dep:lazy_static", "dep:rustls", "client-hyper", "rt-tokio"]
+hyper-webpki-doctest-only = ["dep:hyper-rustls", "hyper-rustls?/webpki-roots"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
@@ -23,18 +24,21 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 fastrand = "1.4.0"
 http = "0.2.3"
-http-body = "1.0.0-rc.1"
-hyper = { version = "1.0.0-rc.1", features = ["client", "http2", "http1"], optional = true }
-hyper-util = { path = "../../../hyper-util", optional = true }
+http-body = "1.0.0-rc.2"
+http-body-util = "0.1.0-rc.2"
+hyper = { version = "1.0.0-rc.3", features = ["client", "http2", "http1"], optional = true }
+hyper_14 = { version = "0.14", package = "hyper", features = ["client", "http1", "http2"] }
+hyper-util = { git = "https://github.com/hyperium/hyper-util", optional = true, features = ["client", "http1", "http2"] }
 # cargo does not support optional test dependencies, so to completely disable rustls when
 # the native-tls feature is enabled, we need to add the webpki-roots feature here.
 # https://github.com/rust-lang/cargo/issues/1596
-hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
+hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native-certs", "http2"] }
 hyper-tls = { version = "0.5.0", optional = true }
+rustls = { version = "0.20", optional = true }
 lazy_static = { version = "1", optional = true }
 pin-project-lite = "0.2.7"
 serde = { version = "1", features = ["derive"], optional = true }
-tokio = { version = "1.8.4" }
+tokio = { version = "1.13.1" }
 tower = { version = "0.4.6", features = ["util", "retry"] }
 tracing = "0.1"
 
@@ -42,8 +46,11 @@ tracing = "0.1"
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1.8.4", features = ["full", "test-util"] }
+tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tower-test = "0.4.0"
+tracing-subscriber = "0.3.16"
+tracing-test = "0.2.4"
+
 
 [package.metadata.docs.rs]
 all-features = true

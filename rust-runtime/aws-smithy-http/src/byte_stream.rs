@@ -126,8 +126,10 @@
 
 use crate::body::SdkBody;
 use crate::byte_stream::error::Error;
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
+use bytes_utils::SegmentedBuf;
 use pin_project_lite::pin_project;
+use std::io::IoSlice;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -265,12 +267,14 @@ pin_project! {
 }
 
 impl ByteStream {
+    /// Create a new `ByteStream` from an [`SdkBody`].
     pub fn new(body: SdkBody) -> Self {
         Self {
             inner: Inner::new(body),
         }
     }
 
+    /// Create a new `ByteStream` from a static byte slice.
     pub fn from_static(bytes: &'static [u8]) -> Self {
         Self {
             inner: Inner::new(SdkBody::from(Bytes::from_static(bytes))),
@@ -300,8 +304,14 @@ impl ByteStream {
     ///     let data: Result<Bytes, Error> = stream.collect().await;
     /// }
     /// ```
-    pub async fn collect(self) -> Result<Bytes, Error> {
+    pub async fn collect(self) -> Result<impl Buf, Error> {
         self.inner.collect().await.map_err(Error::streaming)
+    }
+
+    /// direct conversion to bytes
+    pub async fn bytes(self) -> Result<Bytes, Error> {
+        let mut buf = self.inner.collect().await.map_err(Error::streaming)?;
+        Ok(buf.copy_to_bytes(buf.remaining()))
     }
 
     /// Returns a [`FsBuilder`](crate::byte_stream::FsBuilder), allowing you to build a `ByteStream` with
@@ -396,6 +406,8 @@ impl ByteStream {
         tokio_util::io::StreamReader::new(self)
     }
 
+    /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.
+    /// returning a new `Bytestream`.
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
         ByteStream::new(self.into_inner().map(f))
     }
@@ -446,6 +458,67 @@ impl futures_core::stream::Stream for ByteStream {
     }
 }
 
+/// Non-contiguous Binary Data Storage
+///
+/// When data is read from the network, it is read in a sequence of chunks that are not in
+/// contiguous memory. [`AggregatedBytes`](crate::byte_stream::AggregatedBytes) provides a view of
+/// this data via [`impl Buf`](bytes::Buf) or it can be copied into contiguous storage with
+/// [`.into_bytes()`](crate::byte_stream::AggregatedBytes::into_bytes).
+#[derive(Debug, Clone)]
+pub struct AggregatedBytes(SegmentedBuf<Bytes>);
+
+impl AggregatedBytes {
+    /// Convert this buffer into [`Bytes`](bytes::Bytes)
+    ///
+    /// # Why does this consume `self`?
+    /// Technically, [`copy_to_bytes`](bytes::Buf::copy_to_bytes) can be called without ownership of self. However, since this
+    /// mutates the underlying buffer such that no data is remaining, it is more misuse resistant to
+    /// prevent the caller from attempting to reread the buffer.
+    ///
+    /// If the caller only holds a mutable reference, they may use [`copy_to_bytes`](bytes::Buf::copy_to_bytes)
+    /// directly on `AggregatedBytes`.
+    pub fn into_bytes(mut self) -> Bytes {
+        self.0.copy_to_bytes(self.0.remaining())
+    }
+
+    /// Convert this buffer into an [`Iterator`] of underlying non-contiguous segments of [`Bytes`]
+    pub fn into_segments(self) -> impl Iterator<Item = Bytes> {
+        self.0.into_inner().into_iter()
+    }
+
+    /// Convert this buffer into a `Vec<u8>`
+    pub fn to_vec(self) -> Vec<u8> {
+        self.0
+            .into_inner()
+            .into_iter()
+            .flat_map(|b| b.to_vec())
+            .collect()
+    }
+}
+
+impl Buf for AggregatedBytes {
+    // Forward all methods that SegmentedBuf has custom implementations of.
+    fn remaining(&self) -> usize {
+        self.0.remaining()
+    }
+
+    fn chunk(&self) -> &[u8] {
+        self.0.chunk()
+    }
+
+    fn chunks_vectored<'a>(&'a self, dst: &mut [IoSlice<'a>]) -> usize {
+        self.0.chunks_vectored(dst)
+    }
+
+    fn advance(&mut self, cnt: usize) {
+        self.0.advance(cnt)
+    }
+
+    fn copy_to_bytes(&mut self, len: usize) -> Bytes {
+        self.0.copy_to_bytes(len)
+    }
+}
+
 pin_project! {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct Inner<B> {
@@ -459,12 +532,12 @@ impl<B> Inner<B> {
         Self { body }
     }
 
-    async fn collect(self) -> Result<Bytes, B::Error>
+    async fn collect(self) -> Result<impl Buf, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
         use http_body_util::BodyExt;
-        Ok(self.body.collect().await?.to_bytes())
+        Ok(self.body.collect().await?.aggregate())
     }
 }
 

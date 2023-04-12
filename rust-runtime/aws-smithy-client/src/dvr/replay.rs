@@ -235,7 +235,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
         };
 
         let _initial_request = events.pop_front().unwrap();
-        let (sender, response_body) = hyper::Body::channel();
+        let (sender, response_body) = http_body_util::Body::channel();
         let body = SdkBody::from(response_body);
         let recording = self.recorded_requests.clone();
         let recorded_request = tokio::spawn(async move {

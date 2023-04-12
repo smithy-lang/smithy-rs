@@ -14,10 +14,7 @@ buildscript {
     }
 }
 
-plugins {
-    kotlin("jvm") version "1.3.72" apply false
-    id("org.jetbrains.dokka") version "1.7.10"
-}
+plugins { }
 
 allprojects {
     repositories {
@@ -32,7 +29,7 @@ allprojects.forEach {
 
     it.the<JacocoPluginExtension>().apply {
         toolVersion = "0.8.8"
-        reportsDirectory.set(file("${buildDir}/jacoco-reports"))
+        reportsDirectory.set(file("$buildDir/jacoco-reports"))
     }
 }
 
@@ -62,7 +59,7 @@ tasks.register<JavaExec>("ktlint") {
     group = "Verification"
     classpath = configurations.getByName("ktlint")
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--") + lintPaths
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
@@ -72,7 +69,7 @@ tasks.register<JavaExec>("ktlintFormat") {
     group = "formatting"
     classpath = configurations.getByName("ktlint")
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--format", "--") + lintPaths
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }

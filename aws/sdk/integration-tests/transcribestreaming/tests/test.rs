@@ -4,15 +4,15 @@
  */
 
 use async_stream::stream;
-use aws_sdk_transcribestreaming::error::{
-    AudioStreamError, TranscriptResultStreamError, TranscriptResultStreamErrorKind,
-};
-use aws_sdk_transcribestreaming::model::{
+use aws_sdk_transcribestreaming::config::{Credentials, Region};
+use aws_sdk_transcribestreaming::error::SdkError;
+use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
+use aws_sdk_transcribestreaming::primitives::Blob;
+use aws_sdk_transcribestreaming::types::error::{AudioStreamError, TranscriptResultStreamError};
+use aws_sdk_transcribestreaming::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
-use aws_sdk_transcribestreaming::output::StartStreamTranscriptionOutput;
-use aws_sdk_transcribestreaming::types::{Blob, SdkError};
-use aws_sdk_transcribestreaming::{Client, Config, Credentials, Region};
+use aws_sdk_transcribestreaming::{Client, Config};
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
 use bytes::BufMut;
@@ -76,10 +76,7 @@ async fn test_error() {
 
     match output.transcript_result_stream.recv().await {
         Err(SdkError::ServiceError(context)) => match context.err() {
-            TranscriptResultStreamError {
-                kind: TranscriptResultStreamErrorKind::BadRequestException(err),
-                ..
-            } => {
+            TranscriptResultStreamError::BadRequestException(err) => {
                 assert_eq!(
                     Some("A complete signal was sent without the preceding empty frame."),
                     err.message()
@@ -106,11 +103,10 @@ async fn start_request(
     let replayer = ReplayingConnection::new(events);
 
     let region = Region::from_static(region);
-    let credentials = Credentials::new("test", "test", None, None, "test");
     let config = Config::builder()
         .region(region)
         .http_connector(replayer.clone())
-        .credentials_provider(credentials)
+        .credentials_provider(Credentials::for_tests())
         .build();
     let client = Client::from_conf(config);
 
