@@ -19,7 +19,7 @@ use crate::operation::Operation;
 use super::{Either, Plugin, PluginPipeline, PluginStack};
 
 /// A [`tower::Layer`] used to apply [`CheckHealthService`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CheckHealthLayer<PingHandler> {
     health_check_uri: &'static str,
     ping_handler: PingHandler,
@@ -55,7 +55,7 @@ impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
 }
 
 /// A middleware [`Service`] responsible for handling health check requests.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CheckHealthService<H, S> {
     inner: S,
     layer: CheckHealthLayer<H>,
@@ -105,6 +105,7 @@ fn default_ping_handler<E>(_req: Request<Body>) -> Ready<Result<Response<BoxBody
     std::future::ready(Ok::<_, E>(response))
 }
 
+#[derive(Debug)]
 pub struct CheckHealthPlugin<H> {
     layer: CheckHealthLayer<H>,
 }
