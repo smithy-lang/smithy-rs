@@ -9,3 +9,4 @@ members = [
     "./compiletime-benchmark-common",
     "./compiletime-benchmark-setup",
 ]
+exclude = ["./serde-aws-sdk"]
