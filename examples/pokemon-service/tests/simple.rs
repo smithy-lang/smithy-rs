@@ -81,4 +81,11 @@ async fn simple_integration_test() {
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
     assert_eq!(2, service_statistics_out.calls_count.unwrap());
+
+    let hyper_client = hyper::Client::new();
+    let health_check_url = format!("{}/ping", common::base_url());
+    let health_check_url = hyper::Uri::try_from(health_check_url).unwrap();
+    let result = hyper_client.get(health_check_url).await.unwrap();
+
+    assert_eq!(result.status(), 200);
 }

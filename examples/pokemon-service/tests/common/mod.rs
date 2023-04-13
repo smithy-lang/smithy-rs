@@ -24,11 +24,14 @@ pub async fn run_server() -> ChildDrop {
     ChildDrop(child)
 }
 
+pub fn base_url() -> String {
+    format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}")
+}
+
 pub fn client() -> Client<DynConnector, DynMiddleware<DynConnector>> {
-    let base_url = format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}");
     let raw_client = Builder::new()
         .rustls_connector(Default::default())
-        .middleware_fn(rewrite_base_url(base_url))
+        .middleware_fn(rewrite_base_url(base_url()))
         .build_dyn();
     let config = Config::builder().build();
     Client::with_config(raw_client, config)
