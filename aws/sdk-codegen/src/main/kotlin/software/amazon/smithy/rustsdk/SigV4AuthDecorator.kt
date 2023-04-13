@@ -72,14 +72,21 @@ private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodege
             }
 
             is ServiceRuntimePluginSection.AdditionalConfig -> {
+                section.putConfigValue(this) {
+                    rustTemplate("#{SigningService}::from_static(self.handle.conf.signing_service())", *codegenScope)
+                }
                 rustTemplate(
                     """
-                    cfg.put(#{SigningService}::from_static(self.handle.conf.signing_service()));
                     if let Some(region) = self.handle.conf.region() {
-                        cfg.put(#{SigningRegion}::from(region.clone()));
+                        #{put_signing_region}
                     }
                     """,
                     *codegenScope,
+                    "put_signing_region" to writable {
+                        section.putConfigValue(this) {
+                            rustTemplate("#{SigningRegion}::from(region.clone())", *codegenScope)
+                        }
+                    },
                 )
             }
 
@@ -114,16 +121,6 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
             is OperationRuntimePluginSection.AdditionalConfig -> {
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, section.operationShape)
                 if (authSchemes.containsKey(SigV4Trait.ID)) {
-                    rustTemplate(
-                        """
-                        let auth_option_resolver = #{AuthOptionListResolver}::new(
-                            vec![#{HttpAuthOption}::new(#{SIGV4_SCHEME_ID}, std::sync::Arc::new(#{PropertyBag}::new()))]
-                        );
-                        ${section.configBagName}.set_auth_option_resolver(auth_option_resolver);
-                        """,
-                        *codegenScope,
-                    )
-
                     val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
                     val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
                     val contentSha256Header = needsAmzSha256(codegenContext.serviceShape)
@@ -139,11 +136,17 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
-                        ${section.configBagName}.put(#{SigV4OperationSigningConfig} {
+
+                        let mut sigv4_properties = #{PropertyBag}::new();
+                        sigv4_properties.insert(#{SigV4OperationSigningConfig} {
                             region: signing_region,
                             service: signing_service,
                             signing_options,
                         });
+                        let auth_option_resolver = #{AuthOptionListResolver}::new(
+                            vec![#{HttpAuthOption}::new(#{SIGV4_SCHEME_ID}, std::sync::Arc::new(sigv4_properties))]
+                        );
+                        ${section.configBagName}.set_auth_option_resolver(auth_option_resolver);
                         """,
                         *codegenScope,
                         "payload_override" to writable {

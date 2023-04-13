@@ -20,7 +20,7 @@ from diff_lib import eprint, run, get_cmd_status, get_cmd_output, generate_and_c
 #
 # ```
 # $ cd test/smithy-rs
-# $ ../../smithy-rs/tools/ci-scripts/codegen-diff-revisions.py . <some commit hash to diff against>
+# $ ../../smithy-rs/tools/ci-scripts/codegen-diff/codegen-diff-revisions.py . <some commit hash to diff against>
 # ```
 #
 # It will diff the generated code from HEAD against any commit hash you feed it. If you want to test

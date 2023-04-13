@@ -70,7 +70,7 @@ class EndpointTraitBindings(
                     rustTemplate(
                         """
                         if $field.is_empty() {
-                            return Err(#{invalidFieldError:W})
+                            return Err(#{invalidFieldError:W}.into())
                         }
                         """,
                         "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(

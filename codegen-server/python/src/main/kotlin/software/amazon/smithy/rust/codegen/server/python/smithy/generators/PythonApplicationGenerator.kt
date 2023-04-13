@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -203,14 +204,13 @@ class PythonApplicationGenerator(
                     *codegenScope,
                 )
                 for (operation in operations) {
-                    val operationName = symbolProvider.toSymbol(operation).name
-                    val name = operationName.toSnakeCase()
+                    val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
                     rustTemplate(
                         """
-                        let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                        let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
-                        let builder = builder.$name(move |input, state| {
-                            #{pyo3_asyncio}::tokio::scope(${name}_locals.clone(), crate::python_operation_adaptor::$name(input, state, handler.clone()))
+                        let ${fnName}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                        let handler = self.handlers.get("$fnName").expect("Python handler for operation `$fnName` not found").clone();
+                        let builder = builder.$fnName(move |input, state| {
+                            #{pyo3_asyncio}::tokio::scope(${fnName}_locals.clone(), crate::python_operation_adaptor::$fnName(input, state, handler.clone()))
                         });
                         """,
                         *codegenScope,
@@ -342,7 +342,7 @@ class PythonApplicationGenerator(
             )
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
-                val name = operationName.toSnakeCase()
+                val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
 
                 val input = PythonType.Opaque("${operationName}Input", "crate::input")
                 val output = PythonType.Opaque("${operationName}Output", "crate::output")
@@ -363,15 +363,15 @@ class PythonApplicationGenerator(
 
                 rustTemplate(
                     """
-                    /// Method to register `$name` Python implementation inside the handlers map.
+                    /// Method to register `$fnName` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
                     ///
                     /// :param func ${handler.renderAsDocstring()}:
                     /// :rtype ${PythonType.None.renderAsDocstring()}:
                     ##[pyo3(text_signature = "(${'$'}self, func)")]
-                    pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    pub fn $fnName(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                         use #{SmithyPython}::PyApp;
-                        self.register_operation(py, "$name", func)
+                        self.register_operation(py, "$fnName", func)
                     }
                     """,
                     *codegenScope,

@@ -5,8 +5,10 @@
 
 use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_http::user_agent::AwsUserAgent;
+use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
+use aws_runtime::recursion_detection::RecursionDetectionInterceptor;
+use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::operation::list_objects_v2::{
     ListObjectsV2Error, ListObjectsV2Input, ListObjectsV2Output,
@@ -27,7 +29,6 @@ use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
-use http::HeaderValue;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -142,31 +143,13 @@ async fn sra_manual_test() {
             cfg.put(SigningRegion::from(Region::from_static("us-east-1")));
 
             #[derive(Debug)]
-            struct UserAgentInterceptor;
-            impl Interceptor<HttpRequest, HttpResponse> for UserAgentInterceptor {
-                fn modify_before_signing(
-                    &self,
-                    context: &mut InterceptorContext<HttpRequest, HttpResponse>,
-                    _cfg: &mut ConfigBag,
-                ) -> Result<(), InterceptorError> {
-                    let ua = AwsUserAgent::for_tests();
-
-                    context.request_mut().unwrap().headers_mut().append(
-                        "x-amz-user-agent",
-                        HeaderValue::from_str(&ua.aws_ua_header()).unwrap(),
-                    );
-                    Ok(())
-                }
-            }
-
-            #[derive(Debug)]
             struct OverrideSigningTimeInterceptor;
             impl Interceptor<HttpRequest, HttpResponse> for OverrideSigningTimeInterceptor {
                 fn read_before_signing(
                     &self,
                     _context: &InterceptorContext<HttpRequest, HttpResponse>,
                     cfg: &mut ConfigBag,
-                ) -> Result<(), InterceptorError> {
+                ) -> Result<(), BoxError> {
                     let mut signing_config =
                         cfg.get::<SigV4OperationSigningConfig>().unwrap().clone();
                     signing_config.signing_options.request_timestamp =
@@ -176,9 +159,12 @@ async fn sra_manual_test() {
                 }
             }
 
+            cfg.put(ApiMetadata::new("unused", "unused"));
+            cfg.put(AwsUserAgent::for_tests()); // Override the user agent with the test UA
             cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
                 .expect("interceptors set")
-                .register_client_interceptor(Arc::new(UserAgentInterceptor) as _)
+                .register_client_interceptor(Arc::new(UserAgentInterceptor::new()) as _)
+                .register_client_interceptor(Arc::new(RecursionDetectionInterceptor::new()) as _)
                 .register_client_interceptor(Arc::new(OverrideSigningTimeInterceptor) as _);
             Ok(())
         }
@@ -198,7 +184,7 @@ async fn sra_manual_test() {
                     &self,
                     context: &InterceptorContext<HttpRequest, HttpResponse>,
                     cfg: &mut ConfigBag,
-                ) -> Result<(), InterceptorError> {
+                ) -> Result<(), BoxError> {
                     let input = context.input()?;
                     let input = input
                         .downcast_ref::<ListObjectsV2Input>()
@@ -223,7 +209,7 @@ async fn sra_manual_test() {
                     &self,
                     _context: &InterceptorContext<HttpRequest, HttpResponse>,
                     cfg: &mut ConfigBag,
-                ) -> Result<(), InterceptorError> {
+                ) -> Result<(), BoxError> {
                     let params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
                         .ok_or(InterceptorError::read_before_execution(

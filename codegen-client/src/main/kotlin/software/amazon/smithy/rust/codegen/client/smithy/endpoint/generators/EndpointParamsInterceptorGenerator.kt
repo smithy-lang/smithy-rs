@@ -30,6 +30,7 @@ class EndpointParamsInterceptorGenerator(
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         arrayOf(
+            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
@@ -65,7 +66,7 @@ class EndpointParamsInterceptorGenerator(
                     &self,
                     context: &#{InterceptorContext}<#{HttpRequest}, #{HttpResponse}>,
                     cfg: &mut #{ConfigBag},
-                ) -> Result<(), #{InterceptorError}> {
+                ) -> Result<(), #{BoxError}> {
                     #{body:W}
                 }
             }
@@ -87,7 +88,7 @@ class EndpointParamsInterceptorGenerator(
                 .get::<#{ParamsBuilder}>()
                 .ok_or(#{InterceptorError}::read_before_execution("missing endpoint params builder"))?
                 .clone();
-            // TODO: Call setters on `params_builder` to update its fields by using values from `_input`.
+            ${"" /* TODO(EndpointResolver): Call setters on `params_builder` to update its fields by using values from `_input` */}
             cfg.put(params_builder);
 
             #{endpoint_prefix:W}
@@ -113,7 +114,7 @@ class EndpointParamsInterceptorGenerator(
                 ".map_err(#{InterceptorError}::read_before_execution)?;",
                 *codegenScope,
             ) {
-                endpointTraitBindings.render(this, "self")
+                endpointTraitBindings.render(this, "_input")
             }
             rust("cfg.put(endpoint_prefix);")
         }
