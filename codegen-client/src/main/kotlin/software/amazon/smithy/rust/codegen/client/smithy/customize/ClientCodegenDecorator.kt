@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
@@ -58,6 +60,22 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
      * Hook to customize client construction documentation.
      */
     fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable = baseDocs
+
+    /**
+     * Hooks to register additional service-level runtime plugins at codegen time
+     */
+    fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations
+
+    /**
+     * Hooks to register additional operation-level runtime plugins at codegen time
+     */
+    fun operationRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<OperationRuntimePluginCustomization>,
+    ): List<OperationRuntimePluginCustomization> = baseCustomizations
 }
 
 /**
@@ -105,6 +123,22 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     override fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable =
         combineCustomizations(baseDocs) { decorator, customizations ->
             decorator.clientConstructionDocs(codegenContext, customizations)
+        }
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.serviceRuntimePluginCustomizations(codegenContext, customizations)
+        }
+
+    override fun operationRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<OperationRuntimePluginCustomization>,
+    ): List<OperationRuntimePluginCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.operationRuntimePluginCustomizations(codegenContext, customizations)
         }
 
     companion object {

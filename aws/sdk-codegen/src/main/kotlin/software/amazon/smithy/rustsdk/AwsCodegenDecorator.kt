@@ -32,6 +32,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         RegionDecorator(),
         RequireEndpointRules(),
         UserAgentDecorator(),
+        SigV4AuthDecorator(),
         SigV4SigningDecorator(),
         HttpRequestChecksumDecorator(),
         HttpResponseChecksumDecorator(),
@@ -50,6 +51,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         OperationInputTestDecorator(),
         AwsRequestIdDecorator(),
         DisabledAuthDecorator(),
+        RecursionDetectionDecorator(),
     ),
 
     // Service specific decorators

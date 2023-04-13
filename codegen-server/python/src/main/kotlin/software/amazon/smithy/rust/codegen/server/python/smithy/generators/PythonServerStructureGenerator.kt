@@ -22,6 +22,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonEventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
@@ -58,6 +60,9 @@ class PythonServerStructureGenerator(
         writer.rustTemplate("#{ConstructorSignature:W}", "ConstructorSignature" to renderConstructorSignature())
         super.renderStructure()
         renderPyO3Methods()
+        if (!shape.hasTrait<ErrorTrait>()) {
+            renderPyBoxTraits()
+        }
     }
 
     override fun renderStructureMember(
@@ -69,7 +74,7 @@ class PythonServerStructureGenerator(
         writer.addDependency(PythonServerCargoDependency.PyO3)
         // Above, we manually add dependency since we can't use a `RuntimeType` below
         Attribute("pyo3(get, set)").render(writer)
-        writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
+        writer.rustTemplate("#{Signature:W}", "Signature" to renderMemberSignature(member, memberSymbol))
         super.renderStructureMember(writer, member, memberName, memberSymbol)
     }
 
@@ -99,6 +104,25 @@ class PythonServerStructureGenerator(
         )
     }
 
+    private fun renderPyBoxTraits() {
+        writer.rustTemplate(
+            """
+            impl<'source> #{pyo3}::FromPyObject<'source> for std::boxed::Box<$name> {
+                fn extract(ob: &'source #{pyo3}::PyAny) -> #{pyo3}::PyResult<Self> {
+                    ob.extract::<$name>().map(Box::new)
+                }
+            }
+
+            impl #{pyo3}::IntoPy<#{pyo3}::PyObject> for std::boxed::Box<$name> {
+                fn into_py(self, py: #{pyo3}::Python<'_>) -> #{pyo3}::PyObject {
+                    (*self).into_py(py)
+                }
+            }
+            """,
+            "pyo3" to pyO3,
+        )
+    }
+
     private fun renderStructSignatureMembers(): Writable =
         writable {
             forEachMember(members) { _, memberName, memberSymbol ->
@@ -116,17 +140,26 @@ class PythonServerStructureGenerator(
 
     private fun renderConstructorSignature(): Writable =
         writable {
-            forEachMember(members) { _, memberName, memberSymbol ->
-                val memberType = memberSymbol.rustType().pythonType()
+            forEachMember(members) { member, memberName, memberSymbol ->
+                val memberType = memberPythonType(member, memberSymbol)
                 rust("/// :param $memberName ${memberType.renderAsDocstring()}:")
             }
 
             rust("/// :rtype ${PythonType.None.renderAsDocstring()}:")
         }
 
-    private fun renderSymbolSignature(symbol: Symbol): Writable =
+    private fun renderMemberSignature(shape: MemberShape, symbol: Symbol): Writable =
         writable {
-            val pythonType = symbol.rustType().pythonType()
+            val pythonType = memberPythonType(shape, symbol)
             rust("/// :type ${pythonType.renderAsDocstring()}:")
+        }
+
+    private fun memberPythonType(shape: MemberShape, symbol: Symbol): PythonType =
+        if (shape.isEventStream(model)) {
+            val eventStreamSymbol = PythonEventStreamSymbolProvider.parseSymbol(symbol)
+            val innerT = eventStreamSymbol.innerT.pythonType()
+            PythonType.AsyncIterator(innerT)
+        } else {
+            symbol.rustType().pythonType()
         }
 }
