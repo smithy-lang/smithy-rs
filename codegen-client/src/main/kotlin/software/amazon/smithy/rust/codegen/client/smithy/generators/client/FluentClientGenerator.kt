@@ -303,16 +303,6 @@ class FluentClientGenerator(
                     self.handle.client.call(op).await
                 }
 
-                /// This function replaces the parameter with new one.
-                /// It is useful when you want to replace the existing data with de-serialized data.
-                /// ```rust
-                /// let deserialized_parameters: $inputBuilderType  = serde_json::from_str(parameters_written_in_json).unwrap();
-                /// let outcome: #{OperationOutput} = client.$fnName()}().set_fields(&deserialized_parameters).send().await;
-                /// ```
-                pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
-                    self.inner = data;
-                    self
-                }
                 """,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
@@ -328,46 +318,43 @@ class FluentClientGenerator(
                     generics.toRustGenerics(),
                 ),
             )
-            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+
+            // this fixes this error
+            //  error[E0592]: duplicate definitions with name `set_fields`
+            //     --> sdk/connectcases/src/operation/update_case/builders.rs:115:5
+            //      |
+            //  78  | /     pub fn set_fields(
+            //  79  | |         mut self,
+            //  80  | |         data: crate::operation::update_case::builders::UpdateCaseInputBuilder,
+            //  81  | |     ) -> Self {
+            //      | |_____________- other definition for `set_fields`
+            //  ...
+            //  115 | /     pub fn set_fields(
+            //  116 | |         mut self,
+            //  117 | |         input: std::option::Option<std::vec::Vec<crate::types::FieldValue>>,
+            //  118 | |     ) -> Self {
+            //      | |_____________^ duplicate definitions for `set_fields`
+            if (inputBuilderType.toString().endsWith("Builder")) {
                 rustTemplate(
                     """
-                    // TODO(enableNewSmithyRuntime): Replace `send` with `send_v2`
-                    /// Sends the request and returns the response.
-                    ///
-                    /// If an error occurs, an `SdkError` will be returned with additional details that
-                    /// can be matched against.
-                    ///
-                    /// By default, any retryable failures will be retried twice. Retry behavior
-                    /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                    /// set when configuring the client.
-                    pub async fn send_v2(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                        let runtime_plugins = #{RuntimePlugins}::new()
-                            .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()))
-                            .with_operation_plugin(#{Operation}::new());
-                        let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        let input = #{TypedBox}::new(input).erase();
-                        let output = #{invoke}(input, &runtime_plugins)
-                            .await
-                            .map_err(|err| {
-                                err.map_service_error(|err| {
-                                    #{TypedBox}::<#{OperationError}>::assume_from(err)
-                                        .expect("correct error type")
-                                        .unwrap()
-                                })
-                            })?;
-                        Ok(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
+                    ##[#{AwsSdkUnstableAttribute}]
+                    /// This function replaces the parameter with new one.
+                    /// It is useful when you want to replace the existing data with de-serialized data.
+                    /// ```compile_fail
+                    /// let result_future = async {
+                    ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
+                    ///     client.$fnName().set_fields(&deserialized_parameters).send().await
+                    /// };
+                    /// ```
+                    pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
+                        self.inner = data;
+                        self
                     }
-                    """,
-                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
-                    "OperationError" to errorType,
-                    "Operation" to symbolProvider.toSymbol(operation),
-                    "OperationOutput" to outputType,
-                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                    "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
+                """,
+                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
                 )
             }
+
             PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
                 rustTemplate(
                     """
