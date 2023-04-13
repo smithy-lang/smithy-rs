@@ -31,7 +31,7 @@ build-wheel: ensure-maturin
 build-wheel-release: ensure-maturin
 	cd $(SERVER_SDK_DST) && maturin build --out $(WHEELS) --compatibility linux --release
 
-install:
+install-wheel:
 	find $(WHEELS) -type f -name '*.whl' | xargs python3 -m pip install --user --force-reinstall
 
 generate-stubs:
@@ -51,7 +51,7 @@ run: build
 py-check: build
 	python3 -m mypy pokemon_service.py
 
-test: build py-check
+test: build py-check install-wheel
 	cargo test
 
 clippy: codegen
