@@ -5,14 +5,19 @@
 
 mod plugin;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
-    extension::OperationExtensionExt, instrumentation::InstrumentExt, plugin::CheckHealthLayer,
-    plugin::PluginPipeline, request::request_id::ServerRequestIdProviderLayer, AddExtensionLayer,
+    body,
+    extension::OperationExtensionExt,
+    instrumentation::InstrumentExt,
+    plugin::{check_health::CheckHealthExt, PluginPipeline},
+    request::request_id::ServerRequestIdProviderLayer,
+    AddExtensionLayer,
 };
 use clap::Parser;
 
+use hyper::{Body, Response, StatusCode};
 use plugin::PrintExt;
 use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
@@ -46,7 +51,17 @@ pub async fn main() {
         // `Response::extensions`, or infer routing failure when it's missing.
         .insert_operation_extension()
         // Adds `tracing` spans and events to the request lifecycle.
-        .instrument();
+        .instrument()
+        // Handle `/ping` health check requests.
+        .check_health("/ping", |_req| {
+            let response = Response::builder()
+                .status(StatusCode::OK)
+                .body(body::boxed(Body::empty()))
+                .expect("Couldn't construct response");
+
+            std::future::ready(Ok::<_, Infallible>(response))
+        });
+
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
@@ -63,7 +78,6 @@ pub async fn main() {
     let app = app
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())))
-        .layer(&CheckHealthLayer::with_default_handler())
         // Add request IDs
         .layer(&ServerRequestIdProviderLayer::new());
 
