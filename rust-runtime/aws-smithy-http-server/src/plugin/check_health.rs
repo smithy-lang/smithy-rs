@@ -7,11 +7,9 @@ use std::future::Ready;
 use std::task::{Context, Poll};
 
 use futures_util::Future;
-use http::StatusCode;
 use hyper::{Body, Request, Response};
 use tower::{util::Oneshot, Layer, Service, ServiceExt};
 
-use crate::body;
 use crate::body::BoxBody;
 
 use super::Either;
@@ -40,13 +38,6 @@ impl CheckHealthLayer<()> {
 }
 
 pub type DefaultHandler<E> = fn(Request<Body>) -> Ready<Result<Response<BoxBody>, E>>;
-
-impl CheckHealthLayer<()> {
-    pub fn with_default_handler<E>() -> CheckHealthLayer<DefaultHandler<E>> {
-        const DEFAULT_HEALTH_CHECK_URI: &str = "/ping";
-        CheckHealthLayer::new(DEFAULT_HEALTH_CHECK_URI, default_ping_handler)
-    }
-}
 
 impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
     type Service = CheckHealthService<H, S>;
@@ -98,14 +89,4 @@ where
             }
         }
     }
-}
-
-/// A handler that returns `200 OK` with an empty body.
-fn default_ping_handler<E>(_req: Request<Body>) -> Ready<Result<Response<BoxBody>, E>> {
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .body(body::boxed(Body::empty()))
-        .expect("Couldn't construct response");
-
-    std::future::ready(Ok::<_, E>(response))
 }
