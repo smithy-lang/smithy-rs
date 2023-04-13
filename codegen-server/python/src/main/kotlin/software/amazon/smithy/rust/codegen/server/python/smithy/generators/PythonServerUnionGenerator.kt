@@ -121,7 +121,7 @@ class PythonServerUnionGenerator(
             )
             writer.rust("/// :rtype ${unionSymbol.name}:")
             writer.rustBlock("pub fn $funcNamePart() -> Self") {
-                rust("Self(${unionSymbol.name}::$variantName")
+                rust("Self(${unionSymbol.name}::$variantName)")
             }
         } else {
             val memberSymbol = symbolProvider.toSymbol(member)
@@ -157,7 +157,7 @@ class PythonServerUnionGenerator(
             writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<()>", "pyo3" to pyo3) {
                 rustTemplate(
                     """
-                    self.0.as_$funcNamePart().map_err(#{pyo3}::exceptions::PyValueError::new_err(
+                    self.0.as_$funcNamePart().map_err(|_| #{pyo3}::exceptions::PyValueError::new_err(
                         "${unionSymbol.name} variant is not None"
                     ))
                     """,
