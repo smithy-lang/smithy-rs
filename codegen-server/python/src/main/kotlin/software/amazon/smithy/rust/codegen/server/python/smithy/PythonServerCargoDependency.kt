@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
@@ -29,5 +28,4 @@ object PythonServerCargoDependency {
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
     fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")
-    fun smithyHttpServerPythonBuild(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python", scope = DependencyScope.Build)
 }
