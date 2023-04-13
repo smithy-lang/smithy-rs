@@ -8,26 +8,31 @@
 #[cfg(feature = "rustls")]
 /// A `hyper` connector that uses the `rustls` crate for TLS. To use this in a smithy client,
 /// wrap it in a [hyper_ext::Adapter](crate::hyper_ext::Adapter).
-pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
+pub type Https = hyper_ext::BridgeConnector<hyper_rustls::HttpsConnector<HttpConnector>>;
 
 #[cfg(feature = "native-tls")]
 /// A `hyper` connector that uses the `native-tls` crate for TLS. To use this in a smithy client,
 /// wrap it in a [hyper_ext::Adapter](crate::hyper_ext::Adapter).
-pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
+pub type NativeTls = hyper_tls::HttpsConnector<HttpConnector>;
 
 #[cfg(feature = "rustls")]
 /// A smithy connector that uses the `rustls` crate for TLS.
 pub type Rustls = crate::hyper_ext::Adapter<Https>;
 
+use crate::hyper_ext;
+use crate::hyper_ext::BridgeConnector;
 #[cfg(feature = "rustls")]
 use hyper_rustls::ConfigBuilderExt;
+use hyper_util::client::connect::{Connected, Connection, HttpConnector};
 
 // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
 // don't need to repeatedly incur that cost.
 #[cfg(feature = "rustls")]
 lazy_static::lazy_static! {
     static ref HTTPS_NATIVE_ROOTS: Https = {
-        hyper_rustls::HttpsConnectorBuilder::new()
+        let mut inner = HttpConnector::new();
+        inner.enforce_http(false);
+        let hyper_rustls_connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(
                 rustls::ClientConfig::builder()
                     .with_cipher_suites(&[
@@ -50,7 +55,8 @@ lazy_static::lazy_static! {
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .build()
+            .wrap_connector(inner);
+        BridgeConnector(hyper_rustls_connector)
     };
 }
 
@@ -76,7 +82,7 @@ pub fn native_tls() -> NativeTls {
         .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
         .build()
         .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
-    let mut http = hyper::client::HttpConnector::new();
+    let mut http = HttpConnector::new();
     http.enforce_http(false);
     hyper_tls::HttpsConnector::from((http, tls.into()))
 }

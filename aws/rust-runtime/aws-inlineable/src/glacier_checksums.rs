@@ -36,7 +36,7 @@ pub async fn add_checksum_treehash(request: &mut Request) -> Result<(), byte_str
         cloned_body
     } else {
         let body = std::mem::replace(http_request.body_mut(), SdkBody::taken());
-        let loaded_body = ByteStream::new(body).collect().await?.into_bytes();
+        let loaded_body = ByteStream::new(body).bytes().await?;
         *http_request.body_mut() = SdkBody::from(loaded_body.clone());
         SdkBody::from(loaded_body)
     };

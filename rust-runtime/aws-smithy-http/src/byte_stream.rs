@@ -10,7 +10,8 @@
 //!
 //! # Examples
 //!
-//! ### Writing a ByteStream into a file:
+//! ### Writing a `ByteStream` into a file:
+//!
 //! ```no_run
 //! use aws_smithy_http::byte_stream::ByteStream;
 //! use std::error::Error;
@@ -31,7 +32,8 @@
 //! }
 //! ```
 //!
-//! ### Converting a ByteStream into Bytes
+//! ### Converting a `ByteStream` into `Bytes`
+//!
 //! ```no_run
 //! use bytes::Bytes;
 //! use aws_smithy_http::byte_stream::ByteStream;
@@ -42,11 +44,12 @@
 //! async fn load_audio(
 //!     output: SynthesizeSpeechOutput,
 //! ) -> Result<Bytes, Box<dyn Error + Send + Sync>> {
-//!     Ok(output.audio_stream.collect().await?.into_bytes())
+//!     Ok(output.audio_stream.collect().await?)
 //! }
 //! ```
 //!
-//! ### Stream a ByteStream into a file
+//! ### Stream a `ByteStream` into a file
+//!
 //! The previous example is recommended in cases where loading the entire file into memory first is desirable. For extremely large
 //! files, you may wish to stream the data directly to the file system, chunk by chunk. This is posible using the `futures::Stream` implementation.
 //!
@@ -123,10 +126,8 @@
 
 use crate::body::SdkBody;
 use crate::byte_stream::error::Error;
-use bytes::Buf;
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use bytes_utils::SegmentedBuf;
-use http_body::Body;
 use pin_project_lite::pin_project;
 use std::io::IoSlice;
 use std::pin::Pin;
@@ -152,18 +153,17 @@ pin_project! {
     /// `ByteStream` provides two primary mechanisms for accessing the data:
     /// 1. With `.collect()`:
     ///
-    ///     [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
-    ///     a non-contiguous ByteBuffer.
+    ///     [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `Bytes`.
     ///     ```no_run
-    ///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes};
+    ///     use aws_smithy_http::byte_stream::ByteStream;
     ///     use aws_smithy_http::body::SdkBody;
     ///     use bytes::Buf;
     ///     async fn example() {
     ///        let stream = ByteStream::new(SdkBody::from("hello! This is some data"));
     ///        // Load data from the stream into memory:
     ///        let data = stream.collect().await.expect("error reading data");
-    ///        // collect returns a `bytes::Buf`:
-    ///        println!("first chunk: {:?}", data.chunk());
+    ///        // collect returns a `bytes::Bytes`:
+    ///        println!("full data: {:?}", data);
     ///     }
     ///     ```
     /// 2. Via [`impl Stream`](futures_core::Stream):
@@ -181,7 +181,7 @@ pin_project! {
     ///     #       pub fn finish(&self) -> u64 { 6 }
     ///     #   }
     ///     # }
-    ///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes, error::Error};
+    ///     use aws_smithy_http::byte_stream::{ByteStream, error::Error};
     ///     use aws_smithy_http::body::SdkBody;
     ///     use tokio_stream::StreamExt;
     ///
@@ -243,15 +243,20 @@ pin_project! {
     /// from an SdkBody. **When created from an SdkBody, care must be taken to ensure retriability.** An SdkBody is retryable
     /// when constructed from in-memory data or when using [`SdkBody::retryable`](crate::body::SdkBody::retryable).
     ///     ```no_run
+    ///     use async_stream::stream;
     ///     use aws_smithy_http::byte_stream::ByteStream;
     ///     use aws_smithy_http::body::SdkBody;
+    ///     use http_body::Frame;
+    ///     use http_body_util::StreamBody;
     ///     use bytes::Bytes;
-    ///     let (mut tx, channel_body) = hyper::Body::channel();
-    ///     // this will not be retryable because the SDK has no way to replay this stream
-    ///     let stream = ByteStream::new(SdkBody::from(channel_body));
-    ///     tx.send_data(Bytes::from_static(b"hello world!"));
-    ///     tx.send_data(Bytes::from_static(b"hello again!"));
-    ///     // NOTE! You must ensure that `tx` is dropped to ensure that EOF is sent
+    ///     use std::error::Error;
+    ///
+    ///     let body = StreamBody::new(stream! {
+    ///         yield Result::<_, Box<dyn Error + Send + Sync + 'static>>::Ok(Frame::data(Bytes::from_static(b"hello world!")));
+    ///         yield Ok(Frame::data(Bytes::from_static(b"hello again!")));
+    ///     });
+    ///     // This will not be retryable because the SDK has no way to replay this stream
+    ///     let byte_stream = ByteStream::new(SdkBody::from_body(body));
     ///     ```
     ///
     #[derive(Debug)]
@@ -288,8 +293,7 @@ impl ByteStream {
     ///
     /// If an error in the underlying stream is encountered, `ByteStreamError` is returned.
     ///
-    /// Data is read into an `AggregatedBytes` that stores data non-contiguously as it was received
-    /// over the network. If a contiguous slice is required, use `into_bytes()`.
+    /// Data is read into a `Bytes` instance.
     /// ```no_run
     /// use bytes::Bytes;
     /// use aws_smithy_http::body;
@@ -297,11 +301,17 @@ impl ByteStream {
     /// use aws_smithy_http::byte_stream::{ByteStream, error::Error};
     /// async fn get_data() {
     ///     let stream = ByteStream::new(SdkBody::from("hello!"));
-    ///     let data: Result<Bytes, Error> = stream.collect().await.map(|data| data.into_bytes());
+    ///     let data: Result<Bytes, Error> = stream.collect().await;
     /// }
     /// ```
-    pub async fn collect(self) -> Result<AggregatedBytes, Error> {
+    pub async fn collect(self) -> Result<impl Buf, Error> {
         self.inner.collect().await.map_err(Error::streaming)
+    }
+
+    /// direct conversion to bytes
+    pub async fn bytes(self) -> Result<Bytes, Error> {
+        let mut buf = self.inner.collect().await.map_err(Error::streaming)?;
+        Ok(buf.copy_to_bytes(buf.remaining()))
     }
 
     /// Returns a [`FsBuilder`](crate::byte_stream::FsBuilder), allowing you to build a `ByteStream` with
@@ -436,12 +446,6 @@ impl From<Vec<u8>> for ByteStream {
     }
 }
 
-impl From<hyper::Body> for ByteStream {
-    fn from(input: hyper::Body) -> Self {
-        ByteStream::new(SdkBody::from(input))
-    }
-}
-
 impl futures_core::stream::Stream for ByteStream {
     type Item = Result<Bytes, Error>;
 
@@ -528,17 +532,12 @@ impl<B> Inner<B> {
         Self { body }
     }
 
-    async fn collect(self) -> Result<AggregatedBytes, B::Error>
+    async fn collect(self) -> Result<impl Buf, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
-        let mut output = SegmentedBuf::new();
-        let body = self.body;
-        pin_utils::pin_mut!(body);
-        while let Some(buf) = body.data().await {
-            output.push(buf?);
-        }
-        Ok(AggregatedBytes(output))
+        use http_body_util::BodyExt;
+        Ok(self.body.collect().await?.aggregate())
     }
 }
 
@@ -554,7 +553,18 @@ where
     type Item = Result<Bytes, B::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.project().body.poll_data(cx)
+        match self.project().body.poll_frame(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(err))),
+            Poll::Ready(Some(Ok(frame))) => {
+                // TODO XXX make an error type for this rather than panic
+                let data = frame
+                    .into_data()
+                    .expect("no trailers in the middle of the stream");
+                Poll::Ready(Some(Ok(data)))
+            }
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -574,32 +584,30 @@ where
 #[cfg(test)]
 mod tests {
     use crate::byte_stream::Inner;
+    use async_stream::stream;
     use bytes::Bytes;
+    use http_body::Frame;
+    use http_body_util::{Full, StreamBody};
+    use std::convert::Infallible;
 
     #[tokio::test]
     async fn read_from_string_body() {
-        let body = hyper::Body::from("a simple body");
+        let body = Full::new(Bytes::from_static(b"a simple body"));
         assert_eq!(
-            Inner::new(body)
-                .collect()
-                .await
-                .expect("no errors")
-                .into_bytes(),
+            Inner::new(body).collect().await.expect("no errors"),
             Bytes::from("a simple body")
         );
     }
 
     #[tokio::test]
     async fn read_from_channel_body() {
-        let (mut sender, body) = hyper::Body::channel();
-        let byte_stream = Inner::new(body);
-        tokio::spawn(async move {
-            sender.send_data(Bytes::from("data 1")).await.unwrap();
-            sender.send_data(Bytes::from("data 2")).await.unwrap();
-            sender.send_data(Bytes::from("data 3")).await.unwrap();
-        });
+        let byte_stream = Inner::new(StreamBody::new(stream! {
+            yield Result::<_, Infallible>::Ok(Frame::data(Bytes::from_static(b"data 1")));
+            yield Ok(Frame::data(Bytes::from_static(b"data 2")));
+            yield Ok(Frame::data(Bytes::from_static(b"data 3")));
+        }));
         assert_eq!(
-            byte_stream.collect().await.expect("no errors").into_bytes(),
+            byte_stream.collect().await.expect("no errors"),
             Bytes::from("data 1data 2data 3")
         );
     }
@@ -610,6 +618,7 @@ mod tests {
         use super::ByteStream;
         use bytes::Buf;
         use http_body::Body;
+        use http_body_util::BodyExt;
         use std::io::Write;
         use tempfile::NamedTempFile;
         let mut file = NamedTempFile::new()?;
@@ -623,16 +632,18 @@ mod tests {
         let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
         // read a little bit from one of the clones
         let some_data = body1
-            .data()
+            .frame()
             .await
             .expect("should have some data")
-            .expect("read should not fail");
+            .expect("read should not fail")
+            .into_data()
+            .unwrap();
         assert!(!some_data.is_empty());
         // make some more clones
         let body2 = body.try_clone().expect("retryable bodies are cloneable");
         let body3 = body.try_clone().expect("retryable bodies are cloneable");
-        let body2 = ByteStream::new(body2).collect().await?.into_bytes();
-        let body3 = ByteStream::new(body3).collect().await?.into_bytes();
+        let body2 = ByteStream::new(body2).collect().await?;
+        let body3 = ByteStream::new(body3).collect().await?;
         assert_eq!(body2, body3);
         assert!(body2.starts_with(b"Brian was here."));
         assert!(body2.ends_with(b"9999\n"));

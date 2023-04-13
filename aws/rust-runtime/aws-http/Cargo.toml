@@ -14,7 +14,7 @@ aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
 bytes = "1.1"
 http = "0.2.3"
-http-body = "0.4.5"
+http-body = "1.0.0-rc.2"
 lazy_static = "1.4.0"
 tracing = "0.1"
 percent-encoding = "2.1.0"

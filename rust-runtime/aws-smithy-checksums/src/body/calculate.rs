@@ -6,23 +6,21 @@
 //! Functionality for calculating the checksum of an HTTP body and emitting it as trailers.
 
 use crate::http::HttpChecksum;
-
+use aws_smithy_http::body::Error;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::header::append_merge_header_maps;
-
-use http::HeaderMap;
-use http_body::SizeHint;
+use bytes::Bytes;
+use http_body::{Frame, SizeHint};
 use pin_project_lite::pin_project;
-
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit it as a trailer.
     pub struct ChecksumBody<InnerBody> {
-            #[pin]
-            body: InnerBody,
-            checksum: Option<Box<dyn HttpChecksum>>,
+        #[pin]
+        body: InnerBody,
+        checksum: Option<Box<dyn HttpChecksum>>,
     }
 }
 
@@ -37,51 +35,55 @@ impl ChecksumBody<SdkBody> {
 }
 
 impl http_body::Body for ChecksumBody<SdkBody> {
-    type Data = bytes::Bytes;
-    type Error = aws_smithy_http::body::Error;
+    type Data = Bytes;
+    type Error = Error;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        // If the checksum has already been taken, then we've already returned
+        // trailers. There is nothing left to do, so early return.
+        if self.checksum.is_none() {
+            return Poll::Ready(None);
+        }
+
         let this = self.project();
-        match this.checksum {
-            Some(checksum) => {
-                let poll_res = this.body.poll_data(cx);
-                if let Poll::Ready(Some(Ok(data))) = &poll_res {
+        match this.body.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    let checksum = this
+                        .checksum
+                        .as_mut()
+                        .expect("function early returns if checksum is taken");
                     checksum.update(data);
+                    Poll::Ready(Some(Ok(frame)))
+                } else {
+                    if let Ok(trailers) = frame.into_trailers() {
+                        let checksum_headers = this
+                            .checksum
+                            .take()
+                            .expect("function early returns if checksum is taken")
+                            .headers();
+                        Poll::Ready(Some(Ok(Frame::trailers(append_merge_header_maps(
+                            trailers,
+                            checksum_headers,
+                        )))))
+                    } else {
+                        panic!("encountered unsupported frame type that wasn't data or trailers");
+                    }
                 }
-
-                poll_res
             }
-            None => unreachable!("This can only fail if poll_data is called again after poll_trailers, which is invalid"),
+            Poll::Ready(None) => {
+                let checksum_headers = this
+                    .checksum
+                    .take()
+                    .expect("function early returns if checksum is taken")
+                    .headers();
+                Poll::Ready(Some(Ok(Frame::trailers(checksum_headers))))
+            }
+            poll_result => poll_result,
         }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        let this = self.project();
-        let poll_res = this.body.poll_trailers(cx);
-
-        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
-            let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                checksum.headers()
-            } else {
-                return Poll::Ready(Ok(None));
-            };
-
-            return match maybe_inner_trailers {
-                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
-                    inner_trailers,
-                    checksum_headers,
-                )))),
-                None => Poll::Ready(Ok(Some(checksum_headers))),
-            };
-        }
-
-        poll_res
     }
 
     fn is_end_stream(&self) -> bool {
@@ -101,10 +103,7 @@ mod tests {
     use crate::{http::CRC_32_HEADER_NAME, ChecksumAlgorithm, CRC_32_NAME};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_types::base64;
-    use bytes::Buf;
-    use bytes_utils::SegmentedBuf;
-    use http_body::Body;
-    use std::io::Read;
+    use http_body_util::BodyExt;
 
     fn header_value_as_checksum_string(header_value: &http::HeaderValue) -> String {
         let decoded_checksum = base64::decode(header_value.to_str().unwrap()).unwrap();
@@ -124,32 +123,23 @@ mod tests {
             .parse::<ChecksumAlgorithm>()
             .unwrap()
             .into_impl();
-        let mut body = ChecksumBody::new(body, checksum);
+        let body = ChecksumBody::new(body, checksum);
 
-        let mut output = SegmentedBuf::new();
-        while let Some(buf) = body.data().await {
-            output.push(buf.unwrap());
-        }
-
-        let mut output_text = String::new();
-        output
-            .reader()
-            .read_to_string(&mut output_text)
-            .expect("Doesn't cause IO errors");
-        // Verify data is complete and unaltered
-        assert_eq!(input_text, output_text);
-
-        let trailers = body
+        let collect = body.collect().await.expect("success");
+        let checksum_trailer = collect
             .trailers()
-            .await
-            .expect("checksum generation was without error")
-            .expect("trailers were set");
-        let checksum_trailer = trailers
+            .expect("trailers")
             .get(&CRC_32_HEADER_NAME)
             .expect("trailers contain crc32 checksum");
         let checksum_trailer = header_value_as_checksum_string(checksum_trailer);
 
         // Known correct checksum for the input "This is some test text for an SdkBody"
         assert_eq!("0x99B01F72", checksum_trailer);
+
+        let output = collect.to_bytes();
+        let output_text = std::str::from_utf8(output.as_ref()).unwrap();
+
+        // Verify data is complete and unaltered
+        assert_eq!(input_text, output_text);
     }
 }

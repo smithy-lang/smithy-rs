@@ -103,8 +103,9 @@ const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 70;
 
 /// Returns default HTTP client settings for hyper.
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-fn default_hyper_builder() -> hyper::client::Builder {
-    let mut builder = hyper::client::Builder::default();
+fn default_hyper_builder() -> hyper_util::client::legacy::Builder {
+    use hyper_util::rt::TokioExecutor;
+    let mut builder = hyper_util::client::legacy::Builder::new(TokioExecutor::new());
     builder.pool_max_idle_per_host(DEFAULT_MAX_IDLE_CONNECTIONS);
     builder
 }

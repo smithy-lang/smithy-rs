@@ -97,18 +97,22 @@ use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use http::{Extensions, Uri};
-use hyper::client::connect::{
-    capture_connection, CaptureConnection, Connected, Connection, HttpInfo,
-};
-
+use hyper_util::client::connect::{Connected, Connection, HttpInfo};
+use hyper_util::client::legacy::{Builder as HyperClientBuilder, Client as HyperClient};
 use std::error::Error;
 use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
 
+use hyper::rt::Executor;
+use hyper_util::rt::TokioExecutor;
+use pin_project_lite::pin_project;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use crate::erase::boxclone::BoxFuture;
 use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tower::{BoxError, Service};
 
 /// Adapter from a [`hyper::Client`](hyper::Client) to a connector usable by a Smithy [`Client`](crate::Client).
@@ -117,9 +121,84 @@ use tower::{BoxError, Service};
 /// see [the module documentation](crate::hyper_ext).
 #[derive(Clone, Debug)]
 pub struct Adapter<C> {
-    client: HttpReadTimeout<hyper::Client<ConnectTimeout<C>, SdkBody>>,
+    client: HttpReadTimeout<HyperClient<ConnectTimeout<C>, SdkBody>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct BridgeConnector<C>(pub(crate) C);
+impl<C> Service<Uri> for BridgeConnector<C>
+where
+    C: Clone + Send + Sync + 'static,
+    C: Service<Uri>,
+    C::Response:
+        hyper_14::client::connect::Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    C::Future: Unpin + Send + 'static,
+    C::Error: Into<BoxError>,
+{
+    type Response = BridgeConnection<C::Response>;
+    type Error = C::Error;
+    type Future = BoxFuture<Self::Response, Self::Error>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Uri) -> Self::Future {
+        let fut = self.0.call(req);
+        Box::pin(async move { Ok(BridgeConnection { inner: fut.await? }) })
+    }
+}
+
+pin_project! {
+    pub struct BridgeConnection<C> {
+        #[pin]
+        inner: C,
+    }
+}
+
+impl<C: AsyncRead> AsyncRead for BridgeConnection<C> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        self.project().inner.poll_read(cx, buf)
+    }
+}
+
+impl<C: AsyncWrite> AsyncWrite for BridgeConnection<C> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, std::io::Error>> {
+        self.project().inner.poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+        self.project().inner.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
+        self.project().inner.poll_shutdown(cx)
+    }
+}
+
+impl<C> Connection for BridgeConnection<C>
+where
+    C: hyper_14::client::connect::Connection,
+{
+    fn connected(&self) -> Connected {
+        let v14 = self.inner.connected();
+        /* todo: copy extras */
+        Connected::new().proxy(v14.is_proxied())
+    }
+}
+
+/*
 /// Extract a smithy connection from a hyper CaptureConnection
 fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<ConnectionMetadata> {
     let capture_conn = capture_conn.clone();
@@ -140,6 +219,7 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
         None
     }
 }
+ */
 
 impl<C> Service<http::Request<SdkBody>> for Adapter<C>
 where
@@ -162,11 +242,11 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<SdkBody>) -> Self::Future {
-        let capture_connection = capture_connection(&mut req);
+        /*let capture_connection = capture_connection(&mut req);
         if let Some(capture_smithy_connection) = req.extensions().get::<CaptureSmithyConnection>() {
             capture_smithy_connection
                 .set_connection_retriever(move || extract_smithy_connection(&capture_connection));
-        }
+        }*/
         let fut = self.client.call(req);
         Box::pin(async move { Ok(fut.await.map_err(downcast_error)?.map(SdkBody::from)) })
     }
@@ -262,7 +342,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 pub struct Builder {
     connector_settings: Option<ConnectorSettings>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    client_builder: Option<hyper::client::Builder>,
+    client_builder: Option<HyperClientBuilder>,
 }
 
 impl Builder {
@@ -275,7 +355,10 @@ impl Builder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
-        let client_builder = self.client_builder.unwrap_or_default();
+        let client_builder = self
+            .client_builder
+            // TODO: make configurable, we probably want our own bridge / trait
+            .unwrap_or(HyperClientBuilder::new(TokioExecutor::new()));
         let sleep_impl = self.sleep_impl.or_else(default_async_sleep);
         let (connect_timeout, read_timeout) = self
             .connector_settings
@@ -348,7 +431,7 @@ impl Builder {
     /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+    pub fn hyper_builder(mut self, hyper_builder: HyperClientBuilder) -> Self {
         self.client_builder = Some(hyper_builder);
         self
     }
@@ -356,10 +439,7 @@ impl Builder {
     /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn set_hyper_builder(
-        &mut self,
-        hyper_builder: Option<hyper::client::Builder>,
-    ) -> &mut Self {
+    pub fn set_hyper_builder(&mut self, hyper_builder: Option<HyperClientBuilder>) -> &mut Self {
         self.client_builder = hyper_builder;
         self
     }
@@ -541,7 +621,7 @@ mod timeout_middleware {
 
     impl<I, B> tower::Service<http::Request<B>> for HttpReadTimeout<I>
     where
-        I: tower::Service<http::Request<B>, Error = hyper::Error>,
+        I: tower::Service<http::Request<B>, Error = hyper_util::client::legacy::Error>,
     {
         type Response = I::Response;
         type Error = BoxError;
@@ -680,7 +760,7 @@ mod test {
     use crate::hyper_ext::Adapter;
     use aws_smithy_http::body::SdkBody;
     use http::Uri;
-    use hyper::client::connect::{Connected, Connection};
+    use hyper_util::client::connect::{Connected, Connection};
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::task::{Context, Poll};
@@ -754,7 +834,7 @@ mod test {
 
     impl<T> tower::Service<Uri> for TestConnection<T>
     where
-        T: Clone + Connection,
+        T: Clone + hyper_util::client::connect::Connection,
     {
         type Response = T;
         type Error = BoxError;

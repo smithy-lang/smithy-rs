@@ -7,17 +7,38 @@
 //! error if it doesn't match.
 
 use crate::http::HttpChecksum;
-
 use aws_smithy_http::body::SdkBody;
-
 use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
+use http_body::Frame;
 use http_body::SizeHint;
 use pin_project_lite::pin_project;
-
 use std::fmt::Display;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+/// Errors related to checksum calculation and validation
+#[derive(Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Error {
+    /// The actual checksum didn't match the expected checksum. The checksummed data has been
+    /// altered since the expected checksum was calculated.
+    ChecksumMismatch { expected: Bytes, actual: Bytes },
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Error::ChecksumMismatch { expected, actual } => write!(
+                f,
+                "body checksum mismatch. expected body checksum to be {} but it was {}",
+                hex::encode(expected),
+                hex::encode(actual)
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit an error if it
@@ -44,31 +65,35 @@ impl ChecksumBody<SdkBody> {
             precalculated_checksum,
         }
     }
+}
 
-    fn poll_inner(
+impl http_body::Body for ChecksumBody<SdkBody> {
+    type Data = Bytes;
+    type Error = aws_smithy_http::body::Error;
+
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, aws_smithy_http::body::Error>>> {
-        use http_body::Body;
-
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
         let checksum = this.checksum;
 
-        match this.inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(data))) => {
-                tracing::trace!(
-                    "reading {} bytes from the body and updating the checksum calculation",
-                    data.len()
-                );
-                let checksum = match checksum.as_mut() {
-                    Some(checksum) => checksum,
-                    None => {
-                        unreachable!("The checksum must exist because it's only taken out once the inner body has been completely polled.");
-                    }
-                };
-
-                checksum.update(&data);
-                Poll::Ready(Some(Ok(data)))
+        match this.inner.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    tracing::trace!(
+                        "reading {} bytes from the body and updating the checksum calculation",
+                        data.len()
+                    );
+                    let checksum = match checksum.as_mut() {
+                        Some(checksum) => checksum,
+                        None => {
+                            unreachable!("The checksum must exist because it's only taken out once the inner body has been completely polled.");
+                        }
+                    };
+                    checksum.update(data);
+                }
+                Poll::Ready(Some(Ok(frame)))
             }
             // Once the inner body has stopped returning data, check the checksum
             // and return an error if it doesn't match.
@@ -98,49 +123,6 @@ impl ChecksumBody<SdkBody> {
             Poll::Pending => Poll::Pending,
         }
     }
-}
-
-/// Errors related to checksum calculation and validation
-#[derive(Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum Error {
-    /// The actual checksum didn't match the expected checksum. The checksummed data has been
-    /// altered since the expected checksum was calculated.
-    ChecksumMismatch { expected: Bytes, actual: Bytes },
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Error::ChecksumMismatch { expected, actual } => write!(
-                f,
-                "body checksum mismatch. expected body checksum to be {} but it was {}",
-                hex::encode(expected),
-                hex::encode(actual)
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl http_body::Body for ChecksumBody<SdkBody> {
-    type Data = Bytes;
-    type Error = aws_smithy_http::body::Error;
-
-    fn poll_data(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner(cx)
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        self.project().inner.poll_trailers(cx)
-    }
 
     fn is_end_stream(&self) -> bool {
         self.checksum.is_none()
@@ -156,10 +138,8 @@ mod tests {
     use crate::body::validate::{ChecksumBody, Error};
     use crate::ChecksumAlgorithm;
     use aws_smithy_http::body::SdkBody;
-    use bytes::{Buf, Bytes};
-    use bytes_utils::SegmentedBuf;
-    use http_body::Body;
-    use std::io::Read;
+    use bytes::Bytes;
+    use http_body_util::BodyExt;
 
     fn calculate_crc32_checksum(input: &str) -> Bytes {
         let checksum = crc32fast::hash(input.as_bytes());
@@ -178,8 +158,8 @@ mod tests {
             non_matching_checksum.clone(),
         );
 
-        while let Some(data) = body.data().await {
-            match data {
+        while let Some(frame) = body.frame().await {
+            match frame {
                 Ok(_) => { /* Do nothing */ }
                 Err(e) => {
                     match e.downcast_ref::<Error>().unwrap() {
@@ -203,18 +183,11 @@ mod tests {
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
         let http_checksum = "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl();
-        let mut body = ChecksumBody::new(body, http_checksum, actual_checksum);
+        let body = ChecksumBody::new(body, http_checksum, actual_checksum);
 
-        let mut output = SegmentedBuf::new();
-        while let Some(buf) = body.data().await {
-            output.push(buf.unwrap());
-        }
+        let output = body.collect().await.expect("success").to_bytes();
+        let output_text = std::str::from_utf8(output.as_ref()).unwrap();
 
-        let mut output_text = String::new();
-        output
-            .reader()
-            .read_to_string(&mut output_text)
-            .expect("Doesn't cause IO errors");
         // Verify data is complete and unaltered
         assert_eq!(input_text, output_text);
     }

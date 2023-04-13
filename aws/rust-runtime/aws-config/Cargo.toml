@@ -9,7 +9,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-client-hyper = ["aws-smithy-client/client-hyper"]
+client-hyper = ["aws-smithy-client/client-hyper", "hyper-util"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
@@ -32,6 +32,7 @@ hyper = { version = "0.14.25", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
+hyper-util = { git = "https://github.com/hyperium/hyper-util", optional = true, features = ["client", "http1", "http2"] }
 
 # implementation detail of IMDS credentials provider
 fastrand = "1"

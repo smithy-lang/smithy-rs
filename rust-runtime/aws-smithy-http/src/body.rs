@@ -6,8 +6,7 @@
 //! Types for representing the body of an HTTP request or response
 
 use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
-use http_body::{Body, SizeHint};
+use http_body::{Body, Frame, SizeHint};
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
@@ -17,6 +16,8 @@ use std::task::{Context, Poll};
 
 /// A generic, boxed error that's `Send` and `Sync`
 pub type Error = Box<dyn StdError + Send + Sync>;
+/// BoxBody type alias with errors preselected
+pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Error>;
 
 pin_project! {
     /// SdkBody type
@@ -26,7 +27,7 @@ pin_project! {
     /// by the HTTP stack.
     ///
     // TODO(naming): Consider renaming to simply `Body`, although I'm concerned about naming headaches
-    // between hyper::Body and our Body
+    // between http_body::Body and our Body
     pub struct SdkBody {
         #[pin]
         inner: Inner,
@@ -47,22 +48,19 @@ impl Debug for SdkBody {
     }
 }
 
-/// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`].
-pub type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
-
 pin_project! {
     #[project = InnerProj]
     enum Inner {
-        // An in-memory body
+        /// An in-memory body
         Once {
             inner: Option<Bytes>
         },
-        // A streaming body
-        Streaming {
+        /// A streaming body
+        Incoming {
             #[pin]
-            inner: hyper::Body
+            inner: hyper::body::Incoming
         },
-        // Also a streaming body
+        /// A dynamic body, and also a streaming body in some cases
         Dyn {
             #[pin]
             inner: BoxBody
@@ -79,8 +77,8 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
             Inner::Once { inner: once } => f.debug_tuple("Once").field(once).finish(),
-            Inner::Streaming { inner: streaming } => {
-                f.debug_tuple("Streaming").field(streaming).finish()
+            Inner::Incoming { inner: incoming } => {
+                f.debug_tuple("Incoming").field(incoming).finish()
             }
             Inner::Taken => f.debug_tuple("Taken").finish(),
             Inner::Dyn { .. } => write!(f, "BoxBody"),
@@ -89,7 +87,17 @@ impl Debug for Inner {
 }
 
 impl SdkBody {
-    /// Construct an SdkBody from a Boxed implementation of http::Body
+    /// Construct an SdkBody from an implementation of [`http_body::Body`]
+    pub fn from_body(body: impl Body<Data = Bytes, Error = Error> + Send + Sync + 'static) -> Self {
+        Self {
+            inner: Inner::Dyn {
+                inner: BoxBody::new(body),
+            },
+            rebuild: None,
+        }
+    }
+
+    /// Construct an SdkBody from a Boxed implementation of [`http_body::Body`]
     pub fn from_dyn(body: BoxBody) -> Self {
         Self {
             inner: Inner::Dyn { inner: body },
@@ -133,19 +141,19 @@ impl SdkBody {
     fn poll_inner(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, Error>>> {
+    ) -> Poll<Option<Result<Frame<Bytes>, Error>>> {
         let this = self.project();
         match this.inner.project() {
             InnerProj::Once { ref mut inner } => {
                 let data = inner.take();
                 match data {
                     Some(bytes) if bytes.is_empty() => Poll::Ready(None),
-                    Some(bytes) => Poll::Ready(Some(Ok(bytes))),
+                    Some(bytes) => Poll::Ready(Some(Ok(Frame::data(bytes)))),
                     None => Poll::Ready(None),
                 }
             }
-            InnerProj::Streaming { inner: body } => body.poll_data(cx).map_err(|e| e.into()),
-            InnerProj::Dyn { inner: box_body } => box_body.poll_data(cx),
+            InnerProj::Incoming { inner: body } => body.poll_frame(cx).map_err(|e| e.into()),
+            InnerProj::Dyn { inner: box_body } => box_body.poll_frame(cx),
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
@@ -179,7 +187,7 @@ impl SdkBody {
     /// Return the length, in bytes, of this SdkBody. If this returns `None`, then the body does not
     /// have a known length.
     pub fn content_length(&self) -> Option<u64> {
-        http_body::Body::size_hint(self).exact()
+        Body::size_hint(self).exact()
     }
 
     /// Given a function to modify an `SdkBody`, run that function against this `SdkBody` before
@@ -212,15 +220,6 @@ impl From<Bytes> for SdkBody {
     }
 }
 
-impl From<hyper::Body> for SdkBody {
-    fn from(body: hyper::Body) -> Self {
-        SdkBody {
-            inner: Inner::Streaming { inner: body },
-            rebuild: None,
-        }
-    }
-}
-
 impl From<Vec<u8>> for SdkBody {
     fn from(data: Vec<u8>) -> Self {
         Self::from(Bytes::from(data))
@@ -239,29 +238,31 @@ impl From<&[u8]> for SdkBody {
     }
 }
 
-impl http_body::Body for SdkBody {
+impl From<hyper::body::Incoming> for SdkBody {
+    fn from(incoming: hyper::body::Incoming) -> Self {
+        Self {
+            inner: Inner::Incoming { inner: incoming },
+            rebuild: None,
+        }
+    }
+}
+
+impl Body for SdkBody {
     type Data = Bytes;
     type Error = Error;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         self.poll_inner(cx)
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
     }
 
     fn is_end_stream(&self) -> bool {
         match &self.inner {
             Inner::Once { inner: None } => true,
             Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
-            Inner::Streaming { inner: hyper_body } => hyper_body.is_end_stream(),
+            Inner::Incoming { inner: incoming } => incoming.is_end_stream(),
             Inner::Dyn { inner: box_body } => box_body.is_end_stream(),
             Inner::Taken => true,
         }
@@ -271,7 +272,7 @@ impl http_body::Body for SdkBody {
         match &self.inner {
             Inner::Once { inner: None } => SizeHint::with_exact(0),
             Inner::Once { inner: Some(bytes) } => SizeHint::with_exact(bytes.len() as u64),
-            Inner::Streaming { inner: hyper_body } => hyper_body.size_hint(),
+            Inner::Incoming { inner: incoming } => incoming.size_hint(),
             Inner::Dyn { inner: box_body } => box_body.size_hint(),
             Inner::Taken => SizeHint::new(),
         }
@@ -280,8 +281,9 @@ impl http_body::Body for SdkBody {
 
 #[cfg(test)]
 mod test {
-    use crate::body::{BoxBody, SdkBody};
+    use crate::body::SdkBody;
     use http_body::Body;
+    use http_body_util::{BodyExt, Empty};
     use std::pin::Pin;
 
     #[test]
@@ -301,9 +303,9 @@ mod test {
     async fn http_body_consumes_data() {
         let mut body = SdkBody::from("hello!");
         let mut body = Pin::new(&mut body);
-        let data = body.data().await;
+        let data = body.frame().await.transpose().unwrap();
         assert!(data.is_some());
-        let data = body.data().await;
+        let data = body.frame().await.transpose().unwrap();
         assert!(data.is_none());
     }
 
@@ -312,7 +314,7 @@ mod test {
         // Its important to avoid sending empty chunks of data to avoid H2 data frame problems
         let mut body = SdkBody::from("");
         let mut body = Pin::new(&mut body);
-        let data = body.data().await;
+        let data = body.frame().await.transpose().unwrap();
         assert!(data.is_none());
     }
 
@@ -325,16 +327,8 @@ mod test {
 
     #[test]
     fn sdkbody_debug_dyn() {
-        let hyper_body = hyper::Body::channel().1;
-        let body = SdkBody::from_dyn(BoxBody::new(hyper_body.map_err(|e| e.into())));
-        // actually don't really care what the debug impl is, just that it doesn't crash
-        let _ = format!("{:?}", body);
-    }
-
-    #[test]
-    fn sdkbody_debug_hyper() {
-        let hyper_body = hyper::Body::channel().1;
-        let body = SdkBody::from(hyper_body);
+        let http_body = Empty::new();
+        let body = SdkBody::from_body(http_body.map_err(|e| e.into()));
         // actually don't really care what the debug impl is, just that it doesn't crash
         let _ = format!("{:?}", body);
     }

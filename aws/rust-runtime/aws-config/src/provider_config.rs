@@ -323,7 +323,7 @@ impl ProviderConfig {
     where
         C: Clone + Send + Sync + 'static,
         C: tower::Service<http::Uri>,
-        C::Response: hyper::client::connect::Connection
+        C::Response: hyper_util::client::connect::Connection
             + tokio::io::AsyncRead
             + tokio::io::AsyncWrite
             + Send

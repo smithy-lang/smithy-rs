@@ -5,7 +5,7 @@
 
 use bytes::{Bytes, BytesMut};
 use http::{HeaderMap, HeaderValue};
-use http_body::{Body, SizeHint};
+use http_body::{Body, Frame, SizeHint};
 use pin_project_lite::pin_project;
 
 use std::pin::Pin;
@@ -67,7 +67,7 @@ enum AwsChunkedBodyState {
     WritingChunk,
     /// Write out all trailers associated with this `AwsChunkedBody` and then transition into the
     /// `Closed` state.
-    WritingTrailers,
+    WritingTrailers(Option<HeaderMap>),
     /// This is the final state. Write out the body terminator and then remain in this state.
     Closed,
 }
@@ -97,7 +97,7 @@ pin_project! {
     pub struct AwsChunkedBody<InnerBody> {
         #[pin]
         inner: InnerBody,
-        #[pin]
+        //#[pin]
         state: AwsChunkedBodyState,
         options: AwsChunkedBodyOptions,
         inner_body_bytes_read_so_far: usize,
@@ -204,36 +204,40 @@ where
     type Data = Bytes;
     type Error = aws_smithy_http::body::Error;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         tracing::trace!(state = ?self.state, "polling AwsChunkedBody");
         let mut this = self.project();
 
-        match *this.state {
+        match this.state {
             AwsChunkedBodyState::WritingChunkSize => {
                 if this.options.stream_length == 0 {
                     // If the stream is empty, we skip to writing trailers after writing the CHUNK_TERMINATOR.
-                    *this.state = AwsChunkedBodyState::WritingTrailers;
+                    *this.state = AwsChunkedBodyState::WritingTrailers(None);
                     tracing::trace!("stream is empty, writing chunk terminator");
-                    Poll::Ready(Some(Ok(Bytes::from([CHUNK_TERMINATOR].concat()))))
+                    Poll::Ready(Some(Ok(Frame::data(Bytes::from(
+                        [CHUNK_TERMINATOR].concat(),
+                    )))))
                 } else {
                     *this.state = AwsChunkedBodyState::WritingChunk;
                     // A chunk must be prefixed by chunk size in hexadecimal
                     let chunk_size = format!("{:X?}{CRLF}", this.options.stream_length);
                     tracing::trace!(%chunk_size, "writing chunk size");
                     let chunk_size = Bytes::from(chunk_size);
-                    Poll::Ready(Some(Ok(chunk_size)))
+                    Poll::Ready(Some(Ok(Frame::data(chunk_size))))
                 }
             }
-            AwsChunkedBodyState::WritingChunk => match this.inner.poll_data(cx) {
-                Poll::Ready(Some(Ok(data))) => {
+            AwsChunkedBodyState::WritingChunk => match this.inner.poll_frame(cx) {
+                Poll::Ready(Some(Ok(data))) if data.is_data() => {
+                    let data = data.into_data().unwrap();
                     tracing::trace!(len = data.len(), "writing chunk data");
                     *this.inner_body_bytes_read_so_far += data.len();
-                    Poll::Ready(Some(Ok(data)))
+                    Poll::Ready(Some(Ok(Frame::data(data))))
                 }
-                Poll::Ready(None) => {
+                Poll::Ready(Some(Ok(data))) if data.is_trailers() => {
+                    let data = data.into_trailers().unwrap();
                     let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
                     let expected_stream_length = this.options.stream_length;
                     if actual_stream_length != expected_stream_length {
@@ -245,51 +249,48 @@ where
                     };
 
                     tracing::trace!("no more chunk data, writing CRLF and chunk terminator");
-                    *this.state = AwsChunkedBodyState::WritingTrailers;
+                    *this.state = AwsChunkedBodyState::WritingTrailers(Some(data));
                     // Since we wrote chunk data, we end it with a CRLF and since we only write
                     // a single chunk, we write the CHUNK_TERMINATOR immediately after
-                    Poll::Ready(Some(Ok(Bytes::from([CRLF, CHUNK_TERMINATOR].concat()))))
+                    Poll::Ready(Some(Ok(Frame::data(Bytes::from(
+                        [CRLF, CHUNK_TERMINATOR].concat(),
+                    )))))
+                }
+                Poll::Ready(Some(Ok(other))) => panic!("unexpected frame type: {:?}", other),
+                Poll::Ready(None) => {
+                    *this.state = AwsChunkedBodyState::WritingTrailers(None);
+                    Poll::Ready(Some(Ok(Frame::data(Bytes::from(
+                        [CRLF, CHUNK_TERMINATOR].concat(),
+                    )))))
                 }
                 Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
                 Poll::Pending => Poll::Pending,
             },
-            AwsChunkedBodyState::WritingTrailers => {
-                return match this.inner.poll_trailers(cx) {
-                    Poll::Ready(Ok(trailers)) => {
-                        *this.state = AwsChunkedBodyState::Closed;
-                        let expected_length = total_rendered_length_of_trailers(trailers.as_ref());
-                        let actual_length = this.options.total_trailer_length();
-
-                        if expected_length != actual_length {
-                            let err =
-                                Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
-                                    actual: actual_length,
-                                    expected: expected_length,
-                                });
-                            return Poll::Ready(Some(Err(err)));
-                        }
-
-                        let mut trailers =
-                            trailers_as_aws_chunked_bytes(trailers, actual_length + 1);
-                        // Insert the final CRLF to close the body
-                        trailers.extend_from_slice(CRLF.as_bytes());
-
-                        Poll::Ready(Some(Ok(trailers.into())))
-                    }
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+            AwsChunkedBodyState::WritingTrailers(_trailers) => {
+                let trailers = std::mem::replace(this.state, AwsChunkedBodyState::Closed);
+                let trailers = match trailers {
+                    AwsChunkedBodyState::WritingTrailers(trailers) => trailers,
+                    _ => unreachable!(),
                 };
+                let expected_length = total_rendered_length_of_trailers(trailers.as_ref());
+                let actual_length = this.options.total_trailer_length();
+
+                if expected_length != actual_length {
+                    let err = Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
+                        actual: actual_length,
+                        expected: expected_length,
+                    });
+                    return Poll::Ready(Some(Err(err)));
+                }
+
+                let mut trailers = trailers_as_aws_chunked_bytes(trailers, actual_length + 1);
+                // Insert the final CRLF to close the body
+                trailers.extend_from_slice(CRLF.as_bytes());
+
+                Poll::Ready(Some(Ok(Frame::data(trailers.into()))))
             }
             AwsChunkedBodyState::Closed => Poll::Ready(None),
         }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        // Trailers were already appended to the body because of the content encoding scheme
-        Poll::Ready(Ok(None))
     }
 
     fn is_end_stream(&self) -> bool {
