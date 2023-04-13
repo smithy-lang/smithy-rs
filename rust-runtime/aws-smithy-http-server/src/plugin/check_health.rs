@@ -74,10 +74,7 @@ impl<R, S: Service<R>, F: Future<Output = S::Response>> Future for MappedHandler
     type Output = Result<S::Response, S::Error>;
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let inner = self.project().inner;
-        let res = inner.poll(cx);
-
-        res.map(Ok)
+        self.project().inner.poll(cx).map(Ok)
     }
 }
 
