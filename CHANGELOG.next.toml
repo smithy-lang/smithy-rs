@@ -92,3 +92,15 @@ message = "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningPa
 references = ["smithy-rs#2562"]
 meta = { "breaking" = false, "tada" = true, "bug" = true }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
