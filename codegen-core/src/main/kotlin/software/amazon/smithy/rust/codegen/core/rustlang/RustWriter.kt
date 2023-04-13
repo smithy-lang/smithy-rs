@@ -87,7 +87,9 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     block: T.() -> Unit,
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
-        conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
+        withTemplate(textAfterNewLine, ctx) { tail ->
+            conditionalBlock(header, tail, conditional = true, block = block)
+        }
     }
 }
 
