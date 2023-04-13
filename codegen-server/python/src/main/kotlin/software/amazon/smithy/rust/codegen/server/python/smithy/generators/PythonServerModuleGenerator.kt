@@ -54,6 +54,7 @@ class PythonServerModuleGenerator(
                 renderPyLambdaTypes()
                 renderPyApplicationType()
                 renderCodegenVersion()
+                rust("Ok(())")
             }
         }
     }
@@ -118,11 +119,6 @@ class PythonServerModuleGenerator(
                 *codegenScope,
             )
         }
-    }
-
-    // Render the codegeneration version as module attribute.
-    private fun RustWriter.renderCodegenVersion() {
-        rust("""m.add("CODEGEN_VERSION", "${Version.crateVersion()}")?;""")
     }
 
     // Render wrapper types that are substituted to the ones coming from `aws_smithy_types`.
@@ -236,13 +232,12 @@ class PythonServerModuleGenerator(
 
     // Render Python application type.
     private fun RustWriter.renderPyApplicationType() {
-        rustTemplate(
-            """
-            m.add_class::<crate::python_server_application::App>()?;
-            Ok(())
-            """,
-            *codegenScope,
-        )
+        rust("""m.add_class::<crate::python_server_application::App>()?;""")
+    }
+
+    // Render the codegeneration version as module attribute.
+    private fun RustWriter.renderCodegenVersion() {
+        rust("""m.add("CODEGEN_VERSION", "${Version.crateVersion()}")?;""")
     }
 
     // Convert to symbol and check the namespace to figure out where they should be imported from.
