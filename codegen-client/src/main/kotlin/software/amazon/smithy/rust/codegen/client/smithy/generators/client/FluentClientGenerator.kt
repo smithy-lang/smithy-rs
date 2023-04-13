@@ -343,7 +343,7 @@ class FluentClientGenerator(
             //      | |_____________^ duplicate definitions for `set_fields`
             if (inputBuilderType.toString().endsWith("Builder")) {
                 rustTemplate("""
-                    ##[cfg(#{AwsSdkUnstableAttribute})]
+                    ##[#{Unstable}]
                     /// This function replaces the parameter with new one.
                     /// It is useful when you want to replace the existing data with de-serialized data.
                     /// ```compile_fail
@@ -357,7 +357,7 @@ class FluentClientGenerator(
                         self
                     }
                 """,
-                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute,
+                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
                 )
             }
 
