@@ -43,15 +43,6 @@ pub async fn main() {
     let args = Args::parse();
     setup_tracing();
 
-    let check_health_layer = CheckHealthLayer::new("/ping", |_req| {
-        let response = Response::builder()
-            .status(StatusCode::OK)
-            .body(body::boxed(Body::empty()))
-            .expect("Couldn't construct response");
-
-        std::future::ready(response)
-    });
-
     let plugins = PluginPipeline::new()
         // Apply the `PrintPlugin` defined in `plugin.rs`
         .print()
@@ -62,7 +53,14 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .http_layer(&check_health_layer);
+        .http_layer(CheckHealthLayer::new("/ping", |_req| {
+            let response = Response::builder()
+                .status(StatusCode::OK)
+                .body(body::boxed(Body::empty()))
+                .expect("Couldn't construct response");
+
+            std::future::ready(response)
+        }));
 
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
