@@ -114,7 +114,11 @@ class EndpointParamsInterceptorGenerator(
                 ".map_err(#{InterceptorError}::read_before_execution)?;",
                 *codegenScope,
             ) {
-                endpointTraitBindings.render(this, "_input")
+                endpointTraitBindings.render(
+                    this,
+                    "_input",
+                    codegenContext.settings.codegenConfig.enableNewSmithyRuntime,
+                )
             }
             rust("cfg.put(endpoint_prefix);")
         }
