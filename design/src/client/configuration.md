@@ -109,7 +109,7 @@ The relations between the types can be illustrated in the following diagram:
 
 <img width="1367" alt="client config at different levels" src="https://user-images.githubusercontent.com/15333866/228719737-d58d5e0a-f7ca-46d4-bb22-33c7c528ba69.png">
 
-The `aws_sdk_s3::config::Config` type on the left stores the service-level configuration, which implicitly includes/shadows the AWS-level configuration. `Config` is accessible via `Handle` from a fluent builder `ListBucketsFluentBuilder`, which holds the operation level config.
+The `aws_sdk_s3::config::Config` type on the middle left represents the service-level configuration, which implicitly includes/shadows the AWS-level configuration. `Config` is accessible via `Handle` from a fluent builder `ListBucketsFluentBuilder`, which holds the operation level config.
 
 After the `send` method is called on the `fluent_builder` variable and before it internally calls `aws_smithy_runtime::client::orchestrator::invoke`, the fields in `self.handle.conf` and those in `self.config_override` will be put into a type map (we have been working on [send_v2](https://github.com/awslabs/smithy-rs/blob/b023426d1cfd05e1fd9eef2f92a21cad58b93b86/codegen-client/src/main/kotlin/software/amazon/smithy/rust/codegen/client/smithy/generators/client/FluentClientGenerator.kt#L331-L347) to allow for a gradual transition).
 
