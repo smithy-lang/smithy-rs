@@ -171,7 +171,7 @@ impl<P> PluginPipeline<P> {
         PluginPipeline(PluginStack::new(new_plugin, self.0))
     }
 
-    /// Applies a single [`Layer`] to all operations _before_ they are deserialized.
+    /// Applies a single [`tower::Layer`] to all operations _before_ they are deserialized.
     pub fn http_layer<L>(self, layer: L) -> PluginPipeline<PluginStack<HttpLayer<L>, P>> {
         PluginPipeline(PluginStack::new(HttpLayer(layer), self.0))
     }
