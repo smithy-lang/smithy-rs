@@ -11,7 +11,7 @@ use aws_smithy_http_server::{
     body,
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
-    plugin::{check_health::CheckHealthExt, PluginPipeline},
+    plugin::{check_health::CheckHealthLayer, PluginPipeline},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -43,6 +43,15 @@ pub async fn main() {
     let args = Args::parse();
     setup_tracing();
 
+    let check_health_layer = CheckHealthLayer::new("/ping", |_req| {
+        let response = Response::builder()
+            .status(StatusCode::OK)
+            .body(body::boxed(Body::empty()))
+            .expect("Couldn't construct response");
+
+        std::future::ready(Ok::<_, Infallible>(response))
+    });
+
     let plugins = PluginPipeline::new()
         // Apply the `PrintPlugin` defined in `plugin.rs`
         .print()
@@ -53,14 +62,7 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .check_health("/ping", |_req| {
-            let response = Response::builder()
-                .status(StatusCode::OK)
-                .body(body::boxed(Body::empty()))
-                .expect("Couldn't construct response");
-
-            std::future::ready(Ok::<_, Infallible>(response))
-        });
+        .http_layer(&check_health_layer);
 
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
