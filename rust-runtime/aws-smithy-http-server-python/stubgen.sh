@@ -35,6 +35,6 @@ export CARGO_TARGET_DIR
 # generate the Python stubs
 cargo build --manifest-path "$manifest"
 ln -sf "$CARGO_TARGET_DIR/debug/lib$package.so" "$CARGO_TARGET_DIR/debug/$package.so"
-PYTHONPATH=$CARGO_TARGET_DIR/debug:$PYTHONPATH python "$script_dir/stubgen.py" "$package" "$output"
+PYTHONPATH=$CARGO_TARGET_DIR/debug:$PYTHONPATH python3 "$script_dir/stubgen.py" "$package" "$output"
 
 exit 0

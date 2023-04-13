@@ -48,10 +48,10 @@ release: codegen
 run: build
 	python3 $(CUR_DIR)/pokemon_service.py
 
-py-check: build
+py-check: install-wheel
 	python3 -m mypy pokemon_service.py
 
-test: build install-wheel py-check
+test: build py-check
 	cargo test
 
 clippy: codegen
