@@ -146,16 +146,17 @@ mod tests {
 
     const TEST_KEY: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/examples/pokemon-service-test/tests/testdata/localhost.key"
+        "/../../examples/python/pokemon-service-test/tests/testdata/localhost.key"
     );
     const TEST_CERT: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/examples/pokemon-service-test/tests/testdata/localhost.crt"
+        "/../../examples/python/pokemon-service-test/tests/testdata/localhost.crt"
     );
 
     #[test]
     fn creating_tls_config_in_python() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
+        println!("{}", env!("CARGO_MANIFEST_DIR"));
 
         let config = Python::with_gil(|py| {
             let globals = [

@@ -51,7 +51,7 @@ run: build
 py-check: build
 	python3 -m mypy pokemon_service.py
 
-test: build py-check install-wheel
+test: build install-wheel py-check
 	cargo test
 
 clippy: codegen
