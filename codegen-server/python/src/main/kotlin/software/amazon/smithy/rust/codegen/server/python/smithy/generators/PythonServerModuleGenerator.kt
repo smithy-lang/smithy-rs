@@ -11,7 +11,9 @@ import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -51,6 +53,7 @@ class PythonServerModuleGenerator(
                 renderPyTlsTypes()
                 renderPyLambdaTypes()
                 renderPyApplicationType()
+                renderCodegenVersion()
             }
         }
     }
@@ -115,6 +118,11 @@ class PythonServerModuleGenerator(
                 *codegenScope,
             )
         }
+    }
+
+    // Render the codegeneration version as module attribute.
+    private fun RustWriter.renderCodegenVersion() {
+        rust("""m.add("CODEGEN_VERSION", "${Version.crateVersion()}")?;""")
     }
 
     // Render wrapper types that are substituted to the ones coming from `aws_smithy_types`.

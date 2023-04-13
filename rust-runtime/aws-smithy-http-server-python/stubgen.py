@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import inspect
 import re
-import subprocess
 import textwrap
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -388,9 +387,6 @@ def walk_module(writer: Writer, mod: Any):
 
 
 def generate(module: str, outdir: str):
-    result = subprocess.run("git rev-parse --show-toplevel")
-    source_dir = Path(result.stdout.decode())
-
     path = Path(outdir) / f"{module}.pyi"
     writer = Writer(
         path,
