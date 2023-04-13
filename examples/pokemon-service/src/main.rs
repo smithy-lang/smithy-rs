@@ -5,7 +5,7 @@
 
 mod plugin;
 
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
     body,
@@ -49,7 +49,7 @@ pub async fn main() {
             .body(body::boxed(Body::empty()))
             .expect("Couldn't construct response");
 
-        std::future::ready(Ok::<_, Infallible>(response))
+        std::future::ready(response)
     });
 
     let plugins = PluginPipeline::new()

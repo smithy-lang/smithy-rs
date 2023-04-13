@@ -4,10 +4,12 @@
  */
 
 use std::future::Ready;
+use std::marker::PhantomData;
 use std::task::{Context, Poll};
 
 use futures_util::Future;
 use hyper::{Body, Request, Response};
+use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body::BoxBody;
@@ -22,11 +24,7 @@ pub struct CheckHealthLayer<PingHandler> {
 }
 
 impl CheckHealthLayer<()> {
-    pub fn new<
-        E,
-        HandlerFuture: Future<Output = Result<Response<BoxBody>, E>>,
-        H: Fn(Request<Body>) -> HandlerFuture,
-    >(
+    pub fn new<HandlerFuture: Future<Output = Response<BoxBody>>, H: Fn(Request<Body>) -> HandlerFuture>(
         health_check_uri: &'static str,
         ping_handler: H,
     ) -> CheckHealthLayer<H> {
@@ -37,7 +35,7 @@ impl CheckHealthLayer<()> {
     }
 }
 
-pub type DefaultHandler<E> = fn(Request<Body>) -> Ready<Result<Response<BoxBody>, E>>;
+pub type DefaultHandler = fn(Request<Body>) -> Ready<Response<BoxBody>>;
 
 impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
     type Service = CheckHealthService<H, S>;
@@ -57,18 +55,44 @@ pub struct CheckHealthService<H, S> {
     layer: CheckHealthLayer<H>,
 }
 
+pin_project! {
+    /// A future that converts `F` into a compatible `S::Future`.
+    pub struct MappedHandlerFuture<R, S, F> {
+        #[pin]
+        inner: F,
+        pd: PhantomData<fn(R) -> S>,
+    }
+}
+
+impl<R, S, F> MappedHandlerFuture<R, S, F> {
+    fn new(inner: F) -> MappedHandlerFuture<R, S, F> {
+        Self { inner, pd: PhantomData }
+    }
+}
+
+impl<R, S: Service<R>, F: Future<Output = S::Response>> Future for MappedHandlerFuture<R, S, F> {
+    type Output = Result<S::Response, S::Error>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let inner = self.project().inner;
+        let res = inner.poll(cx);
+
+        res.map(Ok)
+    }
+}
+
 impl<H, HandlerFuture, S> Service<Request<Body>> for CheckHealthService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
     S::Future: std::marker::Send + 'static,
-    HandlerFuture: Future<Output = Result<Response<BoxBody>, S::Error>>,
+    HandlerFuture: Future<Output = Response<BoxBody>>,
     H: Fn(Request<Body>) -> HandlerFuture,
 {
     type Response = S::Response;
 
     type Error = S::Error;
 
-    type Future = Either<HandlerFuture, Oneshot<S, Request<Body>>>;
+    type Future = Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // The check that the service is ready is done by `Oneshot` below.
@@ -77,8 +101,10 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         if req.uri() == self.layer.health_check_uri {
+            let handler_future = (self.layer.ping_handler)(req);
+
             Either::Left {
-                value: (self.layer.ping_handler)(req),
+                value: MappedHandlerFuture::new(handler_future),
             }
         } else {
             let clone = self.inner.clone();
