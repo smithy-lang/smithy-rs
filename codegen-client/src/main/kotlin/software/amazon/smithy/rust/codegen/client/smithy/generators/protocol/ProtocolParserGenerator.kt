@@ -232,7 +232,7 @@ class ProtocolParserGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", symbolProvider.symbolForBuilder(outputShape))
         if (outputShape.id == operationShape.output.get()) {

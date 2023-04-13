@@ -143,15 +143,14 @@ open class AwsJson(
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =

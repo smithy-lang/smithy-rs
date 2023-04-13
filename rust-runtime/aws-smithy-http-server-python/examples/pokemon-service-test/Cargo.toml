@@ -7,6 +7,8 @@ authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "Run tests against the Python server implementation"
 
 [dev-dependencies]
+rand = "0.8"
+async-stream = "0.3"
 command-group = "1.0"
 tokio = { version = "1.20.1", features = ["full"] }
 serial_test = "0.9.0"
