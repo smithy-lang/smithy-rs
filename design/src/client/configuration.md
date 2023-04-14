@@ -83,9 +83,9 @@ How to actually implement this design
 Implementing this design is tied to [RFC 34](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0034_smithy_orchestrator.md). In that RFC, applying client configuration means putting runtime components and required function parameters into a type map for `aws_smithy_runtime::client::orchestrator::invoke` to use.
 
 This section covers three parts:
-- Where we store operation-level config
-- How we put runtime components and required function parameters into a type map
-- How we plan to migrate today's runtime components to the world of the orchestrator
+- [Where we store operation-level config](#where-we-store-operation-level-config)
+- [How we put runtime components and required function parameters into a type map](#how-we-put-runtime-components-and-required-function-parameters-into-a-type-map)
+- [How we plan to migrate today's runtime components to the world of the orchestrator](#how-we-plan-to-migrate-todays-runtime-components-to-the-world-of-the-orchestrator)
 
 #### Where we store operation-level config
 
