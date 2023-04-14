@@ -83,7 +83,7 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
     fn handlers(&mut self) -> &mut HashMap<String, PyHandler>;
 
     /// Build the app's `Service` using given `event_loop`.
-    fn build_service(&mut self, event_loop: &pyo3::PyAny) -> pyo3::PyResult<Service>;
+    fn build_service(&self, event_loop: &pyo3::PyAny) -> pyo3::PyResult<Service>;
 
     /// Handle the graceful termination of Python workers by looping through all the
     /// active workers and calling `terminate()` on them. If termination fails, this

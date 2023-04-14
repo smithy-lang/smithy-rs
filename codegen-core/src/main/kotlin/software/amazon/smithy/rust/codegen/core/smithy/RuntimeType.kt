@@ -102,6 +102,7 @@ data class RuntimeConfig(
         runtimeCrateName: String,
         optional: Boolean = false,
         scope: DependencyScope = DependencyScope.Compile,
+        features: Set<String> = emptySet(),
     ): CargoDependency {
         val crateName = "$cratePrefix-$runtimeCrateName"
         return CargoDependency(
@@ -109,6 +110,7 @@ data class RuntimeConfig(
             runtimeCrateLocation.crateLocation(crateName),
             optional = optional,
             scope = scope,
+            features = features,
         )
     }
 }

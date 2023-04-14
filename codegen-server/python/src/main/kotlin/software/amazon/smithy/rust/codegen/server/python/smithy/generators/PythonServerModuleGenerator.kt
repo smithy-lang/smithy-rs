@@ -183,6 +183,10 @@ class PythonServerModuleGenerator(
             middleware.add_class::<#{SmithyPython}::PyRequest>()?;
             middleware.add_class::<#{SmithyPython}::PyResponse>()?;
             middleware.add_class::<#{SmithyPython}::PyMiddlewareException>()?;
+            middleware.add_class::<#{SmithyPython}::tower::PyTowerLayersConfig>()?;
+            middleware.add_class::<#{SmithyPython}::tower::PyTimeoutLayerConfig>()?;
+            middleware.add_class::<#{SmithyPython}::tower::PyInstrumentLayerConfig>()?;
+            middleware.add_class::<#{SmithyPython}::tower::PyRequestIdLayerConfig>()?;
             pyo3::py_run!(
                 py,
                 middleware,

@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
@@ -84,7 +83,7 @@ class PythonApplicationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
-            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "SmithyServer" to PythonServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
@@ -120,7 +119,7 @@ class PythonApplicationGenerator(
                 middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
-                tower_layers_config: #{SmithyPython}::tower::TowerLayersConfig,
+                tower_layers_config: #{SmithyPython}::tower::PyTowerLayersConfig,
             }
             """,
             *codegenScope,
@@ -187,10 +186,9 @@ class PythonApplicationGenerator(
                 """,
                 *codegenScope,
             )
-
             rustBlockTemplate(
                 """
-                fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
+                fn build_service(&self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
                         #{http}::Request<#{SmithyServer}::body::Body>,
                         #{http}::Response<#{SmithyServer}::body::BoxBody>,
@@ -200,16 +198,7 @@ class PythonApplicationGenerator(
                 """,
                 *codegenScope,
             ) {
-                rustTemplate(
-                    """
-                    let mut plugins = #{SmithyServer}::plugin::PluginPipeline::new();
-                    if self.tower_layers_config.instrument.is_some() {
-                        use #{SmithyServer}::instrumentation::InstrumentExt;
-                        plugins = plugins.instrument();
-                    }
-                    """,
-                    *codegenScope,
-                )
+                renderRustPlugins(writer)
                 rustTemplate(
                     """
                     let builder = crate::service::$serviceName::builder_with_plugins(plugins);
@@ -229,43 +218,105 @@ class PythonApplicationGenerator(
                         *codegenScope,
                     )
                 }
-                rustTemplate(
-                    """
-                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
-
-                    {
-                        use #{tower}::Layer;
-                        #{tracing}::trace!("adding middlewares to rust python router");
-                        let mut middlewares = self.middlewares.clone();
-                        // Reverse the middlewares, so they run with same order as they defined
-                        middlewares.reverse();
-                        for handler in middlewares {
-                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
-                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
-                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
-                        }
-                    }
-                    """,
-                    "Protocol" to protocol.markerStruct(),
-                    *codegenScope,
-                )
-                rustTemplate(
-                    """
-                    {
-                        use #{tower}::Layer;
-                        if let Some(config) = self.tower_layers_config.timeout.as_ref() {
-                            service = #{tower}::util::BoxCloneService::new(
-                                #{tower_http}::timeout::TimeoutLayer::new(config.timeout).layer(service)
-                            );
-                        }
-                    }
-                    """,
-                    *codegenScope,
-                )
+                rustTemplate("use #{tower}::Layer;", *codegenScope)
+                renderPyMiddlewares(writer)
+                renderRustMiddlewares(writer)
                 rust("Ok(service)")
             }
         }
+    }
+
+    private fun renderRustPlugins(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            let maybe_instrument = if self.tower_layers_config.instrument.is_some() {
+                use #{SmithyServer}::instrumentation::InstrumentExt;
+                #{SmithyServer}::plugin::Either::Left {
+                    value: #{SmithyServer}::plugin::PluginPipeline::new().instrument(),
+                }
+            } else {
+                #{SmithyServer}::plugin::Either::Right {
+                    value: #{SmithyServer}::plugin::IdentityPlugin,
+                }
+            };
+            let plugins = #{SmithyServer}::plugin::PluginPipeline::new().push(maybe_instrument);
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun renderRustMiddlewares(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            // Build the `tower_http::timeout::TimeoutLayer`.
+            if let Some(config) = self.tower_layers_config.timeout.as_ref() {
+                service = #{tower}::util::BoxCloneService::new(
+                    #{tower_http}::timeout::TimeoutLayer::new(config.timeout).layer(service)
+                );
+            }
+            // Build the `aws_smithy_http_server::request::request_id::ServerRequestIdProviderLayer`.
+            if let Some(config) = self.tower_layers_config.request_id.as_ref() {
+                let layer = if let Some(header_key) = &config.header_key {
+                    #{SmithyServer}::request::request_id::ServerRequestIdProviderLayer::new_with_response_header(header_key.into()).layer(service)
+                } else {
+                    #{SmithyServer}::request::request_id::ServerRequestIdProviderLayer::new()
+                        .layer(service)
+                };
+                service = #{tower}::util::BoxCloneService::new(layer);
+            }
+            // Build the `tower_http::cors::CorsLayer`.
+            if let Some(config) = self.tower_layers_config.cors.as_ref() {
+                let mut layer =
+                    #{tower_http}::cors::CorsLayer::new().allow_credentials(config.allow_credentials);
+                if let Some(allow_headers) = &config.allow_headers {
+                    layer = layer.allow_headers(allow_headers.clone());
+                } else {
+                    // TODO: should we set allow_headers to any if the config None?
+                    layer = layer.allow_headers(tower_http::cors::Any);
+                }
+                if let Some(allow_methods) = &config.allow_methods {
+                    layer = layer.allow_methods(allow_methods.clone())
+                } else {
+                    // TODO: should we set allow_methods to any if the config None?
+                    layer = layer.allow_methods(tower_http::cors::Any);
+                }
+                if let Some(allow_origins) = config.allow_origins.clone() {
+                    // TODO: should we set allow_origin to any if the config None?
+                    layer = layer.allow_origin(#{tower_http}::cors::AllowOrigin::predicate(
+                        move |origin: &http::HeaderValue, _request_parts: &http::request::Parts| {
+                            allow_origins
+                                .iter()
+                                .any(|suffix| origin.as_bytes().ends_with(suffix.as_bytes()))
+                        },
+                    ));
+                } else {
+                    layer = layer.allow_origin(tower_http::cors::Any);
+                }
+                service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun renderPyMiddlewares(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
+            #{tracing}::trace!("adding middlewares to rust python router");
+            let mut middlewares = self.middlewares.clone();
+            // Reverse the middlewares, so they run with same order as they defined
+            middlewares.reverse();
+            for handler in middlewares {
+                #{tracing}::trace!(name = &handler.name, "adding python middleware");
+                let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+            }
+            """,
+            "Protocol" to protocol.markerStruct(),
+            *codegenScope,
+        )
     }
 
     private fun renderPyMethods(writer: RustWriter) {
@@ -366,32 +417,10 @@ class PythonApplicationGenerator(
                     let service = self.build_and_configure_service(py, event_loop)?;
                     self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
                 }
-
-                /// Enable the timeout middlware layer.
-                ///
-                /// :param config ${PythonType.Optional(PythonType.Opaque("TimeoutLayerConfig", "aws_smithy_http_server_python::server")).renderAsDocstring()}:
-                ##[pyo3(text_signature = "(${'$'}self, config=None)")]
-                pub fn timeout_layer(
-                    &mut self,
-                    config: Option<#{SmithyPython}::tower::TimeoutLayerConfig>
-                ) {
-                    self.tower_layers_config.timeout = Some(config.unwrap_or_else(|| {
-                        #{SmithyPython}::tower::TimeoutLayerConfig::default()
-                    }));
-                }
-
-                /// Enable the timeout middlware layer.
-                ///
-                /// :param config ${PythonType.Optional(PythonType.Opaque("TimeoutLayerConfig", "aws_smithy_http_server_python::server")).renderAsDocstring()}:
-                ##[pyo3(text_signature = "(${'$'}self, config=None)")]
-                pub fn instrument_layer(
-                    &mut self,
-                ) {
-                    self.tower_layers_config.instrument = Some(#{SmithyPython}::tower::InstrumentLayerConfig::default());
-                }
                 """,
                 *codegenScope,
             )
+            renderRustMiddlewarePyMethods(writer)
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
@@ -430,6 +459,57 @@ class PythonApplicationGenerator(
                 )
             }
         }
+    }
+
+    private fun renderRustMiddlewarePyMethods(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            /// Enable the Rust timeout middleware layer from `tower_http::timeout::TimeoutLayer`.
+            ///
+            /// :param config ${PythonType.Optional(PythonType.Opaque("PyTimeoutLayerConfig", "aws_smithy_http_server_python::tower")).renderAsDocstring()}:
+            ##[pyo3(text_signature = "(${'$'}self, config=None)")]
+            pub fn timeout_layer(
+                &mut self,
+                config: Option<#{SmithyPython}::tower::PyTimeoutLayerConfig>
+            ) {
+                self.tower_layers_config.timeout = Some(config.unwrap_or_else(|| {
+                    #{SmithyPython}::tower::PyTimeoutLayerConfig::default()
+                }));
+            }
+
+            /// Enable the Rust instrumentation middleware layer from `aws_smithy_http_server::plugin::InstrumentExt`.
+            ##[pyo3(text_signature = "(${'$'}self)")]
+            pub fn instrument_layer(
+                &mut self,
+            ) {
+                self.tower_layers_config.instrument = Some(#{SmithyPython}::tower::PyInstrumentLayerConfig::default());
+            }
+
+            /// Enable the Rust instrumentation middleware layer from `aws_smithy_http_server::plugin::InstrumentExt`.
+            ///
+            /// :param config ${PythonType.Optional(PythonType.Opaque("PyRequestIdLayerConfig", "aws_smithy_http_server_python::tower")).renderAsDocstring()}:
+            ##[pyo3(text_signature = "(${'$'}self, config=None)")]
+            pub fn request_id_layer(
+                &mut self,
+                config: Option<#{SmithyPython}::tower::PyRequestIdLayerConfig>
+            ) {
+                self.tower_layers_config.request_id = config;
+            }
+
+            /// Enable the Rust timeout middleware layer from `tower_http::timeout::TimeoutLayer`.
+            ///
+            /// :param config ${PythonType.Optional(PythonType.Opaque("PyCorsLayerConfig", "aws_smithy_http_server_python::tower")).renderAsDocstring()}:
+            ##[pyo3(text_signature = "(${'$'}self, config=None)")]
+            pub fn cors_layer(
+                &mut self,
+                config: Option<#{SmithyPython}::tower::PyCorsLayerConfig>
+            ) {
+                self.tower_layers_config.cors = config;
+            }
+
+            """,
+            *codegenScope,
+        )
     }
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {
