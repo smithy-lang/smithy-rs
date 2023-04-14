@@ -36,6 +36,7 @@ impl PySocket {
     /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
     #[new]
+    #[pyo3(signature = (address, port, backlog=None))]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
         let (domain, ip_version) = PySocket::socket_domain(address);

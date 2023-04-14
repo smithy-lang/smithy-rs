@@ -372,7 +372,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///
     ///     #[pymethods]
     ///     impl App {
-    ///     #[pyo3(text_signature = "($self, socket, worker_number, tls)")]
+    ///         #[pyo3(text_signature = "($self, socket, worker_number, tls)")]
     ///         pub fn start_worker(
     ///             &mut self,
     ///             py: pyo3::Python,

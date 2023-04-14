@@ -100,6 +100,7 @@ pub struct PyTracingHandler {
 #[pymethods]
 impl PyTracingHandler {
     #[new]
+    #[pyo3(signature = (level=None, logfile=None))]
     fn newpy(py: Python, level: Option<u8>, logfile: Option<PathBuf>) -> PyResult<Self> {
         let _guard = setup_tracing_subscriber(level, logfile)?;
         let logging = py.import("logging")?;
@@ -137,7 +138,7 @@ class TracingHandler(Handler):
 /// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
 #[cfg(not(test))]
 #[pyfunction]
-#[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
+#[pyo3(text_signature = "(level, message, module, filename, lineno, pid)")]
 pub fn py_tracing_event(
     level: u8,
     message: &str,

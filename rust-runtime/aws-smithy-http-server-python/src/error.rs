@@ -60,6 +60,7 @@ pub struct PyMiddlewareException {
 impl PyMiddlewareException {
     /// Create a new [PyMiddlewareException].
     #[new]
+    #[pyo3(signature = (message, status_code=None))]
     fn newpy(message: String, status_code: Option<u16>) -> Self {
         Self {
             message,

@@ -120,6 +120,7 @@ class PythonApplicationGenerator(
                 middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
+                tower_layers_config: #{SmithyPython}::tower::TowerLayersConfig,
             }
             """,
             *codegenScope,
@@ -136,6 +137,7 @@ class PythonApplicationGenerator(
                         middlewares: self.middlewares.clone(),
                         context: self.context.clone(),
                         workers: #{parking_lot}::Mutex::new(vec![]),
+                        tower_layers_config: self.tower_layers_config.clone(),
                     }
                 }
             }
@@ -154,6 +156,7 @@ class PythonApplicationGenerator(
                         middlewares: vec![],
                         context: None,
                         workers: #{parking_lot}::Mutex::new(vec![]),
+                        tower_layers_config: Default::default()
                     }
                 }
             }
@@ -199,7 +202,17 @@ class PythonApplicationGenerator(
             ) {
                 rustTemplate(
                     """
-                    let builder = crate::service::$serviceName::builder_without_plugins();
+                    let mut plugins = #{SmithyServer}::plugin::PluginPipeline::new();
+                    if self.tower_layers_config.instrument.is_some() {
+                        use #{SmithyServer}::instrumentation::InstrumentExt;
+                        plugins = plugins.instrument();
+                    }
+                    """,
+                    *codegenScope,
+                )
+                rustTemplate(
+                    """
+                    let builder = crate::service::$serviceName::builder_with_plugins(plugins);
                     """,
                     *codegenScope,
                 )
@@ -233,11 +246,24 @@ class PythonApplicationGenerator(
                             service = #{tower}::util::BoxCloneService::new(layer.layer(service));
                         }
                     }
-                    Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
                     *codegenScope,
                 )
+                rustTemplate(
+                    """
+                    {
+                        use #{tower}::Layer;
+                        if let Some(config) = self.tower_layers_config.timeout.as_ref() {
+                            service = #{tower}::util::BoxCloneService::new(
+                                #{tower_http}::timeout::TimeoutLayer::new(config.timeout).layer(service)
+                            );
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+                rust("Ok(service)")
             }
         }
     }
@@ -324,18 +350,44 @@ class PythonApplicationGenerator(
                 }
 
                 /// Build the service and start a single worker.
+                ///
+                /// :param socket ${PythonType.Opaque("Socket", "aws_smithy_http_server_python::socket").renderAsDocstring()}:
+                /// :param worker_number ${PythonType.Int.renderAsDocstring()}:
                 ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None)")]
                 pub fn start_worker(
                     &mut self,
-                    py: pyo3::Python,
-                    socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
+                    py: #{pyo3}::Python,
+                    socket: &#{pyo3}::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
                     tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
-                ) -> pyo3::PyResult<()> {
+                ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
                     let service = self.build_and_configure_service(py, event_loop)?;
                     self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
+                }
+
+                /// Enable the timeout middlware layer.
+                ///
+                /// :param config ${PythonType.Optional(PythonType.Opaque("TimeoutLayerConfig", "aws_smithy_http_server_python::server")).renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, config=None)")]
+                pub fn timeout_layer(
+                    &mut self,
+                    config: Option<#{SmithyPython}::tower::TimeoutLayerConfig>
+                ) {
+                    self.tower_layers_config.timeout = Some(config.unwrap_or_else(|| {
+                        #{SmithyPython}::tower::TimeoutLayerConfig::default()
+                    }));
+                }
+
+                /// Enable the timeout middlware layer.
+                ///
+                /// :param config ${PythonType.Optional(PythonType.Opaque("TimeoutLayerConfig", "aws_smithy_http_server_python::server")).renderAsDocstring()}:
+                ##[pyo3(text_signature = "(${'$'}self, config=None)")]
+                pub fn instrument_layer(
+                    &mut self,
+                ) {
+                    self.tower_layers_config.instrument = Some(#{SmithyPython}::tower::InstrumentLayerConfig::default());
                 }
                 """,
                 *codegenScope,

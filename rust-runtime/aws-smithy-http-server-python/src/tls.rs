@@ -25,10 +25,8 @@ pub mod listener;
 /// :param cert_path pathlib.Path:
 /// :param reload_secs int:
 /// :rtype None:
-#[pyclass(
-    name = "TlsConfig",
-    text_signature = "($self, *, key_path, cert_path, reload_secs=86400)"
-)]
+#[pyclass(name = "TlsConfig")]
+#[pyo3(text_signature = "(key_path, cert_path, reload_secs=86400)")]
 #[derive(Clone)]
 pub struct PyTlsConfig {
     /// Absolute path of the RSA or PKCS private key.
@@ -156,7 +154,6 @@ mod tests {
     #[test]
     fn creating_tls_config_in_python() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
-        println!("{}", env!("CARGO_MANIFEST_DIR"));
 
         let config = Python::with_gil(|py| {
             let globals = [

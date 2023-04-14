@@ -438,8 +438,8 @@ def main() -> None:
     config: Dict[str, Any] = dict(workers=1)
     if args.enable_tls:
         config["tls"] = TlsConfig(
-            key_path=args.tls_key_path,
-            cert_path=args.tls_cert_path,
+            args.tls_key_path,
+            args.tls_cert_path,
         )
 
     app.run(**config)

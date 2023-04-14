@@ -22,6 +22,7 @@ pub mod middleware;
 mod server;
 mod socket;
 pub mod tls;
+pub mod tower;
 pub mod types;
 mod util;
 
