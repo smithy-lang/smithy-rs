@@ -53,13 +53,11 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .http_layer(CheckHealthLayer::new("/ping", |_req| {
-            let response = Response::builder()
+        .http_layer(CheckHealthLayer::new("/ping", |_req| async {
+            Response::builder()
                 .status(StatusCode::OK)
                 .body(body::boxed(Body::empty()))
-                .expect("Couldn't construct response");
-
-            std::future::ready(response)
+                .expect("Couldn't construct response")
         }));
 
     let app = PokemonService::builder_with_plugins(plugins)
