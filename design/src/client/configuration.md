@@ -21,6 +21,15 @@ However, not all of these components are covered by the public APIs for configur
 
 There are still a lot of moving parts and this document is expected to evolve as we discover the implementation details.
 
+Terminology
+-----------
+- Component: An interface coupled with its default implementations to enable an SDK client functionality.
+- Fluent Client: A code generated Client that has methods for each service operation on it. A fluent builder is generated alongside it to make construction easier.
+- Operation: A high-level abstraction representing an interaction between an SDK Client and a remote service.
+- Orchestrator: The code within an SDK client that handles the process of making requests and receiving responses from remote services.
+- Remote Service: A remote API that a user wants to use. Communication with a remote service usually happens over HTTP. The remote service is usually, but not necessarily, an AWS service.
+- SDK Client: A client generated for the AWS SDK, allowing users to make requests to remote services.
+
 The user experience if this design is implemented
 -------------------------------------------------
 
