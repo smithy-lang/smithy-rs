@@ -56,7 +56,7 @@ The main benefit of this approach is simplicity for users. The only change requi
 
 ### Configuring runtime components required by the orchestrator
 
-While `ConfigLoader`, `SdkConfig`, and service configs allow users to configure the necessary runtime components for today's `Tower`-based infrastructure, they do not cover all of the components required for the orchestrator to perform its job.
+While `ConfigLoader`, `SdkConfig`, and service configs allow users to configure the necessary runtime components for today's [`Tower`-based infrastructure](https://github.com/awslabs/smithy-rs/blob/35f2f27a8380a1310c264a386e162cd9f2180137/rust-runtime/aws-smithy-client/src/lib.rs#L155-L245), they do not cover all of the components required for the orchestrator to perform its job.
 
 The following table shows for each runtime component (the left column), what method on `ConfigLoader`, `sdk_config::Builder`, and service config builder (e.g. `aws_sdk_s3::config::Builder`) are currently available (the middle column) and what new method will be available on those types as proposed by the design (the right column).
 
