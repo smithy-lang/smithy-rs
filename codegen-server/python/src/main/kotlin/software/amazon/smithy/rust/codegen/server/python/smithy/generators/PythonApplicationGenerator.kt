@@ -183,6 +183,12 @@ class PythonApplicationGenerator(
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
                 }
+                fn middlewares(&self) -> &[#{SmithyPython}::PyMiddlewareHandler] {
+                    &self.middlewares
+                }
+                fn tower_layers_config(&self) -> &#{SmithyPython}::tower::PyTowerLayersConfig {
+                    &self.tower_layers_config
+                }
                 """,
                 *codegenScope,
             )
@@ -218,10 +224,14 @@ class PythonApplicationGenerator(
                         *codegenScope,
                     )
                 }
-                rustTemplate("use #{tower}::Layer;", *codegenScope)
-                renderPyMiddlewares(writer)
-                renderRustMiddlewares(writer)
-                rust("Ok(service)")
+                rustTemplate(
+                    """
+                    Ok(#{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues")))
+                    """,
+                    *codegenScope,
+                )
+                // renderRustMiddlewares(writer)
+                // rust("Ok(service)")
             }
         }
     }
@@ -240,60 +250,6 @@ class PythonApplicationGenerator(
                 }
             };
             let plugins = #{SmithyServer}::plugin::PluginPipeline::new().push(maybe_instrument);
-            """,
-            *codegenScope,
-        )
-    }
-
-    private fun renderRustMiddlewares(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            // Build the `tower_http::timeout::TimeoutLayer`.
-            if let Some(config) = self.tower_layers_config.timeout.as_ref() {
-                service = #{tower}::util::BoxCloneService::new(
-                    #{tower_http}::timeout::TimeoutLayer::new(config.timeout).layer(service)
-                );
-            }
-            // Build the `aws_smithy_http_server::request::request_id::ServerRequestIdProviderLayer`.
-            if let Some(config) = self.tower_layers_config.request_id.as_ref() {
-                let layer = if let Some(header_key) = &config.header_key {
-                    #{SmithyServer}::request::request_id::ServerRequestIdProviderLayer::new_with_response_header(header_key.into()).layer(service)
-                } else {
-                    #{SmithyServer}::request::request_id::ServerRequestIdProviderLayer::new()
-                        .layer(service)
-                };
-                service = #{tower}::util::BoxCloneService::new(layer);
-            }
-            // Build the `tower_http::cors::CorsLayer`.
-            if let Some(config) = self.tower_layers_config.cors.as_ref() {
-                let mut layer =
-                    #{tower_http}::cors::CorsLayer::new().allow_credentials(config.allow_credentials);
-                if let Some(allow_headers) = &config.allow_headers {
-                    layer = layer.allow_headers(allow_headers.clone());
-                } else {
-                    // TODO: should we set allow_headers to any if the config None?
-                    layer = layer.allow_headers(tower_http::cors::Any);
-                }
-                if let Some(allow_methods) = &config.allow_methods {
-                    layer = layer.allow_methods(allow_methods.clone())
-                } else {
-                    // TODO: should we set allow_methods to any if the config None?
-                    layer = layer.allow_methods(tower_http::cors::Any);
-                }
-                if let Some(allow_origins) = config.allow_origins.clone() {
-                    // TODO: should we set allow_origin to any if the config None?
-                    layer = layer.allow_origin(#{tower_http}::cors::AllowOrigin::predicate(
-                        move |origin: &http::HeaderValue, _request_parts: &http::request::Parts| {
-                            allow_origins
-                                .iter()
-                                .any(|suffix| origin.as_bytes().ends_with(suffix.as_bytes()))
-                        },
-                    ));
-                } else {
-                    layer = layer.allow_origin(tower_http::cors::Any);
-                }
-                service = #{tower}::util::BoxCloneService::new(layer.layer(service));
-            }
             """,
             *codegenScope,
         )
@@ -397,7 +353,7 @@ class PythonApplicationGenerator(
                     py: #{pyo3}::Python,
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.run_lambda_handler(py)
+                    self.run_lambda_handler::<#{Protocol}>(py)
                 }
 
                 /// Build the service and start a single worker.
@@ -414,11 +370,12 @@ class PythonApplicationGenerator(
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
-                    let service = self.build_and_configure_service(py, event_loop)?;
+                    let service = self.build_and_configure_service::<#{Protocol}>(py, event_loop)?;
                     self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
                 }
                 """,
                 *codegenScope,
+                "Protocol" to protocol.markerStruct(),
             )
             renderRustMiddlewarePyMethods(writer)
             operations.map { operation ->

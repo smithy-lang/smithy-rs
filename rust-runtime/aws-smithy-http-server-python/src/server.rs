@@ -11,11 +11,13 @@ use std::process;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
+use aws_smithy_http_server::response::IntoResponse;
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
+    request::request_id::ServerRequestIdProviderLayer,
     routing::IntoMakeService,
 };
-use http::{Request, Response};
+use http::{request::Parts, HeaderValue, Request, Response};
 use hyper::server::conn::AddrIncoming;
 use parking_lot::Mutex;
 use pyo3::{prelude::*, types::IntoPyDict};
@@ -23,14 +25,17 @@ use signal_hook::{consts::*, iterator::Signals};
 use socket2::Socket;
 use tokio::{net::TcpListener, runtime};
 use tokio_rustls::TlsAcceptor;
-use tower::{util::BoxCloneService, ServiceBuilder};
+use tower::{util::BoxCloneService, Layer, ServiceBuilder};
+use tower_http::{cors::CorsLayer, timeout::TimeoutLayer};
 
 use crate::{
     context::{layer::AddPyContextLayer, PyContext},
     tls::{listener::Listener as TlsListener, PyTlsConfig},
+    tower::PyTowerLayersConfig,
     util::{error::rich_py_err, func_metadata},
-    PySocket,
+    PyMiddlewareLayer, PySocket,
 };
+use crate::{PyMiddlewareException, PyMiddlewareHandler};
 
 /// A Python handler function representation.
 ///
@@ -81,6 +86,11 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
 
     /// Mapping between operation names and their `PyHandler` representation.
     fn handlers(&mut self) -> &mut HashMap<String, PyHandler>;
+
+    fn middlewares(&self) -> &[PyMiddlewareHandler];
+
+    /// Configuration for additional [tower] layers.
+    fn tower_layers_config(&self) -> &PyTowerLayersConfig;
 
     /// Build the app's `Service` using given `event_loop`.
     fn build_service(&self, event_loop: &pyo3::PyAny) -> pyo3::PyResult<Service>;
@@ -447,14 +457,17 @@ event_loop.add_signal_handler(signal.SIGINT,
     }
 
     /// Lambda main entrypoint: start the handler on Lambda.
-    fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
+    fn run_lambda_handler<Proto>(&mut self, py: Python) -> PyResult<()>
+    where
+        PyMiddlewareException: IntoResponse<Proto>,
+    {
         use aws_smithy_http_server::routing::LambdaHandler;
 
         let event_loop = self.configure_python_event_loop(py)?;
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
 
-        let service = self.build_and_configure_service(py, event_loop)?;
+        let service = self.build_and_configure_service::<Proto>(py, event_loop)?;
 
         // Spawn a new background [std::thread] to run the application.
         // This is needed because `asyncio` doesn't work properly if it doesn't control the main thread.
@@ -483,18 +496,87 @@ event_loop.add_signal_handler(signal.SIGINT,
     }
 
     // Builds the `Service` and adds necessary layers to it.
-    fn build_and_configure_service(
+    fn build_and_configure_service<Proto>(
         &mut self,
         py: Python,
         event_loop: &pyo3::PyAny,
-    ) -> pyo3::PyResult<Service> {
+    ) -> pyo3::PyResult<Service>
+    where
+        PyMiddlewareException: IntoResponse<Proto>,
+    {
         let service = self.build_service(event_loop)?;
+        let service = self.setup_python_middlewares::<Proto>(service, event_loop);
+        let service = self.setup_tower_middlewares(service);
         let context = PyContext::new(self.context().clone().unwrap_or_else(|| py.None()))?;
         let service = ServiceBuilder::new()
             .boxed_clone()
             .layer(AddPyContextLayer::new(context))
             .service(service);
         Ok(service)
+    }
+
+    fn setup_tower_middlewares(&self, mut service: Service) -> Service {
+        // Build the `tower_http::timeout::TimeoutLayer`.
+        if let Some(config) = self.tower_layers_config().timeout.as_ref() {
+            service = BoxCloneService::new(TimeoutLayer::new(config.timeout).layer(service));
+        }
+        // Build the `aws_smithy_http_server::request::request_id::ServerRequestIdProviderLayer`.
+        if let Some(config) = self.tower_layers_config().request_id.as_ref() {
+            let layer = if let Some(header_key) = &config.header_key {
+                ServerRequestIdProviderLayer::new_with_response_header(header_key.into())
+                    .layer(service)
+            } else {
+                ServerRequestIdProviderLayer::new().layer(service)
+            };
+            service = BoxCloneService::new(layer);
+        }
+        // Build the `tower_http::cors::CorsLayer`.
+        if let Some(config) = self.tower_layers_config().cors.as_ref() {
+            let mut layer = CorsLayer::new().allow_credentials(config.allow_credentials);
+            if let Some(allow_headers) = &config.allow_headers {
+                layer = layer.allow_headers(allow_headers.clone());
+            } else {
+                // TODO: should we set allow_headers to any if the config None?
+                layer = layer.allow_headers(tower_http::cors::Any);
+            }
+            if let Some(allow_methods) = &config.allow_methods {
+                layer = layer.allow_methods(allow_methods.clone())
+            } else {
+                // TODO: should we set allow_methods to any if the config None?
+                layer = layer.allow_methods(tower_http::cors::Any);
+            }
+            if let Some(allow_origins) = config.allow_origins.clone() {
+                // TODO: should we set allow_origin to any if the config None?
+                layer = layer.allow_origin(tower_http::cors::AllowOrigin::predicate(
+                    move |origin: &HeaderValue, _request_parts: &Parts| {
+                        allow_origins
+                            .iter()
+                            .any(|suffix| origin.as_bytes().ends_with(suffix.as_bytes()))
+                    },
+                ));
+            } else {
+                layer = layer.allow_origin(tower_http::cors::Any);
+            }
+            service = BoxCloneService::new(layer.layer(service));
+        }
+        service
+    }
+
+    fn setup_python_middlewares<Proto>(&self, mut service: Service, event_loop: &PyAny) -> Service
+    where
+        PyMiddlewareException: IntoResponse<Proto>,
+    {
+        tracing::trace!("adding middlewares to rust python router");
+        let mut middlewares = self.middlewares().to_vec();
+        // Reverse the middlewares, so they run with same order as they defined
+        middlewares.reverse();
+        for handler in middlewares {
+            tracing::trace!(name = &handler.name, "adding python middleware");
+            let locals = pyo3_asyncio::TaskLocals::new(event_loop);
+            let layer = PyMiddlewareLayer::<Proto>::new(handler, locals);
+            service = BoxCloneService::new(layer.layer(service));
+        }
+        service
     }
 }
 
