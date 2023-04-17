@@ -41,7 +41,8 @@ if [ "$(uname)" == "Darwin" ]; then
 fi
 
 cargo build --manifest-path "$manifest"
-ln -sf "$CARGO_TARGET_DIR/debug/lib$package.$shared_object_extension" "$CARGO_TARGET_DIR/debug/$package.$shared_object_extension"
+# The link target have to end with .so to be sure it is importable by the stubgen.py script.
+ln -sf "$CARGO_TARGET_DIR/debug/lib$package.$shared_object_extension" "$CARGO_TARGET_DIR/debug/$package.so"
 PYTHONPATH=$CARGO_TARGET_DIR/debug:$PYTHONPATH python3 "$script_dir/stubgen.py" "$package" "$output"
 
 exit 0
