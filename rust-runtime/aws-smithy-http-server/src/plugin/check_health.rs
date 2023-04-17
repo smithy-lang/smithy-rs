@@ -110,11 +110,14 @@ where
     }
 }
 
+type CheckHealthFutureInner<S, HandlerFuture> =
+    Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>;
+
 pin_project! {
     /// Future for [`CheckHealthService`].
     pub struct CheckHealthFuture<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> {
         #[pin]
-        inner: Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>,
+        inner: CheckHealthFutureInner<S, HandlerFuture>
     }
 }
 
