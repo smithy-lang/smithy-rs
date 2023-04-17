@@ -255,26 +255,6 @@ class PythonApplicationGenerator(
         )
     }
 
-    private fun renderPyMiddlewares(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
-            #{tracing}::trace!("adding middlewares to rust python router");
-            let mut middlewares = self.middlewares.clone();
-            // Reverse the middlewares, so they run with same order as they defined
-            middlewares.reverse();
-            for handler in middlewares {
-                #{tracing}::trace!(name = &handler.name, "adding python middleware");
-                let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
-                service = #{tower}::util::BoxCloneService::new(layer.layer(service));
-            }
-            """,
-            "Protocol" to protocol.markerStruct(),
-            *codegenScope,
-        )
-    }
-
     private fun renderPyMethods(writer: RustWriter) {
         writer.rustBlockTemplate(
             """
