@@ -33,7 +33,7 @@ fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentT
         .map_err(MissingContentTypeReason::MimeParseError)
 }
 
-/// Checks that the content-type in request headers is valid
+/// Checks that the `content-type` header is valid.
 #[allow(deprecated, clippy::result_large_err)]
 pub fn content_type_header_classifier(
     headers: &HeaderMap,
@@ -43,13 +43,13 @@ pub fn content_type_header_classifier(
         return Ok(());
     }
     let found_mime = parse_content_type(headers)?;
-    // There is a content-type header
-    // If there is an implied content type, they must match
+    // There is a `content-type` header.
+    // If there is an implied content type, they must match.
     if let Some(expected_content_type) = expected_content_type {
         let expected_mime = expected_content_type
             .parse::<mime::Mime>()
             // `expected_content_type` comes from the codegen.
-            .expect("BUG: MIME parsing failed, expected_content_type is not valid. Please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+            .expect("BUG: MIME parsing failed, `expected_content_type` is not valid. Please file a bug report under https://github.com/awslabs/smithy-rs/issues");
         if expected_content_type != found_mime {
             return Err(MissingContentTypeReason::UnexpectedMimeType {
                 expected_mime: Some(expected_mime),
@@ -57,7 +57,7 @@ pub fn content_type_header_classifier(
             });
         }
     } else {
-        // Content-type header and no modeled input (mismatch)
+        // `content-type` header and no modeled input (mismatch).
         return Err(MissingContentTypeReason::UnexpectedMimeType {
             expected_mime: None,
             found_mime: Some(found_mime),
@@ -84,10 +84,10 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str)
                 .ok()
                 .into_iter()
                 /*
-                 * turn a header value of: "type0/subtype0, type1/subtype1, ..."
+                 * Turn a header value of: "type0/subtype0, type1/subtype1, ..."
                  * into: ["type0/subtype0", "type1/subtype1", ...]
                  * and remove the optional "; q=x" parameters
-                 * NOTE: the unwrap() is safe, because it takes the first element (if there's nothing to split, returns the string)
+                 * NOTE: the `unwrap`() is safe, because it takes the first element (if there's nothing to split, returns the string)
                  */
                 .flat_map(|s| s.split(',').map(|typ| typ.split(';').next().unwrap().trim()))
         })

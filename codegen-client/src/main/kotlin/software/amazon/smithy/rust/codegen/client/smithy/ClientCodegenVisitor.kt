@@ -307,7 +307,7 @@ class ClientCodegenVisitor(
                     this@operationWriter,
                     this@inputWriter,
                     operationShape,
-                    codegenDecorator.operationCustomizations(codegenContext, operationShape, listOf()),
+                    codegenDecorator,
                 )
 
                 // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)

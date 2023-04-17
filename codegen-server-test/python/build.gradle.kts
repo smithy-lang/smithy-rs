@@ -54,20 +54,70 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2476)
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+        ),
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2477)
         // CodegenTest(
-        //     "aws.protocoltests.json#JsonProtocol",
-        //     "json_rpc11",
+        //     "aws.protocoltests.restjson.validation#RestJsonValidation",
+        //     "rest_json_validation",
+        //     // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
+        //     // See https://github.com/awslabs/smithy-rs/issues/1401.
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2479)
-        // CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_without_public_constrained_types",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#UniqueItemsService",
+            "unique_items",
+            imports = listOf("$commonModels/unique-items.smithy"),
+        ),
+        CodegenTest(
+            "naming_obs_structs#NamingObstacleCourseStructs",
+            "naming_test_structs",
+            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+        ),
+        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
+        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
     )
 }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+
+tasks.register("stubs") {
+    description = "Generate Python stubs for all models"
+    dependsOn("assemble")
+
+    doLast {
+        allCodegenTests.forEach { test ->
+            val crateDir = "$buildDir/$workingDirUnderBuildDir/${test.module}/$pluginName"
+            val moduleName = test.module.replace("-", "_")
+            exec {
+                commandLine("bash", "$crateDir/stubgen.sh", moduleName, "$crateDir/Cargo.toml", "$crateDir/python/$moduleName")
+            }
+        }
+    }
+}
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")

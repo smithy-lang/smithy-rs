@@ -468,7 +468,8 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
-
+                fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
@@ -514,7 +515,7 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate") || filename.startsWith("tests/")) {
+            require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
                 "We can only write into files in the crate (got $namespace)"
             }
         }

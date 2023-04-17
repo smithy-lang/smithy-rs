@@ -22,31 +22,32 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
  */
 class ServiceGenerator(
     private val rustCrate: RustCrate,
-    private val clientCodegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val decorator: ClientCodegenDecorator,
 ) {
-    private val index = TopDownIndex.of(clientCodegenContext.model)
+    private val index = TopDownIndex.of(codegenContext.model)
 
     /**
      * Render Service-specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        val operations = index.getContainedOperations(clientCodegenContext.serviceShape).sortedBy { it.id }
+        val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
         ServiceErrorGenerator(
-            clientCodegenContext,
+            codegenContext,
             operations,
-            decorator.errorCustomizations(clientCodegenContext, emptyList()),
+            decorator.errorCustomizations(codegenContext, emptyList()),
         ).render(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Config) {
             ServiceConfigGenerator.withBaseBehavior(
-                clientCodegenContext,
-                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
+                codegenContext,
+                extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
             ).render(this)
 
-            if (clientCodegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-                ServiceRuntimePluginGenerator(clientCodegenContext).render(this)
+            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+                ServiceRuntimePluginGenerator(codegenContext)
+                    .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
             }
         }
 
