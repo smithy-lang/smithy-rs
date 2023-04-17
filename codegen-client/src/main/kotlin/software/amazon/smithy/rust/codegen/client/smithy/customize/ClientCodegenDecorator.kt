@@ -74,6 +74,7 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
      */
     fun operationRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
+        operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> = baseCustomizations
 }
@@ -135,10 +136,11 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
 
     override fun operationRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
+        operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
         combineCustomizations(baseCustomizations) { decorator, customizations ->
-            decorator.operationRuntimePluginCustomizations(codegenContext, customizations)
+            decorator.operationRuntimePluginCustomizations(codegenContext, operation, customizations)
         }
 
     companion object {

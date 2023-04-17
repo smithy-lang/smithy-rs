@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -22,7 +24,22 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
     data class AdditionalConfig(
         val configBagName: String,
         val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("AdditionalConfig")
+    ) : OperationRuntimePluginSection("AdditionalConfig") {
+        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+            writer.rustTemplate(
+                """
+                $configBagName.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
+                    .expect("interceptors set")
+                    .register_operation_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                """,
+                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
+                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
+                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
+                "interceptor" to interceptor,
+            )
+        }
+    }
 }
 
 typealias OperationRuntimePluginCustomization = NamedCustomization<OperationRuntimePluginSection>
