@@ -104,3 +104,9 @@ message = "`aws_smithy_types::date_time::Format` has been re-exported in service
 references = ["smithy-rs#2534"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix server code generation bug affecting constrained shapes bound with `@httpPayload`"
+references = ["smithy-rs#2583", "smithy-rs#2584"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"
