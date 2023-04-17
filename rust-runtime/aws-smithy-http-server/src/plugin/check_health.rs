@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::future::Ready;
+//! Middleware for handling health check requests.
+
 use std::marker::PhantomData;
 use std::task::{Context, Poll};
 
@@ -35,8 +36,6 @@ impl CheckHealthLayer<()> {
     }
 }
 
-pub type DefaultHandler = fn(Request<Body>) -> Ready<Response<BoxBody>>;
-
 impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
     type Service = CheckHealthService<H, S>;
 
@@ -56,7 +55,7 @@ pub struct CheckHealthService<H, S> {
 }
 
 pin_project! {
-    /// A future that converts `F` into a compatible `S::Future`.
+    /// A future that converts `F` into a compatible [`Service::Future`].
     pub struct MappedHandlerFuture<R, S, F> {
         #[pin]
         inner: F,
@@ -89,7 +88,7 @@ where
 
     type Error = S::Error;
 
-    type Future = Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>;
+    type Future = CheckHealthFuture<S, HandlerFuture>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // The check that the service is ready is done by `Oneshot` below.
@@ -100,16 +99,47 @@ where
         if req.uri() == self.layer.health_check_uri {
             let handler_future = (self.layer.ping_handler)(req);
 
-            Either::Left {
-                value: MappedHandlerFuture::new(handler_future),
-            }
+            CheckHealthFuture::handler_future(handler_future)
         } else {
             let clone = self.inner.clone();
             let service = std::mem::replace(&mut self.inner, clone);
+            let service_future = service.oneshot(req);
 
-            Either::Right {
-                value: service.oneshot(req),
-            }
+            CheckHealthFuture::service_future(service_future)
         }
+    }
+}
+
+pin_project! {
+    /// Future for [`CheckHealthService`].
+    pub struct CheckHealthFuture<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> {
+        #[pin]
+        inner: Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>,
+    }
+}
+
+impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> CheckHealthFuture<S, HandlerFuture> {
+    fn handler_future(handler_future: HandlerFuture) -> Self {
+        Self {
+            inner: Either::Left {
+                value: MappedHandlerFuture::new(handler_future),
+            },
+        }
+    }
+
+    fn service_future(service_future: Oneshot<S, Request<Body>>) -> Self {
+        Self {
+            inner: Either::Right { value: service_future },
+        }
+    }
+}
+
+impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> Future
+    for CheckHealthFuture<S, HandlerFuture>
+{
+    type Output = Result<S::Response, S::Error>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.project().inner.poll(cx)
     }
 }
