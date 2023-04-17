@@ -160,7 +160,7 @@ class JsonParserGenerator(
         }
         return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(input: &[u8]) -> Result<#{ReturnType}, #{Error}>",
+                "pub(crate) fn $fnName(input: &[u8]) -> Result<#{ReturnType}, #{Error}>",
                 *codegenScope,
                 "ReturnType" to returnSymbolToParse.symbol,
             ) {
