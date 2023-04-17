@@ -6,18 +6,18 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-credential-types = { path = "../../../rust-runtime/aws-credential-types", features = ["test-util"] }
-aws-http = { path = "../../../rust-runtime/aws-http" }
-aws-runtime = { path = "../../../rust-runtime/aws-runtime" }
-aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3", features = ["test-util"] }
-aws-sigv4 = { path = "../../../rust-runtime/aws-sigv4" }
-aws-types = { path = "../../../rust-runtime/aws-types" }
-aws-smithy-async = { path = "../../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
-aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
-aws-smithy-types = { path = "../../../../rust-runtime/aws-smithy-types" }
-aws-smithy-http = { path = "../../../../rust-runtime/aws-smithy-http" }
-aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
-aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api" }
+aws-credential-types = { path = "../../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-http = { path = "../../../sdk/build/aws-sdk/sdk/aws-http" }
+aws-runtime = { path = "../../../sdk/build/aws-sdk/sdk/aws-runtime" }
+aws-sdk-s3 = { path = "../../../sdk/build/aws-sdk/sdk/s3/", features = ["test-util"] }
+aws-sigv4 = { path = "../../../sdk/build/aws-sdk/sdk/aws-sigv4" }
+aws-types = { path = "../../../sdk/build/aws-sdk/sdk/aws-types" }
+aws-smithy-async = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-client = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-types = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-smithy-http = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api" }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }

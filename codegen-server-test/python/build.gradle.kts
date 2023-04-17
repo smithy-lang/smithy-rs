@@ -66,7 +66,7 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2551)
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2477)
         // CodegenTest(
         //     "aws.protocoltests.restjson.validation#RestJsonValidation",
         //     "rest_json_validation",
@@ -103,6 +103,21 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+
+tasks.register("stubs") {
+    description = "Generate Python stubs for all models"
+    dependsOn("assemble")
+
+    doLast {
+        allCodegenTests.forEach { test ->
+            val crateDir = "$buildDir/$workingDirUnderBuildDir/${test.module}/$pluginName"
+            val moduleName = test.module.replace("-", "_")
+            exec {
+                commandLine("bash", "$crateDir/stubgen.sh", moduleName, "$crateDir/Cargo.toml", "$crateDir/python/$moduleName")
+            }
+        }
+    }
+}
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
