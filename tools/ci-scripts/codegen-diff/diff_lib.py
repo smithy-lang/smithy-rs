@@ -51,7 +51,6 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
     get_cmd_output("rm -rf aws/sdk/build")
     get_cmd_output(f"./gradlew --rerun-tasks {clean_tasks}")
     get_cmd_output(f"./gradlew --rerun-tasks {assemble_tasks}")
-    get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
 
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
@@ -62,6 +61,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
+                get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
                 get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
                 get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 

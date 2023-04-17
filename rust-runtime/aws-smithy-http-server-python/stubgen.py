@@ -188,13 +188,13 @@ class DocstringParser:
         if not doc:
             return ""
 
-        def predicate(l: str) -> bool:
+        def predicate(line: str) -> bool:
             for k in DocstringParserDirectives.keys():
-                if l.startswith(f":{k} ") and l.endswith(":"):
+                if line.startswith(f":{k} ") and line.endswith(":"):
                     return False
             return True
 
-        return "\n".join([l for l in doc.splitlines() if predicate(l)]).strip()
+        return "\n".join([line for line in doc.splitlines() if predicate(line)]).strip()
 
 
 def indent(code: str, level: int = 4) -> str:
@@ -210,6 +210,10 @@ def is_fn_like(obj: Any) -> bool:
         or inspect.iscoroutine(obj)
         or inspect.iscoroutinefunction(obj)
     )
+
+
+def is_scalar(obj: Any) -> bool:
+    return isinstance(obj, (str, float, int, bool))
 
 
 def join(args: List[str], delim: str = "\n") -> str:
@@ -253,7 +257,7 @@ def make_function(
     sig: Optional[inspect.Signature] = None
     try:
         sig = inspect.signature(obj)
-    except:
+    except Exception:
         pass
 
     def has_default(param: str, ty: str) -> bool:
@@ -382,6 +386,8 @@ def walk_module(writer: Writer, mod: Any):
             writer.define(make_class(writer, name, member))
         elif is_fn_like(member):
             writer.define(make_function(writer, name, member))
+        elif is_scalar(member):
+            writer.define(f"{name}: {type(member).__name__} = ...")
         else:
             print(f"Unknown type: {member}")
 

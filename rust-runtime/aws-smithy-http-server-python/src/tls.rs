@@ -156,7 +156,6 @@ mod tests {
     #[test]
     fn creating_tls_config_in_python() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
-        println!("{}", env!("CARGO_MANIFEST_DIR"));
 
         let config = Python::with_gil(|py| {
             let globals = [

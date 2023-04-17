@@ -188,7 +188,6 @@ mod tests {
             // We have a certificate with invalid date, so request should fail
             let config = client_config_with_cert(&invalid_cert);
             let response = make_req(config, &addr).await;
-            println!("{}", response.as_ref().unwrap_err().to_string());
             assert!(response
                 .unwrap_err()
                 .to_string()
