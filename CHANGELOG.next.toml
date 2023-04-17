@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Implement std::error::Error#source() properly for the service meta Error enum"
+references = ["aws-sdk-rust#784"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "abusch"
+
+[[smithy-rs]]
+message = "Implement std::error::Error#source() properly for the service meta Error enum"
+references = ["aws-sdk-rust#784"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "abusch"
+
+[[aws-sdk-rust]]
 message = "The outputs for event stream operations (for example, S3's SelectObjectContent) now implement the `Sync` auto-trait."
 references = ["smithy-rs#2496"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
