@@ -4,7 +4,7 @@ This folder contains an example service called Pokémon Service used to showcase
 the service framework Python bindings capabilities and to run benchmarks.
 
 The Python implementation of the service can be found inside
-[pokemon_service.py](/rust-runtime/aws-smithy-http-python-server/examples/pokemon_service.py).
+[pokemon_service.py](./pokemon_service.py).
 
 * [Build](#build)
     * [Build dependencies](#build-dependencies)
