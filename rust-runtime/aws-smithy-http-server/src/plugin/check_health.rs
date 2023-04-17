@@ -5,7 +5,6 @@
 
 //! Middleware for handling health check requests.
 
-use std::marker::PhantomData;
 use std::task::{Context, Poll};
 
 use futures_util::Future;
@@ -15,6 +14,7 @@ use tower::{util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body::BoxBody;
 
+use super::either::EitherProj;
 use super::Either;
 
 /// A [`tower::Layer`] used to apply [`CheckHealthService`].
@@ -54,29 +54,6 @@ pub struct CheckHealthService<H, S> {
     layer: CheckHealthLayer<H>,
 }
 
-pin_project! {
-    /// A future that converts `F` into a compatible [`Service::Future`].
-    pub struct MappedHandlerFuture<R, S, F> {
-        #[pin]
-        inner: F,
-        pd: PhantomData<fn(R) -> S>,
-    }
-}
-
-impl<R, S, F> MappedHandlerFuture<R, S, F> {
-    fn new(inner: F) -> MappedHandlerFuture<R, S, F> {
-        Self { inner, pd: PhantomData }
-    }
-}
-
-impl<R, S: Service<R>, F: Future<Output = S::Response>> Future for MappedHandlerFuture<R, S, F> {
-    type Output = Result<S::Response, S::Error>;
-
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx).map(Ok)
-    }
-}
-
 impl<H, HandlerFuture, S> Service<Request<Body>> for CheckHealthService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
@@ -110,8 +87,7 @@ where
     }
 }
 
-type CheckHealthFutureInner<S, HandlerFuture> =
-    Either<MappedHandlerFuture<Request<Body>, S, HandlerFuture>, Oneshot<S, Request<Body>>>;
+type CheckHealthFutureInner<S, HandlerFuture> = Either<HandlerFuture, Oneshot<S, Request<Body>>>;
 
 pin_project! {
     /// Future for [`CheckHealthService`].
@@ -124,9 +100,7 @@ pin_project! {
 impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> CheckHealthFuture<S, HandlerFuture> {
     fn handler_future(handler_future: HandlerFuture) -> Self {
         Self {
-            inner: Either::Left {
-                value: MappedHandlerFuture::new(handler_future),
-            },
+            inner: Either::Left { value: handler_future },
         }
     }
 
@@ -143,6 +117,11 @@ impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> Fut
     type Output = Result<S::Response, S::Error>;
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx)
+        let either_proj = self.project().inner.project();
+
+        match either_proj {
+            EitherProj::Left { value } => value.poll(cx).map(Ok),
+            EitherProj::Right { value } => value.poll(cx),
+        }
     }
 }
