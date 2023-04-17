@@ -134,7 +134,7 @@ class RustWriterTest {
     }
 
     @Test
-    fun `attributes with derive helpers`() {
+    fun `attributes with derive helpers must come after derives`() {
         val attr = Attribute("foo", isDeriveHelper = true)
         val metadata = RustMetadata(
             derives = setOf(RuntimeType.Debug),
