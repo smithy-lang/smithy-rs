@@ -132,7 +132,9 @@ where
     };
 
     let http_response = http::Response::from_parts(parts, Bytes::from(body));
-    trace!(http_response = ?http_response, "read HTTP response body");
+    if !handler.sensitive() {
+        trace!(http_response = ?http_response, "read HTTP response body");
+    }
     debug_span!("parse_loaded").in_scope(move || {
         let parsed = handler.parse_loaded(&http_response);
         sdk_result(
