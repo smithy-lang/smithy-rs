@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRustModule
@@ -71,13 +72,13 @@ class PythonServerModuleGenerator(
                 when (shape) {
                     is UnionShape -> rustTemplate(
                         """
-                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name}>()?;
+                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name.toPascalCase()}>()?;
                         """,
                         *codegenScope,
                     )
                     else -> rustTemplate(
                         """
-                        $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
+                        $moduleType.add_class::<crate::$moduleType::${shape.id.name.toPascalCase()}>()?;
                         """,
                         *codegenScope,
                     )

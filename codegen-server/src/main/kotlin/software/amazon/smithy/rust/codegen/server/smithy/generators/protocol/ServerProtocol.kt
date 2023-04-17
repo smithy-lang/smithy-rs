@@ -106,6 +106,7 @@ fun jsonParserGenerator(
     codegenContext: ServerCodegenContext,
     httpBindingResolver: HttpBindingResolver,
     jsonName: (MemberShape) -> String,
+    additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ): JsonParserGenerator =
     JsonParserGenerator(
         codegenContext,
@@ -114,12 +115,13 @@ fun jsonParserGenerator(
         returnSymbolToParseFn(codegenContext),
         listOf(
             ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
-        ),
+        ) + additionalParserCustomizations,
     )
 
 class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
@@ -130,7 +132,7 @@ class ServerAwsJsonProtocol(
         }
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName)
+        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName, additionalParserCustomizations)
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
@@ -183,13 +185,14 @@ private fun restRouterType(runtimeConfig: RuntimeConfig) =
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::restJsonFieldName)
+        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::restJsonFieldName, additionalParserCustomizations)
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
@@ -254,5 +257,6 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
                 rust(".map(|x| x.into())")
             }
         }
+        else -> emptySection
     }
 }

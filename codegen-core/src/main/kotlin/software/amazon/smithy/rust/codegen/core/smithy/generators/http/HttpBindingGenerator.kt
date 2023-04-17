@@ -88,6 +88,9 @@ sealed class HttpBindingSection(name: String) : Section(name) {
 
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
+
+    data class AfterDeserializingIntoADateTimeOfHttpHeaders(val memberShape: MemberShape) :
+        HttpBindingSection("AfterDeserializingIntoADateTimeOfHttpHeaders")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -353,7 +356,7 @@ class HttpBindingGenerator(
             rustType to targetShape
         }
         val parsedValue = safeName()
-        if (coreType == dateTime) {
+        if (coreShape.isTimestampShape()) {
             val timestampFormat =
                 index.determineTimestampFormat(
                     memberShape,
@@ -362,10 +365,14 @@ class HttpBindingGenerator(
                 )
             val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
             rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?",
                 headerUtil,
                 timestampFormatType,
             )
+            for (customization in customizations) {
+                customization.section(HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders(memberShape))(this)
+            }
+            rust(";")
         } else if (coreShape.isPrimitive()) {
             rust(
                 "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",
