@@ -4,6 +4,22 @@
  */
 
 //! Middleware for handling health check requests.
+//!
+//! # Example
+//!
+//! ```rust
+//! # use aws_smithy_http_server::{body, plugin::{PluginPipeline, check_health::CheckHealthLayer}};
+//! # use hyper::{Body, Response, StatusCode};
+//! let plugins = PluginPipeline::new()
+//!     // Handle all `/ping` health check requests by returning a `200 OK`.
+//!     .http_layer(CheckHealthLayer::new("/ping", |_req| async {
+//!         Response::builder()
+//!             .status(StatusCode::OK)
+//!             .body(body::boxed(Body::empty()))
+//!             .expect("Couldn't construct response")
+//!     }));
+//!
+//! ```
 
 use std::task::{Context, Poll};
 
