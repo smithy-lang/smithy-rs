@@ -4,6 +4,7 @@
 /codegen-server-test/                               @awslabs/smithy-rs-server
 /codegen-server/                                    @awslabs/smithy-rs-server
 /rust-runtime/aws-smithy-http-server/               @awslabs/smithy-rs-server
+/examples/                                          @awslabs/smithy-rs-server
 
 # Python Server
 /codegen-server-test/python/                        @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
