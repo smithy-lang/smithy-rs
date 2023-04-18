@@ -106,7 +106,7 @@ meta = { "breaking" = false, "tada" = true, "bug" = true }
 author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+message = "`aws_smithy_types::date_time::Format` has been re-exported in SDK crates."
 references = ["smithy-rs#2534"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
