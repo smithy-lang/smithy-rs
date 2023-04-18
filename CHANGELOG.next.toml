@@ -94,7 +94,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "parker-timmerman"
 
 [[aws-sdk-rust]]
-message = "Fix but where an incorrect endpoint was produced for WriteGetObjectResponse"
+message = "Fix bug where an incorrect endpoint was produced for `WriteGetObjectResponse`"
 references = ["smithy-rs#781", "aws-sdk-rust#781"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
