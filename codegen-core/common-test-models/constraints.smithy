@@ -454,6 +454,7 @@ structure ConA {
 
     conBList: ConBList,
     lengthList: LengthList,
+    sensitiveLengthList: SensitiveLengthList,
 
     conBSet: ConBSet,
 
@@ -865,6 +866,14 @@ list ConBListInner {
 list LengthList {
     member: String
 }
+
+@length(max: 69)
+list SensitiveLengthList {
+    member: SensitiveStructure
+}
+
+@sensitive
+structure SensitiveStructure { }
 
 set ConBSet {
     member: ConBSetInner
