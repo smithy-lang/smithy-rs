@@ -5,11 +5,9 @@ The [Smithy specification establishes several auth related modeling traits] that
 operation and service shapes. To briefly summarize:
 
 - The auth schemes that are supported by a service are declared on the service shape
-- Optionally, individual operation shapes can specify which auth schemes they should use
+- Operation shapes MAY specify the subset of service-defined auth schemes they support. If none are specified, then all service-defined auth schemes are supported.
 
-Additionally, an implementation of a Smithy code generator doesn't necessarily need to support all
-the auth schemes of a model if there is at least one supported auth scheme that is compatible with all
-the operations in that model.
+A smithy code generator MUST support at least one auth scheme for every modeled operation, but it need not support ALL modeled auth schemes.
 
 This design document establishes how smithy-rs implements this specification.
 
@@ -75,7 +73,7 @@ with the `AuthOptionResolverParams`. The returned auth options are in priority o
       4. Sign the request with the identity, and break out of the loop from step #4.
 
 In general, it is assumed that if an HTTP auth scheme exists for an auth option, then an identity resolver
-also exists for that auth option. Otherwise, the auth option was configured incorrectly by codegen.
+also exists for that auth option. Otherwise, the auth option was configured incorrectly during codegen.
 
 How this looks in Rust
 ----------------------
