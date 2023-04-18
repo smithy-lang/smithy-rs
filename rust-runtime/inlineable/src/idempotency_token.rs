@@ -94,3 +94,11 @@ impl Clone for IdempotencyTokenProvider {
         }
     }
 }
+
+impl std::fmt::Debug for IdempotencyTokenProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdempotencyTokenProvider")
+            .field("inner", &"** redacted **")
+            .finish()
+    }
+}

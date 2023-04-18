@@ -40,14 +40,17 @@ class ServiceGenerator(
         ).render(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Config) {
-            ServiceConfigGenerator.withBaseBehavior(
+            val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
                 codegenContext,
                 extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
-            ).render(this)
+            )
+            serviceConfigGenerator.render(this)
 
             if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
                 ServiceRuntimePluginGenerator(codegenContext)
                     .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
+
+                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this, codegenContext)
             }
         }
 
