@@ -25,26 +25,26 @@ do something, sometimes referred to as AuthZ.
 Overview of Smithy Client Auth
 ------------------------------
 
-First, let's establish the aspects of auth that can be configured from the model at codegen time.
-
-- **Data**
-  - **AuthOptionResolverParams:** parameters required to resolve auth options. These parameters are allowed
-to come from both the client config and the operation input structs.
-  - **HttpAuthSchemes:** a list of auth schemes that can be used to sign HTTP requests. This information
-comes directly from the service model.
-  - **AuthSchemeProperties:** configuration from the auth scheme for the signer.
-  - **IdentityResolvers:** list of available identity resolvers.
-- **Implementations**
-  - **IdentityResolver:** resolves an identity for use in authentication.
-    There can be multiple identity resolvers that need to be selected from.
-  - **HttpRequestSigner:** a signing implementation that signs a HTTP request.
-  - **AuthOptionResolver:** resolves a list of auth options for a given operation and its inputs.
-
 There are two stages to identity and auth:
 1. Configuration
 2. Execution
 
 ### The configuration stage
+
+First, let's establish the aspects of auth that can be configured from the model at codegen time.
+
+- **Data**
+    - **AuthOptionResolverParams:** parameters required to resolve auth options. These parameters are allowed
+      to come from both the client config and the operation input structs.
+    - **HttpAuthSchemes:** a list of auth schemes that can be used to sign HTTP requests. This information
+      comes directly from the service model.
+    - **AuthSchemeProperties:** configuration from the auth scheme for the signer.
+    - **IdentityResolvers:** list of available identity resolvers.
+- **Implementations**
+    - **IdentityResolver:** resolves an identity for use in authentication.
+      There can be multiple identity resolvers that need to be selected from.
+    - **HttpRequestSigner:** a signing implementation that signs a HTTP request.
+    - **AuthOptionResolver:** resolves a list of auth options for a given operation and its inputs.
 
 As it is undocumented (at time of writing), this document assumes that the code generator
 creates one service-level runtime plugin, and an operation-level runtime plugin per operation, hence
