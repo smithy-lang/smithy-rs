@@ -59,6 +59,7 @@ async fn sra_test() {
     let _ = dbg!(
         client
             .list_objects_v2()
+            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
             .send_v2()
