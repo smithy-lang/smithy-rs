@@ -20,9 +20,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -226,7 +228,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Default)]")
+        writer.raw("#[derive(Clone, Debug, Default)]")
         writer.rustBlock("pub struct Builder") {
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
@@ -268,6 +270,26 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
         customizations.forEach {
             it.section(ServiceConfig.Extras)(writer)
+        }
+    }
+
+    fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        writer.rustBlockTemplate(
+            "impl #{RuntimePlugin} for Builder",
+            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+        ) {
+            rustTemplate(
+                """
+                fn configure(&self, _cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
+                    // TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`.
+
+                    Ok(())
+                }
+                """,
+                "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+            )
         }
     }
 }
