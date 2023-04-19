@@ -42,6 +42,7 @@ pub struct IdempotencyTokenProvider {
     inner: Inner,
 }
 
+#[derive(Debug)]
 enum Inner {
     Static(&'static str),
     Random(Mutex<fastrand::Rng>),
