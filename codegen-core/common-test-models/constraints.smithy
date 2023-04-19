@@ -12,7 +12,9 @@ service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
+        ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
+
         // `httpQueryParams` and `httpPrefixHeaders` are structurually
         // exclusive, so we need one operation per target shape type
         // combination.
@@ -56,6 +58,13 @@ operation ConstrainedShapesOperation {
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/constrained-http-payload-bound-shape-operation", method: "POST")
+operation ConstrainedHttpPayloadBoundShapeOperation {
+    input: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
+    output: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -309,6 +318,12 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
+}
+
+structure ConstrainedHttpPayloadBoundShapeOperationInputOutput {
+    @required
+    @httpPayload
+    httpPayloadBoundConstrainedShape: ConA
 }
 
 structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
