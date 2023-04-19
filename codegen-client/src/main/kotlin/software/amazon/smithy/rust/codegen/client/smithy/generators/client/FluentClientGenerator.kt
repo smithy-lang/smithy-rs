@@ -273,7 +273,6 @@ class FluentClientGenerator(
             val outputType = symbolProvider.toSymbol(operation.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operation)
 
-            // Have to use fully-qualified result here or else it could conflict with an op named Result
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>) -> Self {",
