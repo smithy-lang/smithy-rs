@@ -113,6 +113,11 @@ pub enum RequestRejection {
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
 
+    /// Used when the request contained an `Accept` header with a MIME type, and the server cannot
+    /// return a response body adhering to that MIME type.
+    #[error("request contains invalid value for `Accept` header")]
+    NotAcceptable,
+
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
     /// the modeled input it should represent.
     #[error("error deserializing request HTTP body as JSON: {0}")]
