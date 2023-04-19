@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{fs::File, io::BufReader, process::Command, time::Duration};
+use std::{fs::File, io::BufReader, process::Command, str::FromStr, time::Duration};
 
 use assert_cmd::prelude::*;
 use aws_smithy_client::{
     erase::{DynConnector, DynMiddleware},
     hyper_ext::Adapter,
 };
+use hyper::http::uri::{Authority, Scheme};
 use tokio::time::sleep;
 
 use pokemon_service_client::{Builder, Client, Config};
@@ -48,10 +49,11 @@ pub fn client_http2_only() -> Client<DynConnector, DynMiddleware<DynConnector>> 
         .enable_http2()
         .build();
 
-    let base_url = format!("https://{DEFAULT_DOMAIN}:{DEFAULT_PORT}");
+    let authority = Authority::from_str(&format!("{DEFAULT_DOMAIN}:{DEFAULT_PORT}"))
+        .expect("could not parse authority");
     let raw_client = Builder::new()
         .connector(DynConnector::new(Adapter::builder().build(connector)))
-        .middleware_fn(rewrite_base_url(base_url))
+        .middleware_fn(rewrite_base_url(Scheme::HTTPS, authority))
         .build_dyn();
     let config = Config::builder().build();
     Client::with_config(raw_client, config)
