@@ -168,7 +168,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
             rustTemplate(
                 """
                 /// The default endpoint resolver
-                ##[derive(Default)]
+                ##[derive(Debug, Default)]
                 pub struct DefaultResolver {
                     #{custom_fields:W}
                 }
