@@ -191,7 +191,7 @@ mod tests {
             assert!(response
                 .unwrap_err()
                 .to_string()
-                .contains("invalid peer certificate: InvalidCertValidity"));
+                .contains("invalid peer certificate: Expired"));
         }
 
         // Make a new acceptor with a valid cert and replace
