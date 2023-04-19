@@ -46,7 +46,7 @@ pub fn rewrite_base_url(
         let mut uri_parts = http_req.uri().clone().into_parts();
         uri_parts.authority = Some(authority.clone());
         uri_parts.scheme = Some(scheme.clone());
-        *http_req.uri_mut() = Uri::from_parts(uri_parts).expect("valid uri");
+        *http_req.uri_mut() = Uri::from_parts(uri_parts).expect("failed to create uri from parts");
         req
     }
 }

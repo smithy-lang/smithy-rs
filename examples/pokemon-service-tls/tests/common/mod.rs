@@ -49,8 +49,8 @@ pub fn client_http2_only() -> Client<DynConnector, DynMiddleware<DynConnector>> 
         .enable_http2()
         .build();
 
-    let authority =
-        Authority::from_str(&format!("{DEFAULT_DOMAIN}:{DEFAULT_PORT}")).expect("valid authority");
+    let authority = Authority::from_str(&format!("{DEFAULT_DOMAIN}:{DEFAULT_PORT}"))
+        .expect("could not parse authority");
     let raw_client = Builder::new()
         .connector(DynConnector::new(Adapter::builder().build(connector)))
         .middleware_fn(rewrite_base_url(Scheme::HTTPS, authority))

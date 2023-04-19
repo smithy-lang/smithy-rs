@@ -26,8 +26,8 @@ pub async fn run_server() -> ChildDrop {
 }
 
 pub fn client() -> Client<DynConnector, DynMiddleware<DynConnector>> {
-    let authority =
-        Authority::from_str(&format!("{DEFAULT_ADDRESS}:{DEFAULT_PORT}")).expect("valid authority");
+    let authority = Authority::from_str(&format!("{DEFAULT_ADDRESS}:{DEFAULT_PORT}"))
+        .expect("could not parse authority");
     let raw_client = Builder::new()
         .rustls_connector(Default::default())
         .middleware_fn(rewrite_base_url(Scheme::HTTP, authority))
