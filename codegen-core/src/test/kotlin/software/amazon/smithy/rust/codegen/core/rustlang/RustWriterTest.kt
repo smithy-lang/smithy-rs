@@ -134,6 +134,19 @@ class RustWriterTest {
     }
 
     @Test
+    fun `attributes with derive helpers must come after derives`() {
+        val attr = Attribute("foo", isDeriveHelper = true)
+        val metadata = RustMetadata(
+            derives = setOf(RuntimeType.Debug),
+            additionalAttributes = listOf(Attribute.AllowDeprecated, attr),
+            visibility = Visibility.PUBLIC,
+        )
+        val sut = RustWriter.root()
+        metadata.render(sut)
+        sut.toString().shouldContain("#[allow(deprecated)]\n#[derive(std::fmt::Debug)]\n#[foo]")
+    }
+
+    @Test
     fun `deprecated attribute without any field`() {
         val sut = RustWriter.root()
         Attribute.Deprecated.render(sut)
