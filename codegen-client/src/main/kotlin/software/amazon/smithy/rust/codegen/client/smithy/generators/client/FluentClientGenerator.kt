@@ -388,7 +388,7 @@ class FluentClientGenerator(
                     ///
                     /// `config_override` is applied to the operation configuration level.
                     /// The fields in the builder that are `Some` override those applied to the service
-                    /// configuration level or the AWS configuration level.
+                    /// configuration level.
                     pub fn config_override(
                         mut self,
                         config_override: impl Into<crate::config::Builder>,
