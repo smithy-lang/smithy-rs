@@ -28,6 +28,9 @@ pub enum RequestRejection {
     #[error("error converting non-streaming body to bytes: {0}")]
     BufferHttpBodyBytes(crate::Error),
 
+    #[error("request contains invalid value for `Accept` header")]
+    NotAcceptable,
+
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
 

@@ -137,6 +137,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "Cow" to RuntimeType.Cow,
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
+        "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
         "HttpBody" to RuntimeType.HttpBody,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "Hyper" to RuntimeType.Hyper,
@@ -182,7 +183,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
-                        return Err(#{RuntimeError}::NotAcceptable)
+                        return Err(#{RequestRejection}::NotAcceptable);
                     }
                     """,
                     *codegenScope,
@@ -201,9 +202,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             ?.let { "Some(${it.dq()})" } ?: "None"
                         rustTemplate(
                             """
-                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType).is_err() {
-                                return Err(#{RuntimeError}::UnsupportedMediaType)
-                            }
+                            #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
                             """,
                             *codegenScope,
                         )
@@ -213,9 +212,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
             #{PinProjectLite}::pin_project! {
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
@@ -252,13 +251,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             .await
                             .map_err(Into::into)
                     };
+                    use #{FuturesUtil}::future::TryFutureExt;
+                    let fut = fut.map_err(|e: #{RequestRejection}| {
+                        #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                        #{RuntimeError}::from(e)
+                    });
                     $inputFuture {
                         inner: Box::pin(fut)
                     }
                 }
             }
-
-            """.trimIndent(),
+            """,
             *codegenScope,
             "I" to inputSymbol,
             "Marker" to protocol.markerStruct(),
