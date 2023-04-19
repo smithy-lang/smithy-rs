@@ -1,6 +1,6 @@
 # Smithy Rust Server SDK examples
 
-This folder contains an example services showcasing Smithy Rust Server SDK, 
+This folder contains some example services showcasing Smithy Rust Server SDK, 
 also known as the Rust service framework, capabilities and to run benchmarks.
 
 Three server implementations are available:
