@@ -167,10 +167,16 @@ pub struct TypeErasedBox {
 
 The orchestrator itself doesn't know about any concrete types. Instead, it passes boxed data between the various components of the request/response lifecycle. Individual components access data in two ways:
 
-- **From the `ConfigBag`:** `let retry_strategy: Box<dyn RetryStrategy> = cfg.get()?;`
-- **From the `InterceptorContext`:** `let put_object_input: PutObjectInput = ctx.input().downcast()?;`
+1. **From the `ConfigBag`:**
+  - *(with an accessor)* `let retry_strategy = cfg.retry_strategy();`
+  - *(with the get method)* `let retry_strategy = cfg.get::<Box<dyn RetryStrategy>>()`
+2. **From the `InterceptorContext`:**
+  - *(owned)* `let put_object_input: PutObjectInput = ctx.take_input().unwrap().downcast().unwrap()?;`
+  - *(by reference)* `let put_object_input = ctx.input().unwrap().downcast_ref::<PutObjectInput>().unwrap();`
 
-Users can only call `ConfigBag::get` or [downcast] a `TypeErasedBox` to types they have access to, which allows maintainers to ensure encapsulation.
+Users can only call `ConfigBag::get` or [downcast] a `TypeErasedBox` to types they have access to, which allows maintainers to ensure encapsulation. For example: a plugin writer may declare a private type, place it in the config bag, and then later retrieve it. Because the type is private, only code in the same crate/module can ever insert or retrieve it. Therefore, there's less worry that someone will depend on a hidden, internal detail and no worry they'll accidentally overwrite a type in the bag.
+
+> *NOTE: When inserting values into a config bag, using one of the `set_<component>` methods is always preferred, as this prevents mistakes related to inserting similar, but incorrect types.*
 
 ### The actual code
 
