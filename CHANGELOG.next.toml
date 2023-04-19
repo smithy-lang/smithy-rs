@@ -122,3 +122,9 @@ message = "Fix generation of constrained shapes reaching `@sensitive` shapes"
 references = ["smithy-rs#2582", "smithy-rs#2585"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Fix server code generation bug affecting constrained shapes bound with `@httpPayload`"
+references = ["smithy-rs#2583", "smithy-rs#2584"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"
