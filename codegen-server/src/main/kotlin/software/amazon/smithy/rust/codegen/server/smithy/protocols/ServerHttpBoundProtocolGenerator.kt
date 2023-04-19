@@ -253,7 +253,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     };
                     use #{FuturesUtil}::future::TryFutureExt;
                     let fut = fut.map_err(|e: #{RequestRejection}| {
-                        #{Tracing}::error!(error = %e, "failed to deserialize request");
+                        #{Tracing}::debug!(error = %e, "failed to deserialize request");
                         #{RuntimeError}::from(e)
                     });
                     $inputFuture {
