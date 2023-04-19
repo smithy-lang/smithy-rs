@@ -20,8 +20,7 @@ a suitable choice for implementing your web service.
 
 ## Pre-requisites
 
-You will need install Java 11 (or higher) and [Gradle](https://gradle.org/) 7 
-(or higher) to run the smithy-rs code generator. You will need a working 
+You will need install Java 11 to run the smithy-rs code generator and an
 installation of Rust, including `cargo`, to compile the generated code.
 
 (Optional) The [Cargo Lambda](https://cargo-lambda.info/) sub-command for 
