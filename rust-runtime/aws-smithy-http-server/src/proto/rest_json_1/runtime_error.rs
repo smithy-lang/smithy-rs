@@ -115,6 +115,7 @@ impl From<RequestRejection> for RuntimeError {
         match err {
             RequestRejection::MissingContentType(_reason) => Self::UnsupportedMediaType,
             RequestRejection::ConstraintViolation(reason) => Self::Validation(reason),
+            RequestRejection::NotAcceptable => Self::NotAcceptable,
             _ => Self::Serialization(crate::Error::new(err)),
         }
     }
