@@ -112,7 +112,7 @@ class EndpointParamsInterceptorGenerator(
             )
             withBlockTemplate(
                 "let endpoint_prefix = ",
-                """.map_err(|err| #{ContextAttachedError}::new("endpoint prefix could not be built", err.into()))?;""",
+                """.map_err(|err| #{ContextAttachedError}::new("endpoint prefix could not be built", err))?;""",
                 *codegenScope,
             ) {
                 endpointTraitBindings.render(
@@ -135,7 +135,7 @@ class EndpointParamsInterceptorGenerator(
                 .clone();
             let params = params_builder
                 .build()
-                .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err.into()))?;
+                .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
             cfg.put(
                 #{EndpointResolverParams}::new(params)
             );

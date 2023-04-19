@@ -178,10 +178,10 @@ pub struct ContextAttachedError {
 }
 
 impl ContextAttachedError {
-    pub fn new(context: impl Into<String>, source: BoxError) -> Self {
+    pub fn new(context: impl Into<String>, source: impl Into<BoxError>) -> Self {
         Self {
             context: context.into(),
-            source: Some(source),
+            source: Some(source.into()),
         }
     }
 }
