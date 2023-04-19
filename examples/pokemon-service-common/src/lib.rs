@@ -17,6 +17,10 @@ use std::{
 use async_stream::stream;
 use aws_smithy_http::operation::Request;
 use aws_smithy_http_server::Extension;
+use http::{
+    uri::{Authority, Scheme},
+    Uri,
+};
 use pokemon_service_server_sdk::{
     error, input, model, model::CapturingPayload, output, types::Blob,
 };
@@ -33,11 +37,16 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
     "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
 
 /// Rewrites the base URL of a request
-pub fn rewrite_base_url(base_url: String) -> impl Fn(Request) -> Request + Clone {
+pub fn rewrite_base_url(
+    scheme: Scheme,
+    authority: Authority,
+) -> impl Fn(Request) -> Request + Clone {
     move |mut req| {
         let http_req = req.http_mut();
-        let uri = format!("{base_url}{}", http_req.uri().path());
-        *http_req.uri_mut() = uri.parse().unwrap();
+        let mut uri_parts = http_req.uri().clone().into_parts();
+        uri_parts.authority = Some(authority.clone());
+        uri_parts.scheme = Some(scheme.clone());
+        *http_req.uri_mut() = Uri::from_parts(uri_parts).expect("failed to create uri from parts");
         req
     }
 }
