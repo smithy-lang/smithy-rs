@@ -37,6 +37,7 @@ pub(crate) fn uuid_v4(input: u128) -> String {
 /// for testing, two options are available:
 /// 1. Utilize the From<&'static str>` implementation to hard code an idempotency token
 /// 2. Seed the token provider with [`IdempotencyTokenProvider::with_seed`](IdempotencyTokenProvider::with_seed)
+#[derive(Debug)]
 pub struct IdempotencyTokenProvider {
     inner: Inner,
 }
@@ -92,13 +93,5 @@ impl Clone for IdempotencyTokenProvider {
             Inner::Static(token) => IdempotencyTokenProvider::fixed(token),
             Inner::Random(_) => IdempotencyTokenProvider::random(),
         }
-    }
-}
-
-impl std::fmt::Debug for IdempotencyTokenProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("IdempotencyTokenProvider")
-            .field("inner", &"** redacted **")
-            .finish()
     }
 }
