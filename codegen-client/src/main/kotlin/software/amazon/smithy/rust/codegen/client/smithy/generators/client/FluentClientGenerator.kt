@@ -400,7 +400,7 @@ class FluentClientGenerator(
                     /// Sets the `config_override` for the builder.
                     ///
                     /// `config_override` is applied to the operation configuration level.
-                    /// For the fields in the builder that are not `None, they override those applied to the service
+                    /// The fields in the builder that are `Some` override those applied to the service
                     /// configuration level.
                     pub fn set_config_override(
                         &mut self,
