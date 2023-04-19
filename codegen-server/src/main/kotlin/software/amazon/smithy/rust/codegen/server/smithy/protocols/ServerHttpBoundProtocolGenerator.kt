@@ -251,12 +251,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             .await
                             .map_err(Into::into)
                     };
-                    use #{FuturesUtil}::future::FutureExt;
-                    let fut = fut.map(|res| {
-                        res.map_err(|e: #{RequestRejection}| {
-                            #{Tracing}::error!(error = %e, "failed to deserialize request");
-                            #{RuntimeError}::from(e)
-                        })
+                    use #{FuturesUtil}::future::TryFutureExt;
+                    let fut = fut.map_err(|e: #{RequestRejection}| {
+                        #{Tracing}::error!(error = %e, "failed to deserialize request");
+                        #{RuntimeError}::from(e)
                     });
                     $inputFuture {
                         inner: Box::pin(fut)
