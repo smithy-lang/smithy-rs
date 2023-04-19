@@ -401,7 +401,7 @@ class FluentClientGenerator(
                     ///
                     /// `config_override` is applied to the operation configuration level.
                     /// For the fields in the builder that are not `None, they override those applied to the service
-                    /// configuration level or the AWS configuration level.
+                    /// configuration level.
                     pub fn set_config_override(
                         &mut self,
                         config_override: Option<crate::config::Builder>,
