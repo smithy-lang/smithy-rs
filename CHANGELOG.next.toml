@@ -130,6 +130,22 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
 
 [[aws-sdk-rust]]
+message = """Reduce several instances of credential exposure in the SDK logs:
+- IMDS now suppresses the body of the response from logs
+- `aws-sigv4` marks the `x-amz-session-token` header as sensitive
+- STS & SSO credentials have been manually marked as sensitive which suppresses logging of response bodies for relevant operations
+"""
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Add a sensitive method to `ParseHttpResponse`. When this returns true, logging of the HTTP response body will be suppressed."
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+
+[[aws-sdk-rust]]
 message = "Update MSRV to Rust 1.67.1"
 references = ["smithy-rs#2611"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
