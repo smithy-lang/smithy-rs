@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 
+// Part of RFC30
 public object RenderSerdeAttribute {
     public fun forStructureShape(writer: RustWriter, shape: StructureShape, model: Model) {
         if (shape.members().none { it.isEventStream(model) }) {

@@ -28,5 +28,5 @@ pub mod timeout;
 pub use blob::Blob;
 pub use date_time::DateTime;
 pub use document::Document;
-pub use error::ErrorMetadata;
+pub use error::ErrorMetadata as Error;
 pub use number::Number;
