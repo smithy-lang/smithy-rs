@@ -51,7 +51,7 @@ macro_rules! assert_elapsed {
 }
 
 use crate::rt::sleep::AsyncSleep;
-use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenConfigBag};
+use aws_smithy_runtime_api::config_bag::{Accessor, ConfigBag, FrozenConfigBag, Setter};
 use aws_smithy_runtime_api::storable;
 use std::sync::Arc;
 
@@ -59,32 +59,27 @@ use std::sync::Arc;
 struct AsyncSleepStorable(Arc<dyn AsyncSleep>);
 storable!(AsyncSleepStorable, mode: replace);
 
-/// Async Runtime configuration
-pub struct AsyncConfiguration {
-    inner: FrozenConfigBag,
-}
-
-pub struct AsyncConfigurationBuilder<'a> {
-    bag: &'a mut ConfigBag,
-}
-
-impl<'a> AsyncConfigurationBuilder<'a> {
-    pub fn from_bag(bag: &'a mut ConfigBag) -> Self {
-        Self { bag }
-    }
-
-    pub fn set_sleep_impl(&mut self, sleep: Option<Arc<dyn AsyncSleep>>) {
-        self.bag.store_or_unset(sleep.map(AsyncSleepStorable));
+pub trait AsyncConfig: Accessor {
+    /// Configured sleep implementation
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.config()
+            .load::<AsyncSleepStorable>()
+            .map(|s| s.0.clone())
     }
 }
 
-impl AsyncConfiguration {
-    pub fn from_bag(bag: &FrozenConfigBag) -> Self {
-        Self { inner: bag.clone() }
+pub trait AsyncConfigBuilder: Setter {
+    fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self
+    where
+        Self: Sized,
+    {
+        self.set_sleep_impl(Some(sleep_impl));
+        self
     }
 
-    /// Retrieve an Async Sleep from the bag
-    pub fn async_sleep(&self) -> Option<Arc<dyn AsyncSleep>> {
-        self.inner.load::<AsyncSleepStorable>().map(|s| s.0.clone())
+    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+        self.config()
+            .store_or_unset(sleep_impl.map(AsyncSleepStorable));
+        self
     }
 }

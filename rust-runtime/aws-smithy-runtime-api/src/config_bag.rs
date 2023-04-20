@@ -39,6 +39,14 @@ impl Debug for ConfigBag {
     }
 }
 
+pub trait Accessor {
+    fn config(&self) -> &FrozenConfigBag;
+}
+
+pub trait Setter {
+    fn config(&mut self) -> &mut ConfigBag;
+}
+
 /// Layered Configuration Structure
 ///
 /// [`FrozenConfigBag`] is the "locked" form of the bag.

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_async::{AsyncConfiguration, AsyncConfigurationBuilder};
+use aws_smithy_async::{AsyncConfig, AsyncConfigBuilder};
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigBuilder};
@@ -45,7 +45,7 @@ these services, this setting has no effect"
     }
 }
 
-use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenConfigBag, Storable};
+use aws_smithy_runtime_api::config_bag::{Accessor, ConfigBag, FrozenConfigBag, Setter, Storable};
 use aws_smithy_runtime_api::storable;
 
 /// AWS Shared Configuration
@@ -302,8 +302,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
-        AsyncConfigurationBuilder::from_bag(&mut self.bag).set_sleep_impl(sleep_impl);
-        self
+        AsyncConfigBuilder::set_sleep_impl(self, sleep_impl)
     }
 
     /// Set the [`CredentialsCache`] for the builder
@@ -553,12 +552,6 @@ impl SdkConfig {
         Some(self.inner.load::<TimeoutConfigStorable>().0.build())
     }
 
-    #[doc(hidden)]
-    /// Configured sleep implementation
-    pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
-        aws_smithy_async::AsyncConfiguration::from_bag(&self.inner).async_sleep()
-    }
-
     /// Configured credentials cache
     pub fn credentials_cache(&self) -> Option<&CredentialsCache> {
         todo!()
@@ -598,6 +591,21 @@ impl SdkConfig {
         Builder::default()
     }
 }
+
+impl Accessor for SdkConfig {
+    fn config(&self) -> &FrozenConfigBag {
+        &self.inner
+    }
+}
+impl AsyncConfig for SdkConfig {}
+
+impl Setter for Builder {
+    fn config(&mut self) -> &mut ConfigBag {
+        &mut self.bag
+    }
+}
+
+impl AsyncConfigBuilder for Builder {}
 
 #[cfg(test)]
 mod test {
