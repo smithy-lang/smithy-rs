@@ -171,3 +171,9 @@ message = "Update MSRV to Rust 1.67.1"
 references = ["smithy-rs#2611"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "The Debug implementation for PropertyBag now prints a list of the types it contains. This significantly improves debugability."
+author = "rcoh"
+references = ["smithy-rs#2612"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
