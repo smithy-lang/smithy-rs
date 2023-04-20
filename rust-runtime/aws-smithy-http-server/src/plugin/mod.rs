@@ -118,10 +118,10 @@
 //! ```
 //!
 
-pub mod check_health;
 mod closure;
 mod either;
 mod filter;
+pub mod health_check;
 mod identity;
 mod layer;
 mod pipeline;
