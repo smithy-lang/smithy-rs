@@ -7,7 +7,7 @@
 //! [`crate::proto::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
 //! [`RequestRejection::XmlDeserialize`].
 
-use crate::rejection::MissingContentTypeReason;
+use crate::rejection::{MissingContentTypeReason, NotAcceptableReason};
 use std::num::TryFromIntError;
 use thiserror::Error;
 
@@ -28,8 +28,8 @@ pub enum RequestRejection {
     #[error("error converting non-streaming body to bytes: {0}")]
     BufferHttpBodyBytes(crate::Error),
 
-    #[error("request contains invalid value for `Accept` header")]
-    NotAcceptable,
+    #[error("request is not acceptable: {0}")]
+    NotAcceptable(#[from] NotAcceptableReason),
 
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),

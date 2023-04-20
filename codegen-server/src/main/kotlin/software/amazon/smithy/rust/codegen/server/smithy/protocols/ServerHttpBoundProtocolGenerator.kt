@@ -182,9 +182,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
-                        return Err(#{RequestRejection}::NotAcceptable);
-                    }
+                    #{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()})?;
                     """,
                     *codegenScope,
                 )

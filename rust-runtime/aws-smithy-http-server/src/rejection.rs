@@ -4,6 +4,7 @@
  */
 
 use crate::response::IntoResponse;
+use http::HeaderValue;
 use thiserror::Error;
 
 // This is used across different protocol-specific `rejection` modules.
@@ -22,6 +23,13 @@ pub enum MissingContentTypeReason {
         expected_mime: Option<mime::Mime>,
         found_mime: Option<mime::Mime>,
     },
+}
+
+// This is used across different protocol-specific `rejection` modules.
+#[derive(Debug, Error)]
+pub enum NotAcceptableReason {
+    #[error("cannot satisfy any of `Accept` header values: {0:?}")]
+    CannotSatisfyAcceptHeaders(Vec<HeaderValue>),
 }
 
 pub mod any_rejections {
