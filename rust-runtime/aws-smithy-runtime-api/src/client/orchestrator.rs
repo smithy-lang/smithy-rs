@@ -9,20 +9,22 @@ use crate::client::interceptors::context::{Input, OutputOrError};
 use crate::client::interceptors::InterceptorContext;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
+use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::EndpointPrefix;
 use aws_smithy_http::property_bag::PropertyBag;
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::future::Future;
+use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
 
 pub type HttpRequest = http::Request<SdkBody>;
 pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
+pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
+pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
 pub trait TraceProbe: Send + Sync + Debug {
     fn dispatch_events(&self);
@@ -42,11 +44,11 @@ pub trait ResponseDeserializer: Send + Sync + Debug {
 }
 
 pub trait Connection: Send + Sync + Debug {
-    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse>;
+    fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
 impl Connection for Box<dyn Connection> {
-    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse> {
+    fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
         (**self).call(request)
     }
 }

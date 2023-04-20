@@ -5,8 +5,12 @@
 
 //! Identity types for HTTP auth
 
+use crate::client::identity::{Identity, IdentityResolver};
+use crate::client::orchestrator::Future;
+use aws_smithy_http::property_bag::PropertyBag;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 /// Identity type required to sign requests using Smithy's token-based HTTP auth schemes
@@ -19,6 +23,7 @@ pub struct Token(Arc<TokenInner>);
 #[derive(Eq, PartialEq)]
 struct TokenInner {
     token: Zeroizing<String>,
+    expiration: Option<SystemTime>,
 }
 
 impl Debug for Token {
@@ -31,9 +36,10 @@ impl Debug for Token {
 
 impl Token {
     /// Constructs a new identity token for HTTP auth.
-    pub fn new(token: impl Into<String>) -> Self {
+    pub fn new(token: impl Into<String>, expiration: Option<SystemTime>) -> Self {
         Self(Arc::new(TokenInner {
             token: Zeroizing::new(token.into()),
+            expiration,
         }))
     }
 
@@ -53,7 +59,14 @@ impl From<String> for Token {
     fn from(api_key: String) -> Self {
         Self(Arc::new(TokenInner {
             token: Zeroizing::new(api_key),
+            expiration: None,
         }))
+    }
+}
+
+impl IdentityResolver for Token {
+    fn resolve_identity(&self, _identity_properties: &PropertyBag) -> Future<Identity> {
+        Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }
 
@@ -67,7 +80,8 @@ pub struct Login(Arc<LoginInner>);
 #[derive(Eq, PartialEq)]
 struct LoginInner {
     user: String,
-    pass: Zeroizing<String>,
+    password: Zeroizing<String>,
+    expiration: Option<SystemTime>,
 }
 
 impl Debug for Login {
@@ -81,10 +95,15 @@ impl Debug for Login {
 
 impl Login {
     /// Constructs a new identity login for HTTP auth.
-    pub fn new(user: impl Into<String>, password: impl Into<String>) -> Self {
+    pub fn new(
+        user: impl Into<String>,
+        password: impl Into<String>,
+        expiration: Option<SystemTime>,
+    ) -> Self {
         Self(Arc::new(LoginInner {
             user: user.into(),
-            pass: Zeroizing::new(password.into()),
+            password: Zeroizing::new(password.into()),
+            expiration,
         }))
     }
 
@@ -95,6 +114,17 @@ impl Login {
 
     /// Returns the login password.
     pub fn password(&self) -> &str {
-        &self.0.pass
+        &self.0.password
+    }
+
+    /// Returns the expiration time of this login (if any)
+    pub fn expiration(&self) -> Option<SystemTime> {
+        self.0.expiration
+    }
+}
+
+impl IdentityResolver for Login {
+    fn resolve_identity(&self, _identity_properties: &PropertyBag) -> Future<Identity> {
+        Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }

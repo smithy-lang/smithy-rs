@@ -14,6 +14,7 @@ default = []
 http-auth = ["dep:zeroize"]
 
 [dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 http = "0.2.3"

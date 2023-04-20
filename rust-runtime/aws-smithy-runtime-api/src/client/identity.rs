@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::orchestrator::BoxFallibleFut;
+use crate::client::orchestrator::Future;
 use aws_smithy_http::property_bag::PropertyBag;
 use std::any::Any;
 use std::fmt::Debug;
@@ -14,7 +14,7 @@ use std::time::SystemTime;
 pub mod http;
 
 pub trait IdentityResolver: Send + Sync + Debug {
-    fn resolve_identity(&self, identity_properties: &PropertyBag) -> BoxFallibleFut<Identity>;
+    fn resolve_identity(&self, identity_properties: &PropertyBag) -> Future<Identity>;
 }
 
 #[derive(Debug)]
@@ -77,8 +77,8 @@ impl AnonymousIdentityResolver {
 }
 
 impl IdentityResolver for AnonymousIdentityResolver {
-    fn resolve_identity(&self, _: &PropertyBag) -> BoxFallibleFut<Identity> {
-        Box::pin(async { Ok(Identity::new(AnonymousIdentity::new(), None)) })
+    fn resolve_identity(&self, _: &PropertyBag) -> Future<Identity> {
+        Future::ready(Ok(Identity::new(AnonymousIdentity::new(), None)))
     }
 }
 

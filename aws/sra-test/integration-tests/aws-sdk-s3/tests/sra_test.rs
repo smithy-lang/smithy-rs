@@ -84,7 +84,7 @@ async fn sra_manual_test() {
     impl RuntimePlugin for ManualServiceRuntimePlugin {
         fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
             let identity_resolvers =
-                aws_smithy_runtime_api::client::orchestrator::IdentityResolvers::builder()
+                aws_smithy_runtime_api::client::identity::IdentityResolvers::builder()
                     .identity_resolver(
                         aws_runtime::auth::sigv4::SCHEME_ID,
                         aws_runtime::identity::credentials::CredentialsIdentityResolver::new(

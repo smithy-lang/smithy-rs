@@ -89,7 +89,7 @@ class ServiceRuntimePluginGenerator(
             "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
-            "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
+            "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
