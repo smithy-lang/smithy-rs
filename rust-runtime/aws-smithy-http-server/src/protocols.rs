@@ -34,7 +34,7 @@ fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentT
 }
 
 /// Checks that the `content-type` header is valid.
-#[allow(deprecated, clippy::result_large_err)]
+#[allow(clippy::result_large_err)]
 pub fn content_type_header_classifier(
     headers: &HeaderMap,
     expected_content_type: Option<&'static str>,
@@ -66,7 +66,6 @@ pub fn content_type_header_classifier(
     Ok(())
 }
 
-#[allow(deprecated)]
 pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str) -> bool {
     if !headers.contains_key(http::header::ACCEPT) {
         return true;
@@ -105,7 +104,6 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str)
         })
 }
 
-#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use super::*;
