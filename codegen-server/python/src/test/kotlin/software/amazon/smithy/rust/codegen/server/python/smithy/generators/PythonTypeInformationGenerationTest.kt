@@ -28,7 +28,6 @@ internal class PythonTypeInformationGenerationTest {
         val foo = model.lookup<StructureShape>("test#Foo")
 
         val codegenContext = serverTestCodegenContext(model)
-        val symbolProvider = codegenContext.symbolProvider
         val writer = RustWriter.forModule("model")
         PythonServerStructureGenerator(model, codegenContext, writer, foo).render()
 
