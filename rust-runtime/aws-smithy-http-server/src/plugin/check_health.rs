@@ -35,12 +35,12 @@ use super::Either;
 
 /// A [`tower::Layer`] used to apply [`CheckHealthService`].
 #[derive(Clone, Debug)]
-pub struct CheckHealthLayer<PingHandler> {
-    health_check_uri: &'static str,
+pub struct CheckHealthLayer<'a, PingHandler> {
+    health_check_uri: &'a str,
     ping_handler: PingHandler,
 }
 
-impl CheckHealthLayer<()> {
+impl<'a> CheckHealthLayer<'a, ()> {
     pub fn new<HandlerFuture: Future<Output = Response<BoxBody>>, H: Fn(Request<Body>) -> HandlerFuture>(
         health_check_uri: &'static str,
         ping_handler: H,
@@ -52,8 +52,8 @@ impl CheckHealthLayer<()> {
     }
 }
 
-impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
-    type Service = CheckHealthService<H, S>;
+impl<'a, S, H: Clone> Layer<S> for CheckHealthLayer<'a, H> {
+    type Service = CheckHealthService<'a, H, S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         CheckHealthService {
@@ -65,12 +65,12 @@ impl<S, H: Clone> Layer<S> for CheckHealthLayer<H> {
 
 /// A middleware [`Service`] responsible for handling health check requests.
 #[derive(Clone, Debug)]
-pub struct CheckHealthService<H, S> {
+pub struct CheckHealthService<'a, H, S> {
     inner: S,
-    layer: CheckHealthLayer<H>,
+    layer: CheckHealthLayer<'a, H>,
 }
 
-impl<H, HandlerFuture, S> Service<Request<Body>> for CheckHealthService<H, S>
+impl<'a, H, HandlerFuture, S> Service<Request<Body>> for CheckHealthService<'a, H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
     S::Future: std::marker::Send + 'static,
