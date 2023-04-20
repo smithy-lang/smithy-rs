@@ -24,7 +24,7 @@ async-stream = "0.3"
 rand = "0.8.5"
 serial_test = "1.0.0"
 
-# We use hyper client on tests
+# We use hyper client in tests
 hyper = {version = "0.14.25", features = ["server", "client"] }
 
 # This dependency is only required for testing the `pokemon-service-tls` program.
