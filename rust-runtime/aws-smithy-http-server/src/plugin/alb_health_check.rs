@@ -22,12 +22,14 @@
 //!
 //! ```
 
+use std::convert::Infallible;
 use std::task::{Context, Poll};
 
-use futures_util::Future;
+use futures_util::{Future, FutureExt};
+use http::StatusCode;
 use hyper::{Body, Request, Response};
 use pin_project_lite::pin_project;
-use tower::{util::Oneshot, Layer, Service, ServiceExt};
+use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body::BoxBody;
 
@@ -43,7 +45,24 @@ pub struct AlbHealthCheckLayer<'a, HealthCheckHandler> {
 
 impl<'a> AlbHealthCheckLayer<'a, ()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
-    pub fn new<HandlerFuture: Future<Output = Response<BoxBody>>, H: Fn(Request<Body>) -> HandlerFuture>(
+    pub fn new_fn<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
+        health_check_uri: &'static str,
+        health_check_handler: H,
+    ) -> AlbHealthCheckLayer<
+        impl Service<
+                Request<Body>,
+                Response = StatusCode,
+                Error = Infallible,
+                Future = impl Future<Output = Result<StatusCode, Infallible>>,
+            > + Clone,
+    > {
+        let service = service_fn(move |req| health_check_handler(req).map(Ok));
+
+        AlbHealthCheckLayer::new(health_check_uri, service)
+    }
+
+    /// Handle health check requests at `health_check_uri` with the specified handler.
+    pub fn new<H: Service<Request<Body>, Response = StatusCode>>(
         health_check_uri: &'static str,
         health_check_handler: H,
     ) -> AlbHealthCheckLayer<H> {
@@ -72,18 +91,17 @@ pub struct AlbHealthCheckService<'a, H, S> {
     layer: AlbHealthCheckLayer<'a, H>,
 }
 
-impl<'a, H, HandlerFuture, S> Service<Request<Body>> for AlbHealthCheckService<'a, H, S>
+impl<'a, H, S> Service<Request<Body>> for AlbHealthCheckService<'a, H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
     S::Future: std::marker::Send + 'static,
-    HandlerFuture: Future<Output = Response<BoxBody>>,
-    H: Fn(Request<Body>) -> HandlerFuture,
+    H: Service<Request<Body>, Response = StatusCode, Error = Infallible> + Clone,
 {
     type Response = S::Response;
 
     type Error = S::Error;
 
-    type Future = AlbHealthCheckFuture<S, HandlerFuture>;
+    type Future = AlbHealthCheckFuture<H, S>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // The check that the service is ready is done by `Oneshot` below.
@@ -92,7 +110,9 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         if req.uri() == self.layer.health_check_uri {
-            let handler_future = (self.layer.health_check_handler)(req);
+            let clone = self.layer.health_check_handler.clone();
+            let service = std::mem::replace(&mut self.layer.health_check_handler, clone);
+            let handler_future = service.oneshot(req);
 
             AlbHealthCheckFuture::handler_future(handler_future)
         } else {
@@ -105,18 +125,18 @@ where
     }
 }
 
-type HealthCheckFutureInner<S, HandlerFuture> = Either<HandlerFuture, Oneshot<S, Request<Body>>>;
+type HealthCheckFutureInner<H, S> = Either<Oneshot<H, Request<Body>>, Oneshot<S, Request<Body>>>;
 
 pin_project! {
     /// Future for [`AlbHealthCheckService`].
-    pub struct AlbHealthCheckFuture<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> {
+    pub struct AlbHealthCheckFuture<H: Service<Request<Body>, Response = StatusCode>, S: Service<Request<Body>>> {
         #[pin]
-        inner: HealthCheckFutureInner<S, HandlerFuture>
+        inner: HealthCheckFutureInner<H, S>
     }
 }
 
-impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> AlbHealthCheckFuture<S, HandlerFuture> {
-    fn handler_future(handler_future: HandlerFuture) -> Self {
+impl<H: Service<Request<Body>, Response = StatusCode>, S: Service<Request<Body>>> AlbHealthCheckFuture<H, S> {
+    fn handler_future(handler_future: Oneshot<H, Request<Body>>) -> Self {
         Self {
             inner: Either::Left { value: handler_future },
         }
@@ -129,8 +149,10 @@ impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> Alb
     }
 }
 
-impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> Future
-    for AlbHealthCheckFuture<S, HandlerFuture>
+impl<
+        H: Service<Request<Body>, Response = StatusCode, Error = Infallible>,
+        S: Service<Request<Body>, Response = Response<BoxBody>>,
+    > Future for AlbHealthCheckFuture<H, S>
 {
     type Output = Result<S::Response, S::Error>;
 
@@ -138,7 +160,18 @@ impl<S: Service<Request<Body>>, HandlerFuture: Future<Output = S::Response>> Fut
         let either_proj = self.project().inner.project();
 
         match either_proj {
-            EitherProj::Left { value } => value.poll(cx).map(Ok),
+            EitherProj::Left { value } => {
+                let polled: Poll<Self::Output> = value.poll(cx).map(|res| {
+                    res.map(|status_code| {
+                        Response::builder()
+                            .status(status_code)
+                            .body(crate::body::empty())
+                            .unwrap()
+                    })
+                    .map_err(|never| match never {})
+                });
+                polled
+            }
             EitherProj::Right { value } => value.poll(cx),
         }
     }

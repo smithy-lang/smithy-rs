@@ -8,7 +8,6 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
-    body,
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
     plugin::{alb_health_check::AlbHealthCheckLayer, PluginPipeline},
@@ -17,7 +16,7 @@ use aws_smithy_http_server::{
 };
 use clap::Parser;
 
-use hyper::{Body, Response, StatusCode};
+use hyper::StatusCode;
 use plugin::PrintExt;
 
 use pokemon_service::{
@@ -54,11 +53,8 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .http_layer(AlbHealthCheckLayer::new("/ping", |_req| async {
-            Response::builder()
-                .status(StatusCode::OK)
-                .body(body::boxed(Body::empty()))
-                .expect("Couldn't construct response")
+        .http_layer(AlbHealthCheckLayer::new_fn("/ping", |_req| async {
+            StatusCode::OK
         }));
 
     let app = PokemonService::builder_with_plugins(plugins)
