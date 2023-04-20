@@ -11,6 +11,15 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = """
+Implement layer for servers to handle [ALB health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html).
+Take a look at `aws_smithy_http_server::plugin::alb_health_check` to learn about it.
+"""
+references = ["smithy-rs#2540"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "jjant"
+
 [[aws-sdk-rust]]
 message = "Implement std::error::Error#source() properly for the service meta Error enum"
 references = ["aws-sdk-rust#784"]
@@ -20,7 +29,7 @@ author = "abusch"
 [[smithy-rs]]
 message = "Implement std::error::Error#source() properly for the service meta Error enum"
 references = ["aws-sdk-rust#784"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "abusch"
 
 [[aws-sdk-rust]]
@@ -32,7 +41,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "The outputs for event stream operations now implement the `Sync` auto-trait."
 references = ["smithy-rs#2496"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -44,7 +53,7 @@ author = "eduardomourar"
 [[smithy-rs]]
 message = "Clients now compile for the `wasm32-unknown-unknown` and `wasm32-wasi` targets when no default features are enabled. WebAssembly is not officially supported yet, but this is a great first step towards it!"
 references = ["smithy-rs#2254"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "eduardomourar"
 
 [[smithy-rs]]
@@ -56,7 +65,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts."
 references = ["smithy-rs#2495"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
