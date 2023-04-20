@@ -393,7 +393,7 @@ def walk_module(writer: Writer, mod: Any):
 
 
 def generate(module: str, outdir: str):
-    path = Path(outdir) / f"{module}.pyi"
+    path = Path(outdir) / "__init__.pyi"
     writer = Writer(
         path,
         module,
