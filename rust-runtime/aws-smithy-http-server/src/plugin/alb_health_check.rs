@@ -42,6 +42,7 @@ pub struct AlbHealthCheckLayer<'a, HealthCheckHandler> {
 }
 
 impl<'a> AlbHealthCheckLayer<'a, ()> {
+    /// Handle health check requests at `health_check_uri` with the specified handler.
     pub fn new<HandlerFuture: Future<Output = Response<BoxBody>>, H: Fn(Request<Body>) -> HandlerFuture>(
         health_check_uri: &'static str,
         health_check_handler: H,
