@@ -7,7 +7,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```no_run
 //! # use aws_smithy_http_server::{body, plugin::{PluginPipeline, check_health::CheckHealthLayer}};
 //! # use hyper::{Body, Response, StatusCode};
 //! let plugins = PluginPipeline::new()
