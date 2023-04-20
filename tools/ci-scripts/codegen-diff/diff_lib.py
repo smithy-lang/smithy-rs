@@ -2,9 +2,9 @@
 #  SPDX-License-Identifier: Apache-2.0
 
 import os
-import sys
-import subprocess
 import shlex
+import subprocess
+import sys
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
 BASE_BRANCH_NAME = "__tmp-localonly-base"
@@ -17,22 +17,40 @@ CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 target_codegen_client = 'codegen-client-test'
 target_codegen_server = 'codegen-server-test'
+target_codegen_server_python = 'codegen-server-test:python'
+target_codegen_server_typescript = 'codegen-server-test:typescript'
 target_aws_sdk = 'aws:sdk'
 
 
-def generate_and_commit_generated_code(revision_sha, targets=None):
-    targets = targets or [target_codegen_client, target_codegen_server, target_aws_sdk]
-    # Clean the build artifacts before continuing
-    get_cmd_output("rm -rf aws/sdk/build")
-    if target_codegen_server in targets:
-        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make distclean", shell=True)
-    get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
+def running_in_docker_build():
+    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
-    # Generate code
-    tasks = ' '.join([f'{t}:assemble' for t in targets])
-    get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
-    if target_codegen_server in targets:
-        get_cmd_output("cd rust-runtime/aws-smithy-http-server-python/examples && make build", shell=True, check=False)
+
+def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
+    if running_in_docker_build():
+        eprint(f"Fetching base revision {revision_sha} from GitHub...")
+        run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {revision_sha}")
+
+    # Generate code for HEAD
+    eprint(f"Creating temporary branch {branch_name} with generated code for {revision_sha}")
+    run(f"git checkout {revision_sha} -B {branch_name}")
+    generate_and_commit_generated_code(revision_sha, targets)
+
+
+def generate_and_commit_generated_code(revision_sha, targets=None):
+    targets = targets or [
+        target_codegen_client,
+        target_codegen_server,
+        target_aws_sdk,
+        target_codegen_server_python,
+        target_codegen_server_typescript
+    ]
+    # Clean the build artifacts before continuing
+    assemble_tasks = ' '.join([f'{t}:assemble' for t in targets])
+    clean_tasks = ' '.join([f'{t}:clean' for t in targets])
+    get_cmd_output("rm -rf aws/sdk/build")
+    get_cmd_output(f"./gradlew --rerun-tasks {clean_tasks}")
+    get_cmd_output(f"./gradlew --rerun-tasks {assemble_tasks}")
 
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
@@ -43,9 +61,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
-                get_cmd_output(
-                    f"mv rust-runtime/aws-smithy-http-server-python/examples/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
-                    check=False)
+                get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
+                get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -58,7 +76,15 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
 
     # Clean up the server-test folder
     get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-typescript/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
+        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
+        f"xargs rm -f", shell=True)
+    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
+        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
+        f"xargs rm -f", shell=True)
+    run(f"find {OUTPUT_PATH}/codegen-server-test-typescript | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
@@ -116,6 +142,10 @@ def make_diffs(base_commit_sha, head_commit_sha):
                                  head_commit_sha, "server-test-python", whitespace=True)
     server_nows_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/codegen-server-test-python", base_commit_sha,
                                    head_commit_sha, "server-test-python-ignore-whitespace", whitespace=False)
+    server_ws_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/codegen-server-test-typescript", base_commit_sha,
+                                     head_commit_sha, "server-test-typescript", whitespace=True)
+    server_nows_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/codegen-server-test-typescript", base_commit_sha,
+                                       head_commit_sha, "server-test-typescript-ignore-whitespace", whitespace=False)
 
     sdk_links = diff_link('AWS SDK', 'No codegen difference in the AWS SDK',
                           sdk_ws, 'ignoring whitespace', sdk_nows)
@@ -125,12 +155,15 @@ def make_diffs(base_commit_sha, head_commit_sha):
                              server_ws, 'ignoring whitespace', server_nows)
     server_links_python = diff_link('Server Test Python', 'No codegen difference in the Server Test Python',
                                     server_ws_python, 'ignoring whitespace', server_nows_python)
+    server_links_typescript = diff_link('Server Test Typescript', 'No codegen difference in the Server Test Typescript',
+                                        server_ws_typescript, 'ignoring whitespace', server_nows_typescript)
     # Save escaped newlines so that the GitHub Action script gets the whole message
     return "A new generated diff is ready to view.\\n" \
            f"- {sdk_links}\\n" \
            f"- {client_links}\\n" \
            f"- {server_links}\\n" \
-           f"- {server_links_python}\\n"
+           f"- {server_links_python}\\n" \
+           f"- {server_links_typescript}\\n"
 
 
 def write_to_file(path, text):
@@ -152,12 +185,14 @@ def run(command, shell=False, check=True):
 
 
 # Returns (status, stdout, stderr) from a shell command
-def get_cmd_output(command, cwd=None, check=True, **kwargs):
+def get_cmd_output(command, cwd=None, check=True, quiet=False, **kwargs):
     if isinstance(command, str):
-        eprint(f"running {command}")
+        if not quiet:
+            eprint(f"running {command}")
         command = shlex.split(command)
     else:
-        eprint(f"running {' '.join(command)}")
+        if not quiet:
+            eprint(f"running {' '.join(command)}")
 
     result = subprocess.run(
         command,

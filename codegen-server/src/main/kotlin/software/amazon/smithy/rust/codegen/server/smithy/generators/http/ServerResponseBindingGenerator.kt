@@ -71,6 +71,7 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
 
         is HttpBindingSection.BeforeRenderingHeaderValue,
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
         -> emptySection
     }
 }
@@ -100,6 +101,7 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
 
         is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
         -> emptySection
     }
 }

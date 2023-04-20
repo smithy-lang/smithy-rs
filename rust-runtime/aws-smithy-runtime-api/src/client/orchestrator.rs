@@ -9,8 +9,10 @@ use crate::client::interceptors::InterceptorContext;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::endpoint::EndpointPrefix;
 use aws_smithy_http::property_bag::PropertyBag;
 use std::any::Any;
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -22,7 +24,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
 
 pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self) -> BoxFallibleFut<()>;
+    fn dispatch_events(&self);
 }
 
 pub trait RequestSerializer: Send + Sync + Debug {
@@ -39,7 +41,13 @@ pub trait ResponseDeserializer: Send + Sync + Debug {
 }
 
 pub trait Connection: Send + Sync + Debug {
-    fn call(&self, request: &mut HttpRequest, cfg: &ConfigBag) -> BoxFallibleFut<HttpResponse>;
+    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse>;
+}
+
+impl Connection for Box<dyn Connection> {
+    fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse> {
+        (**self).call(request)
+    }
 }
 
 pub trait RetryStrategy: Send + Sync + Debug {
@@ -66,10 +74,19 @@ impl AuthOptionResolverParams {
 }
 
 pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options(
-        &self,
+    fn resolve_auth_options<'a>(
+        &'a self,
         params: &AuthOptionResolverParams,
-    ) -> Result<Vec<HttpAuthOption>, BoxError>;
+    ) -> Result<Cow<'a, [HttpAuthOption]>, BoxError>;
+}
+
+impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
+    fn resolve_auth_options<'a>(
+        &'a self,
+        params: &AuthOptionResolverParams,
+    ) -> Result<Cow<'a, [HttpAuthOption]>, BoxError> {
+        (**self).resolve_auth_options(params)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -96,7 +113,7 @@ impl HttpAuthOption {
 }
 
 pub trait IdentityResolver: Send + Sync + Debug {
-    fn resolve_identity(&self, cfg: &ConfigBag) -> Result<Identity, BoxError>;
+    fn resolve_identity(&self, identity_properties: &PropertyBag) -> BoxFallibleFut<Identity>;
 }
 
 #[derive(Debug)]
@@ -143,7 +160,10 @@ impl HttpAuthSchemes {
 pub trait HttpAuthScheme: Send + Sync + Debug {
     fn scheme_id(&self) -> &'static str;
 
-    fn identity_resolver(&self, identity_resolvers: &IdentityResolvers) -> &dyn IdentityResolver;
+    fn identity_resolver<'a>(
+        &self,
+        identity_resolvers: &'a IdentityResolvers,
+    ) -> Option<&'a dyn IdentityResolver>;
 
     fn request_signer(&self) -> &dyn HttpRequestSigner;
 }
@@ -154,14 +174,32 @@ pub trait HttpRequestSigner: Send + Sync + Debug {
     /// If the provided identity is incompatible with this signer, an error must be returned.
     fn sign_request(
         &self,
-        request: &HttpRequest,
+        request: &mut HttpRequest,
         identity: &Identity,
-        cfg: &ConfigBag,
-    ) -> Result<HttpRequest, BoxError>;
+        signing_properties: &PropertyBag,
+    ) -> Result<(), BoxError>;
+}
+
+#[derive(Debug)]
+pub struct EndpointResolverParams(TypeErasedBox);
+
+impl EndpointResolverParams {
+    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+        Self(TypedBox::new(params).erase())
+    }
+
+    pub fn get<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
 }
 
 pub trait EndpointResolver: Send + Sync + Debug {
-    fn resolve_and_apply_endpoint(&self, request: &mut HttpRequest) -> Result<(), BoxError>;
+    fn resolve_and_apply_endpoint(
+        &self,
+        params: &EndpointResolverParams,
+        endpoint_prefix: Option<&EndpointPrefix>,
+        request: &mut HttpRequest,
+    ) -> Result<(), BoxError>;
 }
 
 pub trait ConfigBagAccessors {
@@ -173,6 +211,9 @@ pub trait ConfigBagAccessors {
 
     fn auth_option_resolver(&self) -> &dyn AuthOptionResolver;
     fn set_auth_option_resolver(&mut self, auth_option_resolver: impl AuthOptionResolver + 'static);
+
+    fn endpoint_resolver_params(&self) -> &EndpointResolverParams;
+    fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams);
 
     fn endpoint_resolver(&self) -> &dyn EndpointResolver;
     fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static);
@@ -245,6 +286,15 @@ impl ConfigBagAccessors for ConfigBag {
 
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
         self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
+    }
+
+    fn endpoint_resolver_params(&self) -> &EndpointResolverParams {
+        self.get::<EndpointResolverParams>()
+            .expect("endpoint resolver params must be set")
+    }
+
+    fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams) {
+        self.put::<EndpointResolverParams>(endpoint_resolver_params);
     }
 
     fn endpoint_resolver(&self) -> &dyn EndpointResolver {

@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -87,6 +88,9 @@ sealed class HttpBindingSection(name: String) : Section(name) {
 
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
+
+    data class AfterDeserializingIntoADateTimeOfHttpHeaders(val memberShape: MemberShape) :
+        HttpBindingSection("AfterDeserializingIntoADateTimeOfHttpHeaders")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -222,7 +226,7 @@ class HttpBindingGenerator(
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
                     if (target is UnionShape) {
-                        bindEventStreamOutput(operationShape, target)
+                        bindEventStreamOutput(operationShape, outputT, target)
                     } else {
                         deserializeStreamingBody(binding)
                     }
@@ -231,7 +235,7 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorSymbol) {
+                rustBlock("pub(crate) fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorSymbol) {
                     deserializePayloadBody(
                         binding,
                         errorSymbol,
@@ -243,22 +247,22 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, outputT: Symbol, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             codegenContext,
             operationShape,
             targetShape,
         ).render()
+        val receiver = outputT.rustType().qualifiedName()
         rustTemplate(
             """
             let unmarshaller = #{unmarshallerConstructorFn}();
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok(#{Receiver}::new(unmarshaller, body))
+            Ok($receiver::new(unmarshaller, body))
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
-            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
         )
     }
 
@@ -352,7 +356,7 @@ class HttpBindingGenerator(
             rustType to targetShape
         }
         val parsedValue = safeName()
-        if (coreType == dateTime) {
+        if (coreShape.isTimestampShape()) {
             val timestampFormat =
                 index.determineTimestampFormat(
                     memberShape,
@@ -361,10 +365,14 @@ class HttpBindingGenerator(
                 )
             val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
             rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?",
                 headerUtil,
                 timestampFormatType,
             )
+            for (customization in customizations) {
+                customization.section(HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders(memberShape))(this)
+            }
+            rust(";")
         } else if (coreShape.isPrimitive()) {
             rust(
                 "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",

@@ -47,30 +47,36 @@
 //!
 //! Consult `crate::proto::$protocolName::rejection` for rejection types for other protocols.
 
-use std::num::TryFromIntError;
-
-use strum_macros::Display;
-
 use crate::rejection::MissingContentTypeReason;
+use std::num::TryFromIntError;
+use thiserror::Error;
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ResponseRejection {
     /// Used when the service implementer provides an integer outside the 100-999 range for a
     /// member targeted by `httpResponseCode`.
     /// See <https://github.com/awslabs/smithy/issues/1116>.
+    #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
 
-    /// Used when an invalid HTTP header value (a value that cannot be parsed as an
-    /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
+    /// Used when an invalid HTTP header name (a value that cannot be parsed as an
+    /// [`http::header::HeaderName`]) or HTTP header value (a value that cannot be parsed as an
+    /// [`http::header::HeaderValue`]) is provided for a shape member bound to an HTTP header with
     /// `httpHeader` or `httpPrefixHeaders`.
     /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
-    Build(crate::Error),
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_http::operation::error::BuildError),
 
-    /// Used when failing to serialize a struct into a `String` for the HTTP response body (for
-    /// example, converting a struct into a JSON-encoded `String`).
-    Serialization(crate::Error),
+    /// Used when failing to serialize a struct into a `String` for the JSON-encoded HTTP response
+    /// body.
+    /// Fun fact: as of writing, this can only happen when date formatting
+    /// (`aws_smithy_types::date_time::DateTime:fmt`) fails, which can only happen if the
+    /// supplied timestamp is outside of the valid range when formatting using RFC-3339, i.e. a
+    /// date outside the `0001-01-01T00:00:00.000Z`-`9999-12-31T23:59:59.999Z` range is supplied.
+    #[error("error serializing JSON-encoded body: {0}")]
+    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
 
     /// Used when consuming an [`http::response::Builder`] into the constructed [`http::Response`]
     /// when calling [`http::response::Builder::body`].
@@ -78,14 +84,9 @@ pub enum ResponseRejection {
     /// `[http::header::HeaderValue]`) is used for the protocol-specific response `Content-Type`
     /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
     /// errors in RestJson1).
-    Http(crate::Error),
+    #[error("error building HTTP response: {0}")]
+    HttpBuild(#[from] http::Error),
 }
-
-impl std::error::Error for ResponseRejection {}
-
-convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
-convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
 /// that is passed as the first argument to operation handlers.
@@ -98,58 +99,69 @@ convert_to_response_rejection!(http::Error, Http);
 /// deliberate design choice to keep code generation simple. After all, this type is an inner
 /// detail of the framework the service implementer does not interact with.
 ///
-/// If a variant takes in a value, it represents the underlying cause of the error. This inner
-/// value should be of the type-erased boxed error type `[crate::Error]`. In practice, some of the
-/// variants that take in a value are only instantiated with errors of a single type in the
-/// generated code. For example, `UriPatternMismatch` is only instantiated with an error coming
-/// from a `nom` parser, `nom::Err<nom::error::Error<&str>>`. This is reflected in the converters
-/// below that convert from one of these very specific error types into one of the variants. For
-/// example, the `RequestRejection` implements `From<hyper::Error>` to construct the `HttpBody`
-/// variant. This is a deliberate design choice to make the code simpler and less prone to changes.
+/// If a variant takes in a value, it represents the underlying cause of the error.
 ///
 /// The variants are _roughly_ sorted in the order in which the HTTP request is processed.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum RequestRejection {
     /// Used when failing to convert non-streaming requests into a byte slab with
     /// `hyper::body::to_bytes`.
-    HttpBody(crate::Error),
+    #[error("error converting non-streaming body to bytes: {0}")]
+    BufferHttpBodyBytes(crate::Error),
+
+    /// Used when the request contained an `Accept` header with a MIME type, and the server cannot
+    /// return a response body adhering to that MIME type.
+    #[error("request contains invalid value for `Accept` header")]
+    NotAcceptable,
 
     /// Used when checking the `Content-Type` header.
-    MissingContentType(MissingContentTypeReason),
+    #[error("expected `Content-Type` header not found: {0}")]
+    MissingContentType(#[from] MissingContentTypeReason),
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
     /// the modeled input it should represent.
-    JsonDeserialize(crate::Error),
+    #[error("error deserializing request HTTP body as JSON: {0}")]
+    JsonDeserialize(#[from] aws_smithy_json::deserialize::error::DeserializeError),
 
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.
-    HeaderParse(crate::Error),
+    #[error("error binding request HTTP headers: {0}")]
+    HeaderParse(#[from] aws_smithy_http::header::ParseError),
 
+    // In theory, the next two errors should never happen because the router should have already
+    // rejected the request.
     /// Used when the URI pattern has a literal after the greedy label, and it is not found in the
     /// request's URL.
+    #[error("request URI does not match pattern because of literal suffix after greedy label was not found")]
     UriPatternGreedyLabelPostfixNotFound,
     /// Used when the `nom` parser's input does not match the URI pattern.
+    #[error("request URI does not match `@http` URI pattern: {0}")]
     UriPatternMismatch(crate::Error),
 
     /// Used when percent-decoding URL query string.
     /// Used when percent-decoding URI path label.
-    InvalidUtf8(crate::Error),
+    /// This is caused when calling
+    /// [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html).
+    /// This can happen when the percent-encoded data decodes to bytes that are
+    /// not a well-formed UTF-8 string.
+    #[error("request URI cannot be percent decoded into valid UTF-8")]
+    PercentEncodedUriNotValidUtf8(#[from] core::str::Utf8Error),
 
     /// Used when failing to deserialize strings from a URL query string and from URI path labels
     /// into an [`aws_smithy_types::DateTime`].
-    DateTimeParse(crate::Error),
+    #[error("error parsing timestamp from request URI: {0}")]
+    DateTimeParse(#[from] aws_smithy_types::date_time::DateTimeParseError),
 
     /// Used when failing to deserialize strings from a URL query string and from URI path labels
     /// into "primitive" types.
-    PrimitiveParse(crate::Error),
+    #[error("error parsing primitive type from request URI: {0}")]
+    PrimitiveParse(#[from] aws_smithy_types::primitive::PrimitiveParseError),
 
     /// Used when consuming the input struct builder, and constraint violations occur.
-    // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
-    // directly in the code-generated SDK instead of in this crate.
+    // This rejection is constructed directly in the code-generated SDK instead of in this crate.
+    #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
 }
-
-impl std::error::Error for RequestRejection {}
 
 // Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error
 // through `Result<_, RequestRejection>`. This [`From`] implementation accomodates the special case
@@ -170,23 +182,11 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-impl From<MissingContentTypeReason> for RequestRejection {
-    fn from(e: MissingContentTypeReason) -> Self {
-        Self::MissingContentType(e)
-    }
-}
-
 // These converters are solely to make code-generation simpler. They convert from a specific error
 // type (from a runtime/third-party crate or the standard library) into a variant of the
 // [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
 // type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
 // bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
-
-convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
-convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
-convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
-convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
-convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
 
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
@@ -194,19 +194,12 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     }
 }
 
-// Used when calling
-// [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html)
-// and bubbling up.
-// This can happen when the percent-encoded data in e.g. a query string decodes to bytes that are
-// not a well-formed UTF-8 string.
-convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
-
 // `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
 // need this converter for when we convert the body into bytes in the framework, since protocol
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
-convert_to_request_rejection!(hyper::Error, HttpBody);
+convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
 
 // Useful in general, but it also required in order to accept Lambda HTTP requests using
 // `Router<lambda_http::Body>` since `lambda_http::Error` is a type alias for `Box<dyn Error + ..>`.
-convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);
