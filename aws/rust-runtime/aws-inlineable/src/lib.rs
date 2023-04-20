@@ -45,3 +45,5 @@ pub mod route53_resource_id_preprocessor;
 
 /// Convert a streaming `SdkBody` into an aws-chunked streaming body with checksum trailers
 pub mod http_body_checksum;
+
+pub mod endpoint_discovery;
