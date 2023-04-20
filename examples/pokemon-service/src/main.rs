@@ -19,6 +19,7 @@ use clap::Parser;
 
 use hyper::{Body, Response, StatusCode};
 use plugin::PrintExt;
+
 use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
 };
