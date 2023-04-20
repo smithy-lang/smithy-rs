@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.SensitiveIndex
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolParserGenerator
@@ -68,6 +69,8 @@ open class HttpBoundProtocolTraitImplGenerator(
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
+    private val sensitiveIndex = SensitiveIndex.of(model)
+
     open fun generateTraitImpls(
         operationWriter: RustWriter,
         operationShape: OperationShape,
@@ -103,6 +106,11 @@ open class HttpBoundProtocolTraitImplGenerator(
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
         )
+        val sensitive = writable {
+            if (sensitiveIndex.hasSensitiveOutput(operationShape)) {
+                rust("fn sensitive(&self) -> bool { true }")
+            }
+        }
         rustTemplate(
             """
             impl #{ParseStrict} for $operationName {
@@ -118,9 +126,11 @@ open class HttpBoundProtocolTraitImplGenerator(
                         #{parse_response}(status, headers, body)
                      }
                 }
+                #{sensitive}
             }""",
             *codegenScope,
             *localScope,
+            "sensitive" to sensitive,
         )
     }
 
@@ -160,7 +170,10 @@ open class HttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun parseStreamingResponse(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
+    private fun parseStreamingResponse(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
@@ -179,7 +192,11 @@ open class HttpBoundProtocolTraitImplGenerator(
                     """
                     #{parse_streaming_response}(response, &properties)
                     """,
-                    "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, true, customizations),
+                    "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(
+                        operationShape,
+                        true,
+                        customizations,
+                    ),
                 )
             }
         }
