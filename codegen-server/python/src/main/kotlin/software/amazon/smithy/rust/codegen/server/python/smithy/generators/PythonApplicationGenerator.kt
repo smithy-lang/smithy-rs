@@ -230,8 +230,6 @@ class PythonApplicationGenerator(
                     """,
                     *codegenScope,
                 )
-                // renderRustMiddlewares(writer)
-                // rust("Ok(service)")
             }
         }
     }
