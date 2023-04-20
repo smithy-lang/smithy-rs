@@ -11,7 +11,7 @@ use aws_smithy_http_server::{
     body,
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
-    plugin::{health_check::HealthCheckLayer, PluginPipeline},
+    plugin::{alb_health_check::AlbHealthCheckLayer, PluginPipeline},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -53,7 +53,7 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .http_layer(HealthCheckLayer::new("/ping", |_req| async {
+        .http_layer(AlbHealthCheckLayer::new("/ping", |_req| async {
             Response::builder()
                 .status(StatusCode::OK)
                 .body(body::boxed(Body::empty()))
