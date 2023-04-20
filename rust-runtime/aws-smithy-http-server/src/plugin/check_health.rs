@@ -35,19 +35,19 @@ use super::Either;
 
 /// A [`tower::Layer`] used to apply [`CheckHealthService`].
 #[derive(Clone, Debug)]
-pub struct CheckHealthLayer<'a, PingHandler> {
+pub struct CheckHealthLayer<'a, HealthCheckHandler> {
     health_check_uri: &'a str,
-    ping_handler: PingHandler,
+    health_check_handler: HealthCheckHandler,
 }
 
 impl<'a> CheckHealthLayer<'a, ()> {
     pub fn new<HandlerFuture: Future<Output = Response<BoxBody>>, H: Fn(Request<Body>) -> HandlerFuture>(
         health_check_uri: &'static str,
-        ping_handler: H,
+        health_check_handler: H,
     ) -> CheckHealthLayer<H> {
         CheckHealthLayer {
             health_check_uri,
-            ping_handler,
+            health_check_handler,
         }
     }
 }
@@ -90,7 +90,7 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         if req.uri() == self.layer.health_check_uri {
-            let handler_future = (self.layer.ping_handler)(req);
+            let handler_future = (self.layer.health_check_handler)(req);
 
             CheckHealthFuture::handler_future(handler_future)
         } else {
