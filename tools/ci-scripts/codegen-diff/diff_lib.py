@@ -62,6 +62,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
+                get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
                 get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
                 get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 

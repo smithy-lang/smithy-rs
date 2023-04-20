@@ -32,9 +32,17 @@ else
 fi
 export CARGO_TARGET_DIR
 
-# generate the Python stubs
+shared_object_extension="so"
+# generate the Python stubs,
+if [ "$(uname)" == "Darwin" ]; then
+    shared_object_extension="dylib"
+    export CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+    export CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+fi
+
 cargo build --manifest-path "$manifest"
-ln -sf "$CARGO_TARGET_DIR/debug/lib$package.so" "$CARGO_TARGET_DIR/debug/$package.so"
+# The link target have to end with .so to be sure it is importable by the stubgen.py script.
+ln -sf "$CARGO_TARGET_DIR/debug/lib$package.$shared_object_extension" "$CARGO_TARGET_DIR/debug/$package.so"
 PYTHONPATH=$CARGO_TARGET_DIR/debug:$PYTHONPATH python3 "$script_dir/stubgen.py" "$package" "$output"
 
 exit 0

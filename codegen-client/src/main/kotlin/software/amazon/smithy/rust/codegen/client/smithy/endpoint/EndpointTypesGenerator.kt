@@ -41,6 +41,7 @@ class EndpointTypesGenerator(
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(params).paramsStruct()
+    fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(params).paramsBuilder()
     fun defaultResolver(): RuntimeType? =
         rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
 

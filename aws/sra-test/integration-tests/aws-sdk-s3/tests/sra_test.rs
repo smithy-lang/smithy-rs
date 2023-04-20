@@ -17,8 +17,10 @@ use aws_sdk_s3::primitives::SdkBody;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
-use aws_smithy_runtime_api::client::endpoints::StaticUriEndpointResolver;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
+use aws_smithy_runtime_api::client::endpoints::DefaultEndpointResolver;
+use aws_smithy_runtime_api::client::interceptors::{
+    Interceptor, InterceptorContext, InterceptorError, Interceptors,
+};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
 };
@@ -27,7 +29,6 @@ use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
-use http::Uri;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -58,6 +59,7 @@ async fn sra_test() {
     let _ = dbg!(
         client
             .list_objects_v2()
+            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
             .send_v2()
@@ -108,9 +110,16 @@ async fn sra_manual_test() {
                 ),
             );
 
-            cfg.set_endpoint_resolver(StaticUriEndpointResolver::uri(Uri::from_static(
-                "https://test-bucket.s3.us-east-1.amazonaws.com/",
-            )));
+            cfg.set_endpoint_resolver(DefaultEndpointResolver::new(
+                aws_smithy_http::endpoint::SharedEndpointResolver::new(
+                    aws_sdk_s3::endpoint::DefaultResolver::new(),
+                ),
+            ));
+
+            let params_builder = aws_sdk_s3::endpoint::Params::builder()
+                .set_region(Some("us-east-1".to_owned()))
+                .set_endpoint(Some("https://s3.us-east-1.amazonaws.com/".to_owned()));
+            cfg.put(params_builder);
 
             cfg.set_retry_strategy(
                 aws_smithy_runtime_api::client::retries::NeverRetryStrategy::new(),
@@ -162,6 +171,77 @@ async fn sra_manual_test() {
         }
     }
 
+    // This is a temporary operation runtime plugin until <Operation>EndpointParamsInterceptor and
+    // <Operation>EndpointParamsFinalizerInterceptor have been fully implemented, in which case
+    // `.with_operation_plugin(ManualOperationRuntimePlugin)` can be removed.
+    struct ManualOperationRuntimePlugin;
+
+    impl RuntimePlugin for ManualOperationRuntimePlugin {
+        fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+            #[derive(Debug)]
+            struct ListObjectsV2EndpointParamsInterceptor;
+            impl Interceptor<HttpRequest, HttpResponse> for ListObjectsV2EndpointParamsInterceptor {
+                fn read_before_execution(
+                    &self,
+                    context: &InterceptorContext<HttpRequest, HttpResponse>,
+                    cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
+                    let input = context.input()?;
+                    let input = input
+                        .downcast_ref::<ListObjectsV2Input>()
+                        .ok_or_else(|| InterceptorError::invalid_input_access())?;
+                    let mut params_builder = cfg
+                        .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
+                        .ok_or(InterceptorError::read_before_execution(
+                            "missing endpoint params builder",
+                        ))?
+                        .clone();
+                    params_builder = params_builder.set_bucket(input.bucket.clone());
+                    cfg.put(params_builder);
+
+                    Ok(())
+                }
+            }
+
+            #[derive(Debug)]
+            struct ListObjectsV2EndpointParamsFinalizerInterceptor;
+            impl Interceptor<HttpRequest, HttpResponse> for ListObjectsV2EndpointParamsFinalizerInterceptor {
+                fn read_before_execution(
+                    &self,
+                    _context: &InterceptorContext<HttpRequest, HttpResponse>,
+                    cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
+                    let params_builder = cfg
+                        .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
+                        .ok_or(InterceptorError::read_before_execution(
+                            "missing endpoint params builder",
+                        ))?
+                        .clone();
+                    let params = params_builder
+                        .build()
+                        .map_err(InterceptorError::read_before_execution)?;
+                    cfg.put(
+                        aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams::new(
+                            params,
+                        ),
+                    );
+
+                    Ok(())
+                }
+            }
+
+            cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
+                .expect("interceptors set")
+                .register_operation_interceptor(
+                    Arc::new(ListObjectsV2EndpointParamsInterceptor) as _
+                )
+                .register_operation_interceptor(Arc::new(
+                    ListObjectsV2EndpointParamsFinalizerInterceptor,
+                ) as _);
+            Ok(())
+        }
+    }
+
     let conn = TestConnection::new(vec![(
                 http::Request::builder()
                     .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=ae78f74d26b6b0c3a403d9e8cc7ec3829d6264a2b33db672bf2b151bbb901786")
@@ -187,7 +267,8 @@ async fn sra_manual_test() {
 
     let runtime_plugins = aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins::new()
         .with_client_plugin(ManualServiceRuntimePlugin(conn.clone()))
-        .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new());
+        .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new())
+        .with_operation_plugin(ManualOperationRuntimePlugin);
 
     let input = ListObjectsV2Input::builder()
         .bucket("test-bucket")
