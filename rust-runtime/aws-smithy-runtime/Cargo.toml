@@ -6,16 +6,24 @@ description = "The new smithy runtime crate"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+test-util = ["dep:aws-smithy-protocol-test"]
+
 [dependencies]
+aws-smithy-client = { path = "../aws-smithy-client" }
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+bytes = "1"
 http = "0.2.8"
 http-body = "0.4.5"
+pin-utils = "0.1.0"
+tokio = { version = "1.25", features = [] }
+tracing = "0.1"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -17,3 +17,4 @@ python3 --version
 rustc +"${RUST_NIGHTLY_VERSION}" --version
 rustc --version
 sdk-versioner --version
+cargo semver-checks --version

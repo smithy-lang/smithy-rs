@@ -68,6 +68,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
@@ -76,6 +78,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
@@ -115,7 +118,7 @@ open class ServerCodegenVisitor(
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
-        val (protocol, generator) =
+        val (protocolShape, protocolGeneratorFactory) =
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
@@ -123,7 +126,7 @@ open class ServerCodegenVisitor(
                 ),
             )
                 .protocolFor(context.model, service)
-        protocolGeneratorFactory = generator
+        this.protocolGeneratorFactory = protocolGeneratorFactory
 
         model = codegenDecorator.transformModel(service, baseModel)
 
@@ -142,7 +145,7 @@ open class ServerCodegenVisitor(
             serverSymbolProviders.symbolProvider,
             null,
             service,
-            protocol,
+            protocolShape,
             settings,
             serverSymbolProviders.unconstrainedShapeSymbolProvider,
             serverSymbolProviders.constrainedShapeSymbolProvider,
@@ -166,7 +169,7 @@ open class ServerCodegenVisitor(
             settings.codegenConfig,
             codegenContext.expectModuleDocProvider(),
         )
-        protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+        protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     /**
@@ -312,7 +315,12 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
-            val serverBuilderGenerator = ServerBuilderGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+            val serverBuilderGenerator = ServerBuilderGenerator(
+                codegenContext,
+                shape,
+                validationExceptionConversionGenerator,
+                protocolGenerator.protocol,
+            )
             serverBuilderGenerator.render(rustCrate, writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
@@ -333,7 +341,12 @@ open class ServerCodegenVisitor(
 
         if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             val serverBuilderGeneratorWithoutPublicConstrainedTypes =
-                ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape, validationExceptionConversionGenerator)
+                ServerBuilderGeneratorWithoutPublicConstrainedTypes(
+                    codegenContext,
+                    shape,
+                    validationExceptionConversionGenerator,
+                    protocolGenerator.protocol,
+                )
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(rustCrate, writer)
 
             writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
@@ -554,6 +567,15 @@ open class ServerCodegenVisitor(
     }
 
     /**
+     * Generate protocol tests. This method can be overridden by other languages such has Python.
+     */
+    open fun protocolTests() {
+        rustCrate.withModule(ServerRustModule.Operation) {
+            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(this)
+        }
+    }
+
+    /**
      * Generate service-specific code for the model:
      * - Serializers
      * - Deserializers
@@ -564,28 +586,53 @@ open class ServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        ServerServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
-            codegenContext,
-        )
-            .render()
+        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+
+        // Generate root
+        rustCrate.lib {
+            ServerRootGenerator(
+                serverProtocol,
+                codegenContext,
+            ).render(this)
+        }
+
+        // Generate server re-exports
+        rustCrate.withModule(ServerRustModule.Server) {
+            ServerRuntimeTypesReExportsGenerator(codegenContext).render(this)
+        }
+
+        // Generate protocol tests
+        protocolTests()
+
+        // Generate service module
+        rustCrate.withModule(ServerRustModule.Service) {
+            ServerServiceGenerator(
+                codegenContext,
+                serverProtocol,
+            ).render(this)
+        }
     }
 
     /**
      * For each operation shape generate:
+     *  - Operations ser/de
      *  - Errors via `ServerOperationErrorGenerator`
      *  - OperationShapes via `ServerOperationGenerator`
      */
     override fun operationShape(shape: OperationShape) {
+        // Generate errors.
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
+        // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
+        }
+
+        // Generate operations ser/de.
+        rustCrate.withModule(ServerRustModule.Operation) {
+            protocolGenerator.renderOperation(this, shape)
         }
     }
 

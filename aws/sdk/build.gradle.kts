@@ -5,7 +5,6 @@
 
 import aws.sdk.AwsServices
 import aws.sdk.Membership
-import aws.sdk.RootTest
 import aws.sdk.discoverServices
 import aws.sdk.docsLandingPage
 import aws.sdk.parseMembership
@@ -77,6 +76,7 @@ fun eventStreamAllowList(): Set<String> {
 fun generateSmithyBuild(services: AwsServices): String {
     val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
         ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
+    val debugMode = properties.get("debugMode").toBoolean()
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
@@ -99,8 +99,10 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "codegen": {
                             "includeFluentClient": false,
                             "renameErrors": false,
+                            "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true
+                            "enableNewCrateOrganizationScheme": true,
+                            "enableNewSmithyRuntime": false
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -299,9 +301,9 @@ tasks.register<Copy>("relocateChangelog") {
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
-    |exclude = [${"\n"}${services.rootTests.map(RootTest::manifestName).joinToString(",\n") { "|    \"$it\"" }}
+    |exclude = [${"\n"}${services.excludedFromWorkspace().joinToString(",\n") { "|    \"$it\"" }}
     |]
-    |members = [${"\n"}${services.allModules.joinToString(",\n") { "|    \"$it\"" }}
+    |members = [${"\n"}${services.includedInWorkspace().joinToString(",\n") { "|    \"$it\"" }}
     |]
     """.trimMargin()
 }

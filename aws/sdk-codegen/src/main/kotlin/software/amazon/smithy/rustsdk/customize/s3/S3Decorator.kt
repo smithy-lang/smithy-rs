@@ -14,6 +14,9 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rulesengine.traits.EndpointTestCase
+import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
+import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
@@ -31,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rustsdk.endpoints.stripEndpointTrait
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
@@ -63,28 +65,66 @@ class S3Decorator : ClientCodegenDecorator {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
             }
-        }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
+        }
+            // the model has the bucket in the path
+            .let(StripBucketFromHttpPath()::transform)
+            // the tests in EP2 are incorrect and are missing request route
+            .let(
+                FilterEndpointTests(
+                    operationInputFilter = { input ->
+                        when (input.operationName) {
+                            // it's impossible to express HostPrefix behavior in the current EP2 rules schema :-/
+                            // A handwritten test was written to cover this behavior
+                            "WriteGetObjectResponse" -> null
+                            else -> input
+                        }
+                    },
+                )::transform,
+            )
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
-        return listOf(object : EndpointCustomization {
-            override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                if (!name.startsWith("AWS::S3")) {
-                    return null
+        return listOf(
+            object : EndpointCustomization {
+                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                    if (!name.startsWith("AWS::S3")) {
+                        return null
+                    }
+                    val builtIn = codegenContext.getBuiltIn(name) ?: return null
+                    return writable {
+                        rustTemplate(
+                            "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
+                            "value" to value.toWritable(),
+                        )
+                    }
                 }
-                val builtIn = codegenContext.getBuiltIn(name) ?: return null
-                return writable {
-                    rustTemplate(
-                        "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
-                        "value" to value.toWritable(),
-                    )
-                }
-            }
-        },
+            },
         )
     }
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
+}
+
+class FilterEndpointTests(
+    private val testFilter: (EndpointTestCase) -> EndpointTestCase? = { a -> a },
+    private val operationInputFilter: (EndpointTestOperationInput) -> EndpointTestOperationInput? = { a -> a },
+) {
+    fun updateEndpointTests(endpointTests: List<EndpointTestCase>): List<EndpointTestCase> {
+        val filteredTests = endpointTests.mapNotNull { test -> testFilter(test) }
+        return filteredTests.map { test ->
+            val operationInputs = test.operationInputs
+            test.toBuilder().operationInputs(operationInputs.mapNotNull { operationInputFilter(it) }).build()
+        }
+    }
+
+    fun transform(model: Model) = ModelTransformer.create().mapTraits(model) { _, trait ->
+        when (trait) {
+            is EndpointTestsTrait -> EndpointTestsTrait.builder().testCases(updateEndpointTests(trait.testCases))
+                .version(trait.version).build()
+
+            else -> trait
+        }
     }
 }
 
@@ -103,21 +143,21 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(
                     """
                     // S3 HEAD responses have no response body to for an error code. Therefore,
                     // check the HTTP response status and populate an error code for 404s.
-                    if response.body().is_empty() {
+                    if response_body.is_empty() {
                         let mut builder = #{ErrorMetadata}::builder();
-                        if response.status().as_u16() == 404 {
+                        if response_status == 404 {
                             builder = builder.code("NotFound");
                         }
                         Ok(builder)
                     } else {
-                        #{base_errors}::parse_error_metadata(response.body().as_ref())
+                        #{base_errors}::parse_error_metadata(response_body)
                     }
                     """,
                     *errorScope,

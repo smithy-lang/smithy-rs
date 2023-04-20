@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
@@ -34,8 +36,9 @@ internal class EndpointTraitBindingsTest {
         epTrait.prefixFormatString() shouldBe ("\"{foo}.data\"")
     }
 
-    @Test
-    fun `generate endpoint prefixes`() {
+    @ParameterizedTest
+    @ValueSource(booleans = [true, false])
+    fun `generate endpoint prefixes`(enableNewSmithyRuntime: Boolean) {
         val model = """
             namespace test
             @readonly
@@ -73,7 +76,7 @@ internal class EndpointTraitBindingsTest {
                     RuntimeType.smithyHttp(TestRuntimeConfig),
                     TestRuntimeConfig.operationBuildError(),
                 ) {
-                    endpointBindingGenerator.render(this, "self")
+                    endpointBindingGenerator.render(this, "self", enableNewSmithyRuntime)
                 }
             }
             unitTest(

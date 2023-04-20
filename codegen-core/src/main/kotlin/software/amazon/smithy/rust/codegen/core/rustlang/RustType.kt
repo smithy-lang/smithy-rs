@@ -172,6 +172,18 @@ sealed class RustType {
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
+
+    /**
+     * Represents application of a Rust type with the given arguments.
+     *
+     * For example, we can represent `HashMap<String, i64>` as
+     * `RustType.Application(RustType.Opaque("HashMap"), listOf(RustType.String, RustType.Integer(64)))`.
+     * This helps us to separate the type and the arguments which is useful in methods like [qualifiedName].
+     */
+    data class Application(val type: RustType, val args: List<RustType>) : RustType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
 }
 
 /**
@@ -242,7 +254,10 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
             }
         }
-
+        is RustType.Application -> {
+            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+            "${this.name}<$args>"
+        }
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
@@ -370,11 +385,17 @@ data class RustMetadata(
         this.copy(derives = derives - withoutDerives.toSet())
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
-        additionalAttributes.forEach {
+        val (deriveHelperAttrs, otherAttrs) = additionalAttributes.partition { it.isDeriveHelper }
+        otherAttrs.forEach {
             it.render(writer)
         }
+
         Attribute(derive(derives)).render(writer)
 
+        // Derive helper attributes must come after derive, see https://github.com/rust-lang/rust/issues/79202
+        deriveHelperAttrs.forEach {
+            it.render(writer)
+        }
         return this
     }
 
@@ -435,17 +456,22 @@ enum class AttributeKind {
  * [Attributes](https://doc.rust-lang.org/reference/attributes.html) are general free form metadata
  * that are interpreted by the compiler.
  *
+ * If the attribute is a "derive helper", such as  `#[serde]`, set `isDeriveHelper` to `true` so it is sorted correctly after
+ * the derive attribute is rendered. (See https://github.com/rust-lang/rust/issues/79202 for why sorting matters.)
+ *
  * For example:
  * ```rust
+ * #[allow(missing_docs)] // <-- this is an attribute, and it is not a derive helper
  * #[derive(Clone, PartialEq, Serialize)] // <-- this is an attribute
- * #[serde(serialize_with = "abc")] // <-- this is an attribute
+ * #[serde(serialize_with = "abc")] // <-- this attribute is a derive helper because the `Serialize` derive uses it
  * struct Abc {
  *   a: i64
  * }
  * ```
  */
-class Attribute(val inner: Writable) {
+class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     constructor(str: String) : this(writable(str))
+    constructor(str: String, isDeriveHelper: Boolean) : this(writable(str), isDeriveHelper)
     constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
 
     fun render(writer: RustWriter, attributeKind: AttributeKind = AttributeKind.Outer) {

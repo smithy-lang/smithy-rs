@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPrimitivesModule
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -175,5 +175,5 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
         codegenContext.model,
         codegenContext.symbolProvider,
         shape,
-        InfallibleEnumType(codegenContext.featureGatedPrimitivesModule()),
+        InfallibleEnumType(ClientRustModule.Primitives),
     )

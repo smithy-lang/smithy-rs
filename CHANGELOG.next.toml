@@ -10,3 +10,12 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Add a sensitive method to `ParseHttpResponse`. When this returns true, logging of the HTTP response body will be suppressed."
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }

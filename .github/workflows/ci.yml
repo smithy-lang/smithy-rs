@@ -110,6 +110,8 @@ jobs:
           runner: ubuntu-latest
         - action: check-tools
           runner: smithy_ubuntu-latest_8-core
+        - action: check-deterministic-codegen
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: actions/checkout@v3
       with:
@@ -157,6 +159,8 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
+
+
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
@@ -187,8 +191,9 @@ jobs:
           pushd "${runtime_path}" &>/dev/null
           # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
           # which is not really yet fully supported on the platform.
-          cargo test --all-features --workspace --exclude aws-smithy-http-server-python
-          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python
+          # aws-smithy-http-server-typescript cannot be compiled right now on Windows.
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           popd &>/dev/null
         done
 
@@ -208,24 +213,24 @@ jobs:
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
     env:
       CROSS_CONFIG: Cross.toml
     steps:

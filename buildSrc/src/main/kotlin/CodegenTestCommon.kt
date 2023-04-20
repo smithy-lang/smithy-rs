@@ -38,7 +38,6 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                         "relativePath": "$projectDir/rust-runtime"
                     },
                     "codegen": {
-                        "enableNewCrateOrganizationScheme": true
                     },
                     "service": "${it.service}",
                     "module": "${it.module}",
