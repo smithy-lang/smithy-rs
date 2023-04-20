@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use super::identity::{IdentityResolver, IdentityResolvers};
 use crate::client::identity::Identity;
 use crate::client::interceptors::context::{Input, OutputOrError};
 use crate::client::interceptors::InterceptorContext;
@@ -109,28 +110,6 @@ impl HttpAuthOption {
 
     pub fn properties(&self) -> &PropertyBag {
         &self.properties
-    }
-}
-
-pub trait IdentityResolver: Send + Sync + Debug {
-    fn resolve_identity(&self, identity_properties: &PropertyBag) -> BoxFallibleFut<Identity>;
-}
-
-#[derive(Debug)]
-pub struct IdentityResolvers {
-    identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
-}
-
-impl IdentityResolvers {
-    pub fn builder() -> builders::IdentityResolversBuilder {
-        builders::IdentityResolversBuilder::new()
-    }
-
-    pub fn identity_resolver(&self, identity_type: &'static str) -> Option<&dyn IdentityResolver> {
-        self.identity_resolvers
-            .iter()
-            .find(|resolver| resolver.0 == identity_type)
-            .map(|resolver| &*resolver.1)
     }
 }
 
@@ -362,33 +341,6 @@ impl ConfigBagAccessors for ConfigBag {
 
 pub mod builders {
     use super::*;
-
-    #[derive(Debug, Default)]
-    pub struct IdentityResolversBuilder {
-        identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
-    }
-
-    impl IdentityResolversBuilder {
-        pub fn new() -> Self {
-            Default::default()
-        }
-
-        pub fn identity_resolver(
-            mut self,
-            name: &'static str,
-            resolver: impl IdentityResolver + 'static,
-        ) -> Self {
-            self.identity_resolvers
-                .push((name, Box::new(resolver) as _));
-            self
-        }
-
-        pub fn build(self) -> IdentityResolvers {
-            IdentityResolvers {
-                identity_resolvers: self.identity_resolvers,
-            }
-        }
-    }
 
     #[derive(Debug, Default)]
     pub struct HttpAuthSchemesBuilder {
