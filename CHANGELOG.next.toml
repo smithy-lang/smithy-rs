@@ -20,14 +20,20 @@ references = ["smithy-rs#2540"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "jjant"
 
+[[smithy-rs]]
+message = "Implement `PluginPipeline::http_layer` which allows you to apply a `tower::Layer` to all operations."
+references = ["smithy-rs#2540"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+author = "jjant"
+
 [[aws-sdk-rust]]
-message = "Implement std::error::Error#source() properly for the service meta Error enum"
+message = "Implement std::error::Error#source() properly for the service meta Error enum."
 references = ["aws-sdk-rust#784"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "abusch"
 
 [[smithy-rs]]
-message = "Implement std::error::Error#source() properly for the service meta Error enum"
+message = "Implement std::error::Error#source() properly for the service meta Error enum."
 references = ["aws-sdk-rust#784"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "abusch"
