@@ -30,7 +30,7 @@ internal class PythonTypeInformationGenerationTest {
         val codegenContext = serverTestCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
         val writer = RustWriter.forModule("model")
-        PythonServerStructureGenerator(model, symbolProvider, writer, foo).render()
+        PythonServerStructureGenerator(model, codegenContext, writer, foo).render()
 
         val result = writer.toString()
 
