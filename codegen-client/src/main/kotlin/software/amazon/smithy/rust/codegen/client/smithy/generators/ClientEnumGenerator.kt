@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.RenderSerdeAttribute
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /** Infallible enums have an `Unknown` variant and can't fail to parse */
@@ -97,6 +98,8 @@ data class InfallibleEnumType(
                 part of the enums that are public interface.
                 """.trimIndent(),
             )
+
+            RenderSerdeAttribute.writeAttributes(this)
             context.enumMeta.render(this)
             rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {

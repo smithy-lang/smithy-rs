@@ -154,13 +154,13 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
-        SensitiveWarning.addDoc(writer, shape)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
     }
 
     open fun renderStructure() {
+        RenderSerdeAttribute.importSerde(writer)
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
@@ -172,6 +172,7 @@ open class StructureGenerator(
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 SensitiveWarning.addDoc(writer, shape)
+                RenderSerdeAttribute.skipIfStream(writer, member, model)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
             writeCustomizations(customizations, StructureSection.AdditionalFields(shape))

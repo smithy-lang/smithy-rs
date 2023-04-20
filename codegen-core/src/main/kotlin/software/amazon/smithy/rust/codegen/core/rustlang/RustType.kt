@@ -467,6 +467,13 @@ class Attribute(val inner: Writable) {
     public fun SerdeDeserialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
     }
+    public fun SerdeSkip(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
+    }
+
+    public fun SerdeSerializeOrDeserialize(): Attribute {
+        return Attribute(cfg(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize")))))
+    }
 
     companion object {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
@@ -530,6 +537,7 @@ class Attribute(val inner: Writable) {
         fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
         fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)
         fun deny(vararg lints: String): Writable = macroWithArgs("deny", *lints)
+        fun serde(vararg lints: String): Writable = macroWithArgs("serde", *lints)
         fun any(vararg attrMacros: Writable): Writable = macroWithArgs("any", *attrMacros)
         fun cfg(vararg attrMacros: Writable): Writable = macroWithArgs("cfg", *attrMacros)
         fun cfg(vararg attrMacros: String): Writable = macroWithArgs("cfg", *attrMacros)

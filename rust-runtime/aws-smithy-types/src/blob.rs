@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(all(aws_sdk_unstable, feature = "serialize"))]
+#[cfg(all(
+    aws_sdk_unstable,
+    any(feature = "serde-deserialize", feature = "serde-serialize")
+))]
+use crate::base64;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 use serde::Serialize;
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 use serde::{de::Visitor, Deserialize};
-
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
@@ -36,7 +40,7 @@ impl AsRef<[u8]> for Blob {
     }
 }
 
-#[cfg(all(aws_sdk_unstable, feature = "serialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 impl Serialize for Blob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -50,10 +54,10 @@ impl Serialize for Blob {
     }
 }
 
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 struct HumanReadableBlobVisitor;
 
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     type Value = Blob;
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,10 +75,10 @@ impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     }
 }
 
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 struct NotHumanReadableBlobVisitor;
 
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
     type Value = Blob;
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -89,7 +93,7 @@ impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
     }
 }
 
-#[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 impl<'de> Deserialize<'de> for Blob {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -104,16 +108,16 @@ impl<'de> Deserialize<'de> for Blob {
 }
 
 #[cfg(test)]
-#[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+#[cfg(all(
+    aws_sdk_unstable,
+    feature = "serde-serialize",
+    feature = "serde-deserialize"
+))]
 mod test {
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use crate::Blob;
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
-    use std::collections::HashMap;
-
-    #[cfg(all(aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
+
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct ForTest {
         blob: Blob,

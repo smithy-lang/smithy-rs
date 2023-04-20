@@ -16,10 +16,10 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-#[cfg(all(test, aws_sdk_unstable, feature = "deserialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod de;
 mod format;
-#[cfg(all(test, aws_sdk_unstable, feature = "serialize"))]
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod ser;
 
 pub use self::format::DateTimeFormatError;
@@ -557,7 +557,12 @@ mod test {
         );
     }
 
-    #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
+    #[cfg(all(
+        test,
+        aws_sdk_unstable,
+        feature = "serde-deserialize",
+        feature = "serde-serialize"
+    ))]
     #[test]
     fn human_readable_datetime() {
         use serde::{Deserialize, Serialize};
@@ -576,7 +581,12 @@ mod test {
     }
 
     /// checks that they are serialized into tuples
-    #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
+    #[cfg(all(
+        test,
+        aws_sdk_unstable,
+        feature = "serde-deserialize",
+        feature = "serde-serialize"
+    ))]
     #[test]
     fn not_human_readable_datetime() {
         let cbor = ciborium::value::Value::Array(vec![
