@@ -31,7 +31,7 @@ pip install maturin uvloop aiohttp mypy
 ```
 
 The server can depend on [uvloop](https://pypi.org/project/uvloop/) for a faster
-event loop implementationand it will be automatically used instead of the standard
+event loop implementation and it will be automatically used instead of the standard
 library event loop if it is found in the dependencies' closure.
 
 ### Makefile

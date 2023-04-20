@@ -106,7 +106,7 @@ sealed class PythonType {
             when (it) {
                 "crate" -> pythonRootModuleName
                 // In Python, we expose submodules from `aws_smithy_http_server_python`
-                // like `types`, `middleware`, `tls` etc. from `__root_module__name`
+                // like `types`, `middleware`, `tls` etc. from Python root module
                 "aws_smithy_http_server_python" -> pythonRootModuleName
                 else -> it
             }
