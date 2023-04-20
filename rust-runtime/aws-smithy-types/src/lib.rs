@@ -28,5 +28,10 @@ pub mod timeout;
 pub use blob::Blob;
 pub use date_time::DateTime;
 pub use document::Document;
+// TODO(deprecated): Remove deprecated re-export
+/// Use [error::ErrorMetadata] instead.
+#[deprecated(
+    note = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`"
+)]
 pub use error::ErrorMetadata as Error;
 pub use number::Number;
