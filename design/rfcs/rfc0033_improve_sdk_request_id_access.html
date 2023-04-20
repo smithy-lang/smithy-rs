@@ -1,0 +1,420 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0033: Improving access to request IDs in SDK clients - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html" class="active"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-improving-access-to-request-ids-in-sdk-clients"><a class="header" href="#rfc-improving-access-to-request-ids-in-sdk-clients">RFC: Improving access to request IDs in SDK clients</a></h1>
+<blockquote>
+<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2129">#2129</a></p>
+<p>Applies to: AWS SDK clients</p>
+</blockquote>
+<p>At time of writing, customers can retrieve a request ID in one of four ways in the Rust SDK:</p>
+<ol>
+<li>For error cases where the response parsed successfully, the request ID can be retrieved
+via accessor method on operation error. This also works for unmodeled errors so long as
+the response parsing succeeds.</li>
+<li>For error cases where a response was received but parsing fails, the response headers
+can be retrieved from the raw response on the error, but customers have to manually extract
+the request ID from those headers (there's no convenient accessor method).</li>
+<li>For all error cases where the request ID header was sent in the response, customers can
+call <code>SdkError::into_service_error</code> to transform the <code>SdkError</code> into an operation error,
+which has a <code>request_id</code> accessor on it.</li>
+<li>For success cases, the customer can't retrieve the request ID at all if they use the fluent
+client. Instead, they must manually make the operation and call the underlying Smithy client
+so that they have access to <code>SdkSuccess</code>, which provides the raw response where the request ID
+can be manually extracted from headers.</li>
+</ol>
+<p>Only one of these mechanisms is convenient and ergonomic. The rest need considerable improvements.
+Additionally, the request ID should be attached to tracing events where possible so that enabling
+debug logging reveals the request IDs without any code changes being necessary.</p>
+<p>This RFC proposes changes to make the request ID easier to access.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Request ID:</strong> A unique identifier assigned to and associated with a request to AWS that is
+sent back in the response headers. This identifier is useful to customers when requesting support.</li>
+<li><strong>Operation Error:</strong> Operation errors are code generated for each operation in a Smithy model.
+They are an enum of every possible modeled error that that operation can respond with, as well
+as an <code>Unhandled</code> variant for any unmodeled or unrecognized errors.</li>
+<li><strong>Modeled Errors:</strong> Any error that is represented in a Smithy model with the <code>@error</code> trait.</li>
+<li><strong>Unmodeled Errors:</strong> Errors that a service responds with that do not appear in the Smithy model.</li>
+<li><strong>SDK Clients:</strong> Clients generated for the AWS SDK, including &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
+<li><strong>Smithy Clients:</strong> Any clients not generated for the AWS SDK, excluding &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
+</ul>
+<h2 id="sdksmithy-purity"><a class="header" href="#sdksmithy-purity">SDK/Smithy Purity</a></h2>
+<p>Before proposing any changes, the topic of purity needs to be covered. Request IDs are not
+currently a Smithy concept. However, at time of writing, the request ID concept is leaked into
+the non-SDK rust runtime crates and generated code via the <a href="https://docs.rs/aws-smithy-types/0.51.0/aws_smithy_types/error/struct.Error.html">generic error</a> struct and the
+<code>request_id</code> functions on generated operation errors (e.g., <a href="https://docs.rs/aws-sdk-s3/0.21.0/aws_sdk_s3/error/struct.GetObjectError.html#method.request_id"><code>GetObjectError</code> example in S3</a>).</p>
+<p>This RFC attempts to remove these leaks from Smithy clients.</p>
+<h2 id="proposed-changes"><a class="header" href="#proposed-changes">Proposed Changes</a></h2>
+<p>First, we'll explore making it easier to retrieve a request ID from errors,
+and then look at making it possible to retrieve them from successful responses.
+To see the customer experience of these changes, see the <strong>Example Interactions</strong>
+section below.</p>
+<h3 id="make-request-id-retrieval-on-errors-consistent"><a class="header" href="#make-request-id-retrieval-on-errors-consistent">Make request ID retrieval on errors consistent</a></h3>
+<p>One could argue that customers being able to convert a <code>SdkError</code> into an operation error
+that has a request ID on it is sufficient. However, there's no way to write a function
+that takes an error from any operation and logs a request ID, so it's still not ideal.</p>
+<p>The <code>aws-http</code> crate needs to have a <code>RequestId</code> trait on it to facilitate generic
+request ID retrieval:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait RequestId {
+    /// Returns the request ID if it's available.
+    fn request_id(&amp;self) -&gt; Option&lt;&amp;str&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This trait will be implemented for <code>SdkError</code> in <code>aws-http</code> where it is declared,
+complete with logic to pull the request ID header out of the raw HTTP responses
+(it will always return <code>None</code> for event stream <code>Message</code> responses; an additional
+trait may need to be added to <code>aws-smithy-http</code> to facilitate access to the headers).
+This logic will try different request ID header names in order of probability
+since AWS services have a couple of header name variations. <code>x-amzn-requestid</code> is
+the most common, with <code>x-amzn-request-id</code> being the second most common.</p>
+<p><code>aws-http</code> will also implement <code>RequestId</code> for <code>aws_smithy_types::error::Error</code>,
+and the <code>request_id</code> method will be removed from <code>aws_smithy_types::error::Error</code>.
+Places that construct <code>Error</code> will place the request ID into its <code>extras</code> field,
+where the <code>RequestId</code> trait implementation can retrieve it.</p>
+<p>A codegen decorator will be added to <code>sdk-codegen</code> to implement <code>RequestId</code> for
+operation errors, and the existing <code>request_id</code> accessors will be removed from
+<code>CombinedErrorGenerator</code> in <code>codegen-core</code>.</p>
+<p>With these changes, customers can directly access request IDs from <code>SdkError</code> and
+operations errors by importing the <code>RequestId</code> trait. Additionally, the Smithy/SDK
+purity is improved since both places where request IDs are leaked to Smithy clients
+will be resolved.</p>
+<h3 id="implement-requestid-for-outputs"><a class="header" href="#implement-requestid-for-outputs">Implement <code>RequestId</code> for outputs</a></h3>
+<p>To make it possible to retrieve request IDs when using the fluent client, the new
+<code>RequestId</code> trait can be implemented for outputs.</p>
+<p>Some services (e.g., Transcribe Streaming) model the request ID header in their
+outputs, while other services (e.g., Directory Service) model a request ID
+field on errors. In some cases, services take <code>RequestId</code> as a modeled input
+(e.g., IoT Event Data). It follows that it is possible, but unlikely, that
+a service could have a field named <code>RequestId</code> that is not the same concept
+in the future.</p>
+<p>Thus, name collisions are going to be a concern for putting a request ID accessor
+on output. However, if it is implemented as a trait, then this concern is partially
+resolved. In the vast majority of cases, importing <code>RequestId</code> will provide the
+accessor without any confusion. In cases where it is already modeled and is the
+same concept, customers will likely just use it and not even realize they didn't
+import the trait. The only concern is future cases where it is modeled as a
+separate concept, and as long as customers don't import <code>RequestId</code> for something
+else in the same file, that confusion can be avoided.</p>
+<p>In order to implement <code>RequestId</code> for outputs, either the original response needs
+to be stored on the output, or the request ID needs to be extracted earlier and
+stored on the output. The latter will lead to a small amount of header lookup
+code duplication.</p>
+<p>In either case, the <code>StructureGenerator</code> needs to be customized in <code>sdk-codegen</code>
+(Appendix B outlines an alternative approach to this and why it was dismissed).
+This will be done by adding customization hooks to <code>StructureGenerator</code> similar
+to the ones for <code>ServiceConfigGenerator</code> so that a <code>sdk-codegen</code> decorator can
+conditionally add fields and functions to any generated structs. A hook will
+also be needed to additional trait impl blocks.</p>
+<p>Once the hooks are in place, a decorator will be added to store either the original
+response or the request ID on outputs, and then the <code>RequestId</code> trait will be
+implemented for them. The <code>ParseResponse</code> trait implementation will be customized
+to populate this new field.</p>
+<p>Note: To avoid name collisions of the request ID or response on the output struct,
+these fields can be prefixed with an underscore. It shouldn't be possible for SDK
+fields to code generate with this prefix given the model validation rules in place.</p>
+<h3 id="implement-requestid-for-operation-and-operationresponse"><a class="header" href="#implement-requestid-for-operation-and-operationresponse">Implement <code>RequestId</code> for <code>Operation</code> and <code>operation::Response</code></a></h3>
+<p>In the case that a customer wants to ditch the fluent client, it should still
+be easy to retrieve a request ID. To do this, <code>aws-http</code> will provide <code>RequestId</code>
+implementations for <code>Operation</code> and <code>operation::Response</code>. These implementations
+will likely make the other <code>RequestId</code> implementations easier to implement as well.</p>
+<h3 id="implement-requestid-for-result"><a class="header" href="#implement-requestid-for-result">Implement <code>RequestId</code> for <code>Result</code></a></h3>
+<p>The <code>Result</code> returned by the SDK should directly implement <code>RequestId</code> when both
+its <code>Ok</code> and <code>Err</code> variants implement <code>RequestId</code>. This will make it possible
+for a customer to feed the return value from <code>send()</code> directly to a request ID logger.</p>
+<h2 id="example-interactions"><a class="header" href="#example-interactions">Example Interactions</a></h2>
+<h3 id="generic-handling-case"><a class="header" href="#generic-handling-case">Generic Handling Case</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// A re-export of the RequestId trait
+use aws_sdk_service::primitives::RequestId;
+
+fn my_request_id_logging_fn(request_id: &amp;dyn RequestId) {
+    println!(&quot;request ID: {:?}&quot;, request_id.request_id());
+}
+
+let result = client.some_operation().send().await?;
+my_request_id_logging_fn(&amp;result);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="success-case"><a class="header" href="#success-case">Success Case</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+let output = client.some_operation().send().await?;
+println!(&quot;request ID: {:?}&quot;, output.request_id());
+<span class="boring">}</span></code></pre></pre>
+<h3 id="error-case-with-sdkerror"><a class="header" href="#error-case-with-sdkerror">Error Case with <code>SdkError</code></a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) =&gt; { /* handle OK */ }
+    Err(err) =&gt; {
+        println!(&quot;request ID: {:?}&quot;, output.request_id());
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="error-case-with-operation-error"><a class="header" href="#error-case-with-operation-error">Error Case with operation error</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) =&gt; { /* handle OK */ }
+    Err(err) =&gt; match err.into_service_err() {
+        err @ SomeOperationError::SomeError(_) =&gt; { println!(&quot;request ID: {:?}&quot;, err.request_id()); }
+        _ =&gt; { /* don't care */ }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Create the <code>RequestId</code> trait in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement for errors
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>SdkError</code> in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove <code>request_id</code> from <code>aws_smithy_types::error::Error</code>, and store request IDs in its <code>extras</code> instead</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>aws_smithy_types::error::Error</code> in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove generation of <code>request_id</code> accessors from <code>CombinedErrorGenerator</code> in <code>codegen-core</code></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement for outputs
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hooks to <code>StructureGenerator</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hook to <code>ParseResponse</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hook to <code>HttpBoundProtocolGenerator</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Customize output structure code gen in <code>sdk-codegen</code> to add either a request ID or a response field</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Customize <code>ParseResponse</code> in <code>sdk-codegen</code> to populate the outputs</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>Operation</code> and <code>operation::Response</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>Result&lt;O, E&gt;</code> where <code>O</code> and <code>E</code> both implement <code>RequestId</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Re-export <code>RequestId</code> in generated crates</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add integration tests for each request ID access point</li>
+</ul>
+<h2 id="appendix-a-alternate-solution-for-access-on-successful-responses"><a class="header" href="#appendix-a-alternate-solution-for-access-on-successful-responses">Appendix A: Alternate solution for access on successful responses</a></h2>
+<p>Alternatively, for successful responses, a second <code>send</code> method (that is difficult to name)w
+be added to the fluent client that has a return value that includes both the output and
+the request ID (or entire response).</p>
+<p>This solution was dismissed due to difficulty naming, and the risk of name collision.</p>
+<h2 id="appendix-b-adding-requestid-as-a-string-to-outputs-via-model-transform"><a class="header" href="#appendix-b-adding-requestid-as-a-string-to-outputs-via-model-transform">Appendix B: Adding <code>RequestId</code> as a string to outputs via model transform</a></h2>
+<p>The request ID could be stored on outputs by doing a model transform in <code>sdk-codegen</code> to add a
+<code>RequestId</code> member field. However, this causes problems when an output already has a <code>RequestId</code> field,
+and requires the addition of a synthetic trait to skip binding the field in the generated
+serializers/deserializers.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0032_better_constraint_violations.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc0034_smithy_orchestrator.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0032_better_constraint_violations.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc0034_smithy_orchestrator.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,933 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0032: Better Constraint Violations - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html" class="active"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-better-constraint-violations"><a class="header" href="#rfc-better-constraint-violations">RFC: Better Constraint Violations</a></h1>
+<blockquote>
+<p>Status: Accepted</p>
+<p>Applies to: server</p>
+</blockquote>
+<p>During and after <a href="https://github.com/awslabs/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/awslabs/smithy-rs/pull/1342">the core
+implementation</a> of <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint traits</a> in the server
+SDK, some problems relating to constraint violations were identified. This RFC
+sets out to explain and address three of them: <a href="#impossible-constraint-violations">impossible constraint
+violations</a>, <a href="#collecting-constraint-violations">collecting constraint
+violations</a>, and <a href="#tightness-of-constraint-violations">&quot;tightness&quot; of constraint
+violations</a>. The RFC explains each of them
+in turn, solving them in an iterative and pedagogical manner, i.e. the solution
+of a problem depends on the previous ones having been solved with their
+proposed solutions. The three problems are meant to be addressed atomically in
+one changeset (see the <a href="#checklist">Checklist</a>) section.</p>
+<p>Note: code snippets from generated SDKs in this document are abridged so as to
+be didactic and relevant to the point being made. They are accurate with
+regards to commit <a href="https://github.com/awslabs/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<p><a href="https://github.com/awslabs/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the
+PR</a> where the core implementation of constraint traits
+was made are recommended prior reading to understand this RFC.</p>
+<ul>
+<li><strong>Shape closure</strong>: the set of shapes a shape can &quot;reach&quot;, including itself.</li>
+<li><strong>Transitively constrained shape</strong>: a shape whose closure includes:
+<ol>
+<li>a shape with a <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint trait</a> attached,</li>
+<li>a (member) shape with a <a href="https://smithy.io/2.0/spec/type-refinement-traits.html#required-trait"><code>required</code> trait</a> attached,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#enum"><code>enum</code> shape</a>; or</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#intenum"><code>intEnum</code> shape</a>.</li>
+</ol>
+</li>
+<li>A <strong>directly constrained shape</strong> is any of these:
+<ol>
+<li>a shape with a <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint trait</a> attached,</li>
+<li>a (member) shape with a <a href="https://smithy.io/2.0/spec/type-refinement-traits.html#required-trait"><code>required</code> trait</a> attached,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#enum"><code>enum</code> shape</a>,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#intenum"><code>intEnum</code> shape</a>; or</li>
+<li>a <a href="https://smithy.io/2.0/spec/aggregate-types.html#structure"><code>structure</code> shape</a> with at least one <code>required</code> member shape.</li>
+</ol>
+</li>
+<li><strong>Constrained type</strong>: the Rust type a constrained shape gets rendered as. For
+shapes that are not <code>structure</code>, <code>union</code>, <code>enum</code> or <code>intEnum</code> shapes, these
+are wrapper <a href="https://doc.rust-lang.org/rust-by-example/generics/new_types.html">newtype</a>s.</li>
+</ul>
+<p>In the absence of a qualifier, &quot;constrained shape&quot; should be interpreted as
+&quot;transitively constrained shape&quot;.</p>
+<h2 id="impossible-constraint-violations"><a class="header" href="#impossible-constraint-violations">Impossible constraint violations</a></h2>
+<h3 id="background"><a class="header" href="#background">Background</a></h3>
+<p>A constrained type has a fallible constructor by virtue of it implementing the
+<a href="https://doc.rust-lang.org/std/convert/trait.TryFrom.html"><code>TryFrom</code></a> trait. The error type this constructor may yield is known as a
+<strong>constraint violation</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl TryFrom&lt;UnconstrainedType&gt; for ConstrainedType {
+    type Error = ConstraintViolation;
+
+    fn try_from(value: UnconstrainedType) -&gt; Result&lt;Self, Self::Error&gt; {
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>ConstraintViolation</code> type is a Rust <code>enum</code> with one variant per way
+&quot;constraining&quot; the input value may fail. So, for example, the following Smithy
+model:</p>
+<pre><code class="language-smithy">structure A {
+    @required
+    member: String,
+}
+</code></pre>
+<p>Yields:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// See [`A`](crate::model::A).
+pub mod a {
+    #[derive(std::cmp::PartialEq, std::fmt::Debug)]
+    /// Holds one variant for each of the ways the builder can fail.
+    pub enum ConstraintViolation {
+        /// `member` was not provided but it is required when building `A`.
+        MissingMember,
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Constraint violations are always Rust <code>enum</code>s, even if they only have one
+variant.</p>
+<p>Constraint violations can occur in application code:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use my_server_sdk::model
+
+let res = model::a::Builder::default().build(); // We forgot to set `member`.
+
+match res {
+    Ok(a) =&gt; { ... },
+    Err(e) =&gt; {
+        assert_eq!(model::a::ConstraintViolation::MissingMember, e);
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="problem"><a class="header" href="#problem">Problem</a></h3>
+<p>Currently, the constraint violation types we generate are used by <em>both</em>:</p>
+<ol>
+<li>the server framework upon request deserialization; and</li>
+<li>by users in application code.</li>
+</ol>
+<p>However, the kinds of constraint violations that can occur in application code
+can sometimes be a <em>strict subset</em> of those that can occur during request
+deserialization.</p>
+<p>Consider the following model:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+
+@length(min: 2, max: 69)
+string LengthString
+</code></pre>
+<p>This produces:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct LengthMap(
+    pub(crate) std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+);
+
+impl
+    std::convert::TryFrom&lt;
+        std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+    &gt; for LengthMap
+{
+    type Error = crate::model::length_map::ConstraintViolation;
+
+    /// Constructs a `LengthMap` from an
+    /// [`std::collections::HashMap&lt;std::string::String,
+    /// crate::model::LengthString&gt;`], failing when the provided value does not
+    /// satisfy the modeled constraints.
+    fn try_from(
+        value: std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+    ) -&gt; Result&lt;Self, Self::Error&gt; {
+        let length = value.len();
+        if (1..=69).contains(&amp;length) {
+            Ok(Self(value))
+        } else {
+            Err(crate::model::length_map::ConstraintViolation::Length(length))
+        }
+    }
+}
+
+pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        ),
+    }
+    ...
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how the <code>ConstraintViolation::Value</code> variant is never constructed.
+Indeed, this variant is impossible to be constructed <em>in application code</em>: a
+user has to provide a map whose values are already constrained <code>LengthString</code>s
+to the <code>try_from</code> constructor, which only enforces the map's <code>@length</code> trait.</p>
+<p>The reason why these seemingly &quot;impossible violations&quot; are being generated is
+because they can arise during request deserialization. Indeed, the server
+framework deserializes requests into <strong>fully unconstrained types</strong>. These are
+types holding unconstrained types all the way through their closures. For
+instance, in the case of structure shapes, builder types (the unconstrained
+type corresponding to the structure shape) <a href="https://github.com/awslabs/smithy-rs/pull/1342">hold
+builders</a> all the way down.</p>
+<p>In the case of the above model, below is the alternate <code>pub(crate)</code> constructor
+the server framework uses upon deserialization. Observe how
+<code>LengthMapOfLengthStringsUnconstrained</code> is <em>fully unconstrained</em> and how the
+<code>try_from</code> constructor can yield <code>ConstraintViolation::Value</code>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub(crate) mod length_map_of_length_strings_unconstrained {
+    #[derive(Debug, Clone)]
+    pub(crate) struct LengthMapOfLengthStringsUnconstrained(
+        pub(crate) std::collections::HashMap&lt;std::string::String, std::string::String&gt;,
+    );
+
+    impl std::convert::TryFrom&lt;LengthMapOfLengthStringsUnconstrained&gt;
+        for crate::model::LengthMapOfLengthStrings
+    {
+        type Error = crate::model::length_map_of_length_strings::ConstraintViolation;
+        fn try_from(value: LengthMapOfLengthStringsUnconstrained) -&gt; Result&lt;Self, Self::Error&gt; {
+            let res: Result&lt;
+                std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+                Self::Error,
+            &gt; = value
+                .0
+                .into_iter()
+                .map(|(k, v)| {
+                    let v: crate::model::LengthString = k.try_into().map_err(Self::Error::Key)?;
+
+                    Ok((k, v))
+                })
+                .collect();
+            let hm = res?;
+            Self::try_from(hm)
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>In conclusion, the user is currently exposed to an internal detail of how the
+framework operates that has no bearing on their application code. They
+shouldn't be exposed to impossible constraint violation variants in their Rust
+docs, nor have to <code>match</code> on these variants when handling errors.</p>
+<p>Note: <a href="https://github.com/awslabs/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
+<h3 id="solution-proposal"><a class="header" href="#solution-proposal">Solution proposal</a></h3>
+<p>The problem can be mitigated by adding <code>#[doc(hidden)]</code> to the internal
+variants and <code>#[non_exhaustive]</code> to the enum. We're already doing this in some
+constraint violation types.</p>
+<p>However, a &quot;less leaky&quot; solution is achieved by <em>splitting</em> the constraint
+violation type into two types, which this RFC proposes:</p>
+<ol>
+<li>one for use by the framework, with <code>pub(crate)</code> visibility, named
+<code>ConstraintViolationException</code>; and</li>
+<li>one for use by user application code, with <code>pub</code> visibility, named
+<code>ConstraintViolation</code>.</li>
+</ol>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+    }
+    pub (crate) enum ConstraintViolationException {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        ),
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
+present</a>
+in the case of builder types when <code>publicConstrainedTypes</code> is set to <code>false</code>:</p>
+<ol>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
+constraint traits, setting its visibility to <code>pub (crate)</code>, for exclusive
+use by the framework.</li>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
+builder type the user is exposed to: this builder does not take in
+constrained types and does not enforce all modeled constraints.</li>
+</ol>
+<h2 id="collecting-constraint-violations"><a class="header" href="#collecting-constraint-violations">Collecting constraint violations</a></h2>
+<h3 id="background-1"><a class="header" href="#background-1">Background</a></h3>
+<p>Constrained operations are currently required to have
+<code>smithy.framework#ValidationException</code> as a member in their <a href="https://smithy.io/2.0/spec/service-types.html#operation"><code>errors</code>
+property</a>. This is the
+shape that is rendered in responses when a request contains data that violates
+the modeled constraints.</p>
+<p>The shape is defined in the
+<a href="https://search.maven.org/artifact/software.amazon.smithy/smithy-validation-model"><code>smithy-validation-model</code></a>
+Maven package, <a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy">as
+follows</a>:</p>
+<pre><code class="language-smithy">$version: &quot;2.0&quot;
+
+namespace smithy.framework
+
+/// A standard error for input validation failures.
+/// This should be thrown by services when a member of the input structure
+/// falls outside of the modeled or documented constraints.
+@error(&quot;client&quot;)
+structure ValidationException {
+
+    /// A summary of the validation failure.
+    @required
+    message: String,
+
+    /// A list of specific failures encountered while validating the input.
+    /// A member can appear in this list more than once if it failed to satisfy multiple constraints.
+    fieldList: ValidationExceptionFieldList
+}
+
+/// Describes one specific validation failure for an input member.
+structure ValidationExceptionField {
+    /// A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
+    @required
+    path: String,
+
+    /// A detailed description of the validation failure.
+    @required
+    message: String
+}
+
+list ValidationExceptionFieldList {
+    member: ValidationExceptionField
+}
+</code></pre>
+<p>It was mentioned in the <a href="https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809300673">constraint traits
+RFC</a>, and
+implicit in the definition of Smithy's
+<a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy"><code>smithy.framework.ValidationException</code></a>
+shape, that server frameworks should respond with a <em>complete</em> collection of
+errors encountered during constraint trait enforcement to the client.</p>
+<h3 id="problem-1"><a class="header" href="#problem-1">Problem</a></h3>
+<p>As of writing, the <code>TryFrom</code> constructor of constrained types whose shapes have
+more than one constraint trait attached can only yield a single error. For
+example, the following shape:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>Yields:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct LengthPatternString(pub(crate) std::string::String);
+
+impl LengthPatternString {
+    fn check_length(
+        string: &amp;str,
+    ) -&gt; Result&lt;(), crate::model::length_pattern_string::ConstraintViolation&gt; {
+        let length = string.chars().count();
+
+        if (5..=10).contains(&amp;length) {
+            Ok(())
+        } else {
+            Err(crate::model::length_pattern_string::ConstraintViolation::Length(length))
+        }
+    }
+
+    fn check_pattern(
+        string: String,
+    ) -&gt; Result&lt;String, crate::model::length_pattern_string::ConstraintViolation&gt; {
+        let regex = Self::compile_regex();
+
+        if regex.is_match(&amp;string) {
+            Ok(string)
+        } else {
+            Err(crate::model::length_pattern_string::ConstraintViolation::Pattern(string))
+        }
+    }
+
+    pub fn compile_regex() -&gt; &amp;'static regex::Regex {
+        static REGEX: once_cell::sync::Lazy&lt;regex::Regex&gt; = once_cell::sync::Lazy::new(|| {
+            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support&quot;#)
+        });
+
+        &amp;REGEX
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = crate::model::length_pattern_string::ConstraintViolation;
+
+    /// Constructs a `LengthPatternString` from an [`std::string::String`],
+    /// failing when the provided value does not satisfy the modeled constraints.
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        Self::check_length(&amp;value)?;
+
+        let value = Self::check_pattern(value)?;
+
+        Ok(Self(value))
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how a failure to adhere to the <code>@length</code> trait will short-circuit the
+evaluation of the constructor, when the value could technically also not adhere
+with the <code>@pattern</code> trait.</p>
+<p>Similarly, constrained structures fail upon encountering the first member that
+violates a constraint.</p>
+<p>Additionally, <em>in framework request deserialization code</em>:</p>
+<ul>
+<li>collections whose members are constrained fail upon encountering the first
+member that violates the constraint,</li>
+<li>maps whose keys and/or values are constrained fail upon encountering the
+first violation; and</li>
+<li>structures whose members are constrained fail upon encountering the first
+member that violates the constraint,</li>
+</ul>
+<p>In summary, any shape that is transitively constrained yields types whose
+constructors (both the internal one and the user-facing one) currently
+short-circuit upon encountering the first violation.</p>
+<h3 id="solution-proposal-1"><a class="header" href="#solution-proposal-1">Solution proposal</a></h3>
+<p>The deserializing architecture lends itself to be easily refactored so that we
+can collect constraint violations before returning them. Indeed, note that
+deserializers enforce constraint traits in a two-step phase: first, the
+<em>entirety</em> of the unconstrained value is deserialized, <em>then</em> constraint traits
+are enforced by feeding the entire value to the <code>TryFrom</code> constructor.</p>
+<p>Let's consider a <code>ConstraintViolations</code> type (note the plural) that represents
+a collection of constraint violations that can occur <em>within user application
+code</em>. Roughly:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;;
+
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<ul>
+<li>The main reason for wrapping a vector in <code>ConstraintViolations</code> as opposed to
+directly returning the vector is forwards-compatibility: we may want to
+expand <code>ConstraintViolations</code> with conveniences.</li>
+<li>If the constrained type can only ever yield a single violation, we will
+dispense with <code>ConstraintViolations</code> and keep directly returning the
+<code>crate::model::shape_name::ConstraintViolation</code> type.</li>
+</ul>
+<p>We will analogously introduce a <code>ConstraintViolationExceptions</code> type that
+represents a collection of constraint violations that can occur <em>within the
+framework's request deserialization code</em>. This type will be <code>pub(crate)</code> and
+will be the one the framework will map to Smithy's <code>ValidationException</code> that
+eventually gets serialized into the response.</p>
+<h4 id="collecting-constraint-violations-may-constitute-a-dos-attack-vector"><a class="header" href="#collecting-constraint-violations-may-constitute-a-dos-attack-vector">Collecting constraint violations may constitute a DOS attack vector</a></h4>
+<p>This is a problem that <em>already</em> exists as of writing, but that collecting
+constraint violations highlights, so it is a good opportunity, from a
+pedagogical perspective, to explain it here. Consider the following model:</p>
+<pre><code class="language-smithy">@length(max: 3)
+list ListOfPatternStrings {
+    member: PatternString
+}
+
+@pattern(&quot;expensive regex to evaluate&quot;)
+string PatternString
+</code></pre>
+<p>Our implementation currently enforces constraints <em>from the leaf to the root</em>:
+when enforcing the <code>@length</code> constraint, the <code>TryFrom</code> constructor the server
+framework uses gets a <code>Vec&lt;String&gt;</code> and <em>first</em> checks the members adhere to
+the <code>@pattern</code> trait, and only <em>after</em> is the <code>@length</code> trait checked. This
+means that if a client sends a request with <code>n &gt;&gt;&gt; 3</code> list members, the
+expensive check runs <code>n</code> times, when a constant-time check inspecting the
+length of the input vector would have sufficed to reject the request.
+Additionally, we may want to avoid serializing <code>n</code> <code>ValidationExceptionField</code>s
+due to performance concerns.</p>
+<ol>
+<li>A possibility to circumvent this is making the <code>@length</code> validator special,
+having it bound the other validators via effectively permuting the order of
+the checks and thus short-circuiting.
+<ul>
+<li>In general, it's unclear what constraint traits should cause
+short-circuiting. A probably reasonable rule of thumb is to include
+traits that can be attached directly to aggregate shapes: as of writing,
+that would be <code>@uniqueItems</code> on list shapes and <code>@length</code> on list shapes.</li>
+</ul>
+</li>
+<li>Another possiblity is to <em>do nothing</em> and value <em>complete</em> validation
+exception response messages over trying to mitigate this with special
+handling. One could argue that these kind of DOS attack vectors should be
+taken care of with a separate solution e.g. a layer that bounds a request
+body's size to a reasonable default (see <a href="https://github.com/tokio-rs/axum/pull/1420">how Axum added
+this</a>). We will provide a similar
+request body limiting mechanism regardless.</li>
+</ol>
+<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/awslabs/smithy-rs/pull/2040#discussion_r1036226762">it's fair
+to say that the framework should return an error that is as informative as
+possible, but it doesn't necessarily have to be
+complete</a>.
+However, we will also write a layer, applied by default to all server SDKs,
+that bounds a request body's size to a reasonable (yet high) default. Relying
+on users to manually apply the layer is dangerous, since such a configuration
+is <a href="https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/">trivially
+exploitable</a>.
+Users can always manually apply the layer again to their resulting service if
+they want to further restrict a request's body size.</p>
+<h2 id="tightness-of-constraint-violations"><a class="header" href="#tightness-of-constraint-violations">&quot;Tightness&quot; of constraint violations</a></h2>
+<h3 id="problem-2"><a class="header" href="#problem-2">Problem</a></h3>
+<p><code>ConstraintViolationExceptions</code> <a href="https://www.ecorax.net/tightness/">is not
+&quot;tight&quot;</a> in that there's nothing in the type
+system that indicates to the user, when writing the custom validation error
+mapping function, that the iterator will not return a sequence of
+<code>ConstraintViolationException</code>s that is actually impossible to occur in
+practice.</p>
+<p>Recall that <code>ConstraintViolationException</code>s are <code>enum</code>s that model both direct
+constraint violations as well as transitive ones. For example, given the model:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+
+@length(min: 2, max: 69)
+string LengthString
+</code></pre>
+<p>The corresponding <code>ConstraintViolationException</code> Rust type for the <code>LengthMap</code>
+shape is:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+    }
+    pub (crate) enum ConstraintViolationException {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolationException,
+        ),
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><code>ConstraintViolationExceptions</code> is just a container over this type:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolationExceptions&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolationExceptions&lt;T&gt; { ... }
+<span class="boring">}</span></code></pre></pre>
+<p>There might be multiple map values that fail to adhere to the constraints in
+<code>LengthString</code>, which would make the iterator yield multiple
+<code>length_map::ConstraintViolationException::Value</code>s; however, at most one
+<code>length_map::ConstraintViolationException::Length</code> can be yielded <em>in
+practice</em>. This might be obvious to the service owner when inspecting the model
+and the Rust docs, but it's not expressed in the type system.</p>
+<p>The above tightness problem has been formulated in terms of
+<code>ConstraintViolationExceptions</code>, because the fact that
+<code>ConstraintViolationExceptions</code> contain transitive constraint violations
+highlights the tightness problem. Note, however, that <strong>the tightness problem
+also afflicts <code>ConstraintViolations</code></strong>.</p>
+<p>Indeed, consider the following model:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>This would yield:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
+
+pub mod length_pattern_string {
+    pub enum ConstraintViolation {
+        Length(usize),
+        Pattern(String)
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;;
+
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how the iterator of an instance of
+<code>ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;</code>,
+may, a priori, yield e.g. the
+<code>length_pattern_string::ConstraintViolation::Length</code> variant twice, when it's
+clear that the iterator should contain <em>at most one</em> of each of
+<code>length_pattern_string::ConstraintViolation</code>'s variants.</p>
+<h3 id="final-solution-proposal"><a class="header" href="#final-solution-proposal">Final solution proposal</a></h3>
+<p>We propose a tighter API design.</p>
+<ol>
+<li>We substitute <code>enum</code>s for <code>struct</code>s whose members are all <code>Option</code>al,
+representing all the constraint violations that can occur.</li>
+<li>For list shapes and map shapes:
+<ol>
+<li>we implement <code>IntoIterator</code> on an additional <code>struct</code> <code>Members</code>
+representing only the violations that can occur on the collection's
+members.</li>
+<li>we add a <em>non</em> <code>Option</code>-al field to the <code>struct</code> representing the
+constraint violations of type <code>Members</code>.</li>
+</ol>
+</li>
+</ol>
+<p>Let's walk through an example. Take the last model:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>This would yield, as per the first substitution:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_pattern_string {
+    pub struct ConstraintViolations {
+        pub length: Option&lt;constraint_violation::Length&gt;,
+        pub pattern: Option&lt;constraint_violation::Pattern&gt;,
+    }
+
+    pub mod constraint_violation {
+        pub struct Length(usize);
+        pub struct Pattern(String);
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = length_pattern_string::ConstraintViolations;
+
+    // The error type returned by this constructor, `ConstraintViolations`,
+    // will always have _at least_ one member set.
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>We now expand the model to highlight the second step of the algorithm:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+</code></pre>
+<p>This gives us:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub struct ConstraintViolations {
+        pub length: Option&lt;constraint_violation::Length&gt;,
+
+        // Would be `Option&lt;T&gt;` in the case of an aggregate shape that is _not_ a
+        // list shape or a map shape.
+        pub member_violations: constraint_violation::Members,
+    }
+
+    pub mod constraint_violation {
+        // Note that this could now live outside the `length_map` module and be
+        // reused across all `@length`-constrained shapes, if we expanded it with
+        // another `usize` indicating the _modeled_ value in the `@length` trait; by
+        // keeping it inside `length_map` we can hardcode that value in the
+        // implementation of e.g. error messages.
+        pub struct Length(usize);
+
+        pub struct Members {
+            pub(crate) Vec&lt;Member&gt;
+        }
+
+        pub struct Member {
+            // If the map's key shape were constrained, we'd have a `key`
+            // field here too.
+
+            value: Option&lt;Value&gt;
+        }
+
+        pub struct Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        );
+
+        impl IntoIterator&lt;Item = Member&gt; for Members { ... }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<hr />
+<p>The above examples have featured the tight API design with
+<code>ConstraintViolation</code>s. Of course, we will apply the same design in the case of
+<code>ConstraintViolationException</code>s. For the sake of completeness, let's expand our
+model yet again with a structure shape:</p>
+<pre><code class="language-smithy">structure A {
+    @required
+    member: String,
+
+    @required
+    length_map: LengthMap,
+}
+</code></pre>
+<p>And this time let's feature <em>both</em> the resulting
+<code>ConstraintViolationExceptions</code> and <code>ConstraintViolations</code> types:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod a {
+    pub struct ConstraintViolationExceptions {
+        // All fields must be `Option`, despite the members being `@required`,
+        // since no violations for their values might have occurred.
+
+        pub missing_member_exception: Option&lt;constraint_violation_exception::MissingMember&gt;,
+        pub missing_length_map_exception: Option&lt;constraint_violation_exception::MissingLengthMap&gt;,
+        pub length_map_exceptions: Option&lt;crate::model::length_map::ConstraintViolationExceptions&gt;,
+    }
+
+    pub mod constraint_violation_exception {
+        pub struct MissingMember;
+        pub struct MissingLengthMap;
+    }
+
+    pub struct ConstraintViolations {
+        pub missing_member: Option&lt;constraint_violation::MissingMember&gt;,
+        pub missing_length_map: Option&lt;constraint_violation::MissingLengthMap&gt;,
+    }
+
+    pub mod constraint_violation {
+        pub struct MissingMember;
+        pub struct MissingLengthMap;
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>As can be intuited, the only differences are that:</p>
+<ul>
+<li><code>ConstraintViolationExceptions</code> hold transitive violations while
+<code>ConstraintViolations</code> only need to expose direct violations (as explained in
+the <a href="#impossible-constraint-violations">Impossible constraint violations</a>
+section),</li>
+<li><code>ConstraintViolationExceptions</code> have members suffixed with <code>_exception</code>, as
+is the module name.</li>
+</ul>
+<p>Note that while the constraint violation (exception) type names are plural, the
+module names are always singular.</p>
+<p>We also make a conscious decision of, in this case of structure shapes, making
+the types of all members <code>Option</code>s, for simplicity. Another choice would have
+been to make <code>length_map_exceptions</code> not <code>Option</code>-al, and, in the case where no
+violations in <code>LengthMap</code> values occurred, set
+<code>length_map::ConstraintViolations::length</code> to <code>None</code> and
+<code>length_map::ConstraintViolations::member_violations</code> eventually reach an empty
+iterator. However, it's best that we use the expressiveness of <code>Option</code>s at the
+earliest (&quot;highest&quot; in the shape hierarchy) opportunity: if a member is <code>Some</code>,
+it means it (eventually) reaches data.</p>
+<h2 id="checklist"><a class="header" href="#checklist">Checklist</a></h2>
+<p>Unfortunately, while this RFC <em>could</em> be implemented iteratively (i.e. solve
+each of the problems in turn), it would introduce too much churn and throwaway
+work: solving the tightness problem requires a more or less complete overhaul
+of the constraint violations code generator. It's best that all three problems
+be solved in the same changeset.</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Generate <code>ConstraintViolations</code> and <code>ConstraintViolationExceptions</code> types
+so as to not reify <a href="#impossible-constraint-violations">impossible constraint
+violations</a>, add the ability to <a href="#collecting-constraint-violations">collect
+constraint
+violations</a>, and solve the <a href="#tightness-of-constraint-violations">&quot;tightness&quot; problem of constraint violations</a>.</li>
+<li><input disabled="" type="checkbox"/>
+Special-case generated request deserialization code for operations
+using <code>@length</code> and <code>@uniqueItems</code> constrained shapes whose closures reach
+other constrained shapes so that the validators for these two traits
+short-circuit upon encountering a number of inner constraint violations
+above a certain threshold.</li>
+<li><input disabled="" type="checkbox"/>
+Write and expose a layer, applied by default to all generated server SDKs,
+that bounds a request body's size to a reasonable (yet high) default, to prevent <a href="https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/">trivial DoS attacks</a>.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc0033_improve_sdk_request_id_access.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc0033_improve_sdk_request_id_access.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

@@ -33,6 +33,7 @@
 
     </head>
     <body>
+    <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
@@ -70,10 +71,12 @@
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
             var html = document.querySelector('html');
-            var sidebar = 'hidden';
+            var sidebar = null;
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
             }
             html.classList.remove('sidebar-visible');
             html.classList.add("sidebar-" + sidebar);
@@ -81,7 +84,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/middleware.html"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="server/anatomy.html"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">7.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">7.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">7.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">7.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">7.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">7.30.</strong> RFC-0030: Serialization And Deserialization</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -402,7 +405,7 @@ pub struct BigDecimal(String);
 /// The [`aws-smithy-types-convert`](https://crates.io/crates/aws-smithy-types-convert) crate
 /// can be used for conversions to/from other libraries, such as
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
     seconds: i64,
     subsecond_nanos: u32,
@@ -925,6 +928,391 @@ pub enum AttributeValue {
     Unknown,
 }
 <span class="boring">}</span></code></pre></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="smithy-client"><a class="header" href="#smithy-client">Smithy Client</a></h1>
+<p><code>smithy-rs</code> provides the ability to generate a client whose operations defined by a smithy model. The documents referenced
+here explain aspects of the client in greater detail.</p>
+<ul>
+<li><a href="client/./orchestrator.html">What is the 'orchestrator' and why does it exist?</a></li>
+<li><a href="client/./identity_and_auth.html">Identity and Auth</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="what-is-the-orchestrator"><a class="header" href="#what-is-the-orchestrator">What is the orchestrator?</a></h2>
+<p>At a very high level, an orchestrator is a process for transforming requests into responses. Please enjoy this fancy chart:</p>
+<pre class="mermaid">flowchart TB
+	A(Orchestrate)--&gt;|Input|B(Request serialization)
+	B--&gt;|Transmit Request|C(Connection)
+	C--&gt;|Transmit Response|D(Response deserialization)
+	D--&gt;|Success|E(&quot;Ok(Output)&quot;)
+	D--&gt;|Unretryable Failure|F(&quot;Err(SdkError)&quot;)
+	D--&gt;|Retryable Failure|C
+</pre>
+<p>This process is also referred to as the &quot;request/response lifecycle.&quot; In this example, the types of &quot;transmit request&quot; and &quot;transmit response&quot; are protocol-dependent. Typical operations use <a href="https://en.wikipedia.org/wiki/HTTP">HTTP</a>, but we plan to support other protocols like <a href="https://en.wikipedia.org/wiki/MQTT">MQTT</a> in the future.</p>
+<p>In addition to the above steps, the orchestrator must also handle:</p>
+<ul>
+<li><strong>Endpoint resolution:</strong> figuring out which URL to send a request to.</li>
+<li><strong>Authentication, identity resolution, and request signing:</strong> Figuring out who is sending the request, their credentials, and how we should insert the credentials into a request.</li>
+<li><strong>Interceptors</strong>: Running lifecycle hooks at each point in the request/response lifecycle.</li>
+<li><strong>Runtime Plugins:</strong> Resolving configuration from config builders.</li>
+<li><strong>Retries:</strong> Categorizing responses from services and deciding whether to retry and how long to wait before doing so.</li>
+<li><strong>Trace Probes:</strong> A <a href="https://en.wikipedia.org/wiki/Sink_(computing)">sink</a> for events that occur during the request/response lifecycle.</li>
+</ul>
+<h2 id="how-is-an-orchestrator-configured"><a class="header" href="#how-is-an-orchestrator-configured">How is an orchestrator configured?</a></h2>
+<p>While the structure of an orchestrator is fixed, the actions it takes during its lifecycle are highly configurable. Users have two ways to configure this process:</p>
+<ul>
+<li><strong>Runtime Plugins</strong>:
+<ul>
+<li><strong>When can these be set?</strong> Any time before calling <code>orchestrate</code>.</li>
+<li><strong>When are they called by the orchestrator?</strong> In two batches, at the very beginning of <code>orchestrate</code>.</li>
+<li><strong>What can they do?</strong>
+<ul>
+<li>They can set configuration to be used by the orchestrator or in interceptors.</li>
+<li>They can set interceptors.</li>
+</ul>
+</li>
+<li><strong>Are they user-definable?</strong> No. At present, only smithy-rs maintainers may define these.</li>
+</ul>
+</li>
+<li><strong>Interceptors</strong>:
+<ul>
+<li><strong>When can these be set?</strong> Any time before calling <code>orchestrate</code>.</li>
+<li><strong>When are they called by the orchestrator?</strong> At each step in the request-response lifecycle.</li>
+<li><strong>What can they do?</strong>
+<ul>
+<li>They can set configuration to be used by the orchestrator or in interceptors.</li>
+<li>They can log information.</li>
+<li>Depending on when they're run, they can modify the input, transmit request, transmit response, and the output/error.</li>
+</ul>
+</li>
+<li><strong>Are they user-definable?</strong> Yes.</li>
+</ul>
+</li>
+</ul>
+<p>Configuration for a request is constructed by runtime plugins just after calling <code>orchestrate</code>. Configuration is stored in a <code>ConfigBag</code>: a hash map that's keyed on type's <a href="https://doc.rust-lang.org/stable/std/any/struct.TypeId.html"><code>TypeId</code></a> (an opaque object, managed by the Rust compiler, which references some type.)</p>
+<h2 id="what-does-the-orchestrator-do"><a class="header" href="#what-does-the-orchestrator-do">What does the orchestrator do?</a></h2>
+<p>The orchestrator's work is divided into four phases:</p>
+<p><em>NOTE: If an interceptor fails, then the other interceptors for that lifecycle event are still run. All resulting errors are collected and emitted together.</em></p>
+<ol start="0">
+<li><strong>Building the <code>ConfigBag</code> and mounting interceptors</strong>.
+<ul>
+<li><em>This phase is infallible.</em></li>
+<li>An interceptor context is created. This will hold request and response objects, making them available to interceptors.</li>
+<li>All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
+<li>All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
+</ul>
+</li>
+<li><strong>Request Construction</strong>
+<ul>
+<li><em>This phase is fallible.</em></li>
+<li>The <em>&quot;read before serialization&quot;</em> and <em>&quot;modify before serialization&quot;</em> interceptors are called.</li>
+<li>The input is serialized into a transmit request.</li>
+<li>The <em>&quot;read after serialization&quot;</em> and <em>&quot;modify before retry</em> loop&quot; interceptors are called.</li>
+<li>Before making an attempt, the retry handler is called to check if an attempt should be made. The retry handler makes this decision for an initial attempt as well as for the retry attempts. If an initial attempt should be made, then the orchestrator enters the Dispatch phase. Otherwise, a throttling error is returned.</li>
+</ul>
+</li>
+<li><strong>Request Dispatch</strong>
+<ul>
+<li><em>This phase is fallible. This phase's tasks are performed in a loop. Retryable request failures will be retried, and unretryable failures will end the loop.</em></li>
+<li>The <em>&quot;read before attempt&quot;</em> interceptors are run.</li>
+<li>An endpoint is resolved according to an endpoint resolver. The resolved endpoint is then applied to the transmit request.</li>
+<li>The <em>&quot;read before signing&quot;</em> and <em>&quot;modify before signing&quot;</em> interceptors are run.</li>
+<li>An identity and a signer are resolved according to an authentication resolver. The signer then signs the transmit request with the identity.</li>
+<li>The <em>&quot;read after signing&quot;</em>, <em>&quot;read before transmit&quot;</em>, and <em>&quot;modify before transmit&quot;</em> interceptors are run.</li>
+<li>The transmit request is passed into the connection, and a transmit response is received.</li>
+<li>The <em>&quot;read after transmit&quot;</em>, <em>&quot;read before deserialization&quot;</em>, and <em>&quot;modify before deserialization&quot;</em> interceptors are run.</li>
+<li>The transmit response is deserialized.</li>
+<li>The <em>&quot;read after attempt&quot;</em> and <em>&quot;modify before attempt</em> completion&quot; interceptors are run.</li>
+<li>The retry strategy is called to check if a retry is necessary. If a retry is required, the Dispatch phase restarts. Otherwise, the orchestrator enters the Response Handling phase.</li>
+</ul>
+</li>
+<li><strong>Response Handling</strong>
+<ul>
+<li><em>This phase is fallible.</em></li>
+<li>The <em>&quot;read after deserialization&quot;</em> and <em>&quot;modify before completion&quot;</em> interceptors are run.</li>
+<li>Events are dispatched to any trace probes that the user has set.</li>
+<li>The <em>&quot;read after execution&quot;</em> interceptors are run.</li>
+</ul>
+</li>
+</ol>
+<p>At the end of all this, the response is returned. If an error occurred at any point, then the response will contain one or more errors, depending on what failed. Otherwise, the output will be returned.</p>
+<h2 id="how-is-the-orchestrator-implemented-in-rust"><a class="header" href="#how-is-the-orchestrator-implemented-in-rust">How is the orchestrator implemented in Rust?</a></h2>
+<h3 id="avoiding-generics-at-all-costs"><a class="header" href="#avoiding-generics-at-all-costs">Avoiding generics at all costs</a></h3>
+<p>In designing the orchestrator, we sought to solve the problems we had with the original smithy client. The client made heavy use of generics, allowing for increased performance, but at the cost of increased maintenance burden and <a href="https://rustc-dev-guide.rust-lang.org/backend/monomorph.html#polymorphization">increased compile times</a>. The Rust compiler, usually very helpful, isn't well-equipped to explain trait errors when bounds are this complex, and so the resulting client was difficult to extend. <a href="https://github.com/rust-lang/rust/issues/41517">Trait aliases</a> would have helped, but they're not (at the time of writing) available.</p>
+<p><em>The type signatures for the old client and its <code>call</code> method:</em></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware&lt;C&gt;,
+    R: retry::NewRequestPolicy,
+{
+    pub async fn call&lt;O, T, E, Retry&gt;(&amp;self, op: Operation&lt;O, Retry&gt;) -&gt; Result&lt;T, SdkError&lt;E&gt;&gt;
+        where
+            O: Send + Sync,
+            E: std::error::Error + Send + Sync + 'static,
+            Retry: Send + Sync,
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            Retry: ClassifyRetry&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;,
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+    {
+        self.call_raw(op).await.map(|res| res.parsed)
+    }
+
+    pub async fn call_raw&lt;O, T, E, Retry&gt;(
+        &amp;self,
+        op: Operation&lt;O, Retry&gt;,
+    ) -&gt; Result&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;
+        where
+            O: Send + Sync,
+            E: std::error::Error + Send + Sync + 'static,
+            Retry: Send + Sync,
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            Retry: ClassifyRetry&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;,
+        // This bound is not _technically_ inferred by all the previous bounds, but in practice it
+        // is because _we_ know that there is only implementation of Service for Parsed
+        // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
+        // and will produce (as expected) Response = SdkSuccess&lt;T&gt;, Error = SdkError&lt;E&gt;. But Rust
+        // doesn't know that -- there _could_ theoretically be other implementations of Service for
+        // Parsed that don't return those same types. So, we must give the bound.
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+    {
+        // The request/response lifecycle
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><em>The type signature for the new <code>orchestrate</code> method:</em></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn orchestrate(
+    input: Input,
+    runtime_plugins: &amp;RuntimePlugins,
+    // Currently, SdkError is HTTP-only. We currently use it for backwards-compatibility purposes.
+    // The `HttpResponse` generic will likely be removed in the future.
+) -&gt; Result&lt;Output, SdkError&lt;Error, HttpResponse&gt;&gt; {
+	// The request/response lifecycle
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Wait a second, I hear you ask. &quot;I see an <code>Input</code> and <code>Output</code> there, but you're not declaring any generic type arguments. What gives?&quot;</p>
+<p>I'm glad you asked. Generally, when you need traits, but you aren't willing to use generic type arguments, then you must <a href="https://doc.rust-lang.org/std/boxed/index.html"><code>Box</code></a>. Polymorphism is achieved through <a href="https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch">dynamic dispatch</a> instead of <a href="https://doc.rust-lang.org/book/ch10-01-syntax.html#performance-of-code-using-generics">static dispatch</a>, and this comes with a small runtime cost.</p>
+<p>So, what are <code>Input</code> and <code>Output</code>? They're our own special flavor of a boxed trait object.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub type Input = TypeErasedBox;
+pub type Output = TypeErasedBox;
+pub type Error = TypeErasedBox;
+
+/// A new-type around `Box&lt;dyn Any + Send + Sync&gt;`
+#[derive(Debug)]
+pub struct TypeErasedBox {
+    inner: Box&lt;dyn Any + Send + Sync&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The orchestrator itself doesn't know about any concrete types. Instead, it passes boxed data between the various components of the request/response lifecycle. Individual components access data in two ways:</p>
+<ol>
+<li><strong>From the <code>ConfigBag</code>:</strong></li>
+</ol>
+<ul>
+<li><em>(with an accessor)</em> <code>let retry_strategy = cfg.retry_strategy();</code></li>
+<li><em>(with the get method)</em> <code>let retry_strategy = cfg.get::&lt;Box&lt;dyn RetryStrategy&gt;&gt;()</code></li>
+</ul>
+<ol start="2">
+<li><strong>From the <code>InterceptorContext</code>:</strong></li>
+</ol>
+<ul>
+<li><em>(owned)</em> <code>let put_object_input: PutObjectInput = ctx.take_input().unwrap().downcast().unwrap()?;</code></li>
+<li><em>(by reference)</em> <code>let put_object_input = ctx.input().unwrap().downcast_ref::&lt;PutObjectInput&gt;().unwrap();</code></li>
+</ul>
+<p>Users can only call <code>ConfigBag::get</code> or <a href="https://en.wikipedia.org/wiki/Downcasting">downcast</a> a <code>TypeErasedBox</code> to types they have access to, which allows maintainers to ensure encapsulation. For example: a plugin writer may declare a private type, place it in the config bag, and then later retrieve it. Because the type is private, only code in the same crate/module can ever insert or retrieve it. Therefore, there's less worry that someone will depend on a hidden, internal detail and no worry they'll accidentally overwrite a type in the bag.</p>
+<blockquote>
+<p><em>NOTE: When inserting values into a config bag, using one of the <code>set_&lt;component&gt;</code> methods is always preferred, as this prevents mistakes related to inserting similar, but incorrect types.</em></p>
+</blockquote>
+<h3 id="the-actual-code"><a class="header" href="#the-actual-code">The actual code</a></h3>
+<p>The current implementation of <code>orchestrate</code> is defined <a href="https://github.com/awslabs/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23">here</a>, in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime</code> crate</a>. Related code can be found in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime-api</code> crate</a>.</p>
+<h2 id="frequently-asked-questions"><a class="header" href="#frequently-asked-questions">Frequently asked questions</a></h2>
+<h3 id="why-cant-users-create-and-use-their-own-runtime-plugins"><a class="header" href="#why-cant-users-create-and-use-their-own-runtime-plugins">Why can't users create and use their own runtime plugins?</a></h3>
+<p>We chose to hide the runtime plugin API from users because we are concerned that exposing it will cause more problems than it solves. Instead, we encourage users to use interceptors. This is because, when setting a runtime plugin, any existing runtime plugin with the same type will be replaced. For example, there can only be one retry strategy or response deserializer. Errors resulting from unintentionally overriding a plugin would be difficult for users to diagnose, and would consume valuable development time.</p>
+<h3 id="why-does-the-orchestrator-exist"><a class="header" href="#why-does-the-orchestrator-exist">Why does the orchestrator exist?</a></h3>
+<p>The orchestrator exists because there is an AWS-internal initiative to bring the architecture of all AWS SDKs closer to one another.</p>
+<h3 id="why-does-this-document-exist-when-theres-already-an-orchestrator-rfc"><a class="header" href="#why-does-this-document-exist-when-theres-already-an-orchestrator-rfc">Why does this document exist when there's already an orchestrator RFC?</a></h3>
+<p>Because RFCs become outdated as designs evolve. It is our intention to keep this document up to date with our current implementation.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="identity-and-auth-in-clients"><a class="header" href="#identity-and-auth-in-clients">Identity and Auth in Clients</a></h1>
+<p>The <a href="https://smithy.io/2.0/spec/authentication-traits.html">Smithy specification establishes several auth related modeling traits</a> that can be applied to
+operation and service shapes. To briefly summarize:</p>
+<ul>
+<li>The auth schemes that are supported by a service are declared on the service shape</li>
+<li>Operation shapes MAY specify the subset of service-defined auth schemes they support. If none are specified, then all service-defined auth schemes are supported.</li>
+</ul>
+<p>A smithy code generator MUST support at least one auth scheme for every modeled operation, but it need not support ALL modeled auth schemes.</p>
+<p>This design document establishes how smithy-rs implements this specification.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Auth:</strong> Either a shorthand that represents both of the authentication and authorization terms below,
+or an ambiguous representation of one of them. In this doc, this term will always refer to both.</li>
+<li><strong>Authentication:</strong> The process of proving an entity is who they claim they are, sometimes referred to as AuthN.</li>
+<li><strong>Authorization:</strong> The process of granting an authenticated entity the permission to
+do something, sometimes referred to as AuthZ.</li>
+<li><strong>Identity:</strong> The information required for authentication.</li>
+<li><strong>Signing:</strong> The process of attaching metadata to a request that allows a server to authenticate that request.</li>
+</ul>
+<h2 id="overview-of-smithy-client-auth"><a class="header" href="#overview-of-smithy-client-auth">Overview of Smithy Client Auth</a></h2>
+<p>There are two stages to identity and auth:</p>
+<ol>
+<li>Configuration</li>
+<li>Execution</li>
+</ol>
+<h3 id="the-configuration-stage"><a class="header" href="#the-configuration-stage">The configuration stage</a></h3>
+<p>First, let's establish the aspects of auth that can be configured from the model at codegen time.</p>
+<ul>
+<li><strong>Data</strong>
+<ul>
+<li><strong>AuthOptionResolverParams:</strong> parameters required to resolve auth options. These parameters are allowed
+to come from both the client config and the operation input structs.</li>
+<li><strong>HttpAuthSchemes:</strong> a list of auth schemes that can be used to sign HTTP requests. This information
+comes directly from the service model.</li>
+<li><strong>AuthSchemeProperties:</strong> configuration from the auth scheme for the signer.</li>
+<li><strong>IdentityResolvers:</strong> list of available identity resolvers.</li>
+</ul>
+</li>
+<li><strong>Implementations</strong>
+<ul>
+<li><strong>IdentityResolver:</strong> resolves an identity for use in authentication.
+There can be multiple identity resolvers that need to be selected from.</li>
+<li><strong>HttpRequestSigner:</strong> a signing implementation that signs a HTTP request.</li>
+<li><strong>AuthOptionResolver:</strong> resolves a list of auth options for a given operation and its inputs.</li>
+</ul>
+</li>
+</ul>
+<p>As it is undocumented (at time of writing), this document assumes that the code generator
+creates one service-level runtime plugin, and an operation-level runtime plugin per operation, hence
+referred to as the service runtime plugin and operation runtime plugin.</p>
+<p>The code generator emits code to add identity resolvers and HTTP auth schemes to the config bag
+in the service runtime plugin. It then emits code to register an interceptor in the operation runtime
+plugin that reads the operation input to generate the auth option resolver params (which also get added
+to the config bag).</p>
+<h3 id="the-execution-stage"><a class="header" href="#the-execution-stage">The execution stage</a></h3>
+<p>At a high-level, the process of resolving an identity and signing a request looks as follows:</p>
+<ol>
+<li>Retrieve the <code>AuthOptionResolverParams</code> from the config bag. The <code>AuthOptionResolverParams</code> allow client
+config and operation inputs to play a role in which auth option is selected.</li>
+<li>Retrieve the <code>AuthOptionResolver</code> from the config bag, and use it to resolve the auth options available
+with the <code>AuthOptionResolverParams</code>. The returned auth options are in priority order.</li>
+<li>Retrieve the <code>IdentityResolvers</code> list from the config bag.</li>
+<li>For each auth option:
+<ol>
+<li>Attempt to find an HTTP auth scheme for that auth option in the config bag (from the <code>HttpAuthSchemes</code> list).</li>
+<li>If an auth scheme is found:
+<ol>
+<li>Use the auth scheme to extract the correct identity resolver from the <code>IdentityResolvers</code> list.</li>
+<li>Retrieve the <code>HttpRequestSigner</code> implementation from the auth scheme.</li>
+<li>Use the <code>IdentityResolver</code> to resolve the identity needed for signing.</li>
+<li>Sign the request with the identity, and break out of the loop from step #4.</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p>In general, it is assumed that if an HTTP auth scheme exists for an auth option, then an identity resolver
+also exists for that auth option. Otherwise, the auth option was configured incorrectly during codegen.</p>
+<h2 id="how-this-looks-in-rust"><a class="header" href="#how-this-looks-in-rust">How this looks in Rust</a></h2>
+<p>The client will use trait objects and dynamic dispatch for the <code>IdentityResolver</code>,
+<code>HttpRequestSigner</code>, and <code>AuthOptionResolver</code> implementations. Generics could potentially be used,
+but the number of generic arguments and trait bounds in the orchestrator would balloon to
+unmaintainable levels if each configurable implementation in it was made generic.</p>
+<p>These traits look like this:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Clone, Debug)]
+pub struct HttpAuthOption {
+    scheme_id: &amp;'static str,
+    properties: Arc&lt;PropertyBag&gt;,
+}
+
+pub trait AuthOptionResolver: Send + Sync + Debug {
+    fn resolve_auth_options&lt;'a&gt;(
+        &amp;'a self,
+        params: &amp;AuthOptionResolverParams,
+    ) -&gt; Result&lt;Cow&lt;'a, [HttpAuthOption]&gt;, BoxError&gt;;
+}
+
+pub trait IdentityResolver: Send + Sync + Debug {
+    // `identity_properties` come from `HttpAuthOption::properties`
+    fn resolve_identity(&amp;self, identity_properties: &amp;PropertyBag) -&gt; BoxFallibleFut&lt;Identity&gt;;
+}
+
+pub trait HttpRequestSigner: Send + Sync + Debug {
+    /// Return a signed version of the given request using the given identity.
+    ///
+    /// If the provided identity is incompatible with this signer, an error must be returned.
+    fn sign_request(
+        &amp;self,
+        request: &amp;mut HttpRequest,
+        identity: &amp;Identity,
+        // `signing_properties` come from `HttpAuthOption::properties`
+        signing_properties: &amp;PropertyBag,
+    ) -&gt; Result&lt;(), BoxError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p><code>IdentityResolver</code> and <code>HttpRequestSigner</code> implementations are both given an <code>Identity</code>, but
+will need to understand what the concrete data type underlying that identity is. The <code>Identity</code> struct
+uses a <code>Arc&lt;dyn Any&gt;</code> to represent the actual identity data so that generics are not needed in
+the traits:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Clone, Debug)]
+pub struct Identity {
+    data: Arc&lt;dyn Any + Send + Sync&gt;,
+    expiration: Option&lt;SystemTime&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Identities can often be cached and reused across several requests, which is why the <code>Identity</code> uses <code>Arc</code>
+rather than <code>Box</code>. This also reduces the allocations required. The signer implementations
+will use downcasting to access the identity data types they understand. For example, with AWS SigV4,
+it might look like the following:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn sign_request(
+    &amp;self,
+    request: &amp;mut HttpRequest,
+    identity: &amp;Identity,
+    signing_properties: &amp;PropertyBag
+) -&gt; Result&lt;(), BoxError&gt; {
+    let aws_credentials = identity.data::&lt;Credentials&gt;()
+        .ok_or_else(|| &quot;The SigV4 signer requires AWS credentials&quot;)?;
+    let access_key = &amp;aws_credentials.secret_access_key;
+    // -- snip --
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Also note that identity data structs are expected to censor their own sensitive fields, as
+<code>Identity</code> implements the automatically derived <code>Debug</code> trait.</p>
+<h3 id="challenges-with-this-identity-design"><a class="header" href="#challenges-with-this-identity-design">Challenges with this <code>Identity</code> design</a></h3>
+<p>A keen observer would note that there is an <code>expiration</code> field on <code>Identity</code>, and may ask, &quot;what about
+non-expiring identities?&quot; This is the result of a limitation on <code>Box&lt;dyn Any&gt;</code>, where it can only be
+downcasted to concrete types. There is no way to downcast to a <code>dyn Trait</code> since the information required
+to verify that that type is that trait is lost at compile time (a <code>std::any::TypeId</code> only encodes information
+about the concrete type).</p>
+<p>In an ideal world, it would be possible to extract the expiration like this:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait ExpiringIdentity {
+    fn expiration(&amp;self) -&gt; SystemTime;
+}
+
+let identity: Identity = some_identity();
+if let Some(expiration) = identity.data::&lt;&amp;dyn ExpiringIdentity&gt;().map(ExpiringIdentity::expiration) {
+    // make a decision based on that expiration
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Theoretically, you should be able to save off additional type information alongside the <code>Box&lt;dyn Any&gt;</code> and use
+unsafe code to transmute to known traits, but it is difficult to implement in practice, and adds unsafe code
+in a security critical piece of code that could otherwise be avoided.</p>
+<p>The <code>expiration</code> field is a special case that is allowed onto the <code>Identity</code> struct directly since identity
+cache implementations will always need to be aware of this piece of information, and having it as an <code>Option</code>
+still allows for non-expiring identities.</p>
+<p>Ultimately, this design constrains <code>HttpRequestSigner</code> implementations to concrete types. There is no world
+where an <code>HttpRequestSigner</code> can operate across multiple unknown identity data types via trait, and that
+should be OK since the signer implementation can always be wrapped with an implementation that is aware
+of the concrete type provided by the identity resolver, and can do any necessary conversions.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="smithy-server"><a class="header" href="#smithy-server">Smithy Server</a></h1>
 <p>Smithy Rust provides the ability to generate a server whose operations are provided by the customer.</p>
 <ul>
@@ -1314,7 +1702,7 @@ let app = PokemonService::builder_with_plugins(plugins)
 <span class="boring">}</span></code></pre></pre>
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 <h3 id="example"><a class="header" href="#example">Example</a></h3>
-<p>The Pokémon service example, located at <code>rust-runtime/aws-smithy-http-server/examples/pokemon-service</code>, sets up a <code>tracing</code> <code>Subscriber</code> as follows:</p>
+<p>The Pokémon service example, located at <code>/examples/pokemon-service</code>, sets up a <code>tracing</code> <code>Subscriber</code> as follows:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
@@ -1721,7 +2109,7 @@ where
     }
 <span class="boring">}</span></code></pre></pre>
 <p>When we <code>GetPokemonService::from_handler</code> or <code>GetPokemonService::from_service</code>, the model service produced, <code>S</code>, will meet the constraints above.</p>
-<p>There is an associated <code>Layer</code>, <code>UpgradeLayer&lt;P, Op, B&gt;</code> which constructs <code>Upgrade</code> from a service.</p>
+<p>There is an associated <code>Layer</code>, <code>UpgradeLayer&lt;P, Op&gt;</code> which constructs <code>Upgrade</code> from a service.</p>
 <p>The upgrade procedure is finalized by the application of the <code>Layer</code> <code>L</code>, referenced in <code>Operation&lt;S, L&gt;</code>. In this way the entire upgrade procedure takes an <code>Operation&lt;S, L&gt;</code> and returns a HTTP service.</p>
 <pre class="mermaid">stateDiagram-v2
     direction LR
@@ -2035,7 +2423,7 @@ pub trait Plugin&lt;Protocol, Op, S, L&gt; {
 
     Op1 --&gt; Op2 : Plugin#colon;#colon;map
 </pre>
-<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs">aws-smithy-http-server/examples/pokemon-service/src/plugin.rs</a>.</p>
+<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
 <p>The service builder API requires plugins to be specified upfront - they must be passed as an argument to <code>builder_with_plugins</code> and cannot be modified afterwards.
 This constraint is in place to ensure that all handlers are upgraded using the same set of plugins.</p>
 <p>You might find yourself wanting to apply <em>multiple</em> plugins to your service.
@@ -2145,13 +2533,15 @@ This document introduces the project and how code is being generated. It is writ
 <h2 id="folder-structure"><a class="header" href="#folder-structure">Folder structure</a></h2>
 <p>The project is divided in:</p>
 <ul>
-<li><code>/codegen</code>: it contains shared code for both client and server, but only generates a client</li>
-<li><code>/codegen-server</code>: server only. This project started with <code>codegen</code> to generate a client, but client and server share common code; that code lives in <code>codegen</code>, which <code>codegen-server</code> depends on</li>
+<li><code>/codegen-core</code>: contains common code to be used for both client and server code generation</li>
+<li><code>/codegen-client</code>: client code generation. Depends on <code>codegen-core</code></li>
+<li><code>/codegen-server</code>: server code generation. Depends on <code>codegen-core</code></li>
 <li><code>/aws</code>: the AWS Rust SDK, it deals with AWS services specifically. The folder structure reflects the project's, with the <code>rust-runtime</code> and the <code>codegen</code></li>
 <li><code>/rust-runtime</code>: the generated client and server crates may depend on crates in this folder. Crates here are not code generated. The only crate that is not published is <code>inlineable</code>,
 which contains common functions used by other crates, <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/CargoDependency.kt#L95-L95">copied into</a> the source crate</li>
 </ul>
-<p><code>/rust-runtime</code> crates (&quot;runtime crates&quot;) are added to a crate's dependency only when used. If a model uses event streams, it will depend on <a href="https://docs.rs/aws-smithy-eventstream"><code>aws-smithy-eventstream</code></a>.</p>
+<p>Crates in <code>/rust-runtime</code> (informally referred to as &quot;runtime crates&quot;) are added to a crate's dependency only when used.
+For example, if a model uses event streams, the generated crates will depend on <a href="https://docs.rs/aws-smithy-eventstream"><code>aws-smithy-eventstream</code></a>.</p>
 <h2 id="generating-code"><a class="header" href="#generating-code">Generating code</a></h2>
 <p><code>smithy-rs</code>'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L34">RustCodegenPlugin::execute</a> and
 inherits from <code>SmithyBuildPlugin</code> in <a href="https://github.com/awslabs/smithy/tree/main/smithy-build">smithy-build</a>. Code generation is in Kotlin and shared common, non-Rust specific code with the <a href="https://github.com/awslabs/smithy"><code>smithy</code> Java repository</a>. They plug into the <a href="https://awslabs.github.io/smithy/1.0/guides/building-models/gradle-plugin.html">Smithy gradle</a> plugin, which is a gradle plugin.</p>
@@ -2430,6 +2820,10 @@ let app = app.layer(
 <li><a href="rfcs/./rfc0027_endpoints_20.html">RFC-0027: Endpoints 2.0</a></li>
 <li><a href="rfcs/./rfc0028_sdk_credential_cache_type_safety.html">RFC-0028: SDK Credential Cache Type Safety</a></li>
 <li><a href="rfcs/./rfc0029_new_home_for_cred_types.html">RFC-0029: Finding New Home for Credential Types</a></li>
+<li><a href="rfcs/./rfc0030_serialization_and_deserialization.html">RFC-0030: Serialization And Deserialization</a></li>
+<li><a href="rfcs/./rfc0031_providing_fallback_credentials_on_timeout.html">RFC-0031: Providing Fallback Credentials on Timeout</a></li>
+<li><a href="rfcs/./rfc0032_better_constraint_violations.html">RFC-0032: Better Constraint Violations</a></li>
+<li><a href="rfcs/./rfc0033_improve_sdk_request_id_access.html">RFC-0033: Improving access to request IDs in SDK clients</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="aws-configuration-rfc"><a class="header" href="#aws-configuration-rfc">AWS Configuration RFC</a></h1>
 <blockquote>
@@ -2709,7 +3103,7 @@ and these custom connectors must align with what the Smithy model requires.</li>
 <li><strong>Connector Selection</strong>: The generated code must be able to select the connector that best matches the requirements
 from the Smithy model.</li>
 </ol>
-<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<h2 id="terminology-1"><a class="header" href="#terminology-1">Terminology</a></h2>
 <p>Today, there are three layers of <code>Client</code> that are easy to confuse, so to make the following easier to follow,
 the following terms will be used:</p>
 <ul>
@@ -2940,7 +3334,7 @@ Add required defaulting for models that don't set the optional <code>http</code>
 <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html">S3's documentation on authenticating requests using query parameters</a>.</p>
 <p>This doc establishes the customer-facing API for creating these presigned URLs and how they will
 be implemented in a generic fashion in the SDK codegen.</p>
-<h2 id="terminology-1"><a class="header" href="#terminology-1">Terminology</a></h2>
+<h2 id="terminology-2"><a class="header" href="#terminology-2">Terminology</a></h2>
 <p>To differentiate between the clients that are present in the generated SDK today, the following
 terms will be used throughout this doc:</p>
 <ul>
@@ -3152,7 +3546,7 @@ Polly SynthesizeSpeech</li>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0004_retry_behavior.html#changes-checklist">Changes Checklist</a> section.</p>
 <p>It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely. This RFC would introduce breaking changes to the <code>retry</code> module of the <code>aws-smithy-client</code> crate.</p>
-<h2 id="terminology-2"><a class="header" href="#terminology-2">Terminology</a></h2>
+<h2 id="terminology-3"><a class="header" href="#terminology-3">Terminology</a></h2>
 <ul>
 <li><strong>Smithy Client</strong>: A <code>aws_smithy_client::Client&lt;C, M, R&gt;</code> struct that is responsible for gluing together
 the connector, middleware, and retry policy. This is not generated and lives in the <code>aws-smithy-client</code> crate.</li>
@@ -3423,7 +3817,7 @@ impossible.</li>
 <p>In light of these limitations, this RFC proposes moving middleware into each generated service. <code>aws-inlineable</code> will be
 used to host and test the middleware stack. Each service will then define a public <code>middleware</code> module containing their
 middleware stack.</p>
-<h2 id="terminology-3"><a class="header" href="#terminology-3">Terminology</a></h2>
+<h2 id="terminology-4"><a class="header" href="#terminology-4">Terminology</a></h2>
 <ul>
 <li><strong>Middleware</strong>: A tower layer that augments <code>operation::Request -&gt; operation::Response</code> for things like signing and
 endpoint resolution.</li>
@@ -3471,7 +3865,7 @@ are issues around publishing the server-specific runtime crates since they don't
 belong to the SDK.</p>
 <p>This RFC proposes a new split-release process so that the entire <code>smithy-rs</code> runtime
 can be published separately before the AWS SDK is published.</p>
-<h2 id="terminology-4"><a class="header" href="#terminology-4">Terminology</a></h2>
+<h2 id="terminology-5"><a class="header" href="#terminology-5">Terminology</a></h2>
 <ul>
 <li><strong>Smithy Runtime Crate</strong>: A crate that gets published to crates.io and supports
 the code generated by <code>smithy-rs</code>. These crates don't provide any SDK-only functionality.
@@ -3976,7 +4370,7 @@ loop {
 to the current API. This doc outlines the approach to add them in this fashion, but does <em>NOT</em>
 examine code generating response classification from JMESPath expressions, which can be left
 to the implementer without concern for the overall API.</p>
-<h2 id="terminology-5"><a class="header" href="#terminology-5">Terminology</a></h2>
+<h2 id="terminology-6"><a class="header" href="#terminology-6">Terminology</a></h2>
 <p>Today, there are three layers of <code>Client</code> that are easy to confuse, so to make the following easier to follow,
 the following terms will be used:</p>
 <ul>
@@ -4117,7 +4511,7 @@ so that customers can include them in their projects and also publish crates of 
 <p>This doc proposes a short-term solution for publishing to crates.io. This approach is intended to be executed
 manually by a developer using scripts and an SOP no more than once per week, and should require less than a
 dev week to implement.</p>
-<h2 id="terminology-6"><a class="header" href="#terminology-6">Terminology</a></h2>
+<h2 id="terminology-7"><a class="header" href="#terminology-7">Terminology</a></h2>
 <ul>
 <li><strong>AWS SDK Crate</strong>: A crate that provides a client for calling a given AWS service, such as <code>aws-sdk-s3</code> for calling S3.</li>
 <li><strong>AWS Runtime Crate</strong>: Any runtime crate that the AWS SDK generated code relies on, such as <code>aws-types</code>.</li>
@@ -4234,7 +4628,7 @@ of maintaining consistent <code>major.minor</code> version numbers.</li>
 major version will be bumped to 1, and backwards breaking changes will no longer be allowed
 without a major version bump to all crates in the SDK.</li>
 </ol>
-<h2 id="terminology-7"><a class="header" href="#terminology-7">Terminology</a></h2>
+<h2 id="terminology-8"><a class="header" href="#terminology-8">Terminology</a></h2>
 <ul>
 <li><strong>AWS SDK Crate</strong>: A crate that provides a client for calling a given AWS service, such as <code>aws-sdk-s3</code> for calling S3.</li>
 <li><strong>AWS Runtime Crate</strong>: Any runtime crate that the AWS SDK generated code relies on, such as <code>aws-types</code>.</li>
@@ -4727,7 +5121,7 @@ impl ReadCallback for Crc32cChecksumCallback {
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0014_timeout_config.html#changes-checklist">Changes Checklist</a> section.</p>
 <p>While it is currently possible for users to implement request timeouts by racing operation send futures against timeout futures, this RFC proposes a more ergonomic solution that would also enable users to set timeouts for things like TLS negotiation and &quot;time to first byte&quot;.</p>
-<h2 id="terminology-8"><a class="header" href="#terminology-8">Terminology</a></h2>
+<h2 id="terminology-9"><a class="header" href="#terminology-9">Terminology</a></h2>
 <p>There's a lot of terminology to define, so I've broken it up into three sections.</p>
 <h3 id="general-terms"><a class="header" href="#general-terms">General terms</a></h3>
 <ul>
@@ -6596,7 +6990,7 @@ let response = smithy_client.call(operation).await?;
 a Smithy client rather than the generated fluent client, and it's anything but ergonomic.</p>
 <p>This RFC proposes an easier way to augment requests that is compatible with the fluent
 client.</p>
-<h2 id="terminology-9"><a class="header" href="#terminology-9">Terminology</a></h2>
+<h2 id="terminology-10"><a class="header" href="#terminology-10">Terminology</a></h2>
 <ul>
 <li><strong>Smithy Client</strong>: A <code>aws_smithy_client::Client&lt;C, M, R&gt;</code> struct that is responsible for gluing together
 the connector, middleware, and retry policy.</li>
@@ -6764,7 +7158,7 @@ Comment on older discussions asking about how to do this with this improved appr
 <li>A new logging middleware is generated and applied to each <code>OperationHandler</code> <code>Service</code>.</li>
 <li>A developer guideline is provided on how to avoid violating the specification.</li>
 </ul>
-<h2 id="terminology-10"><a class="header" href="#terminology-10">Terminology</a></h2>
+<h2 id="terminology-11"><a class="header" href="#terminology-11">Terminology</a></h2>
 <ul>
 <li><strong>Model</strong>: A <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html">Smithy Model</a>, usually pertaining to the one in use by the customer.</li>
 <li><strong>Runtime crate</strong>: A crate existing within the <code>rust-runtime</code> folder, used to implement shared functionalities that do not have to be code-generated.</li>
@@ -7306,7 +7700,7 @@ Customers' experience using errors mirrors the Rust way: <code>Err(error::Stream
 </blockquote>
 <p>One might characterize <code>smithy-rs</code> as a tool for transforming a <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service">Smithy service</a> into a <a href="https://docs.rs/tower-service/latest/tower_service/trait.Service.html">tower::Service</a> builder. A Smithy model defines behavior of the generated service partially - handlers must be passed to the builder before the <code>tower::Service</code> is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.</p>
 <p>This RFC proposes a new builder, deprecating the existing one, which addresses API deficiencies and takes steps to improve performance.</p>
-<h2 id="terminology-11"><a class="header" href="#terminology-11">Terminology</a></h2>
+<h2 id="terminology-12"><a class="header" href="#terminology-12">Terminology</a></h2>
 <ul>
 <li><strong>Model</strong>: A <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html">Smithy Model</a>, usually pertaining to the one in use by the customer.</li>
 <li><strong>Smithy Service</strong>: The entry point of an API that aggregates <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#resource">resources</a> and <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation">operations</a> together within a Smithy model. Described in detail <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service">here</a>.</li>
@@ -8089,8 +8483,13 @@ Add code generation which outputs new service builder.
 <li><a href="https://github.com/awslabs/smithy-rs/pull/1693">https://github.com/awslabs/smithy-rs/pull/1693</a></li>
 </ul>
 </li>
-<li><input disabled="" type="checkbox"/>
-Deprecate <code>OperationRegistryBuilder</code>, <code>OperationRegistry</code> and <code>Router</code>.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Deprecate <code>OperationRegistryBuilder</code>, <code>OperationRegistry</code> and <code>Router</code>.
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1886">https://github.com/awslabs/smithy-rs/pull/1886</a></li>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/2161">https://github.com/awslabs/smithy-rs/pull/2161</a></li>
+</ul>
+</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-dependency-versions"><a class="header" href="#rfc-dependency-versions">RFC: Dependency Versions</a></h1>
 <blockquote>
@@ -9214,12 +9613,24 @@ let app = PokemonService::builder(plugin_stack)
 <p>The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code <a href="https://github.com/LukeMathWalker/builder-experiments">here</a>.</p>
 <h2 id="changes-checklist-17"><a class="header" href="#changes-checklist-17">Changes checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
-Update <code>codegen-server</code> to generate the proposed service builder API</li>
-<li><input disabled="" type="checkbox"/>
-Implement <code>Pluggable</code> for <code>PluginStack</code></li>
-<li><input disabled="" type="checkbox"/>
-Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to compose multiple plugins (instead of <code>PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)</code>)</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update <code>codegen-server</code> to generate the proposed service builder API
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>Pluggable</code> for <code>PluginStack</code>
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to compose multiple plugins (instead of <code>PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)</code>)
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1971">https://github.com/awslabs/smithy-rs/pull/1971</a></li>
+</ul>
+</li>
 </ul>
 <div class="footnote-definition" id="further-dev-productivity-improvements"><sup class="footnote-definition-label">1</sup>
 <p>The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.</p>
@@ -9230,7 +9641,7 @@ Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to 
 <p>Applies to: server</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0024_request_id.html#changes-checklist">Changes Checklist</a> section.</p>
-<h2 id="terminology-12"><a class="header" href="#terminology-12">Terminology</a></h2>
+<h2 id="terminology-13"><a class="header" href="#terminology-13">Terminology</a></h2>
 <ul>
 <li><strong>RequestID</strong>: a service-wide request's unique identifier</li>
 <li><strong>UUID</strong>: a universally unique identifier</li>
@@ -9669,7 +10080,7 @@ alternative design. Refer to the mentions of the <code>publicConstrainedTypes</c
 in the description of the <a href="https://github.com/awslabs/smithy-rs/pull/1342">Builders of builders PR</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-client-crate-organization"><a class="header" href="#rfc-client-crate-organization">RFC: Client Crate Organization</a></h1>
 <blockquote>
-<p>Status: Accepted</p>
+<p>Status: Implemented</p>
 <p>Applies to: clients (and may impact servers due to shared codegen)</p>
 </blockquote>
 <p>This RFC proposes changing the organization structure of the generated client crates to:</p>
@@ -9980,38 +10391,65 @@ private or <code>#[doc(hidden)]</code> if necessary.</p>
 <p><code>(*)</code> - signifies that a type is re-exported from one of the runtime crates</p>
 <h2 id="changes-checklist-19"><a class="header" href="#changes-checklist-19">Changes Checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
-Move <code>crate::AppName</code>, <code>crate::Endpoint</code>, <code>crate::Credentials</code>, and <code>crate::Region</code> into <code>crate::config</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Move <code>crate::AppName</code> into <code>crate::config</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
 Move <code>crate::PKG_VERSION</code> into a new <code>crate::meta</code> module</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Move <code>crate::Endpoint</code> into <code>crate::config</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Move <code>crate::Credentials</code> into <code>crate::config</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Move <code>crate::Region</code> into <code>crate::config</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
 Move <code>crate::operation::customize</code> into <code>crate::client</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Finish refactor to decouple client/server modules</li>
+<li><input disabled="" type="checkbox" checked=""/>
 Organize code generated types by operation</li>
-<li><input disabled="" type="checkbox"/>
-Reorganize builders that aren't per-operation</li>
-<li><input disabled="" type="checkbox"/>
-Only re-export <code>aws_smithy_client::client::Builder</code> for non-SDK clients (remove from SDK clients)</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Reorganize builders</li>
+<li><input disabled="" type="checkbox" checked=""/>
 Rename <code>crate::types</code> to <code>crate::primitives</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Rename <code>crate::model</code> to <code>crate::types</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Move <code>crate::error</code> into <code>crate::types</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Only re-export <code>aws_smithy_client::client::Builder</code> for non-SDK clients (remove from SDK clients)</li>
+<li><input disabled="" type="checkbox" checked=""/>
 Move <code>crate::ErrorExt</code> into <code>crate::error</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Re-export <code>aws_smithy_types::error::display::DisplayErrorContext</code> and <code>aws_smithy_http::result::SdkError</code> in <code>crate::error</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Move <code>crate::paginator</code> into <code>crate::operation</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Flatten <code>crate::presigning</code></li>
-<li><input disabled="" type="checkbox"/>
-Remove/hide operation <code>ParseResponse</code> implementations in <code>crate::operation</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Hide or remove <code>crate::lens</code> and <code>crate::http_body_checksum</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
+Move fluent builders into <code>crate::operation::x::builders</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove/hide operation <code>ParseResponse</code> implementations in <code>crate::operation</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
 Update &quot;Crate Organization&quot; top-level section in generated crate docs</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update all module docs</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Break up modules/files so that they're not 30k lines of code
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+models/types; each struct/enum should probably get its own file with pub-use</li>
+<li><input disabled="" type="checkbox" checked=""/>
+models/types::builders: now this needs to get split up</li>
+<li><input disabled="" type="checkbox" checked=""/>
+<code>client.rs</code></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Fix examples</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Write changelog</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
 <h1 id="rfc-endpoints-20"><a class="header" href="#rfc-endpoints-20">RFC: Endpoints 2.0</a></h1>
@@ -10027,7 +10465,7 @@ Endpoints 2.0 defines a rules language for resolving endpoints. The Rust SDK wil
 intermediate language and use this to create service-specific endpoint resolvers.</p>
 <p>Endpoints 2.0 will be a core feature and be available for generic clients as well as the AWS SDK.</p>
 <!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
-<h2 id="terminology-13"><a class="header" href="#terminology-13">Terminology</a></h2>
+<h2 id="terminology-14"><a class="header" href="#terminology-14">Terminology</a></h2>
 <ul>
 <li><strong>Generic client</strong>: In reference to features/code that is <em>not</em> AWS specific and is supported for all Smithy clients.</li>
 <li><strong>Rules language</strong>: A JSON-based rules language used to resolve endpoints</li>
@@ -10492,7 +10930,7 @@ Add a Smithy endpoint resolver to the service config, with a default that loads 
 <li><input disabled="" type="checkbox" checked=""/>
 Update <code>SdkConfig</code> to accept a URI instead of an implementation of <code>ResolveAwsEndpoint</code>. This change can be done
 standalone.</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Remove/deprecate the <code>ResolveAwsEndpoint</code> trait and replace it with the vanilla Smithy trait. Potentially, provide
 a bridge.</li>
 <li><input disabled="" type="checkbox" checked=""/>
@@ -10992,7 +11430,7 @@ Update use statements and fully qualified names in the affected places</li>
 <p>Status: RFC</p>
 <p>Applies to: Output, Input, and Builder types as well as <code>DateTime</code>, <code>Document</code>, <code>Blob</code>, and <code>Number</code> implemented in <code>aws_smithy_types</code> crate.</p>
 </blockquote>
-<h1 id="terminology-14"><a class="header" href="#terminology-14">Terminology</a></h1>
+<h1 id="terminology-15"><a class="header" href="#terminology-15">Terminology</a></h1>
 <ul>
 <li>Builder
 Refers to data types prefixed with <code>Builder</code>, which converts itself into a corresponding data type upon being built. e.g. <code>aws_sdk_dynamodb::input::PutItemInput</code>.</li>
@@ -11157,53 +11595,54 @@ External tagging is the default way.
 This RFC can be achieved either way.</p>
 <p>The resulting size of the serialized data is smaller when tagged externally, as adjacent tagging will require a tag even when a variant has no content.</p>
 <p>For the reasons mentioned above, we implement an enum that is externally tagged.</p>
-<h2 id="data-types-to-skip"><a class="header" href="#data-types-to-skip">Data Types to Skip</a></h2>
-<p>We are going to skip serialization and deserialization of fields that have the datatype that corresponds to <code>@streaming blob</code> and <code>@streaming union</code> from smithy.
-Any fields with these data types are tagged with <code>#[serde(skip, default = &quot;..name of the function for tailored serialization/de-serialization&quot;)]</code>.</p>
-<p>As of writing, this decision affects following Rust data types.</p>
+<h2 id="data-types-to-skip-serializationdeserialization"><a class="header" href="#data-types-to-skip-serializationdeserialization">Data Types to Skip Serialization/Deserialization</a></h2>
+<p>We are going to skip serialization and deserialization of fields that have the datatype that corresponds to <code>@streaming blob</code> from smithy.
+Any fields with these data types are tagged with <code>#[serde(skip)]</code>.</p>
+<p>By skipping, corresponding field's value will be assigned the value generated by <code>Default</code> trait.</p>
+<p>As of writing, <code>aws_smithy_http::byte_stream::ByteStream</code> is the only data type that is affected by this decision.</p>
+<p>Here is an example of data types affected by this decision:</p>
 <ul>
-<li><code>aws_smithy_http::byte_stream::ByteStream</code></li>
-<li><code>aws_smithy_http::event_stream::Receiver</code></li>
-<li><code>aws_smithy_http::event_stream::EventStreamSender</code></li>
-</ul>
-<p>Here are some examples of data types affected by this decision:</p>
-<ul>
-<li><code>aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription</code></li>
 <li><code>aws_sdk_s3::input::put_object_input::PutObjectInput</code></li>
 </ul>
-<p>We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.
-Additionally, those data types are sometimes used to represent bi-directional data transfer, which is not serializable.</p>
-<p>Here is an example of struct with a field that comes with custom serialization/de-serialization logic.</p>
+<p>We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.</p>
+<p>Here is an example snippet.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[allow(missing_docs)]
 #[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;serialize&quot;),
+    all(aws-sdk-unstable, feature = &quot;serde-serialize&quot;),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
+    all(aws-sdk-unstable, feature = &quot;serde-deserialize&quot;),
     derive(serde::Deserialize)
 )]
 #[non_exhaustive]
 #[derive(std::fmt::Debug)]
-pub struct ExampleStreamTranscriptionOutput {
-    #[cfg_attr(
-        any(
-            all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
-            all(aws-sdk-unstable, feature = &quot;serialize&quot;)
-        ),
-        serde(
-            skip,
-            default = &quot;aws_smithy_http::event_stream::Receiver::deserialized_receiver&quot;
-        )
-    )]
-    pub transcript_result_stream: aws_smithy_http::event_stream::Receiver&lt;
-        crate::model::ExampleTranscriptResultStream,
-        crate::error::ExampleTranscriptResultStreamError,
-    &gt;
+pub struct PutObjectInput {
+    pub acl: std::option::Option&lt;crate::model::ObjectCannedAcl&gt;,
+    pub body: aws_smithy_http::byte_stream::ByteStream,
+    // ... other fields
 }
 <span class="boring">}</span></code></pre></pre>
+<h2 id="data-types-to-exclude-from-serde-code-generation"><a class="header" href="#data-types-to-exclude-from-serde-code-generation">Data types to exclude from ser/de code generation</a></h2>
+<p>For data types that include <code>@streaming union</code> in any of their fields, we do NOT implement <code>serde</code> traits.</p>
+<p>As of writing, following Rust data types corresponds to <code>@streaming union</code>.</p>
+<ul>
+<li><code>aws_smithy_http::event_stream::Receiver</code></li>
+<li><code>aws_smithy_http::event_stream::EventStreamSender</code></li>
+</ul>
+<p>Here is an example of data type affected by this decision;</p>
+<ul>
+<li><code>aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription</code></li>
+</ul>
+<p>We considered skipping relevant fields on serialization and creating a custom de-serialization function which creates event stream that will always result in error when a user tries to send/receive data.
+However, we believe that our decision is justified for following reason.</p>
+<ul>
+<li>All for operations that feature event streams since the stream is ephemeral (tied to the HTTP connection), and is effectively unusable after serialization and deserialization</li>
+<li>Most event stream operations don't have fields that go along with them, making the stream the sole component in them, which makes ser/de not so useful</li>
+<li>SDK that uses event stream, such as <code>aws-sdk-transcribestreaming</code> only has just over 5000 all-time downloads with recent downloads of just under 1000 as of writing (2023/01/21); It makes it difficult to justify since the implementation impacts smaller number of people.</li>
+</ul>
 <h2 id="serde-traits-implemented-on-builder-of-output-types"><a class="header" href="#serde-traits-implemented-on-builder-of-output-types"><code>Serde</code> traits implemented on Builder of Output Types</a></h2>
 <p>Output data, such as <code>aws_sdk_dynamodb::output::UpdateTableOutput</code> has builder types.
 These builder types are available to users, however, no API requires users to build data types by themselves.</p>
@@ -11387,13 +11826,1808 @@ Prepare examples</li>
 <li><input disabled="" type="checkbox"/>
 Prepare reproducible compile time benchmark</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-providing-fallback-credentials-on-external-timeout"><a class="header" href="#rfc-providing-fallback-credentials-on-external-timeout">RFC: Providing fallback credentials on external timeout</a></h1>
+<blockquote>
+<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2246">smithy-rs#2246</a></p>
+<p>Applies to: client</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html#changes-checklist">Changes Checklist</a> section.</p>
+<p>This RFC proposes a fallback mechanism for credentials providers on external timeout (see the <a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html#terminology">Terminology</a> section), allowing them to continue serving (possibly expired) credentials for the sake of overall reliability of the intended service; The IMDS credentials provider is an example that must fulfill such a requirement to support static stability.</p>
+<h2 id="terminology-16"><a class="header" href="#terminology-16">Terminology</a></h2>
+<ul>
+<li>External timeout: The name of the timeout that occurs when a duration elapses before an async call to <code>provide_credentials</code> returns. In this case, <code>provide_credentials</code> returns no credentials.</li>
+<li>Internal timeout: The name of the timeout that occurs when a duration elapses before an async call to some function, inside the implementation of <code>provide_credentials</code>, returns. Examples include connection timeouts, TLS negotiation timeouts, and HTTP request timeouts. Implementations of <code>provide_credentials</code> may handle these failures at their own discretion e.g. by returning <em>(possibly expired)</em> credentials or a <code>CredentialsError</code>.</li>
+<li>Static stability: Continued availability of a service in the face of impaired dependencies.</li>
+</ul>
+<h2 id="assumption"><a class="header" href="#assumption">Assumption</a></h2>
+<p>This RFC is concerned only with external timeouts, as the cost of poor API design is much higher in this case than for internal timeouts. The former will affect a public trait implemented by all credentials providers whereas the latter can be handled locally by individual credentials providers without affecting one another.</p>
+<h2 id="problem"><a class="header" href="#problem">Problem</a></h2>
+<p>We have mentioned static stability. Supporting it calls for the following functional requirement, among others:</p>
+<ul>
+<li>REQ 1: Once a credentials provider has served credentials, it should continue serving them in the event of a timeout (whether internal or external) while obtaining refreshed credentials.</li>
+</ul>
+<p>Today, we have the following trait method to obtain credentials:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn provide_credentials&lt;'a&gt;(&amp;'a self) -&gt; future::ProvideCredentials&lt;'a&gt;
+where
+    Self: 'a,
+<span class="boring">}</span></code></pre></pre>
+<p>This method returns a future, which can be raced against a timeout future as demonstrated by the following code snippet from <code>LazyCredentialsCache</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+   .get_or_load(|| async move {
+        let credentials = future.await.map_err(|_err| {
+            CredentialsError::provider_timed_out(load_timeout)
+        })??;
+        // --snip--
+    }).await;
+// --snip--
+<span class="boring">}</span></code></pre></pre>
+<p>This creates an external timeout for <code>provide_credentials</code>. If <code>timeout_future</code> wins the race, a future for <code>provide_credentials</code> gets dropped, <code>timeout_future</code> returns an error, and the error is mapped to <code>CredentialsError::ProviderTimedOut</code> and returned. This makes it impossible for the variable <code>provider</code> above to serve credentials as stated in REQ 1.</p>
+<p>A more complex use case involves <code>CredentialsProviderChain</code>. It is a manifestation of the chain of responsibility pattern and keeps calling the <code>provide_credentials</code> method on each credentials provider down the chain until credentials are returned by one of them. In addition to REQ 1, we have the following functional requirement with respect to <code>CredentialsProviderChain</code>:</p>
+<ul>
+<li>REQ 2: Once a credentials provider in the chain has returned credentials, it should continue serving them even in the event of a timeout (whether internal or external) without falling back to another credentials provider.</li>
+</ul>
+<p>Referring back to the code snippet above, we analyze two relevant cases (and suppose provider 2 below must meet REQ 1 and REQ 2 in each case):</p>
+<p><strong>Case 1:</strong> Provider 2 successfully loaded credentials but later failed to do so because an external timeout kicked in.</p>
+<p align="center">
+<img width="750" alt="chain-provider-ext-timeout-1" src="https://user-images.githubusercontent.com/15333866/212421638-d08e4821-2dbe-497f-82c5-c78aab8acbe9.png">
+</p>
+<p>The figure above illustrates an example. This <code>CredentialsProviderChain</code> consists of three credentials providers. When <code>CredentialsProviderChain::provide_credentials</code> is called, provider 1's <code>provide_credentials</code> is called but does not find credentials so passes the torch to provider 2, which in turn successfully loads credentials and returns them. The next time the method is called, provider 1 does not find credentials but neither does provider 2 this time, because an external timeout by <code>timeout_future</code> given to the whole chain kicked in and the future is dropped while provider 2's <code>provide_credentials</code> was running. Given the functional requirements, provider 2 should return the previously available credentials but today the code snippet from <code>LazyCredentialsCache</code> returns a <code>CredentialsError::ProviderTimedOut</code> instead.</p>
+<p><strong>Case 2:</strong> Provider 2 successfully loaded credentials but later was not reached because its preceding provider was still running when an external timeout kicked in.</p>
+<p align="center">
+<img width="750" alt="chain-provider-ext-timeout-2" src="https://user-images.githubusercontent.com/15333866/212421712-8c6eab11-a0c1-4229-8ba3-67b0bb6056e7.png">
+</p>
+<p>The figure above illustrates an example with the same setting as the previous figure. Again, when <code>CredentialsProviderChain::provide_credentials</code> is called the first time, provider 1 does not find credentials but provider 2 does. The next time the method is called, provider 1 is still executing <code>provide_credentials</code> and then an external timeout by <code>timeout_future</code> kicked in. Consequently, the execution of <code>CredentialsProviderChain::provide_credentials</code> has been terminated. Given the functional requirements, provider 2 should return the previously available credentials but today the code snippet from <code>LazyCredentialsCache</code> returns <code>CredentialsError::ProviderTimedOut</code> instead.</p>
+<h2 id="proposal-4"><a class="header" href="#proposal-4">Proposal</a></h2>
+<p>To address the problem in the previous section, we propose to add a new method to the <code>ProvideCredentials</code> trait called <code>fallback_on_interrupt</code>. This method allows credentials providers to have a fallback mechanism on an external timeout and to serve credentials to users if needed. There are two options as to how it is implemented, either as a synchronous primitive or as an asynchronous primitive.</p>
+<h4 id="option-a-synchronous-primitive"><a class="header" href="#option-a-synchronous-primitive">Option A: Synchronous primitive</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
+    // --snip--
+
+    fn fallback_on_interrupt(&amp;self) -&gt; Option&lt;Credentials&gt; {
+        None
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<ul>
+<li>:+1: Users can be guided to use only synchronous primitives when implementing <code>fallback_on_interrupt</code>.</li>
+<li>:-1: It cannot support cases where fallback credentials are asynchronously retrieved.</li>
+<li>:-1: It may turn into a blocking operation if it takes longer than it should.</li>
+</ul>
+<h4 id="option-b-asynchronous-primitive"><a class="header" href="#option-b-asynchronous-primitive">Option B: Asynchronous primitive</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>mod future {
+    // --snip--
+
+    // This cannot use `OnlyReady` in place of `BoxFuture` because
+    // when a chain of credentials providers implements its own
+    // `fallback_on_interrupt`, it needs to await fallback credentials
+    // in its inner providers. Thus, `BoxFuture` is required.
+    pub struct FallbackOnInterrupt&lt;'a&gt;(NowOrLater&lt;Option&lt;Credentials&gt;, BoxFuture&lt;'a, Option&lt;Credentials&gt;&gt;&gt;);
+
+    // impls for FallbackOnInterrupt similar to those for the ProvideCredentials future newtype
+}
+
+pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
+    // --snip--
+
+    fn fallback_on_interrupt&lt;'a&gt;(&amp;'a self) -&gt; future::FallbackOnInterrupt&lt;'a&gt; {
+        future::FallbackOnInterrupt::ready(None)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<ul>
+<li>:+1: It is async from the beginning, so less likely to introduce a breaking change.</li>
+<li>:-1: We may have to consider yet another timeout for <code>fallback_on_interrupt</code> itself.</li>
+</ul>
+<p>Option A cannot be reversible in the future if we are to support the use case for asynchronously retrieving the fallback credentials, whereas option B allows us to continue supporting both ready and pending futures when retrieving the fallback credentials. However, <code>fallback_on_interrupt</code> is supposed to return credentials that have been set aside in case <code>provide_credentials</code> is timed out. To express that intent, we choose option A and document that users should NOT go fetch new credentials in <code>fallback_on_interrupt</code>.</p>
+<p>The user experience for the code snippet in question will look like this once this proposal is implemented:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
+// --snip--
+let future = Timeout::new(provider.provide_credentials(), timeout_future);
+let result = cache
+    .get_or_load(|| {
+        async move {
+           let credentials = match future.await {
+                Ok(creds) =&gt; creds?,
+                Err(_err) =&gt; match provider.fallback_on_interrupt() { // can provide fallback credentials
+                    Some(creds) =&gt; creds,
+                    None =&gt; return Err(CredentialsError::provider_timed_out(load_timeout)),
+                }
+            };
+            // --snip--
+        }
+    }).await;
+// --snip--
+<span class="boring">}</span></code></pre></pre>
+<h2 id="how-to-actually-implement-this-rfc-2"><a class="header" href="#how-to-actually-implement-this-rfc-2">How to actually implement this RFC</a></h2>
+<p>Almost all credentials providers do not have to implement their own <code>fallback_on_interrupt</code> except for <code>CredentialsProviderChain</code> (<code>ImdsCredentialsProvider</code> also needs to implement <code>fallback_on_interrupt</code> when we are adding static stability support to it but that is outside the scope of this RFC).</p>
+<p>Considering the two cases we analyzed above, implementing <code>CredentialsProviderChain::fallback_on_interrupt</code> is not so straightforward. Keeping track of whose turn in the chain it is to call <code>provide_credentials</code> when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy <code>Case 2</code> above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.</p>
+<p>With that in mind, consider instead the following approach:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl ProvideCredentials for CredentialsProviderChain {
+    // --snip--
+
+    fn fallback_on_interrupt(&amp;self) -&gt; Option&lt;Credentials&gt; { {
+        for (_, provider) in &amp;self.providers {
+            match provider.fallback_on_interrupt() {
+                creds @ Some(_) =&gt; return creds,
+                None =&gt; {}
+            }
+        }
+        None
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><code>CredentialsProviderChain::fallback_on_interrupt</code> will invoke each provider's <code>fallback_on_interrupt</code> method until credentials are returned by one of them. It ensures that the updated code snippet for <code>LazyCredentialsCache</code> can return credentials from provider 2 in both <code>Case 1</code> and <code>Case 2</code>. Even if <code>timeout_future</code> wins the race, the execution subsequently calls <code>provider.fallback_on_interrupt()</code> to obtain fallback credentials from provider 2, assuming provider 2's <code>fallback_on_interrupt</code> is implemented to return fallback credentials accordingly.</p>
+<p>The downside of this simple approach is that the behavior is not clear if more than one credentials provider in the chain can return credentials from their <code>fallback_on_interrupt</code>. Note, however, that it is the exception rather than the norm for a provider's <code>fallback_on_interrupt</code> to return fallback credentials, at least at the time of writing (01/13/2023). The fact that it returns fallback credentials means that the provider successfully loaded credentials at least once, and it usually continues serving credentials on subsequent calls to <code>provide_credentials</code>.</p>
+<p>Should we have more than one provider in the chain that can potentially return fallback credentials from <code>fallback_on_interrupt</code>, we could configure the behavior of <code>CredentialsProviderChain</code> managing in what order and how each <code>fallback_on_interrupt</code> should be executed. See the <a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html#possible-enhancement">Possible enhancement
+</a> section for more details. The use case described there is an extreme edge case, but it's worth exploring what options are available to us with the proposed design.</p>
+<h2 id="alternative"><a class="header" href="#alternative">Alternative</a></h2>
+<p>In this section, we will describe an alternative approach that we ended up dismissing as unworkable.</p>
+<p>Instead of <code>fallback_on_interrupt</code>, we considered the following method to be added to the <code>ProvideCredentials</code> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
+    // --snip--
+
+    /// Returns a future that provides credentials within the given `timeout`.
+    ///
+    /// The default implementation races `provide_credentials` against
+    /// a timeout future created from `timeout`.
+    fn provide_credentials_with_timeout&lt;'a&gt;(
+        &amp;'a self,
+        sleeper: Arc&lt;dyn AsyncSleep&gt;,
+        timeout: Duration,
+    ) -&gt; future::ProvideCredentials&lt;'a&gt;
+    where
+        Self: 'a,
+    {
+        let timeout_future = sleeper.sleep(timeout);
+        let future = Timeout::new(self.provide_credentials(), timeout_future);
+        future::ProvideCredentials::new(async move {
+            let credentials = future
+                .await
+                .map_err(|_err| CredentialsError::provider_timed_out(timeout))?;
+            credentials
+        })
+    }
+<span class="boring">}</span></code></pre></pre>
+<p><code>provide_credentials_with_timeout</code> encapsulated the timeout race and allowed users to specify how long the external timeout for <code>provide_credentials</code> would be. The code snippet from <code>LazyCredentialsCache</code> then looked like</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let sleeper = Arc::clone(&amp;self.sleeper);
+let load_timeout = self.load_timeout; // by default self.load_timeout is 5 seconds.
+// --snip--
+let result = cache
+    .get_or_load(|| {
+        async move {
+            let credentials = provider
+                .provide_credentials_with_timeout(sleeper, load_timeout)
+                .await?;
+            // --snip--
+        }
+    }).await;
+// --snip--
+<span class="boring">}</span></code></pre></pre>
+<p>However, implementing <code>CredentialsProviderChain::provide_credentials_with_timeout</code> quickly ran into the following problem:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl ProvideCredentials for CredentialsProviderChain {
+    // --snip--
+
+    fn provide_credentials_with_timeout&lt;'a&gt;(
+        &amp;'a self,
+        sleeper: Arc&lt;dyn AsyncSleep&gt;,
+        timeout: Duration,
+    ) -&gt; future::ProvideCredentials&lt;'a&gt;
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.credentials_with_timeout(sleeper, timeout))
+    }
+}
+
+impl CredentialsProviderChain {
+    // --snip--
+
+    async fn credentials_with_timeout(
+        &amp;self,
+        sleeper: Arc&lt;dyn AsyncSleep&gt;,
+        timeout: Duration,
+    ) -&gt; provider::Result {
+        for (_, provider) in &amp;self.providers {
+            match provider
+                .provide_credentials_with_timeout(Arc::clone(&amp;sleeper), /* how do we calculate timeout for each provider ? */)
+                .await
+            {
+                Ok(credentials) =&gt; {
+                    return Ok(credentials);
+                }
+                Err(CredentialsError::ProviderTimedOut(_)) =&gt; {
+                    // --snip--
+                }
+                Err(err) =&gt; {
+                   // --snip--
+                }
+           }
+        }
+        Err(CredentialsError::provider_timed_out(timeout))
+    }
+<span class="boring">}</span></code></pre></pre>
+<p>There are mainly two problems with this approach. The first problem is that as shown above, there is no sensible way to calculate a timeout for each provider in the chain. The second problem is that exposing a parameter like <code>timeout</code> at a public trait's level is giving too much control to users; delegating overall timeout to the individual provider means each provider has to get it right.</p>
+<h2 id="changes-checklist-24"><a class="header" href="#changes-checklist-24">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Add <code>fallback_on_interrupt</code> method to the <code>ProvideCredentials</code> trait with the default implementation</li>
+<li><input disabled="" type="checkbox"/>
+Implement <code>CredentialsProviderChain::fallback_on_interrupt</code></li>
+<li><input disabled="" type="checkbox"/>
+Implement <code>DefaultCredentialsChain::fallback_on_interrupt</code></li>
+<li><input disabled="" type="checkbox"/>
+Add unit tests for <code>Case 1</code> and <code>Case 2</code></li>
+</ul>
+<h2 id="possible-enhancement"><a class="header" href="#possible-enhancement">Possible enhancement</a></h2>
+<p>We will describe how to customize the behavior for <code>CredentialsProviderChain::fallback_on_interrupt</code>. We are only demonstrating how much the proposed design can be extended and currently do not have concrete use cases to implement using what we present in this section.</p>
+<p>As described in the <a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html#proposal">Proposal</a> section, <code>CredentialsProviderChain::fallback_on_interrupt</code> traverses the chain from the head to the tail and returns the first fallback credentials found. This precedence policy works most of the time, but when we have more than one provider in the chain that can potentially return fallback credentials, it could break in the following edge case (we are still basing our discussion on the code snippet from <code>LazyCredentialsCache</code> but forget REQ 1 and REQ 2 for the sake of simplicity).</p>
+<p align="center">
+<img width="800" alt="fallback_on_interrupt_appendix excalidraw" src="https://user-images.githubusercontent.com/15333866/213618808-d19892d8-5c83-4039-9940-280dcd2a8cf1.png">
+</p>
+<p>During the first call to <code>CredentialsProviderChain::provide_credentials</code>, provider 1 fails to load credentials, maybe due to an internal timeout, and then provider 2 succeeds in loading its credentials (call them credentials 2) and internally stores them for <code>Provider2::fallback_on_interrupt</code> to return them subsequently. During the second call, provider 1 succeeds in loading credentials (call them credentials 1) and internally stores them for <code>Provider1::fallback_on_interrupt</code> to return them subsequently. Suppose, however, that credentials 1's expiry is earlier than credentials 2's expiry. Finally, during the third call, <code>CredentialsProviderChain::provide_credentials</code> did not complete due to an external timeout. <code>CredentialsProviderChain::fallback_on_interrupt</code> then returns credentials 1, when it should return credentials 2 whose expiry is later, because of the precedence policy.</p>
+<p>This a case where <code>CredentialsProviderChain::fallback_on_interrupt</code> requires the recency policy for fallback credentials found in provider 1 and provider 2, not the precedence policy. The following figure shows how we can set up such a chain:</p>
+<p align="center">
+<img width="700" alt="heterogeneous_policies_for_fallback_on_interrupt" src="https://user-images.githubusercontent.com/15333866/213755875-ac6fddbc-0f1b-4437-af16-6e0dbe08ae04.png">
+</p>
+<p>The outermost chain is a <code>CredentialsProviderChain</code> and follows the precedence policy for <code>fallback_on_interrupt</code>. It contains a sub-chain that, in turn, contains provider 1 and provider 2. This sub-chain implements its own <code>fallback_on_interrupt</code> to realize the recency policy for fallback credentials found in provider 1 and provider 2. Conceptually, we have</p>
+<pre><code>pub struct FallbackRecencyChain {
+    provider_chain: CredentialsProviderChain,
+}
+
+impl ProvideCredentials for FallbackRecencyChain {
+    fn provide_credentials&lt;'a&gt;(&amp;'a self) -&gt; future::ProvideCredentials&lt;'a&gt;
+    where
+        Self: 'a,
+    {
+        // Can follow the precedence policy for loading credentials
+        // if it chooses to do so.
+    }
+
+    fn fallback_on_interrupt(&amp;self) -&gt; Option&lt;Credentials&gt; {
+        // Iterate over `self.provider_chain` and return
+        // fallback credentials whose expiry is the most recent.
+    }
+}
+</code></pre>
+<p>We can then compose the entire chain like so:</p>
+<pre><code>let provider_1 = /* ... */
+let provider_2 = /* ... */
+let provider_3 = /* ... */
+
+let sub_chain = CredentialsProviderChain::first_try(&quot;Provider1&quot;, provider_1)
+    .or_else(&quot;Provider2&quot;, provider_2);
+
+let recency_chain = /* Create a FallbackRecencyChain with sub_chain */
+
+let final_chain = CredentialsProviderChain::first_try(&quot;fallback_recency&quot;, recency_chain)
+    .or_else(&quot;Provider3&quot;, provider_3);
+</code></pre>
+<p>The <code>fallback_on_interrupt</code> method on <code>final_chain</code> still traverses from the head to the tail, but once it hits <code>recency_chain</code>, <code>fallback_on_interrupt</code> on <code>recency_chain</code> respects the expiry of fallback credentials found in its inner providers.</p>
+<p>What we have presented in this section can be generalized thanks to chain composability. We could have different sub-chains, each implementing its own policy for <code>fallback_on_interrupt</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-better-constraint-violations"><a class="header" href="#rfc-better-constraint-violations">RFC: Better Constraint Violations</a></h1>
+<blockquote>
+<p>Status: Accepted</p>
+<p>Applies to: server</p>
+</blockquote>
+<p>During and after <a href="https://github.com/awslabs/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/awslabs/smithy-rs/pull/1342">the core
+implementation</a> of <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint traits</a> in the server
+SDK, some problems relating to constraint violations were identified. This RFC
+sets out to explain and address three of them: <a href="rfcs/rfc0032_better_constraint_violations.html#impossible-constraint-violations">impossible constraint
+violations</a>, <a href="rfcs/rfc0032_better_constraint_violations.html#collecting-constraint-violations">collecting constraint
+violations</a>, and <a href="rfcs/rfc0032_better_constraint_violations.html#tightness-of-constraint-violations">&quot;tightness&quot; of constraint
+violations</a>. The RFC explains each of them
+in turn, solving them in an iterative and pedagogical manner, i.e. the solution
+of a problem depends on the previous ones having been solved with their
+proposed solutions. The three problems are meant to be addressed atomically in
+one changeset (see the <a href="rfcs/rfc0032_better_constraint_violations.html#checklist">Checklist</a>) section.</p>
+<p>Note: code snippets from generated SDKs in this document are abridged so as to
+be didactic and relevant to the point being made. They are accurate with
+regards to commit <a href="https://github.com/awslabs/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
+<h2 id="terminology-17"><a class="header" href="#terminology-17">Terminology</a></h2>
+<p><a href="https://github.com/awslabs/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the
+PR</a> where the core implementation of constraint traits
+was made are recommended prior reading to understand this RFC.</p>
+<ul>
+<li><strong>Shape closure</strong>: the set of shapes a shape can &quot;reach&quot;, including itself.</li>
+<li><strong>Transitively constrained shape</strong>: a shape whose closure includes:
+<ol>
+<li>a shape with a <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint trait</a> attached,</li>
+<li>a (member) shape with a <a href="https://smithy.io/2.0/spec/type-refinement-traits.html#required-trait"><code>required</code> trait</a> attached,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#enum"><code>enum</code> shape</a>; or</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#intenum"><code>intEnum</code> shape</a>.</li>
+</ol>
+</li>
+<li>A <strong>directly constrained shape</strong> is any of these:
+<ol>
+<li>a shape with a <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint trait</a> attached,</li>
+<li>a (member) shape with a <a href="https://smithy.io/2.0/spec/type-refinement-traits.html#required-trait"><code>required</code> trait</a> attached,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#enum"><code>enum</code> shape</a>,</li>
+<li>an <a href="https://smithy.io/2.0/spec/simple-types.html#intenum"><code>intEnum</code> shape</a>; or</li>
+<li>a <a href="https://smithy.io/2.0/spec/aggregate-types.html#structure"><code>structure</code> shape</a> with at least one <code>required</code> member shape.</li>
+</ol>
+</li>
+<li><strong>Constrained type</strong>: the Rust type a constrained shape gets rendered as. For
+shapes that are not <code>structure</code>, <code>union</code>, <code>enum</code> or <code>intEnum</code> shapes, these
+are wrapper <a href="https://doc.rust-lang.org/rust-by-example/generics/new_types.html">newtype</a>s.</li>
+</ul>
+<p>In the absence of a qualifier, &quot;constrained shape&quot; should be interpreted as
+&quot;transitively constrained shape&quot;.</p>
+<h2 id="impossible-constraint-violations"><a class="header" href="#impossible-constraint-violations">Impossible constraint violations</a></h2>
+<h3 id="background-2"><a class="header" href="#background-2">Background</a></h3>
+<p>A constrained type has a fallible constructor by virtue of it implementing the
+<a href="https://doc.rust-lang.org/std/convert/trait.TryFrom.html"><code>TryFrom</code></a> trait. The error type this constructor may yield is known as a
+<strong>constraint violation</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl TryFrom&lt;UnconstrainedType&gt; for ConstrainedType {
+    type Error = ConstraintViolation;
+
+    fn try_from(value: UnconstrainedType) -&gt; Result&lt;Self, Self::Error&gt; {
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>ConstraintViolation</code> type is a Rust <code>enum</code> with one variant per way
+&quot;constraining&quot; the input value may fail. So, for example, the following Smithy
+model:</p>
+<pre><code class="language-smithy">structure A {
+    @required
+    member: String,
+}
+</code></pre>
+<p>Yields:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// See [`A`](crate::model::A).
+pub mod a {
+    #[derive(std::cmp::PartialEq, std::fmt::Debug)]
+    /// Holds one variant for each of the ways the builder can fail.
+    pub enum ConstraintViolation {
+        /// `member` was not provided but it is required when building `A`.
+        MissingMember,
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Constraint violations are always Rust <code>enum</code>s, even if they only have one
+variant.</p>
+<p>Constraint violations can occur in application code:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use my_server_sdk::model
+
+let res = model::a::Builder::default().build(); // We forgot to set `member`.
+
+match res {
+    Ok(a) =&gt; { ... },
+    Err(e) =&gt; {
+        assert_eq!(model::a::ConstraintViolation::MissingMember, e);
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="problem-1"><a class="header" href="#problem-1">Problem</a></h3>
+<p>Currently, the constraint violation types we generate are used by <em>both</em>:</p>
+<ol>
+<li>the server framework upon request deserialization; and</li>
+<li>by users in application code.</li>
+</ol>
+<p>However, the kinds of constraint violations that can occur in application code
+can sometimes be a <em>strict subset</em> of those that can occur during request
+deserialization.</p>
+<p>Consider the following model:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+
+@length(min: 2, max: 69)
+string LengthString
+</code></pre>
+<p>This produces:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct LengthMap(
+    pub(crate) std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+);
+
+impl
+    std::convert::TryFrom&lt;
+        std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+    &gt; for LengthMap
+{
+    type Error = crate::model::length_map::ConstraintViolation;
+
+    /// Constructs a `LengthMap` from an
+    /// [`std::collections::HashMap&lt;std::string::String,
+    /// crate::model::LengthString&gt;`], failing when the provided value does not
+    /// satisfy the modeled constraints.
+    fn try_from(
+        value: std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+    ) -&gt; Result&lt;Self, Self::Error&gt; {
+        let length = value.len();
+        if (1..=69).contains(&amp;length) {
+            Ok(Self(value))
+        } else {
+            Err(crate::model::length_map::ConstraintViolation::Length(length))
+        }
+    }
+}
+
+pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        ),
+    }
+    ...
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how the <code>ConstraintViolation::Value</code> variant is never constructed.
+Indeed, this variant is impossible to be constructed <em>in application code</em>: a
+user has to provide a map whose values are already constrained <code>LengthString</code>s
+to the <code>try_from</code> constructor, which only enforces the map's <code>@length</code> trait.</p>
+<p>The reason why these seemingly &quot;impossible violations&quot; are being generated is
+because they can arise during request deserialization. Indeed, the server
+framework deserializes requests into <strong>fully unconstrained types</strong>. These are
+types holding unconstrained types all the way through their closures. For
+instance, in the case of structure shapes, builder types (the unconstrained
+type corresponding to the structure shape) <a href="https://github.com/awslabs/smithy-rs/pull/1342">hold
+builders</a> all the way down.</p>
+<p>In the case of the above model, below is the alternate <code>pub(crate)</code> constructor
+the server framework uses upon deserialization. Observe how
+<code>LengthMapOfLengthStringsUnconstrained</code> is <em>fully unconstrained</em> and how the
+<code>try_from</code> constructor can yield <code>ConstraintViolation::Value</code>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub(crate) mod length_map_of_length_strings_unconstrained {
+    #[derive(Debug, Clone)]
+    pub(crate) struct LengthMapOfLengthStringsUnconstrained(
+        pub(crate) std::collections::HashMap&lt;std::string::String, std::string::String&gt;,
+    );
+
+    impl std::convert::TryFrom&lt;LengthMapOfLengthStringsUnconstrained&gt;
+        for crate::model::LengthMapOfLengthStrings
+    {
+        type Error = crate::model::length_map_of_length_strings::ConstraintViolation;
+        fn try_from(value: LengthMapOfLengthStringsUnconstrained) -&gt; Result&lt;Self, Self::Error&gt; {
+            let res: Result&lt;
+                std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
+                Self::Error,
+            &gt; = value
+                .0
+                .into_iter()
+                .map(|(k, v)| {
+                    let v: crate::model::LengthString = k.try_into().map_err(Self::Error::Key)?;
+
+                    Ok((k, v))
+                })
+                .collect();
+            let hm = res?;
+            Self::try_from(hm)
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>In conclusion, the user is currently exposed to an internal detail of how the
+framework operates that has no bearing on their application code. They
+shouldn't be exposed to impossible constraint violation variants in their Rust
+docs, nor have to <code>match</code> on these variants when handling errors.</p>
+<p>Note: <a href="https://github.com/awslabs/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
+<h3 id="solution-proposal"><a class="header" href="#solution-proposal">Solution proposal</a></h3>
+<p>The problem can be mitigated by adding <code>#[doc(hidden)]</code> to the internal
+variants and <code>#[non_exhaustive]</code> to the enum. We're already doing this in some
+constraint violation types.</p>
+<p>However, a &quot;less leaky&quot; solution is achieved by <em>splitting</em> the constraint
+violation type into two types, which this RFC proposes:</p>
+<ol>
+<li>one for use by the framework, with <code>pub(crate)</code> visibility, named
+<code>ConstraintViolationException</code>; and</li>
+<li>one for use by user application code, with <code>pub</code> visibility, named
+<code>ConstraintViolation</code>.</li>
+</ol>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+    }
+    pub (crate) enum ConstraintViolationException {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        ),
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
+present</a>
+in the case of builder types when <code>publicConstrainedTypes</code> is set to <code>false</code>:</p>
+<ol>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
+constraint traits, setting its visibility to <code>pub (crate)</code>, for exclusive
+use by the framework.</li>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
+builder type the user is exposed to: this builder does not take in
+constrained types and does not enforce all modeled constraints.</li>
+</ol>
+<h2 id="collecting-constraint-violations"><a class="header" href="#collecting-constraint-violations">Collecting constraint violations</a></h2>
+<h3 id="background-3"><a class="header" href="#background-3">Background</a></h3>
+<p>Constrained operations are currently required to have
+<code>smithy.framework#ValidationException</code> as a member in their <a href="https://smithy.io/2.0/spec/service-types.html#operation"><code>errors</code>
+property</a>. This is the
+shape that is rendered in responses when a request contains data that violates
+the modeled constraints.</p>
+<p>The shape is defined in the
+<a href="https://search.maven.org/artifact/software.amazon.smithy/smithy-validation-model"><code>smithy-validation-model</code></a>
+Maven package, <a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy">as
+follows</a>:</p>
+<pre><code class="language-smithy">$version: &quot;2.0&quot;
+
+namespace smithy.framework
+
+/// A standard error for input validation failures.
+/// This should be thrown by services when a member of the input structure
+/// falls outside of the modeled or documented constraints.
+@error(&quot;client&quot;)
+structure ValidationException {
+
+    /// A summary of the validation failure.
+    @required
+    message: String,
+
+    /// A list of specific failures encountered while validating the input.
+    /// A member can appear in this list more than once if it failed to satisfy multiple constraints.
+    fieldList: ValidationExceptionFieldList
+}
+
+/// Describes one specific validation failure for an input member.
+structure ValidationExceptionField {
+    /// A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
+    @required
+    path: String,
+
+    /// A detailed description of the validation failure.
+    @required
+    message: String
+}
+
+list ValidationExceptionFieldList {
+    member: ValidationExceptionField
+}
+</code></pre>
+<p>It was mentioned in the <a href="https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809300673">constraint traits
+RFC</a>, and
+implicit in the definition of Smithy's
+<a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy"><code>smithy.framework.ValidationException</code></a>
+shape, that server frameworks should respond with a <em>complete</em> collection of
+errors encountered during constraint trait enforcement to the client.</p>
+<h3 id="problem-2"><a class="header" href="#problem-2">Problem</a></h3>
+<p>As of writing, the <code>TryFrom</code> constructor of constrained types whose shapes have
+more than one constraint trait attached can only yield a single error. For
+example, the following shape:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>Yields:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct LengthPatternString(pub(crate) std::string::String);
+
+impl LengthPatternString {
+    fn check_length(
+        string: &amp;str,
+    ) -&gt; Result&lt;(), crate::model::length_pattern_string::ConstraintViolation&gt; {
+        let length = string.chars().count();
+
+        if (5..=10).contains(&amp;length) {
+            Ok(())
+        } else {
+            Err(crate::model::length_pattern_string::ConstraintViolation::Length(length))
+        }
+    }
+
+    fn check_pattern(
+        string: String,
+    ) -&gt; Result&lt;String, crate::model::length_pattern_string::ConstraintViolation&gt; {
+        let regex = Self::compile_regex();
+
+        if regex.is_match(&amp;string) {
+            Ok(string)
+        } else {
+            Err(crate::model::length_pattern_string::ConstraintViolation::Pattern(string))
+        }
+    }
+
+    pub fn compile_regex() -&gt; &amp;'static regex::Regex {
+        static REGEX: once_cell::sync::Lazy&lt;regex::Regex&gt; = once_cell::sync::Lazy::new(|| {
+            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support&quot;#)
+        });
+
+        &amp;REGEX
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = crate::model::length_pattern_string::ConstraintViolation;
+
+    /// Constructs a `LengthPatternString` from an [`std::string::String`],
+    /// failing when the provided value does not satisfy the modeled constraints.
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        Self::check_length(&amp;value)?;
+
+        let value = Self::check_pattern(value)?;
+
+        Ok(Self(value))
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how a failure to adhere to the <code>@length</code> trait will short-circuit the
+evaluation of the constructor, when the value could technically also not adhere
+with the <code>@pattern</code> trait.</p>
+<p>Similarly, constrained structures fail upon encountering the first member that
+violates a constraint.</p>
+<p>Additionally, <em>in framework request deserialization code</em>:</p>
+<ul>
+<li>collections whose members are constrained fail upon encountering the first
+member that violates the constraint,</li>
+<li>maps whose keys and/or values are constrained fail upon encountering the
+first violation; and</li>
+<li>structures whose members are constrained fail upon encountering the first
+member that violates the constraint,</li>
+</ul>
+<p>In summary, any shape that is transitively constrained yields types whose
+constructors (both the internal one and the user-facing one) currently
+short-circuit upon encountering the first violation.</p>
+<h3 id="solution-proposal-1"><a class="header" href="#solution-proposal-1">Solution proposal</a></h3>
+<p>The deserializing architecture lends itself to be easily refactored so that we
+can collect constraint violations before returning them. Indeed, note that
+deserializers enforce constraint traits in a two-step phase: first, the
+<em>entirety</em> of the unconstrained value is deserialized, <em>then</em> constraint traits
+are enforced by feeding the entire value to the <code>TryFrom</code> constructor.</p>
+<p>Let's consider a <code>ConstraintViolations</code> type (note the plural) that represents
+a collection of constraint violations that can occur <em>within user application
+code</em>. Roughly:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;;
+
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<ul>
+<li>The main reason for wrapping a vector in <code>ConstraintViolations</code> as opposed to
+directly returning the vector is forwards-compatibility: we may want to
+expand <code>ConstraintViolations</code> with conveniences.</li>
+<li>If the constrained type can only ever yield a single violation, we will
+dispense with <code>ConstraintViolations</code> and keep directly returning the
+<code>crate::model::shape_name::ConstraintViolation</code> type.</li>
+</ul>
+<p>We will analogously introduce a <code>ConstraintViolationExceptions</code> type that
+represents a collection of constraint violations that can occur <em>within the
+framework's request deserialization code</em>. This type will be <code>pub(crate)</code> and
+will be the one the framework will map to Smithy's <code>ValidationException</code> that
+eventually gets serialized into the response.</p>
+<h4 id="collecting-constraint-violations-may-constitute-a-dos-attack-vector"><a class="header" href="#collecting-constraint-violations-may-constitute-a-dos-attack-vector">Collecting constraint violations may constitute a DOS attack vector</a></h4>
+<p>This is a problem that <em>already</em> exists as of writing, but that collecting
+constraint violations highlights, so it is a good opportunity, from a
+pedagogical perspective, to explain it here. Consider the following model:</p>
+<pre><code class="language-smithy">@length(max: 3)
+list ListOfPatternStrings {
+    member: PatternString
+}
+
+@pattern(&quot;expensive regex to evaluate&quot;)
+string PatternString
+</code></pre>
+<p>Our implementation currently enforces constraints <em>from the leaf to the root</em>:
+when enforcing the <code>@length</code> constraint, the <code>TryFrom</code> constructor the server
+framework uses gets a <code>Vec&lt;String&gt;</code> and <em>first</em> checks the members adhere to
+the <code>@pattern</code> trait, and only <em>after</em> is the <code>@length</code> trait checked. This
+means that if a client sends a request with <code>n &gt;&gt;&gt; 3</code> list members, the
+expensive check runs <code>n</code> times, when a constant-time check inspecting the
+length of the input vector would have sufficed to reject the request.
+Additionally, we may want to avoid serializing <code>n</code> <code>ValidationExceptionField</code>s
+due to performance concerns.</p>
+<ol>
+<li>A possibility to circumvent this is making the <code>@length</code> validator special,
+having it bound the other validators via effectively permuting the order of
+the checks and thus short-circuiting.
+<ul>
+<li>In general, it's unclear what constraint traits should cause
+short-circuiting. A probably reasonable rule of thumb is to include
+traits that can be attached directly to aggregate shapes: as of writing,
+that would be <code>@uniqueItems</code> on list shapes and <code>@length</code> on list shapes.</li>
+</ul>
+</li>
+<li>Another possiblity is to <em>do nothing</em> and value <em>complete</em> validation
+exception response messages over trying to mitigate this with special
+handling. One could argue that these kind of DOS attack vectors should be
+taken care of with a separate solution e.g. a layer that bounds a request
+body's size to a reasonable default (see <a href="https://github.com/tokio-rs/axum/pull/1420">how Axum added
+this</a>). We will provide a similar
+request body limiting mechanism regardless.</li>
+</ol>
+<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/awslabs/smithy-rs/pull/2040#discussion_r1036226762">it's fair
+to say that the framework should return an error that is as informative as
+possible, but it doesn't necessarily have to be
+complete</a>.
+However, we will also write a layer, applied by default to all server SDKs,
+that bounds a request body's size to a reasonable (yet high) default. Relying
+on users to manually apply the layer is dangerous, since such a configuration
+is <a href="https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/">trivially
+exploitable</a>.
+Users can always manually apply the layer again to their resulting service if
+they want to further restrict a request's body size.</p>
+<h2 id="tightness-of-constraint-violations"><a class="header" href="#tightness-of-constraint-violations">&quot;Tightness&quot; of constraint violations</a></h2>
+<h3 id="problem-3"><a class="header" href="#problem-3">Problem</a></h3>
+<p><code>ConstraintViolationExceptions</code> <a href="https://www.ecorax.net/tightness/">is not
+&quot;tight&quot;</a> in that there's nothing in the type
+system that indicates to the user, when writing the custom validation error
+mapping function, that the iterator will not return a sequence of
+<code>ConstraintViolationException</code>s that is actually impossible to occur in
+practice.</p>
+<p>Recall that <code>ConstraintViolationException</code>s are <code>enum</code>s that model both direct
+constraint violations as well as transitive ones. For example, given the model:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+
+@length(min: 2, max: 69)
+string LengthString
+</code></pre>
+<p>The corresponding <code>ConstraintViolationException</code> Rust type for the <code>LengthMap</code>
+shape is:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub enum ConstraintViolation {
+        Length(usize),
+    }
+    pub (crate) enum ConstraintViolationException {
+        Length(usize),
+        Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolationException,
+        ),
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><code>ConstraintViolationExceptions</code> is just a container over this type:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolationExceptions&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolationExceptions&lt;T&gt; { ... }
+<span class="boring">}</span></code></pre></pre>
+<p>There might be multiple map values that fail to adhere to the constraints in
+<code>LengthString</code>, which would make the iterator yield multiple
+<code>length_map::ConstraintViolationException::Value</code>s; however, at most one
+<code>length_map::ConstraintViolationException::Length</code> can be yielded <em>in
+practice</em>. This might be obvious to the service owner when inspecting the model
+and the Rust docs, but it's not expressed in the type system.</p>
+<p>The above tightness problem has been formulated in terms of
+<code>ConstraintViolationExceptions</code>, because the fact that
+<code>ConstraintViolationExceptions</code> contain transitive constraint violations
+highlights the tightness problem. Note, however, that <strong>the tightness problem
+also afflicts <code>ConstraintViolations</code></strong>.</p>
+<p>Indeed, consider the following model:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>This would yield:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
+
+pub mod length_pattern_string {
+    pub enum ConstraintViolation {
+        Length(usize),
+        Pattern(String)
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;;
+
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe how the iterator of an instance of
+<code>ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;</code>,
+may, a priori, yield e.g. the
+<code>length_pattern_string::ConstraintViolation::Length</code> variant twice, when it's
+clear that the iterator should contain <em>at most one</em> of each of
+<code>length_pattern_string::ConstraintViolation</code>'s variants.</p>
+<h3 id="final-solution-proposal"><a class="header" href="#final-solution-proposal">Final solution proposal</a></h3>
+<p>We propose a tighter API design.</p>
+<ol>
+<li>We substitute <code>enum</code>s for <code>struct</code>s whose members are all <code>Option</code>al,
+representing all the constraint violations that can occur.</li>
+<li>For list shapes and map shapes:
+<ol>
+<li>we implement <code>IntoIterator</code> on an additional <code>struct</code> <code>Members</code>
+representing only the violations that can occur on the collection's
+members.</li>
+<li>we add a <em>non</em> <code>Option</code>-al field to the <code>struct</code> representing the
+constraint violations of type <code>Members</code>.</li>
+</ol>
+</li>
+</ol>
+<p>Let's walk through an example. Take the last model:</p>
+<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+@length(min: 5, max: 10)
+string LengthPatternString
+</code></pre>
+<p>This would yield, as per the first substitution:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_pattern_string {
+    pub struct ConstraintViolations {
+        pub length: Option&lt;constraint_violation::Length&gt;,
+        pub pattern: Option&lt;constraint_violation::Pattern&gt;,
+    }
+
+    pub mod constraint_violation {
+        pub struct Length(usize);
+        pub struct Pattern(String);
+    }
+}
+
+impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
+    type Error = length_pattern_string::ConstraintViolations;
+
+    // The error type returned by this constructor, `ConstraintViolations`,
+    // will always have _at least_ one member set.
+    fn try_from(value: std::string::String) -&gt; Result&lt;Self, Self::Error&gt; {
+        // Check constraints and collect violations.
+        ...
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>We now expand the model to highlight the second step of the algorithm:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: LengthString
+}
+</code></pre>
+<p>This gives us:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod length_map {
+    pub struct ConstraintViolations {
+        pub length: Option&lt;constraint_violation::Length&gt;,
+
+        // Would be `Option&lt;T&gt;` in the case of an aggregate shape that is _not_ a
+        // list shape or a map shape.
+        pub member_violations: constraint_violation::Members,
+    }
+
+    pub mod constraint_violation {
+        // Note that this could now live outside the `length_map` module and be
+        // reused across all `@length`-constrained shapes, if we expanded it with
+        // another `usize` indicating the _modeled_ value in the `@length` trait; by
+        // keeping it inside `length_map` we can hardcode that value in the
+        // implementation of e.g. error messages.
+        pub struct Length(usize);
+
+        pub struct Members {
+            pub(crate) Vec&lt;Member&gt;
+        }
+
+        pub struct Member {
+            // If the map's key shape were constrained, we'd have a `key`
+            // field here too.
+
+            value: Option&lt;Value&gt;
+        }
+
+        pub struct Value(
+            std::string::String,
+            crate::model::length_string::ConstraintViolation,
+        );
+
+        impl IntoIterator&lt;Item = Member&gt; for Members { ... }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<hr />
+<p>The above examples have featured the tight API design with
+<code>ConstraintViolation</code>s. Of course, we will apply the same design in the case of
+<code>ConstraintViolationException</code>s. For the sake of completeness, let's expand our
+model yet again with a structure shape:</p>
+<pre><code class="language-smithy">structure A {
+    @required
+    member: String,
+
+    @required
+    length_map: LengthMap,
+}
+</code></pre>
+<p>And this time let's feature <em>both</em> the resulting
+<code>ConstraintViolationExceptions</code> and <code>ConstraintViolations</code> types:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod a {
+    pub struct ConstraintViolationExceptions {
+        // All fields must be `Option`, despite the members being `@required`,
+        // since no violations for their values might have occurred.
+
+        pub missing_member_exception: Option&lt;constraint_violation_exception::MissingMember&gt;,
+        pub missing_length_map_exception: Option&lt;constraint_violation_exception::MissingLengthMap&gt;,
+        pub length_map_exceptions: Option&lt;crate::model::length_map::ConstraintViolationExceptions&gt;,
+    }
+
+    pub mod constraint_violation_exception {
+        pub struct MissingMember;
+        pub struct MissingLengthMap;
+    }
+
+    pub struct ConstraintViolations {
+        pub missing_member: Option&lt;constraint_violation::MissingMember&gt;,
+        pub missing_length_map: Option&lt;constraint_violation::MissingLengthMap&gt;,
+    }
+
+    pub mod constraint_violation {
+        pub struct MissingMember;
+        pub struct MissingLengthMap;
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>As can be intuited, the only differences are that:</p>
+<ul>
+<li><code>ConstraintViolationExceptions</code> hold transitive violations while
+<code>ConstraintViolations</code> only need to expose direct violations (as explained in
+the <a href="rfcs/rfc0032_better_constraint_violations.html#impossible-constraint-violations">Impossible constraint violations</a>
+section),</li>
+<li><code>ConstraintViolationExceptions</code> have members suffixed with <code>_exception</code>, as
+is the module name.</li>
+</ul>
+<p>Note that while the constraint violation (exception) type names are plural, the
+module names are always singular.</p>
+<p>We also make a conscious decision of, in this case of structure shapes, making
+the types of all members <code>Option</code>s, for simplicity. Another choice would have
+been to make <code>length_map_exceptions</code> not <code>Option</code>-al, and, in the case where no
+violations in <code>LengthMap</code> values occurred, set
+<code>length_map::ConstraintViolations::length</code> to <code>None</code> and
+<code>length_map::ConstraintViolations::member_violations</code> eventually reach an empty
+iterator. However, it's best that we use the expressiveness of <code>Option</code>s at the
+earliest (&quot;highest&quot; in the shape hierarchy) opportunity: if a member is <code>Some</code>,
+it means it (eventually) reaches data.</p>
+<h2 id="checklist"><a class="header" href="#checklist">Checklist</a></h2>
+<p>Unfortunately, while this RFC <em>could</em> be implemented iteratively (i.e. solve
+each of the problems in turn), it would introduce too much churn and throwaway
+work: solving the tightness problem requires a more or less complete overhaul
+of the constraint violations code generator. It's best that all three problems
+be solved in the same changeset.</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Generate <code>ConstraintViolations</code> and <code>ConstraintViolationExceptions</code> types
+so as to not reify <a href="rfcs/rfc0032_better_constraint_violations.html#impossible-constraint-violations">impossible constraint
+violations</a>, add the ability to <a href="rfcs/rfc0032_better_constraint_violations.html#collecting-constraint-violations">collect
+constraint
+violations</a>, and solve the <a href="rfcs/rfc0032_better_constraint_violations.html#tightness-of-constraint-violations">&quot;tightness&quot; problem of constraint violations</a>.</li>
+<li><input disabled="" type="checkbox"/>
+Special-case generated request deserialization code for operations
+using <code>@length</code> and <code>@uniqueItems</code> constrained shapes whose closures reach
+other constrained shapes so that the validators for these two traits
+short-circuit upon encountering a number of inner constraint violations
+above a certain threshold.</li>
+<li><input disabled="" type="checkbox"/>
+Write and expose a layer, applied by default to all generated server SDKs,
+that bounds a request body's size to a reasonable (yet high) default, to prevent <a href="https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hyper-package/">trivial DoS attacks</a>.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-improving-access-to-request-ids-in-sdk-clients"><a class="header" href="#rfc-improving-access-to-request-ids-in-sdk-clients">RFC: Improving access to request IDs in SDK clients</a></h1>
+<blockquote>
+<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2129">#2129</a></p>
+<p>Applies to: AWS SDK clients</p>
+</blockquote>
+<p>At time of writing, customers can retrieve a request ID in one of four ways in the Rust SDK:</p>
+<ol>
+<li>For error cases where the response parsed successfully, the request ID can be retrieved
+via accessor method on operation error. This also works for unmodeled errors so long as
+the response parsing succeeds.</li>
+<li>For error cases where a response was received but parsing fails, the response headers
+can be retrieved from the raw response on the error, but customers have to manually extract
+the request ID from those headers (there's no convenient accessor method).</li>
+<li>For all error cases where the request ID header was sent in the response, customers can
+call <code>SdkError::into_service_error</code> to transform the <code>SdkError</code> into an operation error,
+which has a <code>request_id</code> accessor on it.</li>
+<li>For success cases, the customer can't retrieve the request ID at all if they use the fluent
+client. Instead, they must manually make the operation and call the underlying Smithy client
+so that they have access to <code>SdkSuccess</code>, which provides the raw response where the request ID
+can be manually extracted from headers.</li>
+</ol>
+<p>Only one of these mechanisms is convenient and ergonomic. The rest need considerable improvements.
+Additionally, the request ID should be attached to tracing events where possible so that enabling
+debug logging reveals the request IDs without any code changes being necessary.</p>
+<p>This RFC proposes changes to make the request ID easier to access.</p>
+<h2 id="terminology-18"><a class="header" href="#terminology-18">Terminology</a></h2>
+<ul>
+<li><strong>Request ID:</strong> A unique identifier assigned to and associated with a request to AWS that is
+sent back in the response headers. This identifier is useful to customers when requesting support.</li>
+<li><strong>Operation Error:</strong> Operation errors are code generated for each operation in a Smithy model.
+They are an enum of every possible modeled error that that operation can respond with, as well
+as an <code>Unhandled</code> variant for any unmodeled or unrecognized errors.</li>
+<li><strong>Modeled Errors:</strong> Any error that is represented in a Smithy model with the <code>@error</code> trait.</li>
+<li><strong>Unmodeled Errors:</strong> Errors that a service responds with that do not appear in the Smithy model.</li>
+<li><strong>SDK Clients:</strong> Clients generated for the AWS SDK, including &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
+<li><strong>Smithy Clients:</strong> Any clients not generated for the AWS SDK, excluding &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
+</ul>
+<h2 id="sdksmithy-purity"><a class="header" href="#sdksmithy-purity">SDK/Smithy Purity</a></h2>
+<p>Before proposing any changes, the topic of purity needs to be covered. Request IDs are not
+currently a Smithy concept. However, at time of writing, the request ID concept is leaked into
+the non-SDK rust runtime crates and generated code via the <a href="https://docs.rs/aws-smithy-types/0.51.0/aws_smithy_types/error/struct.Error.html">generic error</a> struct and the
+<code>request_id</code> functions on generated operation errors (e.g., <a href="https://docs.rs/aws-sdk-s3/0.21.0/aws_sdk_s3/error/struct.GetObjectError.html#method.request_id"><code>GetObjectError</code> example in S3</a>).</p>
+<p>This RFC attempts to remove these leaks from Smithy clients.</p>
+<h2 id="proposed-changes-1"><a class="header" href="#proposed-changes-1">Proposed Changes</a></h2>
+<p>First, we'll explore making it easier to retrieve a request ID from errors,
+and then look at making it possible to retrieve them from successful responses.
+To see the customer experience of these changes, see the <strong>Example Interactions</strong>
+section below.</p>
+<h3 id="make-request-id-retrieval-on-errors-consistent"><a class="header" href="#make-request-id-retrieval-on-errors-consistent">Make request ID retrieval on errors consistent</a></h3>
+<p>One could argue that customers being able to convert a <code>SdkError</code> into an operation error
+that has a request ID on it is sufficient. However, there's no way to write a function
+that takes an error from any operation and logs a request ID, so it's still not ideal.</p>
+<p>The <code>aws-http</code> crate needs to have a <code>RequestId</code> trait on it to facilitate generic
+request ID retrieval:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait RequestId {
+    /// Returns the request ID if it's available.
+    fn request_id(&amp;self) -&gt; Option&lt;&amp;str&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This trait will be implemented for <code>SdkError</code> in <code>aws-http</code> where it is declared,
+complete with logic to pull the request ID header out of the raw HTTP responses
+(it will always return <code>None</code> for event stream <code>Message</code> responses; an additional
+trait may need to be added to <code>aws-smithy-http</code> to facilitate access to the headers).
+This logic will try different request ID header names in order of probability
+since AWS services have a couple of header name variations. <code>x-amzn-requestid</code> is
+the most common, with <code>x-amzn-request-id</code> being the second most common.</p>
+<p><code>aws-http</code> will also implement <code>RequestId</code> for <code>aws_smithy_types::error::Error</code>,
+and the <code>request_id</code> method will be removed from <code>aws_smithy_types::error::Error</code>.
+Places that construct <code>Error</code> will place the request ID into its <code>extras</code> field,
+where the <code>RequestId</code> trait implementation can retrieve it.</p>
+<p>A codegen decorator will be added to <code>sdk-codegen</code> to implement <code>RequestId</code> for
+operation errors, and the existing <code>request_id</code> accessors will be removed from
+<code>CombinedErrorGenerator</code> in <code>codegen-core</code>.</p>
+<p>With these changes, customers can directly access request IDs from <code>SdkError</code> and
+operations errors by importing the <code>RequestId</code> trait. Additionally, the Smithy/SDK
+purity is improved since both places where request IDs are leaked to Smithy clients
+will be resolved.</p>
+<h3 id="implement-requestid-for-outputs"><a class="header" href="#implement-requestid-for-outputs">Implement <code>RequestId</code> for outputs</a></h3>
+<p>To make it possible to retrieve request IDs when using the fluent client, the new
+<code>RequestId</code> trait can be implemented for outputs.</p>
+<p>Some services (e.g., Transcribe Streaming) model the request ID header in their
+outputs, while other services (e.g., Directory Service) model a request ID
+field on errors. In some cases, services take <code>RequestId</code> as a modeled input
+(e.g., IoT Event Data). It follows that it is possible, but unlikely, that
+a service could have a field named <code>RequestId</code> that is not the same concept
+in the future.</p>
+<p>Thus, name collisions are going to be a concern for putting a request ID accessor
+on output. However, if it is implemented as a trait, then this concern is partially
+resolved. In the vast majority of cases, importing <code>RequestId</code> will provide the
+accessor without any confusion. In cases where it is already modeled and is the
+same concept, customers will likely just use it and not even realize they didn't
+import the trait. The only concern is future cases where it is modeled as a
+separate concept, and as long as customers don't import <code>RequestId</code> for something
+else in the same file, that confusion can be avoided.</p>
+<p>In order to implement <code>RequestId</code> for outputs, either the original response needs
+to be stored on the output, or the request ID needs to be extracted earlier and
+stored on the output. The latter will lead to a small amount of header lookup
+code duplication.</p>
+<p>In either case, the <code>StructureGenerator</code> needs to be customized in <code>sdk-codegen</code>
+(Appendix B outlines an alternative approach to this and why it was dismissed).
+This will be done by adding customization hooks to <code>StructureGenerator</code> similar
+to the ones for <code>ServiceConfigGenerator</code> so that a <code>sdk-codegen</code> decorator can
+conditionally add fields and functions to any generated structs. A hook will
+also be needed to additional trait impl blocks.</p>
+<p>Once the hooks are in place, a decorator will be added to store either the original
+response or the request ID on outputs, and then the <code>RequestId</code> trait will be
+implemented for them. The <code>ParseResponse</code> trait implementation will be customized
+to populate this new field.</p>
+<p>Note: To avoid name collisions of the request ID or response on the output struct,
+these fields can be prefixed with an underscore. It shouldn't be possible for SDK
+fields to code generate with this prefix given the model validation rules in place.</p>
+<h3 id="implement-requestid-for-operation-and-operationresponse"><a class="header" href="#implement-requestid-for-operation-and-operationresponse">Implement <code>RequestId</code> for <code>Operation</code> and <code>operation::Response</code></a></h3>
+<p>In the case that a customer wants to ditch the fluent client, it should still
+be easy to retrieve a request ID. To do this, <code>aws-http</code> will provide <code>RequestId</code>
+implementations for <code>Operation</code> and <code>operation::Response</code>. These implementations
+will likely make the other <code>RequestId</code> implementations easier to implement as well.</p>
+<h3 id="implement-requestid-for-result"><a class="header" href="#implement-requestid-for-result">Implement <code>RequestId</code> for <code>Result</code></a></h3>
+<p>The <code>Result</code> returned by the SDK should directly implement <code>RequestId</code> when both
+its <code>Ok</code> and <code>Err</code> variants implement <code>RequestId</code>. This will make it possible
+for a customer to feed the return value from <code>send()</code> directly to a request ID logger.</p>
+<h2 id="example-interactions"><a class="header" href="#example-interactions">Example Interactions</a></h2>
+<h3 id="generic-handling-case"><a class="header" href="#generic-handling-case">Generic Handling Case</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// A re-export of the RequestId trait
+use aws_sdk_service::primitives::RequestId;
+
+fn my_request_id_logging_fn(request_id: &amp;dyn RequestId) {
+    println!(&quot;request ID: {:?}&quot;, request_id.request_id());
+}
+
+let result = client.some_operation().send().await?;
+my_request_id_logging_fn(&amp;result);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="success-case"><a class="header" href="#success-case">Success Case</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+let output = client.some_operation().send().await?;
+println!(&quot;request ID: {:?}&quot;, output.request_id());
+<span class="boring">}</span></code></pre></pre>
+<h3 id="error-case-with-sdkerror"><a class="header" href="#error-case-with-sdkerror">Error Case with <code>SdkError</code></a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) =&gt; { /* handle OK */ }
+    Err(err) =&gt; {
+        println!(&quot;request ID: {:?}&quot;, output.request_id());
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="error-case-with-operation-error"><a class="header" href="#error-case-with-operation-error">Error Case with operation error</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) =&gt; { /* handle OK */ }
+    Err(err) =&gt; match err.into_service_err() {
+        err @ SomeOperationError::SomeError(_) =&gt; { println!(&quot;request ID: {:?}&quot;, err.request_id()); }
+        _ =&gt; { /* don't care */ }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="changes-checklist-25"><a class="header" href="#changes-checklist-25">Changes Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Create the <code>RequestId</code> trait in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement for errors
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>SdkError</code> in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove <code>request_id</code> from <code>aws_smithy_types::error::Error</code>, and store request IDs in its <code>extras</code> instead</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>aws_smithy_types::error::Error</code> in <code>aws-http</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove generation of <code>request_id</code> accessors from <code>CombinedErrorGenerator</code> in <code>codegen-core</code></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement for outputs
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hooks to <code>StructureGenerator</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hook to <code>ParseResponse</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add customization hook to <code>HttpBoundProtocolGenerator</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Customize output structure code gen in <code>sdk-codegen</code> to add either a request ID or a response field</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Customize <code>ParseResponse</code> in <code>sdk-codegen</code> to populate the outputs</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>Operation</code> and <code>operation::Response</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>RequestId</code> for <code>Result&lt;O, E&gt;</code> where <code>O</code> and <code>E</code> both implement <code>RequestId</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Re-export <code>RequestId</code> in generated crates</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add integration tests for each request ID access point</li>
+</ul>
+<h2 id="appendix-a-alternate-solution-for-access-on-successful-responses"><a class="header" href="#appendix-a-alternate-solution-for-access-on-successful-responses">Appendix A: Alternate solution for access on successful responses</a></h2>
+<p>Alternatively, for successful responses, a second <code>send</code> method (that is difficult to name)w
+be added to the fluent client that has a return value that includes both the output and
+the request ID (or entire response).</p>
+<p>This solution was dismissed due to difficulty naming, and the risk of name collision.</p>
+<h2 id="appendix-b-adding-requestid-as-a-string-to-outputs-via-model-transform"><a class="header" href="#appendix-b-adding-requestid-as-a-string-to-outputs-via-model-transform">Appendix B: Adding <code>RequestId</code> as a string to outputs via model transform</a></h2>
+<p>The request ID could be stored on outputs by doing a model transform in <code>sdk-codegen</code> to add a
+<code>RequestId</code> member field. However, this causes problems when an output already has a <code>RequestId</code> field,
+and requires the addition of a synthetic trait to skip binding the field in the generated
+serializers/deserializers.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="smithy-orchestrator"><a class="header" href="#smithy-orchestrator">Smithy Orchestrator</a></h1>
+<blockquote>
+<p>status: implemented
+applies-to: The smithy client</p>
+</blockquote>
+<p>This RFC proposes a new process for constructing client requests and handling service responses. This new process is intended to:</p>
+<ul>
+<li>Improve the user experience by</li>
+<li>Simplifying several aspects of sending a request</li>
+<li>Adding more extension points to the request/response lifecycle</li>
+<li>Improve the maintainer experience by</li>
+<li>Making our SDK more similar in structure to other AWS SDKs</li>
+<li>Simplifying many aspects of the request/response lifecycle</li>
+<li>Making room for future changes</li>
+</ul>
+<p>Additionally, functionality that the SDKs currently provide like retries, logging, and auth with be incorporated into this new process in such a way as to make it more configurable and understandable.</p>
+<p>This RFC references but is not the source of truth on:</p>
+<ul>
+<li>Interceptors: To be described in depth in a future RFC.</li>
+<li>Runtime Plugins: To be described in depth in a future RFC.</li>
+</ul>
+<h2 id="tldr"><a class="header" href="#tldr">TLDR;</a></h2>
+<p>When a smithy client communicates with a smithy service, messages are handled by an &quot;orchestrator.&quot; The orchestrator runs in two main phases:</p>
+<ol>
+<li>Constructing configuration.
+<ul>
+<li>This process is user-configurable with &quot;runtime plugins.&quot;</li>
+<li>Configuration is stored in a typemap.</li>
+</ul>
+</li>
+<li>Transforming a client request into a server response.
+<ul>
+<li>This process is user-configurable with &quot;interceptors.&quot;</li>
+<li>Interceptors are functions that are run by &quot;hooks&quot; in the request/response lifecycle.</li>
+</ul>
+</li>
+</ol>
+<h2 id="terminology-19"><a class="header" href="#terminology-19">Terminology</a></h2>
+<ul>
+<li><strong>SDK Client</strong>: A high-level abstraction allowing users to make requests to remote services.</li>
+<li><strong>Remote Service</strong>: A remote API that a user wants to use. Communication with a remote service usually happens over HTTP. The remote service is usually, but not necessarily, an AWS service.</li>
+<li><strong>Operation</strong>: A high-level abstraction representing an interaction between an *SDK Client and a <em>remote service</em>.</li>
+<li><strong>Input Message</strong>: A modeled request passed into an <em>SDK client</em>. For example, S3’s <code>ListObjectsRequest</code>.</li>
+<li><strong>Transport Request Message</strong>: A message that can be transmitted to a <em>remote service</em>. For example, an HTTP request.</li>
+<li><strong>Transport Response Message</strong>: A message that can be received from a <em>remote service</em>. For example, an HTTP response.</li>
+<li><strong>Output Message</strong>: A modeled response or exception returned to an <em>SDK client</em> caller. For example, S3’s <code>ListObjectsResponse</code> or <code>NoSuchBucketException</code>.</li>
+<li><strong>The request/response lifecycle</strong>: The process by which an <em>SDK client</em> makes requests and receives responses from a <em>remote service</em>. This process is enacted and managed by the <em>orchestrator</em>.</li>
+<li><strong>Orchestrator</strong>: The code within an <em>SDK client</em> that handles the process of making requests and receiving responses from <em>remote services</em>. The orchestrator is configurable by modifying the <em>runtime plugins</em> it's built from. The orchestrator is responsible for calling <em>interceptors</em> at the appropriate times in the <em>request/response lifecycle</em>.</li>
+<li><strong>Interceptor</strong>/<strong>Hook</strong>: A generic extension point within the <em>orchestrator</em>. Supports &quot;anything that someone should be able to do&quot;, NOT &quot;anything anyone might want to do&quot;. These hooks are:
+<ul>
+<li>Either <strong>read-only</strong> or <strong>read/write</strong>.</li>
+<li>Able to read and modify the <strong>Input</strong>, <strong>Transport Request</strong>, <strong>Transport Response</strong>, or <strong>Output</strong> messages.</li>
+</ul>
+</li>
+<li><strong>Runtime Plugin</strong>: Runtime plugins are similar to interceptors, but they act on configuration instead of requests and response. Both users and services may define runtime plugins. Smithy also defines several default runtime plugins used by most clients. See the F.A.Q. for a list of plugins with descriptions.</li>
+<li><strong>ConfigBag</strong>: A <code>typemap</code> that's equivalent to <a href="https://docs.rs/http/latest/http/struct.Extensions.html"><code>http::Extensions</code></a>. Used to store configuration for the orchestrator.</li>
+</ul>
+<h2 id="the-user-experience-if-this-rfc-is-implemented-3"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented-3">The user experience if this RFC is implemented</a></h2>
+<p>For many users, the changes described by this RFC will be invisible. Making a request with an orchestrator-based SDK client looks very similar to the way requests were made pre-RFC:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let sdk_config = aws_config::load_from_env().await;
+let client = aws_sdk_s3::Client::new(&amp;sdk_config);
+let res = client.get_object()
+    .bucket(&quot;a-bucket&quot;)
+    .key(&quot;a-file.txt&quot;)
+    .send()
+    .await?;
+
+match res {
+    Ok(res) =&gt; println!(&quot;success: {:?}&quot;),
+    Err(err) =&gt; eprintln!(&quot;failure: {:?}&quot;)
+};
+<span class="boring">}</span></code></pre></pre>
+<p>Users may further configure clients and operations with <strong>runtime plugins</strong>, and they can modify requests and responses with <strong>interceptors</strong>. We'll examine each of these concepts in the following sections.</p>
+<h3 id="service-clients-and-operations-are-configured-with-runtime-plugins"><a class="header" href="#service-clients-and-operations-are-configured-with-runtime-plugins">Service clients and operations are configured with runtime plugins</a></h3>
+<blockquote>
+<p>The exact implementation of <strong>runtime plugins</strong> is left for another RFC. That other RFC will be linked here once it's written. To get an idea of what they may look like, see the <em>&quot;Layered configuration, stored in type maps&quot;</em> section of this RFC.</p>
+</blockquote>
+<p>Runtime plugins construct and modify client configuration. Plugin initialization is the first step of sending a request, and plugins set in later steps can override the actions of earlier plugins. Plugin ordering is deterministic and non-customizable.</p>
+<p>While AWS services define a default set of plugins, users may define their own plugins, and set them by calling the appropriate methods on a service's config, client, or operation. Plugins are specifically meant for constructing service and operation configuration. If a user wants to define behavior that should occur at specific points in the <em>request/response lifecycle</em>, then they should instead consider defining an <em>interceptor</em>.</p>
+<h3 id="requests-and-responses-are-modified-by-interceptors"><a class="header" href="#requests-and-responses-are-modified-by-interceptors">Requests and responses are modified by interceptors</a></h3>
+<p>Interceptors are similar to middlewares, in that they are functions that can read and modify request and response state. However, they are more restrictive than middlewares in that they can't modify the &quot;control flow&quot; of the request/response lifecycle. This is intentional. Interceptors can be registered on a client or operation, and the orchestrator is responsible for calling interceptors at the appropriate time. Users MUST NOT perform blocking IO within an interceptor. Interceptors are sync, and are not intended to perform large amounts of work. This makes them easier to reason about and use. Depending on when they are called, interceptors may read and modify <em>input messages</em>, <em>transport request messages</em>, <em>transport response messages</em>, and <em>output messages</em>. Additionally, all interceptors may write to a context object that is shared between all interceptors.</p>
+<h4 id="currently-supported-hooks"><a class="header" href="#currently-supported-hooks">Currently supported hooks</a></h4>
+<ol>
+<li><strong>Read Before Execution <em>(Read-Only)</em></strong>: Before anything happens. This is the first
+thing the SDK calls during operation execution.</li>
+<li><strong>Modify Before Serialization <em>(Read/Write)</em></strong>: Before the input message given by
+the customer is marshalled into a transport request message. Allows modifying the
+input message.</li>
+<li><strong>Read Before Serialization <em>(Read-Only)</em></strong>: The last thing the SDK calls before
+marshaling the input message into a transport message.</li>
+<li><strong>Read After Serialization <em>(Read-Only)</em></strong>: The first thing the SDK calls after marshaling the input message into a transport message.</li>
+<li><em>(Retry Loop)</em>
+<ol>
+<li><strong>Modify Before Retry Loop <em>(Read/Write)</em></strong>: The last thing the SDK calls before entering the retry look. Allows modifying the transport message.</li>
+<li><strong>Read Before Attempt <em>(Read-Only)</em></strong>: The first thing the SDK calls “inside” of the retry loop.</li>
+<li><strong>Modify Before Signing <em>(Read/Write)</em></strong>: Before the transport request message is signed. Allows modifying the transport message.</li>
+<li><strong>Read Before Signing <em>(Read-Only)</em></strong>: The last thing the SDK calls before signing the transport request message.</li>
+<li>**Read After Signing (Read-Only)****: The first thing the SDK calls after signing the transport request message.</li>
+<li><strong>Modify Before Transmit <em>(Read/Write)</em></strong>: Before the transport request message is sent to the service. Allows modifying the transport message.</li>
+<li><strong>Read Before Transmit <em>(Read-Only)</em></strong>: The last thing the SDK calls before sending the transport request message.</li>
+<li><strong>Read After Transmit <em>(Read-Only)</em></strong>: The last thing the SDK calls after receiving the transport response message.</li>
+<li><strong>Modify Before Deserialization <em>(Read/Write)</em></strong>: Before the transport response message is unmarshaled. Allows modifying the transport response message.</li>
+<li><strong>Read Before Deserialization <em>(Read-Only)</em></strong>: The last thing the SDK calls before unmarshalling the transport response message into an output message.</li>
+<li><strong>Read After Deserialization <em>(Read-Only)</em></strong>: The last thing the SDK calls after unmarshaling the transport response message into an output message.</li>
+<li><strong>Modify Before Attempt Completion <em>(Read/Write)</em></strong>: Before the retry loop ends. Allows modifying the unmarshaled response (output message or error).</li>
+<li><strong>Read After Attempt <em>(Read-Only)</em></strong>: The last thing the SDK calls “inside” of the retry loop.</li>
+</ol>
+</li>
+<li><strong>Modify Before Execution Completion <em>(Read/Write)</em></strong>: Before the execution ends. Allows modifying the unmarshaled response (output message or error).</li>
+<li><strong>Read After Execution <em>(Read-Only)</em></strong>: After everything has happened. This is the last thing the SDK calls during operation execution.</li>
+</ol>
+<h3 id="interceptor-context"><a class="header" href="#interceptor-context">Interceptor context</a></h3>
+<p>As mentioned above, interceptors may read/write a context object that is shared between all interceptors:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct InterceptorContext&lt;ModReq, TxReq, TxRes, ModRes&gt; {
+    // a.k.a. the input message
+    modeled_request: ModReq,
+    // a.k.a. the transport request message
+    tx_request: Option&lt;TxReq&gt;,
+    // a.k.a. the output message
+    modeled_response: Option&lt;ModRes&gt;,
+    // a.k.a. the transport response message
+    tx_response: Option&lt;TxRes&gt;,
+    // A type-keyed map
+    properties: SharedPropertyBag,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The optional request and response types in the interceptor context can only be accessed by interceptors that are run after specific points in the <em>request/response lifecycle</em>. Rather than go into depth in this RFC, I leave that to a future &quot;Interceptors RFC.&quot;</p>
+<h2 id="how-to-implement-this-rfc"><a class="header" href="#how-to-implement-this-rfc">How to implement this RFC</a></h2>
+<h3 id="integrating-with-the-orchestrator"><a class="header" href="#integrating-with-the-orchestrator">Integrating with the orchestrator</a></h3>
+<p>Imagine we have some sort of request signer. This signer doesn't refer to any orchestrator types. All it needs is a <code>HeaderMap</code> along with two strings, and will return a signature in string form.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct Signer;
+
+impl Signer {
+    fn sign(headers: &amp;http::HeaderMap, signing_name: &amp;str, signing_region: &amp;str) -&gt; String {
+        todo!()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Now imagine things from the orchestrator's point of view. It requires something that implements an <code>AuthOrchestrator</code> which will be responsible for resolving the correct auth
+scheme, identity, and signer for an operation, as well as signing the request</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait AuthOrchestrator&lt;Req&gt;: Send + Sync + Debug {
+    fn auth_request(&amp;self, req: &amp;mut Req, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt;;
+}
+
+// And it calls that `AuthOrchestrator` like so:
+fn invoke() {
+    // code omitted for brevity
+
+    // Get the request to be signed
+    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    // Fetch the auth orchestrator from the bag
+    let auth_orchestrator = cfg
+        .get::&lt;Box&lt;dyn AuthOrchestrator&lt;Req&gt;&gt;&gt;()
+        .ok_or(&quot;missing auth orchestrator&quot;)?;
+    // Auth the request
+    auth_orchestrator.auth_request(tx_req_mut, cfg)?;
+
+    // code omitted for brevity
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The specific implementation of the <code>AuthOrchestrator</code> is what brings these two things together:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct Sigv4AuthOrchestrator;
+
+impl AuthOrchestrator for Sigv4AuthOrchestrator {
+    fn auth_request(&amp;self, req: &amp;mut http::Request&lt;SdkBody&gt;, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt; {
+        let signer = Signer;
+        let signing_name = cfg.get::&lt;SigningName&gt;().ok_or(Error::MissingSigningName)?;
+        let signing_region = cfg.get::&lt;SigningRegion&gt;().ok_or(Error::MissingSigningRegion)?;
+        let headers = req.headers_mut();
+
+        let signature = signer.sign(headers, signing_name, signing_region);
+        match cfg.get::&lt;SignatureLocation&gt;() {
+            Some(SignatureLocation::Query) =&gt; req.query.set(&quot;sig&quot;, signature),
+            Some(SignatureLocation::Header) =&gt; req.headers_mut().insert(&quot;sig&quot;, signature),
+            None =&gt; return Err(Error::MissingSignatureLocation),
+        };
+
+        Ok(())
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This intermediate code should be free from as much logic as possible. Whenever possible, we must maintain this encapsulation. Doing so will make the Orchestrator more flexible, maintainable, and understandable.</p>
+<h3 id="layered-configuration-stored-in-type-maps"><a class="header" href="#layered-configuration-stored-in-type-maps">Layered configuration, stored in type maps</a></h3>
+<blockquote>
+<p><strong>Type map</strong>: A data structure where stored values are keyed by their type. Hence, only one value can be stored for a given type.</p>
+<p><em>See <a href="https://docs.rs/typemap">typemap</a>, <a href="https://docs.rs/crate/type-map">type-map</a>, <a href="https://docs.rs/http/latest/http/struct.Extensions.html">http::Extensions</a>, and <a href="https://docs.rs/actix-http/latest/actix_http/struct.Extensions.html">actix_http::Extensions</a> for examples.</em></p>
+</blockquote>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span> let conf: ConfigBag = aws_config::from_env()
+    // Configuration can be common to all smithy clients
+    .with(RetryConfig::builder().disable_retries().build())
+    // Or, protocol-specific
+    .with(HttpClient::builder().build())
+    // Or, AWS-specific
+    .with(Region::from(&quot;us-east-1&quot;))
+    // Or, service-specific
+    .with(S3Config::builder().force_path_style(false).build())
+    .await;
+
+let client = aws_sdk_s3::Client::new(&amp;conf);
+
+client.list_buckets()
+    .customize()
+    // Configuration can be set on operations as well as clients
+    .with(HttpConfig::builder().conn(some_other_conn).build())
+    .send()
+    .await;
+<span class="boring">}</span></code></pre></pre>
+<p>Setting configuration that will not be used wastes memory and can make debugging more difficult. Therefore, configuration defaults are only set when they're relevant. For example, if a smithy service doesn't support HTTP, then no HTTP client will be set.</p>
+<h4 id="what-is-layered-configuration"><a class="header" href="#what-is-layered-configuration">What is &quot;layered&quot; configuration?</a></h4>
+<p>Configuration has precedence. Configuration set on an operation will override configuration set on a client, and configuration set on a client will override default configuration. However, configuration with a higher precedence can also augment configuration with a lower precedence. For example:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let conf: ConfigBag = aws_config::from_env()
+    .with(
+        SomeConfig::builder()
+            .option_a(1)
+            .option_b(2)
+            .option_c(3)
+    )
+    .build()
+    .await;
+
+let client = aws_sdk_s3::Client::new(&amp;conf);
+
+client.list_buckets()
+    .customize()
+    .with(
+        SomeConfig::builder()
+            .option_a(0)
+            .option_b(Value::Inherit)
+            .option_c(Value::Unset)
+    )
+    .build()
+    .send()
+    .await;
+<span class="boring">}</span></code></pre></pre>
+<p>In the above example, when the <code>option_a</code>, <code>option_b</code>, <code>option_c</code>, values of <code>SomeConfig</code> are accessed, they'll return:</p>
+<ul>
+<li><code>option_a</code>: <code>0</code></li>
+<li><code>option_b</code>: <code>2</code></li>
+<li><code>option_c</code>: No value</li>
+</ul>
+<p>Config values are wrapped in a special enum called <code>Value</code> with three variants:</p>
+<ul>
+<li><code>Value::Set</code>: A set value that will override values from lower layers.</li>
+<li><code>Value::Unset</code>: An explicitly unset value that will override values from lower layers.</li>
+<li><code>Value::Inherit</code>: An explicitly unset value that will inherit a value from a lower layer.</li>
+</ul>
+<p>Builders are defined like this:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct SomeBuilder {
+    value: Value&lt;T&gt;,
+}
+
+impl struct SomeBuilder&lt;T&gt; {
+    fn new() -&gt; Self {
+        // By default, config values inherit from lower-layer configs
+        Self { value: Value::Inherit }
+    }
+
+    fn some_field(&amp;mut self, value: impl Into&lt;Value&lt;T&gt;&gt;) -&gt; &amp;mut self {
+        self.value = value.into();
+        self
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Because of <code>impl Into&lt;Value&lt;T&gt;&gt;</code>, users don't need to reference the <code>Value</code> enum unless they want to &quot;unset&quot; a value.</p>
+<h4 id="layer-separation-and-precedence"><a class="header" href="#layer-separation-and-precedence">Layer separation and precedence</a></h4>
+<p>Codegen defines default sets of interceptors and runtime plugins at various &quot;levels&quot;:</p>
+<ol>
+<li>AWS-wide defaults set by codegen.</li>
+<li>Service-wide defaults set by codegen.</li>
+<li>Operation-specific defaults set by codegen.</li>
+</ol>
+<p>Likewise, users may mount their own interceptors and runtime plugins:</p>
+<ol>
+<li>The AWS config level, e.g. <code>aws_types::Config</code>.</li>
+<li>The service config level, e.g. <code>aws_sdk_s3::Config</code>.</li>
+<li>The operation config level, e.g. <code>aws_sdk_s3::Client::get_object</code>.</li>
+</ol>
+<p>Configuration is resolved in a fixed manner by reading the &quot;lowest level&quot; of config available, falling back to &quot;higher levels&quot; only when no value has been set. Therefore, at least 3 separate <code>ConfigBag</code>s are necessary, and user configuration has precedence over codegen-defined default configuration. With that in mind, resolution of configuration would look like this:</p>
+<ol>
+<li>Check user-set operation config.</li>
+<li>Check codegen-defined operation config.</li>
+<li>Check user-set service config.</li>
+<li>Check codegen-defined service config.</li>
+<li>Check user-set AWS config.</li>
+<li>Check codegen-defined AWS config.</li>
+</ol>
+<h3 id="the-aws-smithy-orchestrator-crate"><a class="header" href="#the-aws-smithy-orchestrator-crate">The <code>aws-smithy-orchestrator</code> crate</a></h3>
+<p><em>I've omitted some of the error conversion to shorten this example and make it easier to understand. The real version will be messier.</em></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// `In`: The input message e.g. `ListObjectsRequest`
+/// `Req`: The transport request message e.g. `http::Request&lt;SmithyBody&gt;`
+/// `Res`: The transport response message e.g. `http::Response&lt;SmithyBody&gt;`
+/// `Out`: The output message. A `Result` containing either:
+///     - The 'success' output message e.g. `ListObjectsResponse`
+///     - The 'failure' output message e.g. `NoSuchBucketException`
+pub async fn invoke&lt;In, Req, Res, T&gt;(
+    input: In,
+    interceptors: &amp;mut Interceptors&lt;In, Req, Res, Result&lt;T, BoxError&gt;&gt;,
+    runtime_plugins: &amp;RuntimePlugins,
+    cfg: &amp;mut ConfigBag,
+) -&gt; Result&lt;T, BoxError&gt;
+    where
+        // The input must be Clone in case of retries
+        In: Clone + 'static,
+        Req: 'static,
+        Res: 'static,
+        T: 'static,
+{
+    let mut ctx: InterceptorContext&lt;In, Req, Res, Result&lt;T, BoxError&gt;&gt; =
+        InterceptorContext::new(input);
+
+    runtime_plugins.apply_client_configuration(cfg)?;
+    interceptors.client_read_before_execution(&amp;ctx, cfg)?;
+
+    runtime_plugins.apply_operation_configuration(cfg)?;
+    interceptors.operation_read_before_execution(&amp;ctx, cfg)?;
+
+    interceptors.read_before_serialization(&amp;ctx, cfg)?;
+    interceptors.modify_before_serialization(&amp;mut ctx, cfg)?;
+
+    let request_serializer = cfg
+        .get::&lt;Box&lt;dyn RequestSerializer&lt;In, Req&gt;&gt;&gt;()
+        .ok_or(&quot;missing serializer&quot;)?;
+    let req = request_serializer.serialize_request(ctx.modeled_request_mut(), cfg)?;
+    ctx.set_tx_request(req);
+
+    interceptors.read_after_serialization(&amp;ctx, cfg)?;
+    interceptors.modify_before_retry_loop(&amp;mut ctx, cfg)?;
+
+    loop {
+        make_an_attempt(&amp;mut ctx, cfg, interceptors).await?;
+        interceptors.read_after_attempt(&amp;ctx, cfg)?;
+        interceptors.modify_before_attempt_completion(&amp;mut ctx, cfg)?;
+
+        let retry_strategy = cfg
+            .get::&lt;Box&lt;dyn RetryStrategy&lt;Result&lt;T, BoxError&gt;&gt;&gt;&gt;()
+            .ok_or(&quot;missing retry strategy&quot;)?;
+        let mod_res = ctx
+            .modeled_response()
+            .expect(&quot;it's set during 'make_an_attempt'&quot;);
+        if retry_strategy.should_retry(mod_res, cfg)? {
+            continue;
+        }
+
+        interceptors.modify_before_completion(&amp;mut ctx, cfg)?;
+        let trace_probe = cfg
+            .get::&lt;Box&lt;dyn TraceProbe&gt;&gt;()
+            .ok_or(&quot;missing trace probes&quot;)?;
+        trace_probe.dispatch_events(cfg);
+        interceptors.read_after_execution(&amp;ctx, cfg)?;
+
+        break;
+    }
+
+    let (modeled_response, _) = ctx.into_responses()?;
+    modeled_response
+}
+
+// Making an HTTP request can fail for several reasons, but we still need to
+// call lifecycle events when that happens. Therefore, we define this
+// `make_an_attempt` function to make error handling simpler.
+async fn make_an_attempt&lt;In, Req, Res, T&gt;(
+    ctx: &amp;mut InterceptorContext&lt;In, Req, Res, Result&lt;T, BoxError&gt;&gt;,
+    cfg: &amp;mut ConfigBag,
+    interceptors: &amp;mut Interceptors&lt;In, Req, Res, Result&lt;T, BoxError&gt;&gt;,
+) -&gt; Result&lt;(), BoxError&gt;
+    where
+        In: Clone + 'static,
+        Req: 'static,
+        Res: 'static,
+        T: 'static,
+{
+    interceptors.read_before_attempt(ctx, cfg)?;
+
+    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    let endpoint_orchestrator = cfg
+        .get::&lt;Box&lt;dyn EndpointOrchestrator&lt;Req&gt;&gt;&gt;()
+        .ok_or(&quot;missing endpoint orchestrator&quot;)?;
+    endpoint_orchestrator.resolve_and_apply_endpoint(tx_req_mut, cfg)?;
+
+    interceptors.modify_before_signing(ctx, cfg)?;
+    interceptors.read_before_signing(ctx, cfg)?;
+
+    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    let auth_orchestrator = cfg
+        .get::&lt;Box&lt;dyn AuthOrchestrator&lt;Req&gt;&gt;&gt;()
+        .ok_or(&quot;missing auth orchestrator&quot;)?;
+    auth_orchestrator.auth_request(tx_req_mut, cfg)?;
+
+    interceptors.read_after_signing(ctx, cfg)?;
+    interceptors.modify_before_transmit(ctx, cfg)?;
+    interceptors.read_before_transmit(ctx, cfg)?;
+
+    // The connection consumes the request but we need to keep a copy of it
+    // within the interceptor context, so we clone it here.
+    let res = {
+        let tx_req = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+        let connection = cfg
+            .get::&lt;Box&lt;dyn Connection&lt;Req, Res&gt;&gt;&gt;()
+            .ok_or(&quot;missing connector&quot;)?;
+        connection.call(tx_req, cfg).await?
+    };
+    ctx.set_tx_response(res);
+
+    interceptors.read_after_transmit(ctx, cfg)?;
+    interceptors.modify_before_deserialization(ctx, cfg)?;
+    interceptors.read_before_deserialization(ctx, cfg)?;
+    let tx_res = ctx.tx_response_mut().expect(&quot;tx_response has been set&quot;);
+    let response_deserializer = cfg
+        .get::&lt;Box&lt;dyn ResponseDeserializer&lt;Res, Result&lt;T, BoxError&gt;&gt;&gt;&gt;()
+        .ok_or(&quot;missing response deserializer&quot;)?;
+    let res = response_deserializer.deserialize_response(tx_res, cfg)?;
+    ctx.set_modeled_response(res);
+
+    interceptors.read_after_deserialization(ctx, cfg)?;
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="traits"><a class="header" href="#traits">Traits</a></h4>
+<p>At various points in the execution of <code>invoke</code>, trait objects are fetched from the <code>ConfigBag</code>. These are preliminary definitions of those traits:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait TraceProbe: Send + Sync + Debug {
+    fn dispatch_events(&amp;self, cfg: &amp;ConfigBag) -&gt; BoxFallibleFut&lt;()&gt;;
+}
+
+pub trait RequestSerializer&lt;In, TxReq&gt;: Send + Sync + Debug {
+    fn serialize_request(&amp;self, req: &amp;mut In, cfg: &amp;ConfigBag) -&gt; Result&lt;TxReq, BoxError&gt;;
+}
+
+pub trait ResponseDeserializer&lt;TxRes, Out&gt;: Send + Sync + Debug {
+    fn deserialize_response(&amp;self, res: &amp;mut TxRes, cfg: &amp;ConfigBag) -&gt; Result&lt;Out, BoxError&gt;;
+}
+
+pub trait Connection&lt;TxReq, TxRes&gt;: Send + Sync + Debug {
+    fn call(&amp;self, req: &amp;mut TxReq, cfg: &amp;ConfigBag) -&gt; BoxFallibleFut&lt;TxRes&gt;;
+}
+
+pub trait RetryStrategy&lt;Out&gt;: Send + Sync + Debug {
+    fn should_retry(&amp;self, res: &amp;Out, cfg: &amp;ConfigBag) -&gt; Result&lt;bool, BoxError&gt;;
+}
+
+pub trait AuthOrchestrator&lt;Req&gt;: Send + Sync + Debug {
+    fn auth_request(&amp;self, req: &amp;mut Req, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt;;
+}
+
+pub trait EndpointOrchestrator&lt;Req&gt;: Send + Sync + Debug {
+    fn resolve_and_apply_endpoint(&amp;self, req: &amp;mut Req, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt;;
+    fn resolve_auth_schemes(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;, BoxError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="faq"><a class="header" href="#faq">F.A.Q.</a></h2>
+<ul>
+<li>The orchestrator is a large and complex feature, with many moving parts. How can we ensure that multiple people can contribute in parallel?
+<ul>
+<li>By defining the entire orchestrator and agreeing on its structure, we can then move on to working on individual runtime plugins and interceptors.</li>
+</ul>
+</li>
+<li>What is the precedence of interceptors?
+<ul>
+<li>The precedence of interceptors is as follows:
+<ul>
+<li>Interceptors registered via Smithy default plugins.</li>
+<li><em>(AWS Services only)</em> Interceptors registered via AWS default plugins.</li>
+<li>Interceptors registered via service-customization plugins.</li>
+<li>Interceptors registered via client-level plugins.</li>
+<li>Interceptors registered via client-level configuration.</li>
+<li>Interceptors registered via operation-level plugins.</li>
+<li>Interceptors registered via operation-level configuration.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>What runtime plugins will be defined in <code>smithy-rs</code>?
+<ul>
+<li><code>RetryStrategy</code>: Configures how requests are retried.</li>
+<li><code>TraceProbes</code>: Configures locations to which SDK metrics are published.</li>
+<li><code>EndpointProviders</code>: Configures which hostname an SDK will call when making a request.</li>
+<li><code>HTTPClients</code>: Configures how remote services are called.</li>
+<li><code>IdentityProviders</code>: Configures how customers identify themselves to remote services.</li>
+<li><code>HTTPAuthSchemes</code> &amp; <code>AuthSchemeResolvers</code>: Configures how customers authenticate themselves to remote services.</li>
+<li><code>Checksum Algorithms</code>: Configures how an SDK calculates request and response checksums.</li>
+</ul>
+</li>
+</ul>
+<h2 id="changes-checklist-26"><a class="header" href="#changes-checklist-26">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Create a new <code>aws-smithy-runtime</code> crate.
+<ul>
+<li>Add orchestrator implementation</li>
+<li>Define the orchestrator/runtime plugin interface traits
+<ul>
+<li><code>TraceProbe</code></li>
+<li><code>RequestSerializer&lt;In, TxReq&gt;</code></li>
+<li><code>ResponseDeserializer&lt;TxRes, Out&gt;</code></li>
+<li><code>Connection&lt;TxReq, TxRes&gt;</code></li>
+<li><code>RetryStrategy&lt;Out&gt;</code></li>
+<li><code>AuthOrchestrator&lt;Req&gt;</code></li>
+<li><code>EndpointOrchestrator&lt;Req&gt;</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create a new <code>aws-smithy-runtime-api</code> crate.
+<ul>
+<li>Add <code>ConfigBag</code> module</li>
+<li>Add <code>retries</code> module
+<ul>
+<li>Add <code>rate_limiting</code> sub-module</li>
+</ul>
+</li>
+<li>Add <code>interceptors</code> module
+<ul>
+<li><code>Interceptor</code> trait</li>
+<li><code>InterceptorContext</code> impl</li>
+</ul>
+</li>
+<li>Add <code>runtime_plugins</code> module</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create a new integration test that ensures the orchestrator works.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
 <p>This is a collection of written resources for smithy-rs and SDK contributors.</p>
 <ul>
 <li><a href="contributing/./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html">Writing and debugging a low-level feature that relies on HTTP</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="writing-and-debugging-a-low-level-feature-that-relies-on-http"><a class="header" href="#writing-and-debugging-a-low-level-feature-that-relies-on-http">Writing and debugging a low-level feature that relies on HTTP</a></h1>
-<h2 id="background-2"><a class="header" href="#background-2">Background</a></h2>
+<h2 id="background-4"><a class="header" href="#background-4">Background</a></h2>
 <p>This article came about as a result of all the difficulties I encountered while developing the request checksums feature
 laid out in the internal-only Flexible Checksums spec <em>(the feature is also highlighted in <a href="https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/">this public blog post</a>.)</em>
 I spent much more time developing the feature than I had anticipated. In this article, I'll talk about:</p>
@@ -11751,5 +13985,6 @@ where
         });
         </script>
 
+    </div>
     </body>
 </html>

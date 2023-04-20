@@ -1,0 +1,401 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>What is the &#x27;orchestrator&#x27; and why does it exist? - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html" class="active"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="what-is-the-orchestrator"><a class="header" href="#what-is-the-orchestrator">What is the orchestrator?</a></h2>
+<p>At a very high level, an orchestrator is a process for transforming requests into responses. Please enjoy this fancy chart:</p>
+<pre class="mermaid">flowchart TB
+	A(Orchestrate)--&gt;|Input|B(Request serialization)
+	B--&gt;|Transmit Request|C(Connection)
+	C--&gt;|Transmit Response|D(Response deserialization)
+	D--&gt;|Success|E(&quot;Ok(Output)&quot;)
+	D--&gt;|Unretryable Failure|F(&quot;Err(SdkError)&quot;)
+	D--&gt;|Retryable Failure|C
+</pre>
+<p>This process is also referred to as the &quot;request/response lifecycle.&quot; In this example, the types of &quot;transmit request&quot; and &quot;transmit response&quot; are protocol-dependent. Typical operations use <a href="https://en.wikipedia.org/wiki/HTTP">HTTP</a>, but we plan to support other protocols like <a href="https://en.wikipedia.org/wiki/MQTT">MQTT</a> in the future.</p>
+<p>In addition to the above steps, the orchestrator must also handle:</p>
+<ul>
+<li><strong>Endpoint resolution:</strong> figuring out which URL to send a request to.</li>
+<li><strong>Authentication, identity resolution, and request signing:</strong> Figuring out who is sending the request, their credentials, and how we should insert the credentials into a request.</li>
+<li><strong>Interceptors</strong>: Running lifecycle hooks at each point in the request/response lifecycle.</li>
+<li><strong>Runtime Plugins:</strong> Resolving configuration from config builders.</li>
+<li><strong>Retries:</strong> Categorizing responses from services and deciding whether to retry and how long to wait before doing so.</li>
+<li><strong>Trace Probes:</strong> A <a href="https://en.wikipedia.org/wiki/Sink_(computing)">sink</a> for events that occur during the request/response lifecycle.</li>
+</ul>
+<h2 id="how-is-an-orchestrator-configured"><a class="header" href="#how-is-an-orchestrator-configured">How is an orchestrator configured?</a></h2>
+<p>While the structure of an orchestrator is fixed, the actions it takes during its lifecycle are highly configurable. Users have two ways to configure this process:</p>
+<ul>
+<li><strong>Runtime Plugins</strong>:
+<ul>
+<li><strong>When can these be set?</strong> Any time before calling <code>orchestrate</code>.</li>
+<li><strong>When are they called by the orchestrator?</strong> In two batches, at the very beginning of <code>orchestrate</code>.</li>
+<li><strong>What can they do?</strong>
+<ul>
+<li>They can set configuration to be used by the orchestrator or in interceptors.</li>
+<li>They can set interceptors.</li>
+</ul>
+</li>
+<li><strong>Are they user-definable?</strong> No. At present, only smithy-rs maintainers may define these.</li>
+</ul>
+</li>
+<li><strong>Interceptors</strong>:
+<ul>
+<li><strong>When can these be set?</strong> Any time before calling <code>orchestrate</code>.</li>
+<li><strong>When are they called by the orchestrator?</strong> At each step in the request-response lifecycle.</li>
+<li><strong>What can they do?</strong>
+<ul>
+<li>They can set configuration to be used by the orchestrator or in interceptors.</li>
+<li>They can log information.</li>
+<li>Depending on when they're run, they can modify the input, transmit request, transmit response, and the output/error.</li>
+</ul>
+</li>
+<li><strong>Are they user-definable?</strong> Yes.</li>
+</ul>
+</li>
+</ul>
+<p>Configuration for a request is constructed by runtime plugins just after calling <code>orchestrate</code>. Configuration is stored in a <code>ConfigBag</code>: a hash map that's keyed on type's <a href="https://doc.rust-lang.org/stable/std/any/struct.TypeId.html"><code>TypeId</code></a> (an opaque object, managed by the Rust compiler, which references some type.)</p>
+<h2 id="what-does-the-orchestrator-do"><a class="header" href="#what-does-the-orchestrator-do">What does the orchestrator do?</a></h2>
+<p>The orchestrator's work is divided into four phases:</p>
+<p><em>NOTE: If an interceptor fails, then the other interceptors for that lifecycle event are still run. All resulting errors are collected and emitted together.</em></p>
+<ol start="0">
+<li><strong>Building the <code>ConfigBag</code> and mounting interceptors</strong>.
+<ul>
+<li><em>This phase is infallible.</em></li>
+<li>An interceptor context is created. This will hold request and response objects, making them available to interceptors.</li>
+<li>All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
+<li>All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
+</ul>
+</li>
+<li><strong>Request Construction</strong>
+<ul>
+<li><em>This phase is fallible.</em></li>
+<li>The <em>&quot;read before serialization&quot;</em> and <em>&quot;modify before serialization&quot;</em> interceptors are called.</li>
+<li>The input is serialized into a transmit request.</li>
+<li>The <em>&quot;read after serialization&quot;</em> and <em>&quot;modify before retry</em> loop&quot; interceptors are called.</li>
+<li>Before making an attempt, the retry handler is called to check if an attempt should be made. The retry handler makes this decision for an initial attempt as well as for the retry attempts. If an initial attempt should be made, then the orchestrator enters the Dispatch phase. Otherwise, a throttling error is returned.</li>
+</ul>
+</li>
+<li><strong>Request Dispatch</strong>
+<ul>
+<li><em>This phase is fallible. This phase's tasks are performed in a loop. Retryable request failures will be retried, and unretryable failures will end the loop.</em></li>
+<li>The <em>&quot;read before attempt&quot;</em> interceptors are run.</li>
+<li>An endpoint is resolved according to an endpoint resolver. The resolved endpoint is then applied to the transmit request.</li>
+<li>The <em>&quot;read before signing&quot;</em> and <em>&quot;modify before signing&quot;</em> interceptors are run.</li>
+<li>An identity and a signer are resolved according to an authentication resolver. The signer then signs the transmit request with the identity.</li>
+<li>The <em>&quot;read after signing&quot;</em>, <em>&quot;read before transmit&quot;</em>, and <em>&quot;modify before transmit&quot;</em> interceptors are run.</li>
+<li>The transmit request is passed into the connection, and a transmit response is received.</li>
+<li>The <em>&quot;read after transmit&quot;</em>, <em>&quot;read before deserialization&quot;</em>, and <em>&quot;modify before deserialization&quot;</em> interceptors are run.</li>
+<li>The transmit response is deserialized.</li>
+<li>The <em>&quot;read after attempt&quot;</em> and <em>&quot;modify before attempt</em> completion&quot; interceptors are run.</li>
+<li>The retry strategy is called to check if a retry is necessary. If a retry is required, the Dispatch phase restarts. Otherwise, the orchestrator enters the Response Handling phase.</li>
+</ul>
+</li>
+<li><strong>Response Handling</strong>
+<ul>
+<li><em>This phase is fallible.</em></li>
+<li>The <em>&quot;read after deserialization&quot;</em> and <em>&quot;modify before completion&quot;</em> interceptors are run.</li>
+<li>Events are dispatched to any trace probes that the user has set.</li>
+<li>The <em>&quot;read after execution&quot;</em> interceptors are run.</li>
+</ul>
+</li>
+</ol>
+<p>At the end of all this, the response is returned. If an error occurred at any point, then the response will contain one or more errors, depending on what failed. Otherwise, the output will be returned.</p>
+<h2 id="how-is-the-orchestrator-implemented-in-rust"><a class="header" href="#how-is-the-orchestrator-implemented-in-rust">How is the orchestrator implemented in Rust?</a></h2>
+<h3 id="avoiding-generics-at-all-costs"><a class="header" href="#avoiding-generics-at-all-costs">Avoiding generics at all costs</a></h3>
+<p>In designing the orchestrator, we sought to solve the problems we had with the original smithy client. The client made heavy use of generics, allowing for increased performance, but at the cost of increased maintenance burden and <a href="https://rustc-dev-guide.rust-lang.org/backend/monomorph.html#polymorphization">increased compile times</a>. The Rust compiler, usually very helpful, isn't well-equipped to explain trait errors when bounds are this complex, and so the resulting client was difficult to extend. <a href="https://github.com/rust-lang/rust/issues/41517">Trait aliases</a> would have helped, but they're not (at the time of writing) available.</p>
+<p><em>The type signatures for the old client and its <code>call</code> method:</em></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware&lt;C&gt;,
+    R: retry::NewRequestPolicy,
+{
+    pub async fn call&lt;O, T, E, Retry&gt;(&amp;self, op: Operation&lt;O, Retry&gt;) -&gt; Result&lt;T, SdkError&lt;E&gt;&gt;
+        where
+            O: Send + Sync,
+            E: std::error::Error + Send + Sync + 'static,
+            Retry: Send + Sync,
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            Retry: ClassifyRetry&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;,
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+    {
+        self.call_raw(op).await.map(|res| res.parsed)
+    }
+
+    pub async fn call_raw&lt;O, T, E, Retry&gt;(
+        &amp;self,
+        op: Operation&lt;O, Retry&gt;,
+    ) -&gt; Result&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;
+        where
+            O: Send + Sync,
+            E: std::error::Error + Send + Sync + 'static,
+            Retry: Send + Sync,
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            Retry: ClassifyRetry&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;,
+        // This bound is not _technically_ inferred by all the previous bounds, but in practice it
+        // is because _we_ know that there is only implementation of Service for Parsed
+        // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
+        // and will produce (as expected) Response = SdkSuccess&lt;T&gt;, Error = SdkError&lt;E&gt;. But Rust
+        // doesn't know that -- there _could_ theoretically be other implementations of Service for
+        // Parsed that don't return those same types. So, we must give the bound.
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+    {
+        // The request/response lifecycle
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><em>The type signature for the new <code>orchestrate</code> method:</em></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn orchestrate(
+    input: Input,
+    runtime_plugins: &amp;RuntimePlugins,
+    // Currently, SdkError is HTTP-only. We currently use it for backwards-compatibility purposes.
+    // The `HttpResponse` generic will likely be removed in the future.
+) -&gt; Result&lt;Output, SdkError&lt;Error, HttpResponse&gt;&gt; {
+	// The request/response lifecycle
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Wait a second, I hear you ask. &quot;I see an <code>Input</code> and <code>Output</code> there, but you're not declaring any generic type arguments. What gives?&quot;</p>
+<p>I'm glad you asked. Generally, when you need traits, but you aren't willing to use generic type arguments, then you must <a href="https://doc.rust-lang.org/std/boxed/index.html"><code>Box</code></a>. Polymorphism is achieved through <a href="https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch">dynamic dispatch</a> instead of <a href="https://doc.rust-lang.org/book/ch10-01-syntax.html#performance-of-code-using-generics">static dispatch</a>, and this comes with a small runtime cost.</p>
+<p>So, what are <code>Input</code> and <code>Output</code>? They're our own special flavor of a boxed trait object.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub type Input = TypeErasedBox;
+pub type Output = TypeErasedBox;
+pub type Error = TypeErasedBox;
+
+/// A new-type around `Box&lt;dyn Any + Send + Sync&gt;`
+#[derive(Debug)]
+pub struct TypeErasedBox {
+    inner: Box&lt;dyn Any + Send + Sync&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The orchestrator itself doesn't know about any concrete types. Instead, it passes boxed data between the various components of the request/response lifecycle. Individual components access data in two ways:</p>
+<ol>
+<li><strong>From the <code>ConfigBag</code>:</strong></li>
+</ol>
+<ul>
+<li><em>(with an accessor)</em> <code>let retry_strategy = cfg.retry_strategy();</code></li>
+<li><em>(with the get method)</em> <code>let retry_strategy = cfg.get::&lt;Box&lt;dyn RetryStrategy&gt;&gt;()</code></li>
+</ul>
+<ol start="2">
+<li><strong>From the <code>InterceptorContext</code>:</strong></li>
+</ol>
+<ul>
+<li><em>(owned)</em> <code>let put_object_input: PutObjectInput = ctx.take_input().unwrap().downcast().unwrap()?;</code></li>
+<li><em>(by reference)</em> <code>let put_object_input = ctx.input().unwrap().downcast_ref::&lt;PutObjectInput&gt;().unwrap();</code></li>
+</ul>
+<p>Users can only call <code>ConfigBag::get</code> or <a href="https://en.wikipedia.org/wiki/Downcasting">downcast</a> a <code>TypeErasedBox</code> to types they have access to, which allows maintainers to ensure encapsulation. For example: a plugin writer may declare a private type, place it in the config bag, and then later retrieve it. Because the type is private, only code in the same crate/module can ever insert or retrieve it. Therefore, there's less worry that someone will depend on a hidden, internal detail and no worry they'll accidentally overwrite a type in the bag.</p>
+<blockquote>
+<p><em>NOTE: When inserting values into a config bag, using one of the <code>set_&lt;component&gt;</code> methods is always preferred, as this prevents mistakes related to inserting similar, but incorrect types.</em></p>
+</blockquote>
+<h3 id="the-actual-code"><a class="header" href="#the-actual-code">The actual code</a></h3>
+<p>The current implementation of <code>orchestrate</code> is defined <a href="https://github.com/awslabs/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23">here</a>, in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime</code> crate</a>. Related code can be found in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime-api</code> crate</a>.</p>
+<h2 id="frequently-asked-questions"><a class="header" href="#frequently-asked-questions">Frequently asked questions</a></h2>
+<h3 id="why-cant-users-create-and-use-their-own-runtime-plugins"><a class="header" href="#why-cant-users-create-and-use-their-own-runtime-plugins">Why can't users create and use their own runtime plugins?</a></h3>
+<p>We chose to hide the runtime plugin API from users because we are concerned that exposing it will cause more problems than it solves. Instead, we encourage users to use interceptors. This is because, when setting a runtime plugin, any existing runtime plugin with the same type will be replaced. For example, there can only be one retry strategy or response deserializer. Errors resulting from unintentionally overriding a plugin would be difficult for users to diagnose, and would consume valuable development time.</p>
+<h3 id="why-does-the-orchestrator-exist"><a class="header" href="#why-does-the-orchestrator-exist">Why does the orchestrator exist?</a></h3>
+<p>The orchestrator exists because there is an AWS-internal initiative to bring the architecture of all AWS SDKs closer to one another.</p>
+<h3 id="why-does-this-document-exist-when-theres-already-an-orchestrator-rfc"><a class="header" href="#why-does-this-document-exist-when-theres-already-an-orchestrator-rfc">Why does this document exist when there's already an orchestrator RFC?</a></h3>
+<p>Because RFCs become outdated as designs evolve. It is our intention to keep this document up to date with our current implementation.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../client/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../client/identity_and_auth.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../client/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../client/identity_and_auth.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>
