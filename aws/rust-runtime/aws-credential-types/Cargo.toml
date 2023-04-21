@@ -6,7 +6,8 @@ description = "Types for AWS SDK credentials."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-
+[package.metadata.cargo-udeps]
+ignore = true
 [features]
 hardcoded-credentials = []
 test-util = []
