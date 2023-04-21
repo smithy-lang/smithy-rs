@@ -137,13 +137,13 @@ class BaseSymbolMetadataProvider(
 
     // Only the server subproject uses these, so we provide a sane and conservative default implementation here so that
     // the rest of symbol metadata providers can just delegate to it.
-    private val defaultRustMetadata = RustMetadata(visibility = Visibility.PRIVATE)
+    private fun defaultRustMetadata() = RustMetadata(visibility = Visibility.PRIVATE)
 
-    override fun listMeta(listShape: ListShape) = defaultRustMetadata
-    override fun mapMeta(mapShape: MapShape) = defaultRustMetadata
-    override fun stringMeta(stringShape: StringShape) = defaultRustMetadata
-    override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata
-    override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata
+    override fun listMeta(listShape: ListShape) = defaultRustMetadata()
+    override fun mapMeta(mapShape: MapShape) = defaultRustMetadata()
+    override fun stringMeta(stringShape: StringShape) = defaultRustMetadata()
+    override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata()
+    override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata()
 }
 
 private const val META_KEY = "meta"
