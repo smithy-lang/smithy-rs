@@ -24,6 +24,12 @@ pub(super) async fn orchestrate_auth(
         .map_err(construction_failure)?;
     let identity_resolvers = cfg.identity_resolvers();
 
+    tracing::trace!(
+        auth_option_resolver_params = ?params,
+        auth_options = ?auth_options,
+        identity_resolvers = ?identity_resolvers,
+        "orchestrating auth",
+    );
     for option in auth_options.as_ref() {
         let scheme_id = option.scheme_id();
         let scheme_properties = option.properties();

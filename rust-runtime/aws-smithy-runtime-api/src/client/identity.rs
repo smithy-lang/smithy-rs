@@ -17,9 +17,9 @@ pub trait IdentityResolver: Send + Sync + Debug {
     fn resolve_identity(&self, identity_properties: &PropertyBag) -> Future<Identity>;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct IdentityResolvers {
-    identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
+    identity_resolvers: Vec<(&'static str, Arc<dyn IdentityResolver>)>,
 }
 
 impl IdentityResolvers {
@@ -32,6 +32,12 @@ impl IdentityResolvers {
             .iter()
             .find(|resolver| resolver.0 == identity_type)
             .map(|resolver| &*resolver.1)
+    }
+
+    pub fn to_builder(self) -> builders::IdentityResolversBuilder {
+        builders::IdentityResolversBuilder {
+            identity_resolvers: self.identity_resolvers,
+        }
     }
 }
 
@@ -87,7 +93,7 @@ pub mod builders {
 
     #[derive(Debug, Default)]
     pub struct IdentityResolversBuilder {
-        identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
+        pub(super) identity_resolvers: Vec<(&'static str, Arc<dyn IdentityResolver>)>,
     }
 
     impl IdentityResolversBuilder {
@@ -101,7 +107,7 @@ pub mod builders {
             resolver: impl IdentityResolver + 'static,
         ) -> Self {
             self.identity_resolvers
-                .push((name, Box::new(resolver) as _));
+                .push((name, Arc::new(resolver) as _));
             self
         }
 

@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.customizations
+package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.testutil.clientRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
