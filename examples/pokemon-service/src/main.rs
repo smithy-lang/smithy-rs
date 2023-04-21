@@ -5,7 +5,7 @@
 
 mod plugin;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{borrow::Cow, net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
     extension::OperationExtensionExt,
@@ -53,9 +53,10 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument()
         // Handle `/ping` health check requests.
-        .http_layer(AlbHealthCheckLayer::new_fn("/ping", |_req| async {
-            StatusCode::OK
-        }));
+        .http_layer(AlbHealthCheckLayer::new_fn(
+            Cow::from("/ping"),
+            |_req| async { StatusCode::OK },
+        ));
 
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These

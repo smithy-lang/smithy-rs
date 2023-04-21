@@ -22,6 +22,7 @@
 //!
 //! ```
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::task::{Context, Poll};
 
@@ -39,14 +40,14 @@ use super::Either;
 /// A [`tower::Layer`] used to apply [`AlbHealthCheckService`].
 #[derive(Clone, Debug)]
 pub struct AlbHealthCheckLayer<'a, HealthCheckHandler> {
-    health_check_uri: &'a str,
+    health_check_uri: Cow<'a, str>,
     health_check_handler: HealthCheckHandler,
 }
 
 impl<'a> AlbHealthCheckLayer<'a, ()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
     pub fn new_fn<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
-        health_check_uri: &'static str,
+        health_check_uri: Cow<'a, str>,
         health_check_handler: H,
     ) -> AlbHealthCheckLayer<
         impl Service<
@@ -63,7 +64,7 @@ impl<'a> AlbHealthCheckLayer<'a, ()> {
 
     /// Handle health check requests at `health_check_uri` with the specified handler.
     pub fn new<H: Service<Request<Body>, Response = StatusCode>>(
-        health_check_uri: &'static str,
+        health_check_uri: Cow<'a, str>,
         health_check_handler: H,
     ) -> AlbHealthCheckLayer<H> {
         AlbHealthCheckLayer {
@@ -109,7 +110,7 @@ where
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        if req.uri() == self.layer.health_check_uri {
+        if req.uri() == self.layer.health_check_uri.as_ref() {
             let clone = self.layer.health_check_handler.clone();
             let service = std::mem::replace(&mut self.layer.health_check_handler, clone);
             let handler_future = service.oneshot(req);
