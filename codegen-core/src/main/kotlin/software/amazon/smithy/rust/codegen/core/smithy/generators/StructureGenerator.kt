@@ -160,7 +160,6 @@ open class StructureGenerator(
     }
 
     open fun renderStructure() {
-        RenderSerdeAttribute.importSerde(writer)
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
