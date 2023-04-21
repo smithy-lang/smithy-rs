@@ -19,7 +19,7 @@ use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::endpoint::SharedEndpointResolver;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
-use aws_smithy_runtime_api::client::endpoints::DefaultEndpointResolver;
+use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver;
 use aws_smithy_runtime_api::client::interceptors::{
     Interceptor, InterceptorContext, InterceptorError, Interceptors,
 };
