@@ -20,9 +20,8 @@ use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::endpoint::SharedEndpointResolver;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
 use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver;
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorContext, InterceptorError, Interceptors,
-};
+use aws_smithy_runtime_api::client::interceptors::error::ContextAttachedError;
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
 };
@@ -190,12 +189,10 @@ async fn sra_manual_test() {
                     let input = context.input()?;
                     let input = input
                         .downcast_ref::<ListObjectsV2Input>()
-                        .ok_or_else(|| InterceptorError::invalid_input_access())?;
+                        .ok_or_else(|| "failed to downcast to ListObjectsV2Input")?;
                     let mut params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or(InterceptorError::read_before_execution(
-                            "missing endpoint params builder",
-                        ))?
+                        .ok_or_else(|| "missing endpoint params builder")?
                         .clone();
                     params_builder = params_builder.set_bucket(input.bucket.clone());
                     cfg.put(params_builder);
@@ -214,13 +211,11 @@ async fn sra_manual_test() {
                 ) -> Result<(), BoxError> {
                     let params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or(InterceptorError::read_before_execution(
-                            "missing endpoint params builder",
-                        ))?
+                        .ok_or_else(|| "missing endpoint params builder")?
                         .clone();
-                    let params = params_builder
-                        .build()
-                        .map_err(InterceptorError::read_before_execution)?;
+                    let params = params_builder.build().map_err(|err| {
+                        ContextAttachedError::new("endpoint params could not be built", err)
+                    })?;
                     cfg.put(
                         aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams::new(
                             params,
