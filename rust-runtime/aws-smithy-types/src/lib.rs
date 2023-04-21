@@ -21,6 +21,10 @@ pub mod primitive;
 pub mod retry;
 pub mod timeout;
 
+mod blob;
+mod number;
+mod document;
+
 pub use blob::Blob;
 pub use date_time::DateTime;
 pub use document::Document;
