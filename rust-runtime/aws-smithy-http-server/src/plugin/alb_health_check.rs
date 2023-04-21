@@ -36,18 +36,17 @@ use super::Either;
 
 /// A [`tower::Layer`] used to apply [`AlbHealthCheckService`].
 #[derive(Clone, Debug)]
-pub struct AlbHealthCheckLayer<'a, HealthCheckHandler> {
-    health_check_uri: Cow<'a, str>,
+pub struct AlbHealthCheckLayer<HealthCheckHandler> {
+    health_check_uri: Cow<'static, str>,
     health_check_handler: HealthCheckHandler,
 }
 
-impl<'a> AlbHealthCheckLayer<'a, ()> {
+impl AlbHealthCheckLayer<()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
     pub fn from_handler<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
-        health_check_uri: impl Into<Cow<'a, str>>,
+        health_check_uri: impl Into<Cow<'static, str>>,
         health_check_handler: H,
     ) -> AlbHealthCheckLayer<
-        'a,
         impl Service<
                 Request<Body>,
                 Response = StatusCode,
@@ -62,9 +61,9 @@ impl<'a> AlbHealthCheckLayer<'a, ()> {
 
     /// Handle health check requests at `health_check_uri` with the specified service.
     pub fn new<H: Service<Request<Body>, Response = StatusCode>>(
-        health_check_uri: impl Into<Cow<'a, str>>,
+        health_check_uri: impl Into<Cow<'static, str>>,
         health_check_handler: H,
-    ) -> AlbHealthCheckLayer<'a, H> {
+    ) -> AlbHealthCheckLayer<H> {
         AlbHealthCheckLayer {
             health_check_uri: health_check_uri.into(),
             health_check_handler,
@@ -72,8 +71,8 @@ impl<'a> AlbHealthCheckLayer<'a, ()> {
     }
 }
 
-impl<'a, S, H: Clone> Layer<S> for AlbHealthCheckLayer<'a, H> {
-    type Service = AlbHealthCheckService<'a, H, S>;
+impl<S, H: Clone> Layer<S> for AlbHealthCheckLayer<H> {
+    type Service = AlbHealthCheckService<H, S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         AlbHealthCheckService {
@@ -85,12 +84,12 @@ impl<'a, S, H: Clone> Layer<S> for AlbHealthCheckLayer<'a, H> {
 
 /// A middleware [`Service`] responsible for handling health check requests.
 #[derive(Clone, Debug)]
-pub struct AlbHealthCheckService<'a, H, S> {
+pub struct AlbHealthCheckService<H, S> {
     inner: S,
-    layer: AlbHealthCheckLayer<'a, H>,
+    layer: AlbHealthCheckLayer<H>,
 }
 
-impl<'a, H, S> Service<Request<Body>> for AlbHealthCheckService<'a, H, S>
+impl<H, S> Service<Request<Body>> for AlbHealthCheckService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
     S::Future: std::marker::Send + 'static,
