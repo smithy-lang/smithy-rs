@@ -69,6 +69,7 @@ internal class EndpointConfigCustomization(
                         /// use aws_smithy_http::endpoint;
                         /// use $moduleUseName::endpoint::{Params as EndpointParams, DefaultResolver};
                         /// /// Endpoint resolver which adds a prefix to the generated endpoint
+                        /// ##[derive(Debug)]
                         /// struct PrefixResolver {
                         ///     base_resolver: DefaultResolver,
                         ///     prefix: String
@@ -132,6 +133,7 @@ internal class EndpointConfigCustomization(
                             RuntimeType.forInlineFun("MissingResolver", ClientRustModule.Endpoint) {
                                 rustTemplate(
                                     """
+                                    ##[derive(Debug)]
                                     pub(crate) struct MissingResolver;
                                     impl<T> #{ResolveEndpoint}<T> for MissingResolver {
                                         fn resolve_endpoint(&self, _params: &T) -> #{Result} {

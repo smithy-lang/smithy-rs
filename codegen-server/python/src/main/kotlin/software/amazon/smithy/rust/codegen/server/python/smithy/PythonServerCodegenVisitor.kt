@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.ConstrainedPythonBlobGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonApplicationGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEventStreamErrorGenerator
@@ -30,6 +32,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.protocols.PythonServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleDocProvider
@@ -42,8 +45,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreat
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.withModuleOrWithStructureBuilderModule
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -68,10 +72,10 @@ class PythonServerCodegenVisitor(
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) =
-            ServerProtocolLoader(
+            PythonServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols,
+                    PythonServerProtocolLoader.defaultProtocols(settings.runtimeConfig),
                 ),
             )
                 .protocolFor(context.model, service)
@@ -148,7 +152,7 @@ class PythonServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render()
+            PythonServerStructureGenerator(model, codegenContext, this, shape).render()
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
@@ -186,7 +190,7 @@ class PythonServerCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         logger.info("[python-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
-            PythonServerUnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            PythonServerUnionGenerator(model, codegenContext, this, shape, renderUnknownVariant = false).render()
         }
 
         if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
@@ -255,6 +259,23 @@ class PythonServerCodegenVisitor(
         if (shape.isEventStream(model)) {
             rustCrate.withModule(PythonServerRustModule.PythonEventStream) {
                 PythonServerEventStreamWrapperGenerator(codegenContext, shape).render(this)
+            }
+        }
+    }
+
+    override fun blobShape(shape: BlobShape) {
+        logger.info("[python-server-codegen] Generating a service $shape")
+        super.blobShape(shape)
+
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.Model, shape, codegenContext) {
+                ConstrainedPythonBlobGenerator(
+                    codegenContext,
+                    rustCrate.createInlineModuleCreator(),
+                    this,
+                    shape,
+                    validationExceptionConversionGenerator,
+                ).render()
             }
         }
     }

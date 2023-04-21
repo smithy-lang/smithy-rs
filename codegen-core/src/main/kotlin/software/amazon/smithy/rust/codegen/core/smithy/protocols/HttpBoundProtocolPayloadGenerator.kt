@@ -239,7 +239,11 @@ class HttpBoundProtocolPayloadGenerator(
     ) {
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
-            val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
+            val outputT = if (member.isStreaming(model)) {
+                symbolProvider.toSymbol(member)
+            } else {
+                RuntimeType.ByteSlab.toSymbol()
+            }
             rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
