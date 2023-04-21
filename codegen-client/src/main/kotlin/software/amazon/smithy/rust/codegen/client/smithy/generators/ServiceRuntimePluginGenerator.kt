@@ -40,6 +40,15 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
 
     /**
+     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
+     *
+     * Should emit code that looks like the following:
+     ```
+     .with_classifier(AwsErrorCodeClassifier::new())
+     */
+    data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val configBagName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -90,12 +99,14 @@ class ServiceRuntimePluginGenerator(
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
-            "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
+            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "TestConnection" to runtime.resolve("client::connections::test_connection::TestConnection"),
+            "StaticUriEndpointResolver" to runtimeApi.resolve("client::endpoints::StaticUriEndpointResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
@@ -138,6 +149,10 @@ class ServiceRuntimePluginGenerator(
                     ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
                     cfg.put(#{Params}::builder());
 
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+                    cfg.set_retry_classifiers(retry_classifiers);
+
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
 
@@ -172,6 +187,9 @@ class ServiceRuntimePluginGenerator(
             },
             "http_auth_scheme_customizations" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
+            },
+            "retry_classifier_customizations" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RetryClassifier("cfg"))
             },
             "additional_config" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))

@@ -40,6 +40,11 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
             )
         }
     }
+
+    data class RuntimePluginImpls(
+        val configBagName: String,
+        val operationShape: OperationShape,
+    ) : OperationRuntimePluginSection("RuntimePluginImpls")
 }
 
 typealias OperationRuntimePluginCustomization = NamedCustomization<OperationRuntimePluginSection>
@@ -83,12 +88,20 @@ class OperationRuntimePluginGenerator(
                     Ok(())
                 }
             }
+
+            #{runtime_plugin_impls}
             """,
             *codegenScope,
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
                     OperationRuntimePluginSection.AdditionalConfig("cfg", operationShape),
+                )
+            },
+            "runtime_plugin_impls" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationRuntimePluginSection.RuntimePluginImpls("cfg", operationShape),
                 )
             },
         )

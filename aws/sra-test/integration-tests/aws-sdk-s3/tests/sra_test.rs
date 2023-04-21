@@ -17,18 +17,18 @@ use aws_sdk_s3::primitives::SdkBody;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
-use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver;
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorContext, InterceptorError, Interceptors,
-};
+use aws_smithy_runtime_api::client::endpoints::StaticUriEndpointResolver;
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
 };
+use aws_smithy_runtime_api::client::retries::RetryClassifiers;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
+use http::Uri;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -122,7 +122,7 @@ async fn sra_manual_test() {
             cfg.put(params_builder);
 
             cfg.set_retry_strategy(
-                aws_smithy_runtime_api::client::retries::NeverRetryStrategy::new(),
+                aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy::default(),
             );
 
             let connection: Box<dyn Connection> =
@@ -265,9 +265,23 @@ async fn sra_manual_test() {
 "#).unwrap(),
             )]);
 
+    struct ListObjectsV2RetryClassifiers;
+
+    // TODO(orchestrator) perform this step in Codegen
+    impl RuntimePlugin for ListObjectsV2RetryClassifiers {
+        fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+            cfg.set_retry_classifiers(
+                aws_sdk_s3::operation::list_objects_v2::default_retry_classifiers(),
+            );
+
+            Ok(())
+        }
+    }
+
     let runtime_plugins = aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins::new()
         .with_client_plugin(ManualServiceRuntimePlugin(conn.clone()))
         .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new())
+        .with_operation_plugin(ListObjectsV2RetryClassifiers)
         .with_operation_plugin(ManualOperationRuntimePlugin);
 
     let input = ListObjectsV2Input::builder()
