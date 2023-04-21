@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -161,14 +160,19 @@ open class StructureGenerator(
     }
 
     open fun renderStructure() {
+        RenderSerdeAttribute.importSerde(writer)
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+        RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        SensitiveWarning.addDoc(writer, shape)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
+                SensitiveWarning.addDoc(writer, shape)
+                RenderSerdeAttribute.skipIfStream(writer, member, model)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
             writeCustomizations(customizations, StructureSection.AdditionalFields(shape))

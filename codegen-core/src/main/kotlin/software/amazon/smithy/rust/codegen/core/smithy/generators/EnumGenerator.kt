@@ -4,7 +4,6 @@
  */
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
-
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -222,6 +221,8 @@ open class EnumGenerator(
     private fun RustWriter.renderUnnamedEnum() {
         documentShape(shape, model)
         deprecatedShape(shape)
+        RenderSerdeAttribute.writeAttributes(this)
+        SensitiveWarning.addDoc(this, shape)
         context.enumMeta.render(this)
         rust("struct ${context.enumName}(String);")
         implBlock(
@@ -257,6 +258,8 @@ open class EnumGenerator(
         )
         deprecatedShape(shape)
 
+        RenderSerdeAttribute.writeAttributes(this)
+        SensitiveWarning.addDoc(this, shape)
         context.enumMeta.render(this)
         rustBlock("enum ${context.enumName}") {
             context.sortedMembers.forEach { member -> member.render(this) }
