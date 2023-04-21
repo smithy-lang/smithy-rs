@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 pub type HttpRequest = http::Request<SdkBody>;
 pub type HttpResponse = http::Response<SdkBody>;
@@ -183,6 +184,29 @@ pub trait EndpointResolver: Send + Sync + Debug {
     ) -> Result<(), BoxError>;
 }
 
+/// Time that the request is being made (so that time can be overridden in the [`ConfigBag`]).
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct RequestTime(SystemTime);
+
+impl Default for RequestTime {
+    fn default() -> Self {
+        Self(SystemTime::now())
+    }
+}
+
+impl RequestTime {
+    /// Create a new [`RequestTime`].
+    pub fn new(time: SystemTime) -> Self {
+        Self(time)
+    }
+
+    /// Returns the request time as a [`SystemTime`].
+    pub fn system_time(&self) -> SystemTime {
+        self.0
+    }
+}
+
 pub trait ConfigBagAccessors {
     fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams;
     fn set_auth_option_resolver_params(
@@ -222,6 +246,9 @@ pub trait ConfigBagAccessors {
 
     fn trace_probe(&self) -> &dyn TraceProbe;
     fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static);
+
+    fn request_time(&self) -> Option<RequestTime>;
+    fn set_request_time(&mut self, request_time: RequestTime);
 }
 
 impl ConfigBagAccessors for ConfigBag {
@@ -338,6 +365,14 @@ impl ConfigBagAccessors for ConfigBag {
 
     fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static) {
         self.put::<Box<dyn TraceProbe>>(Box::new(trace_probe));
+    }
+
+    fn request_time(&self) -> Option<RequestTime> {
+        self.get::<RequestTime>().cloned()
+    }
+
+    fn set_request_time(&mut self, request_time: RequestTime) {
+        self.put::<RequestTime>(request_time);
     }
 }
 

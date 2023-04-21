@@ -6,7 +6,6 @@
 use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
-use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
 use aws_runtime::recursion_detection::RecursionDetectionInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sdk_s3::config::{Credentials, Region};
@@ -23,7 +22,7 @@ use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver
 use aws_smithy_runtime_api::client::interceptors::error::ContextAttachedError;
 use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
+    BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, RequestTime, TraceProbe,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -32,8 +31,6 @@ use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-
-mod interceptors;
 
 // TODO(orchestrator-test): unignore
 #[ignore]
@@ -128,31 +125,16 @@ async fn sra_manual_test() {
 
             cfg.put(SigningService::from_static("s3"));
             cfg.put(SigningRegion::from(Region::from_static("us-east-1")));
-
-            #[derive(Debug)]
-            struct OverrideSigningTimeInterceptor;
-            impl Interceptor<HttpRequest, HttpResponse> for OverrideSigningTimeInterceptor {
-                fn read_before_signing(
-                    &self,
-                    _context: &InterceptorContext<HttpRequest, HttpResponse>,
-                    cfg: &mut ConfigBag,
-                ) -> Result<(), BoxError> {
-                    let mut signing_config =
-                        cfg.get::<SigV4OperationSigningConfig>().unwrap().clone();
-                    signing_config.signing_options.request_timestamp =
-                        UNIX_EPOCH + Duration::from_secs(1624036048);
-                    cfg.put(signing_config);
-                    Ok(())
-                }
-            }
+            cfg.set_request_time(RequestTime::new(
+                UNIX_EPOCH + Duration::from_secs(1624036048),
+            ));
 
             cfg.put(ApiMetadata::new("unused", "unused"));
             cfg.put(AwsUserAgent::for_tests()); // Override the user agent with the test UA
             cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
                 .expect("interceptors set")
                 .register_client_interceptor(Arc::new(UserAgentInterceptor::new()) as _)
-                .register_client_interceptor(Arc::new(RecursionDetectionInterceptor::new()) as _)
-                .register_client_interceptor(Arc::new(OverrideSigningTimeInterceptor) as _);
+                .register_client_interceptor(Arc::new(RecursionDetectionInterceptor::new()) as _);
             cfg.set_identity_resolvers(
                 aws_smithy_runtime_api::client::identity::IdentityResolvers::builder()
                     .identity_resolver(
