@@ -5,9 +5,13 @@
 
 #[macro_use]
 extern crate criterion;
+use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_s3 as s3;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::infallible_connection_fn;
+use aws_smithy_http::endpoint::SharedEndpointResolver;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 use criterion::Criterion;
 use s3::operation::list_objects_v2::{ListObjectsV2Error, ListObjectsV2Input, ListObjectsV2Output};
@@ -22,10 +26,20 @@ async fn middleware(client: &s3::Client) {
         .expect("successful execution");
 }
 
-async fn orchestrator(connector: &DynConnector) {
+async fn orchestrator(
+    connector: &DynConnector,
+    endpoint_resolver: SharedEndpointResolver<s3::endpoint::Params>,
+    credentials_cache: SharedCredentialsCache,
+) {
+    let service_runtime_plugin = orchestrator::ManualServiceRuntimePlugin {
+        connector: connector.clone(),
+        endpoint_resolver: endpoint_resolver.clone(),
+        credentials_cache: credentials_cache.clone(),
+    };
+
     // TODO(enableNewSmithyRuntime): benchmark with `send_v2` directly once it works
     let runtime_plugins = aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins::new()
-        .with_client_plugin(orchestrator::ManualServiceRuntimePlugin(connector.clone()))
+        .with_client_plugin(service_runtime_plugin)
         .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new())
         .with_operation_plugin(orchestrator::ManualOperationRuntimePlugin);
     let input = ListObjectsV2Input::builder()
@@ -95,25 +109,32 @@ fn middleware_bench(c: &mut Criterion) {
 
 fn orchestrator_bench(c: &mut Criterion) {
     let conn = test_connection();
+    let endpoint_resolver = SharedEndpointResolver::new(s3::endpoint::DefaultResolver::new());
+    let credentials_cache = SharedCredentialsCache::new(
+        CredentialsCache::lazy()
+            .create_cache(SharedCredentialsProvider::new(Credentials::for_tests())),
+    );
 
     c.bench_function("orchestrator", move |b| {
         b.to_async(tokio::runtime::Runtime::new().unwrap())
-            .iter(|| async { orchestrator(&conn).await })
+            .iter(|| async {
+                orchestrator(&conn, endpoint_resolver.clone(), credentials_cache.clone()).await
+            })
     });
 }
 
 mod orchestrator {
-    use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
-    use aws_credential_types::provider::SharedCredentialsProvider;
-    use aws_credential_types::Credentials;
+    use aws_credential_types::cache::SharedCredentialsCache;
     use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
     use aws_runtime::recursion_detection::RecursionDetectionInterceptor;
     use aws_runtime::user_agent::UserAgentInterceptor;
     use aws_sdk_s3::config::Region;
+    use aws_sdk_s3::endpoint::Params;
     use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Input;
     use aws_smithy_client::erase::DynConnector;
+    use aws_smithy_http::endpoint::SharedEndpointResolver;
     use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
-    use aws_smithy_runtime_api::client::endpoints::StaticUriEndpointResolver;
+    use aws_smithy_runtime_api::client::endpoints::DefaultEndpointResolver;
     use aws_smithy_runtime_api::client::interceptors::{
         Interceptor, InterceptorContext, InterceptorError, Interceptors,
     };
@@ -124,10 +145,13 @@ mod orchestrator {
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_types::region::SigningRegion;
     use aws_types::SigningService;
-    use http::Uri;
     use std::sync::Arc;
 
-    pub struct ManualServiceRuntimePlugin(pub DynConnector);
+    pub struct ManualServiceRuntimePlugin {
+        pub connector: DynConnector,
+        pub endpoint_resolver: SharedEndpointResolver<Params>,
+        pub credentials_cache: SharedCredentialsCache,
+    }
 
     impl RuntimePlugin for ManualServiceRuntimePlugin {
         fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
@@ -136,9 +160,7 @@ mod orchestrator {
                     .identity_resolver(
                         aws_runtime::auth::sigv4::SCHEME_ID,
                         aws_runtime::identity::credentials::CredentialsIdentityResolver::new(
-                            SharedCredentialsCache::new(CredentialsCache::lazy().create_cache(
-                                SharedCredentialsProvider::new(Credentials::for_tests()),
-                            )),
+                            self.credentials_cache.clone(),
                         ),
                     )
                     .identity_resolver(
@@ -163,14 +185,7 @@ mod orchestrator {
                 ),
             );
 
-            //cfg.set_endpoint_resolver(DefaultEndpointResolver::new(
-            //    aws_smithy_http::endpoint::SharedEndpointResolver::new(
-            //        aws_sdk_s3::endpoint::DefaultResolver::new(),
-            //    ),
-            //));
-            cfg.set_endpoint_resolver(StaticUriEndpointResolver::uri(Uri::from_static(
-                "https://test-bucket.s3.us-east-1.amazonaws.com/",
-            )));
+            cfg.set_endpoint_resolver(DefaultEndpointResolver::new(self.endpoint_resolver.clone()));
 
             let params_builder = aws_sdk_s3::endpoint::Params::builder()
                 .set_region(Some("us-east-1".to_owned()))
@@ -182,7 +197,7 @@ mod orchestrator {
             );
 
             let connection: Box<dyn Connection> =
-                Box::new(DynConnectorAdapter::new(self.0.clone()));
+                Box::new(DynConnectorAdapter::new(self.connector.clone()));
             cfg.set_connection(connection);
 
             cfg.set_trace_probe({
