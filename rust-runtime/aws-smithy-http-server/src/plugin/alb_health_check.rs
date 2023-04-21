@@ -13,11 +13,8 @@
 //! # use hyper::{Body, Response, StatusCode};
 //! let plugins = PluginPipeline::new()
 //!     // Handle all `/ping` health check requests by returning a `200 OK`.
-//!     .http_layer(AlbHealthCheckLayer::new("/ping", |_req| async {
-//!         Response::builder()
-//!             .status(StatusCode::OK)
-//!             .body(body::boxed(Body::empty()))
-//!             .expect("Couldn't construct response")
+//!     .http_layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+//!         StatusCode::OK
 //!     }));
 //!
 //! ```
@@ -46,10 +43,11 @@ pub struct AlbHealthCheckLayer<'a, HealthCheckHandler> {
 
 impl<'a> AlbHealthCheckLayer<'a, ()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
-    pub fn new_fn<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
-        health_check_uri: Cow<'a, str>,
+    pub fn from_handler<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
+        health_check_uri: impl Into<Cow<'a, str>>,
         health_check_handler: H,
     ) -> AlbHealthCheckLayer<
+        'a,
         impl Service<
                 Request<Body>,
                 Response = StatusCode,
@@ -62,13 +60,13 @@ impl<'a> AlbHealthCheckLayer<'a, ()> {
         AlbHealthCheckLayer::new(health_check_uri, service)
     }
 
-    /// Handle health check requests at `health_check_uri` with the specified handler.
+    /// Handle health check requests at `health_check_uri` with the specified service.
     pub fn new<H: Service<Request<Body>, Response = StatusCode>>(
-        health_check_uri: Cow<'a, str>,
+        health_check_uri: impl Into<Cow<'a, str>>,
         health_check_handler: H,
-    ) -> AlbHealthCheckLayer<H> {
+    ) -> AlbHealthCheckLayer<'a, H> {
         AlbHealthCheckLayer {
-            health_check_uri,
+            health_check_uri: health_check_uri.into(),
             health_check_handler,
         }
     }
