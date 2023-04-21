@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Implement std::error::Error#source() properly for the service meta Error enum"
+references = ["aws-sdk-rust#784"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "abusch"
+
+[[smithy-rs]]
+message = "Implement std::error::Error#source() properly for the service meta Error enum"
+references = ["aws-sdk-rust#784"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "abusch"
+
+[[aws-sdk-rust]]
 message = "The outputs for event stream operations (for example, S3's SelectObjectContent) now implement the `Sync` auto-trait."
 references = ["smithy-rs#2496"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
@@ -82,7 +94,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "parker-timmerman"
 
 [[aws-sdk-rust]]
-message = "Fix but where an incorrect endpoint was produced for WriteGetObjectResponse"
+message = "Fix bug where an incorrect endpoint was produced for `WriteGetObjectResponse`"
 references = ["smithy-rs#781", "aws-sdk-rust#781"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
@@ -92,3 +104,43 @@ message = "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningPa
 references = ["smithy-rs#2562"]
 meta = { "breaking" = false, "tada" = true, "bug" = true }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in SDK crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::date_time::Format` has been re-exported in service client crates."
+references = ["smithy-rs#2534"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix generation of constrained shapes reaching `@sensitive` shapes"
+references = ["smithy-rs#2582", "smithy-rs#2585"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"
+
+[[smithy-rs]]
+message = "Fix server code generation bug affecting constrained shapes bound with `@httpPayload`"
+references = ["smithy-rs#2583", "smithy-rs#2584"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """Reduce several instances of credential exposure in the SDK logs:
+- IMDS now suppresses the body of the response from logs
+- `aws-sigv4` marks the `x-amz-session-token` header as sensitive
+- STS & SSO credentials have been manually marked as sensitive which suppresses logging of response bodies for relevant operations
+"""
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Add a sensitive method to `ParseHttpResponse`. When this returns true, logging of the HTTP response body will be suppressed."
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }

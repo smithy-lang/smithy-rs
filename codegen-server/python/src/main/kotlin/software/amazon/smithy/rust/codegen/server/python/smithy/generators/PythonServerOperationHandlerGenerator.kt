@@ -6,11 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 
@@ -50,10 +52,11 @@ class PythonServerOperationHandlerGenerator(
 
     private fun renderPythonOperationHandlerImpl(writer: RustWriter) {
         val operationName = symbolProvider.toSymbol(operation).name
-        val input = "crate::input::${operationName}Input"
-        val output = "crate::output::${operationName}Output"
+        val input = "crate::input::${operationName.toPascalCase()}Input"
+        val output = "crate::output::${operationName.toPascalCase()}Output"
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2552) - Use to pascalCase for error shapes.
         val error = "crate::error::${operationName}Error"
-        val fnName = operationName.toSnakeCase()
+        val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
 
         writer.rustTemplate(
             """

@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -72,7 +73,9 @@ typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimeP
 class ServiceRuntimePluginGenerator(
     codegenContext: ClientCodegenContext,
 ) {
+    private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
+        val http = RuntimeType.smithyHttp(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         arrayOf(
@@ -83,12 +86,15 @@ class ServiceRuntimePluginGenerator(
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
+            "DefaultEndpointResolver" to runtimeApi.resolve("client::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
             "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
+            "Params" to endpointTypesGenerator.paramsStruct(),
+            "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "StaticUriEndpointResolver" to runtimeApi.resolve("client::endpoints::StaticUriEndpointResolver"),
+            "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "TestConnection" to runtime.resolve("client::connections::test_connection::TestConnection"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
@@ -125,8 +131,12 @@ class ServiceRuntimePluginGenerator(
                     // Set an empty auth option resolver to be overridden by operations that need auth.
                     cfg.set_auth_option_resolver(#{AuthOptionListResolver}::new(Vec::new()));
 
-                    // TODO(RuntimePlugins): Resolve the correct endpoint
-                    cfg.set_endpoint_resolver(#{StaticUriEndpointResolver}::http_localhost(1234));
+                    let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
+                        #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
+                    cfg.set_endpoint_resolver(endpoint_resolver);
+
+                    ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
+                    cfg.put(#{Params}::builder());
 
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());

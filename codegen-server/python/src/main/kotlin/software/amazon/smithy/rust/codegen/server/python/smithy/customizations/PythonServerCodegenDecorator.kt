@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import java.io.File
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -194,6 +195,31 @@ class PyTypedMarkerDecorator : ServerCodegenDecorator {
     }
 }
 
+/**
+ * Copies the stubgen scripts to the generated crate root.
+ *
+ * The shell script `stubgen.sh` runs a quick build and uses `stubgen.py` to generate mypy compatibile
+ * types stubs for the project.
+ */
+class AddStubgenScriptDecorator : ServerCodegenDecorator {
+    override val name: String = "AddStubgenScriptDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val runtimeCratesPath = codegenContext.runtimeConfig.runtimeCratesPath()
+        val stubgenPythonLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.py"
+        val stubgenPythonContent = File(stubgenPythonLocation).readText(Charsets.UTF_8)
+        rustCrate.withFile("stubgen.py") {
+            writeWithNoFormatting("$stubgenPythonContent")
+        }
+        val stubgenShellLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.sh"
+        val stubgenShellContent = File(stubgenShellLocation).readText(Charsets.UTF_8)
+        rustCrate.withFile("stubgen.sh") {
+            writeWithNoFormatting("$stubgenShellContent")
+        }
+    }
+}
+
 val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -214,4 +240,6 @@ val DECORATORS = arrayOf(
     InitPyDecorator(),
     // Generate `py.typed` for the Python source.
     PyTypedMarkerDecorator(),
+    // Generate scripts for stub generation.
+    AddStubgenScriptDecorator(),
 )

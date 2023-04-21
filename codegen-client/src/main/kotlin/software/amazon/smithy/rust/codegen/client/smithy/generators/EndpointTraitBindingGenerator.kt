@@ -44,7 +44,7 @@ class EndpointTraitBindings(
      *
      * The returned expression is a `Result<EndpointPrefix, UriError>`
      */
-    fun render(writer: RustWriter, input: String) {
+    fun render(writer: RustWriter, input: String, enableNewSmithyRuntime: Boolean) {
         // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
         val formatLiteral = endpointTrait.prefixFormatString()
         if (endpointTrait.hostPrefix.labels.isEmpty()) {
@@ -67,12 +67,23 @@ class EndpointTraitBindings(
                         // NOTE: this is dead code until we start respecting @required
                         rust("let $field = &$input.$field;")
                     }
-                    rustTemplate(
+                    val contents = if (enableNewSmithyRuntime) {
+                        // TODO(enableNewSmithyRuntime): Remove the allow attribute once all places need .into method
+                        """
+                        if $field.is_empty() {
+                            ##[allow(clippy::useless_conversion)]
+                            return Err(#{invalidFieldError:W}.into())
+                        }
+                        """
+                    } else {
                         """
                         if $field.is_empty() {
                             return Err(#{invalidFieldError:W})
                         }
-                        """,
+                        """
+                    }
+                    rustTemplate(
+                        contents,
                         "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(
                             field,
                             "$field was unset or empty but must be set as part of the endpoint prefix",
