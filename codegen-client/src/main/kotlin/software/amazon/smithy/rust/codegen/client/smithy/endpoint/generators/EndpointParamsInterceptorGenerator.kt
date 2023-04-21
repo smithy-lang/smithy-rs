@@ -32,6 +32,7 @@ class EndpointParamsInterceptorGenerator(
         arrayOf(
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+            "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
@@ -83,10 +84,10 @@ class EndpointParamsInterceptorGenerator(
             let input = context.input()?;
             let _input = input
                 .downcast_ref::<${operationInput.name}>()
-                .ok_or_else(|| #{InterceptorError}::invalid_input_access())?;
+                .ok_or_else(|| "failed to downcast to ${operationInput.name}")?;
             let params_builder = cfg
                 .get::<#{ParamsBuilder}>()
-                .ok_or(#{InterceptorError}::read_before_execution("missing endpoint params builder"))?
+                .ok_or_else(|| "missing endpoint params builder")?
                 .clone();
             ${"" /* TODO(EndpointResolver): Call setters on `params_builder` to update its fields by using values from `_input` */}
             cfg.put(params_builder);
@@ -111,7 +112,7 @@ class EndpointParamsInterceptorGenerator(
             )
             withBlockTemplate(
                 "let endpoint_prefix = ",
-                ".map_err(#{InterceptorError}::read_before_execution)?;",
+                """.map_err(|err| #{ContextAttachedError}::new("endpoint prefix could not be built", err))?;""",
                 *codegenScope,
             ) {
                 endpointTraitBindings.render(
@@ -130,11 +131,11 @@ class EndpointParamsInterceptorGenerator(
             let _ = context;
             let params_builder = cfg
                 .get::<#{ParamsBuilder}>()
-                .ok_or(#{InterceptorError}::read_before_execution("missing endpoint params builder"))?
+                .ok_or_else(|| "missing endpoint params builder")?
                 .clone();
             let params = params_builder
                 .build()
-                .map_err(#{InterceptorError}::read_before_execution)?;
+                .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
             cfg.put(
                 #{EndpointResolverParams}::new(params)
             );
