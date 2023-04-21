@@ -86,7 +86,7 @@ class ServiceRuntimePluginGenerator(
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
-            "DefaultEndpointResolver" to runtimeApi.resolve("client::endpoints::DefaultEndpointResolver"),
+            "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
