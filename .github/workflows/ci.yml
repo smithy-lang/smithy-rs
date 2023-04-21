@@ -159,8 +159,6 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
-
-
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
