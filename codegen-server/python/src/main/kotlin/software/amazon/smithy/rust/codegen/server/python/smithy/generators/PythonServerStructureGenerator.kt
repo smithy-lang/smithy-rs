@@ -18,16 +18,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonEventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**
  * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -36,11 +37,13 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstrin
  */
 class PythonServerStructureGenerator(
     model: Model,
-    private val symbolProvider: RustSymbolProvider,
+    private val codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     private val shape: StructureShape,
-) : StructureGenerator(model, symbolProvider, writer, shape, emptyList()) {
+) : StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()) {
 
+    private val symbolProvider = codegenContext.symbolProvider
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
 
     override fun renderStructure() {
@@ -157,9 +160,9 @@ class PythonServerStructureGenerator(
     private fun memberPythonType(shape: MemberShape, symbol: Symbol): PythonType =
         if (shape.isEventStream(model)) {
             val eventStreamSymbol = PythonEventStreamSymbolProvider.parseSymbol(symbol)
-            val innerT = eventStreamSymbol.innerT.pythonType()
+            val innerT = eventStreamSymbol.innerT.pythonType(libName)
             PythonType.AsyncIterator(innerT)
         } else {
-            symbol.rustType().pythonType()
+            symbol.rustType().pythonType(libName)
         }
 }

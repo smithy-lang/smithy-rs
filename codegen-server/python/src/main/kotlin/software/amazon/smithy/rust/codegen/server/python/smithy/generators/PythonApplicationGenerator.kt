@@ -250,11 +250,11 @@ class PythonApplicationGenerator(
             """,
             *codegenScope,
         ) {
-            val middlewareRequest = PythonType.Opaque("Request", "crate::middleware")
-            val middlewareResponse = PythonType.Opaque("Response", "crate::middleware")
+            val middlewareRequest = PythonType.Opaque("Request", libName, rustNamespace = "crate::middleware")
+            val middlewareResponse = PythonType.Opaque("Response", libName, rustNamespace = "crate::middleware")
             val middlewareNext = PythonType.Callable(listOf(middlewareRequest), PythonType.Awaitable(middlewareResponse))
             val middlewareFunc = PythonType.Callable(listOf(middlewareRequest, middlewareNext), PythonType.Awaitable(middlewareResponse))
-            val tlsConfig = PythonType.Opaque("TlsConfig", "crate::tls")
+            val tlsConfig = PythonType.Opaque("TlsConfig", libName, rustNamespace = "crate::tls")
 
             rustTemplate(
                 """
@@ -344,9 +344,9 @@ class PythonApplicationGenerator(
                 val operationName = symbolProvider.toSymbol(operation).name
                 val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
 
-                val input = PythonType.Opaque("${operationName}Input", "crate::input")
-                val output = PythonType.Opaque("${operationName}Output", "crate::output")
-                val context = PythonType.Opaque("Ctx")
+                val input = PythonType.Opaque("${operationName}Input", libName, rustNamespace = "crate::input")
+                val output = PythonType.Opaque("${operationName}Output", libName, rustNamespace = "crate::output")
+                val context = PythonType.Opaque("Ctx", libName)
                 val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
                 val handler = PythonType.Union(
                     listOf(

@@ -152,7 +152,7 @@ class PythonServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render()
+            PythonServerStructureGenerator(model, codegenContext, this, shape).render()
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
@@ -190,7 +190,7 @@ class PythonServerCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         logger.info("[python-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
-            PythonServerUnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            PythonServerUnionGenerator(model, codegenContext, this, shape, renderUnknownVariant = false).render()
         }
 
         if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
