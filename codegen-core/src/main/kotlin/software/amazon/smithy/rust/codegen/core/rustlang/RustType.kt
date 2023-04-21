@@ -422,15 +422,6 @@ data class RustMetadata(
     fun hasDebugDerive(): Boolean {
         return derives.contains(RuntimeType.Debug)
     }
-
-    companion object {
-        val TestModule = RustMetadata(
-            visibility = Visibility.PRIVATE,
-            additionalAttributes = listOf(
-                Attribute.CfgTest,
-            ),
-        )
-    }
 }
 
 data class Argument(val argument: String, val value: String, val type: String)
