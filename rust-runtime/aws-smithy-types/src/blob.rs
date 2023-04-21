@@ -70,7 +70,7 @@ impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     {
         match base64::decode(v) {
             Ok(inner) => Ok(Blob { inner }),
-            Err(e) => Err(serde::de::Error::custom(e)),
+            Err(e) => Err(E::custom(e)),
         }
     }
 }

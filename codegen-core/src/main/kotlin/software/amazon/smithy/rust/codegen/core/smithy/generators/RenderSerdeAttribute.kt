@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 public object RenderSerdeAttribute {
     public fun forStructureShape(writer: RustWriter, shape: StructureShape, model: Model) {
         if (shape.members().none { it.isEventStream(model) }) {
+            importSerde(writer)
             writeAttributes(writer)
         }
     }

@@ -5,7 +5,13 @@
 
 use crate::Number;
 use std::collections::HashMap;
-
+#[cfg(
+    any(
+        all(aws_sdk_unstable, feature = "serde-deserialize"),
+        all(aws_sdk_unstable, feature = "serde-serialize")
+    )
+)]
+use serde;
 /* ANCHOR: document */
 
 /// Document Type

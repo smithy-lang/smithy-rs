@@ -11,10 +11,11 @@ impl serde::Serialize for DateTime {
     where
         S: serde::Serializer,
     {
+        use serde::ser::Error;
         if serializer.is_human_readable() {
             match self.fmt(Format::DateTime) {
                 Ok(val) => serializer.serialize_str(&val),
-                Err(e) => Err(serde::ser::Error::custom(e)),
+                Err(e) => Err(Error::custom(e)),
             }
         } else {
             let mut tup_ser = serializer.serialize_tuple(2)?;
