@@ -147,8 +147,6 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" 
 
 [[smithy-rs]]
 message = """
-List of changes:
-
 - rust runtime
   - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
   - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
@@ -178,6 +176,9 @@ message = """
   - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
   - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
 
+- aws-credential-types/Cargo.toml
+  - tracing-subscriber 0.3.16 requires regex to enable feature = unicode-case. Without it it fails.
+  - regex is added to package.metadata.cargo-udeps.ignore to work with check-aws-sdk-smoketest-docs-clippy-udeps
 """
 author = "thomas-k-cameron"
 references = ["smithy-rs#2615"]
