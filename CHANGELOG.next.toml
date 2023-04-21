@@ -144,3 +144,41 @@ message = "Add a sensitive method to `ParseHttpResponse`. When this returns true
 author = "rcoh"
 references = ["smithy-rs#2603"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+
+[[smithy-rs]]
+message = """
+List of changes:
+
+- rust runtime
+  - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
+  - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
+
+- buildSrc
+  - add rustflag to enable feature gated features
+
+- Core codegen code
+  - Add sensitive warning
+  - Add `serde` attributes 
+  - Import `serde` crate to enable `serde(skip)` on some namespaces
+  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
+
+- Client codegen code
+  - add `serde` as dependency behind feature gate
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2615"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+
+[[aws-sdk-rust]]
+message = """
+- SDK
+    - Implements `serde` support as described in RFC 30
+    
+- rust runtime
+  - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
+  - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
+
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2615"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
