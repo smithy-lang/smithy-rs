@@ -118,7 +118,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         generateEndpointsStruct(this)
     }
 
-    private fun endpointsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Endpoint) {
+    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Endpoint) {
         generateEndpointParamsBuilder(this)
     }
 
@@ -182,7 +182,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
                     #{Builder}::default()
                 }
                 """,
-                "Builder" to endpointsBuilder(),
+                "Builder" to paramsBuilder(),
             )
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()

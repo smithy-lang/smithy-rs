@@ -96,6 +96,8 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
+    fun runtimeCratesPath(): String? = runtimeCrateLocation.path
+
     fun smithyRuntimeCrate(
         runtimeCrateName: String,
         optional: Boolean = false,
@@ -278,6 +280,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun classifyRetry(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("retry::ClassifyRetry")
         fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("DateTime")
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
+        fun format(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("date_time::Format")
         fun retryErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
         fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")

@@ -87,7 +87,9 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     block: T.() -> Unit,
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
-        conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
+        withTemplate(textAfterNewLine, ctx) { tail ->
+            conditionalBlock(header, tail, conditional = true, block = block)
+        }
     }
 }
 
@@ -469,6 +471,7 @@ class RustWriter private constructor(
                     devDependenciesOnly = true,
                 )
                 fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }

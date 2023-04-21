@@ -1,5 +1,11 @@
 on:
   workflow_dispatch:
+    inputs:
+      opt-in-to-sparse-registry:
+        description: Enable/disable CARGO_UNSTABLE_SPARSE_REGISTRY (https://blog.rust-lang.org/2022/06/22/sparse-registry-testing.html)
+        required: true
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -24,6 +30,7 @@ jobs:
     - name: Generate docs
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CARGO_UNSTABLE_SPARSE_REGISTRY: ${{ inputs.opt-in-to-sparse-registry }}
       run: |
         git config --local user.name "AWS SDK Rust Bot"
         git config --local user.email "aws-sdk-rust-primary@amazon.com"

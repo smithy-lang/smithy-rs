@@ -28,6 +28,7 @@ class ServerRequestBindingGenerator(
     protocol: Protocol,
     codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
+    additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val httpBindingGenerator =
         HttpBindingGenerator(
@@ -39,7 +40,7 @@ class ServerRequestBindingGenerator(
                 ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUnconstrainedMapHttpBindingCustomization(
                     codegenContext,
                 ),
-            ),
+            ) + additionalHttpBindingCustomizations,
         )
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
@@ -81,5 +82,6 @@ class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUncons
                 )
             }
         }
+        else -> emptySection
     }
 }

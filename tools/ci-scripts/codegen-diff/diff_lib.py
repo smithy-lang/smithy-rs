@@ -2,9 +2,9 @@
 #  SPDX-License-Identifier: Apache-2.0
 
 import os
-import sys
-import subprocess
 import shlex
+import subprocess
+import sys
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
 BASE_BRANCH_NAME = "__tmp-localonly-base"
@@ -15,10 +15,10 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
-PYTHON_EXAMPLES_PATH = "rust-runtime/aws-smithy-http-server-python/examples"
-
 target_codegen_client = 'codegen-client-test'
 target_codegen_server = 'codegen-server-test'
+target_codegen_server_python = 'codegen-server-test:python'
+target_codegen_server_typescript = 'codegen-server-test:typescript'
 target_aws_sdk = 'aws:sdk'
 
 
@@ -38,19 +38,19 @@ def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
 
 
 def generate_and_commit_generated_code(revision_sha, targets=None):
-    targets = targets or [target_codegen_client, target_codegen_server, target_aws_sdk]
+    targets = targets or [
+        target_codegen_client,
+        target_codegen_server,
+        target_aws_sdk,
+        target_codegen_server_python,
+        target_codegen_server_typescript
+    ]
     # Clean the build artifacts before continuing
+    assemble_tasks = ' '.join([f'{t}:assemble' for t in targets])
+    clean_tasks = ' '.join([f'{t}:clean' for t in targets])
     get_cmd_output("rm -rf aws/sdk/build")
-    if target_codegen_server in targets:
-        get_cmd_output("make distclean", shell=True, cwd=PYTHON_EXAMPLES_PATH)
-    get_cmd_output("./gradlew codegen-core:clean codegen-client:clean codegen-server:clean aws:sdk-codegen:clean")
-
-    # Generate code
-    tasks = ' '.join([f'{t}:assemble' for t in targets])
-    get_cmd_output(f"./gradlew --rerun-tasks {tasks}")
-    if target_codegen_server in targets:
-        get_cmd_output("make build", shell=True, check=False, cwd=PYTHON_EXAMPLES_PATH)
-        get_cmd_output(f"./gradlew --rerun-tasks codegen-server-test:typescript:assemble")
+    get_cmd_output(f"./gradlew --rerun-tasks {clean_tasks}")
+    get_cmd_output(f"./gradlew --rerun-tasks {assemble_tasks}")
 
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
@@ -61,12 +61,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
-                get_cmd_output(
-                    f"mv {PYTHON_EXAMPLES_PATH}/pokemon-service-server-sdk/ {OUTPUT_PATH}/codegen-server-test-python/",
-                    check=False)
-                get_cmd_output(
-                    f"mv codegen-server-test/typescript/build/smithyprojections/codegen-server-test-typescript {OUTPUT_PATH}/",
-                    check=False)
+                get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
+                get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
@@ -79,6 +76,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
 
     # Clean up the server-test folder
     get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
     get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-typescript/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
