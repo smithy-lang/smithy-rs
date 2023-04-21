@@ -143,3 +143,19 @@ message = "Fix server code generation bug affecting constrained shapes bound wit
 references = ["smithy-rs#2583", "smithy-rs#2584"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """Reduce several instances of credential exposure in the SDK logs:
+- IMDS now suppresses the body of the response from logs
+- `aws-sigv4` marks the `x-amz-session-token` header as sensitive
+- STS & SSO credentials have been manually marked as sensitive which suppresses logging of response bodies for relevant operations
+"""
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Add a sensitive method to `ParseHttpResponse`. When this returns true, logging of the HTTP response body will be suppressed."
+author = "rcoh"
+references = ["smithy-rs#2603"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
