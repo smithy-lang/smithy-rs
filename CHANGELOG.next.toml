@@ -145,41 +145,14 @@ author = "rcoh"
 references = ["smithy-rs#2603"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 
-[[smithy-rs]]
-message = """
-- rust runtime
-  - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
-  - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
-
-- buildSrc
-  - add rustflag to enable feature gated features
-
-- Core codegen code
-  - Add sensitive warning
-  - Add `serde` attributes
-  - Import `serde` crate to enable `serde(skip)` on some namespaces
-  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
-
-- Client codegen code
-  - add `serde` as dependency behind feature gate
-"""
-author = "thomas-k-cameron"
-references = ["smithy-rs#2615"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-
 [[aws-sdk-rust]]
-message = """
-- SDK
-    - Implements `serde` support as described in RFC 30
+message = "Update MSRV to Rust 1.67.1"
+references = ["smithy-rs#2611"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
 
-- rust runtime
-  - Implements serde support to `number`, `blob`, `document`, `date time` and `error type`.
-  - `&'static str` on Error type is replaced with `Cow` to allow `serde` support. No breaking changes are introduced.
-
-- aws-credential-types/Cargo.toml
-  - tracing-subscriber 0.3.16 requires regex to enable feature = unicode-case. Without it it fails.
-  - regex is added to package.metadata.cargo-udeps.ignore to work with check-aws-sdk-smoketest-docs-clippy-udeps
-"""
-author = "thomas-k-cameron"
-references = ["smithy-rs#2615"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.67.1"
+references = ["smithy-rs#2611"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
