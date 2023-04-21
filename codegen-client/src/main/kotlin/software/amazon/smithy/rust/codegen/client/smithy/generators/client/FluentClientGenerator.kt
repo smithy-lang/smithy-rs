@@ -358,20 +358,20 @@ class FluentClientGenerator(
             if (inputBuilderType.toString().endsWith("Builder")) {
                 rustTemplate(
                     """
-                        ##[#{AwsSdkUnstableAttribute}]
-                        /// This function replaces the parameter with new one.
-                        /// It is useful when you want to replace the existing data with de-serialized data.
-                        /// ```compile_fail
-                        /// let result_future = async {
-                        ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
-                        ///     client.$fnName().set_fields(&deserialized_parameters).send().await
-                        /// };
-                        /// ```
-                        pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
-                            self.inner = data;
-                            self
-                        }
-                        """,
+                    ##[#{AwsSdkUnstableAttribute}]
+                    /// This function replaces the parameter with new one.
+                    /// It is useful when you want to replace the existing data with de-serialized data.
+                    /// ```compile_fail
+                    /// let result_future = async {
+                    ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
+                    ///     client.$fnName().set_fields(&deserialized_parameters).send().await
+                    /// };
+                    /// ```
+                    pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
+                        self.inner = data;
+                        self
+                    }
+                    """,
                     "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
                 )
             }
