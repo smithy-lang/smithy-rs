@@ -2,11 +2,12 @@
 #  SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
-import re
+
 import inspect
+import re
 import textwrap
 from pathlib import Path
-from typing import Any, Set, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 ROOT_MODULE_NAME_PLACEHOLDER = "__root_module_name__"
 
@@ -36,11 +37,7 @@ class Writer:
         Returns fixed version of given type path.
         It unescapes `\\[` and `\\]` and also populates placeholder for root module name.
         """
-        return (
-            path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name)
-            .replace("\\[", "[")
-            .replace("\\]", "]")
-        )
+        return path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name).replace("\\[", "[").replace("\\]", "]")
 
     def submodule(self, path: Path) -> Writer:
         w = Writer(path, self.root_module_name)
@@ -98,27 +95,21 @@ class DocstringParserResult:
 def parse_type_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=1)
     if len(parts) != 2:
-        raise ValueError(
-            f"Invalid `:type` directive: `{line}` must be in `:type T:` format"
-        )
+        raise ValueError(f"Invalid `:type` directive: `{line}` must be in `:type T:` format")
     res.types.append(parts[1].rstrip(":"))
 
 
 def parse_rtype_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=1)
     if len(parts) != 2:
-        raise ValueError(
-            f"Invalid `:rtype` directive: `{line}` must be in `:rtype T:` format"
-        )
+        raise ValueError(f"Invalid `:rtype` directive: `{line}` must be in `:rtype T:` format")
     res.rtypes.append(parts[1].rstrip(":"))
 
 
 def parse_param_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=2)
     if len(parts) != 3:
-        raise ValueError(
-            f"Invalid `:param` directive: `{line}` must be in `:param name T:` format"
-        )
+        raise ValueError(f"Invalid `:param` directive: `{line}` must be in `:param name T:` format")
     name = parts[1]
     ty = parts[2].rstrip(":")
     res.params.append((name, ty))
@@ -127,18 +118,14 @@ def parse_param_directive(line: str, res: DocstringParserResult):
 def parse_generic_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=1)
     if len(parts) != 2:
-        raise ValueError(
-            f"Invalid `:generic` directive: `{line}` must be in `:generic T:` format"
-        )
+        raise ValueError(f"Invalid `:generic` directive: `{line}` must be in `:generic T:` format")
     res.generics.append(parts[1].rstrip(":"))
 
 
 def parse_extends_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=1)
     if len(parts) != 2:
-        raise ValueError(
-            f"Invalid `:extends` directive: `{line}` must be in `:extends Base[...]:` format"
-        )
+        raise ValueError(f"Invalid `:extends` directive: `{line}` must be in `:extends Base[...]:` format")
     res.extends.append(parts[1].rstrip(":"))
 
 
@@ -201,13 +188,13 @@ class DocstringParser:
         if not doc:
             return ""
 
-        def predicate(l: str) -> bool:
+        def predicate(line: str) -> bool:
             for k in DocstringParserDirectives.keys():
-                if l.startswith(f":{k} ") and l.endswith(":"):
+                if line.startswith(f":{k} ") and line.endswith(":"):
                     return False
             return True
 
-        return "\n".join([l for l in doc.splitlines() if predicate(l)]).strip()
+        return "\n".join([line for line in doc.splitlines() if predicate(line)]).strip()
 
 
 def indent(code: str, level: int = 4) -> str:
@@ -223,6 +210,10 @@ def is_fn_like(obj: Any) -> bool:
         or inspect.iscoroutine(obj)
         or inspect.iscoroutinefunction(obj)
     )
+
+
+def is_scalar(obj: Any) -> bool:
+    return isinstance(obj, (str, float, int, bool))
 
 
 def join(args: List[str], delim: str = "\n") -> str:
@@ -266,7 +257,7 @@ def make_function(
     sig: Optional[inspect.Signature] = None
     try:
         sig = inspect.signature(obj)
-    except:
+    except Exception:
         pass
 
     def has_default(param: str, ty: str) -> bool:
@@ -312,9 +303,7 @@ def {name}({params}) -> {rtype}:
 
 
 def make_class(writer: Writer, name: str, klass: Any) -> str:
-    bases = list(
-        filter(lambda n: n != "object", map(lambda b: b.__name__, klass.__bases__))
-    )
+    bases = list(filter(lambda n: n != "object", map(lambda b: b.__name__, klass.__bases__)))
     class_sig = DocstringParser.parse_class(klass)
     if class_sig:
         (generics, extends) = class_sig
@@ -386,7 +375,7 @@ class {name}{bases_str}:
 def walk_module(writer: Writer, mod: Any):
     exported = mod.__all__
 
-    for (name, member) in inspect.getmembers(mod):
+    for name, member in inspect.getmembers(mod):
         if name not in exported:
             continue
 
@@ -397,8 +386,23 @@ def walk_module(writer: Writer, mod: Any):
             writer.define(make_class(writer, name, member))
         elif is_fn_like(member):
             writer.define(make_function(writer, name, member))
+        elif is_scalar(member):
+            writer.define(f"{name}: {type(member).__name__} = ...")
         else:
             print(f"Unknown type: {member}")
+
+
+def generate(module: str, outdir: str):
+    path = Path(outdir) / "__init__.pyi"
+    writer = Writer(
+        path,
+        module,
+    )
+    walk_module(
+        writer,
+        importlib.import_module(module),
+    )
+    writer.dump()
 
 
 if __name__ == "__main__":
@@ -410,13 +414,4 @@ if __name__ == "__main__":
     parser.add_argument("outdir")
     args = parser.parse_args()
 
-    path = Path(args.outdir) / f"{args.module}.pyi"
-    writer = Writer(
-        path,
-        args.module,
-    )
-    walk_module(
-        writer,
-        importlib.import_module(args.module),
-    )
-    writer.dump()
+    generate(args.module, args.outdir)

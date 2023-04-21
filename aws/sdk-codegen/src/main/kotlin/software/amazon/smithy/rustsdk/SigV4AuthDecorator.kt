@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -38,6 +39,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
 
     override fun operationRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
+        operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
         baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {

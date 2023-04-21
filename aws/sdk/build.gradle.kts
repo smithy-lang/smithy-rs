@@ -20,6 +20,7 @@ plugins {
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+    allowUnknownTraits = true
 }
 
 val smithyVersion: String by project

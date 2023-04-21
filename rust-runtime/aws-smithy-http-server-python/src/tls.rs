@@ -105,7 +105,7 @@ impl PyTlsConfig {
 #[pymethods]
 impl PyTlsConfig {
     #[new]
-    #[args(reload_secs = "86400")] // <- 1 Day by default
+    #[pyo3(signature = (key_path, cert_path, reload_secs=86400))]
     fn py_new(key_path: PathBuf, cert_path: PathBuf, reload_secs: u64) -> Self {
         // TODO(BugOnUpstream): `reload: &PyDelta` segfaults, create an issue on PyO3
         Self {
@@ -146,11 +146,11 @@ mod tests {
 
     const TEST_KEY: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/examples/pokemon-service-test/tests/testdata/localhost.key"
+        "/../../examples/python/pokemon-service-test/tests/testdata/localhost.key"
     );
     const TEST_CERT: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/examples/pokemon-service-test/tests/testdata/localhost.crt"
+        "/../../examples/python/pokemon-service-test/tests/testdata/localhost.crt"
     );
 
     #[test]

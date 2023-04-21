@@ -6,47 +6,38 @@
 import argparse
 import logging
 import random
-from threading import Lock
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Callable, Awaitable, AsyncIterator
+from threading import Lock
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from pokemon_service_server_sdk import App
-from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.aws_lambda import LambdaContext
 from pokemon_service_server_sdk.error import (
+    InvalidPokeballError,
+    MasterBallUnsuccessful,
     ResourceNotFoundException,
     UnsupportedRegionError,
-    MasterBallUnsuccessful,
-    InvalidPokeballError,
 )
 from pokemon_service_server_sdk.input import (
+    CapturePokemonInput,
+    CheckHealthInput,
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
-    CheckHealthInput,
     StreamPokemonRadioInput,
-    CapturePokemonInput,
 )
 from pokemon_service_server_sdk.logging import TracingHandler
-from pokemon_service_server_sdk.middleware import (
-    MiddlewareException,
-    Response,
-    Request,
-)
-from pokemon_service_server_sdk.model import (
-    CapturePokemonEvents,
-    CaptureEvent,
-    FlavorText,
-    Language,
-)
+from pokemon_service_server_sdk.middleware import MiddlewareException, Request, Response
+from pokemon_service_server_sdk.model import CaptureEvent, CapturePokemonEvents, FlavorText, Language
 from pokemon_service_server_sdk.output import (
+    CapturePokemonOutput,
+    CheckHealthOutput,
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
-    CheckHealthOutput,
     StreamPokemonRadioOutput,
-    CapturePokemonOutput,
 )
+from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
@@ -164,17 +155,16 @@ app.context(Context())
 # Next is either the next middleware in the stack or the handler.
 Next = Callable[[Request], Awaitable[Response]]
 
+
 # This middleware checks the `Content-Type` from the request header,
 # logs some information depending on that and then calls `next`.
 @app.middleware
 async def check_content_type_header(request: Request, next: Next) -> Response:
     content_type = request.headers.get("content-type")
     if content_type == "application/json":
-        logging.debug("Found valid `application/json` content type")
+        logging.debug("found valid `application/json` content type")
     else:
-        logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers.items()}"
-        )
+        logging.warning("invalid content type %s, dumping headers: %s", content_type, request.headers.items())
     return await next(request)
 
 
@@ -184,7 +174,7 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
 @app.middleware
 async def add_x_amzn_answer_header(request: Request, next: Next) -> Response:
     request.headers["x-amzn-answer"] = "42"
-    logging.debug("Setting `x-amzn-answer` header to 42")
+    logging.debug("setting `x-amzn-answer` header to 42")
     return await next(request)
 
 
@@ -205,18 +195,15 @@ async def check_x_amzn_answer_header(request: Request, next: Next) -> Response:
 # DoNothing operation used for raw benchmarking.
 @app.do_nothing
 def do_nothing(_: DoNothingInput) -> DoNothingOutput:
-    # logging.debug("Running the DoNothing operation")
     return DoNothingOutput()
 
 
 # Get the translation of a Pokémon specie or an error.
 @app.get_pokemon_species
-def get_pokemon_species(
-    input: GetPokemonSpeciesInput, context: Context
-) -> GetPokemonSpeciesOutput:
+def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetPokemonSpeciesOutput:
     if context.lambda_ctx is not None:
         logging.debug(
-            "Lambda Context: %s",
+            "lambda Context: %s",
             dict(
                 request_id=context.lambda_ctx.request_id,
                 deadline=context.lambda_ctx.deadline,
@@ -229,24 +216,19 @@ def get_pokemon_species(
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
-        logging.debug("Total requests executed: %s", context.get_calls_count())
-        logging.info("Found description for Pokémon %s", input.name)
-        logging.error("Found some stuff")
-        return GetPokemonSpeciesOutput(
-            name=input.name, flavor_text_entries=flavor_text_entries
-        )
+        logging.debug("total requests executed: %s", context.get_calls_count())
+        logging.info("found description for Pokémon %s", input.name)
+        return GetPokemonSpeciesOutput(name=input.name, flavor_text_entries=flavor_text_entries)
     else:
-        logging.warning("Description for Pokémon %s not in the database", input.name)
+        logging.warning("description for Pokémon %s not in the database", input.name)
         raise ResourceNotFoundException("Requested Pokémon not available")
 
 
 # Get the number of requests served by this server.
 @app.get_server_statistics
-def get_server_statistics(
-    _: GetServerStatisticsInput, context: Context
-) -> GetServerStatisticsOutput:
+def get_server_statistics(_: GetServerStatisticsInput, context: Context) -> GetServerStatisticsOutput:
     calls_count = context.get_calls_count()
-    logging.debug("The service handled %d requests", calls_count)
+    logging.debug("the service handled %d requests", calls_count)
     return GetServerStatisticsOutput(calls_count=calls_count)
 
 
@@ -398,7 +380,7 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
                     break
         # You can catch modeled errors and act accordingly, they will terminate the event stream
         except MasterBallUnsuccessful as err:
-            logging.error(f"masterball unsuccessful: {err}")
+            logging.error("masterball unsuccessful: %s", err)
 
         # Here event stream is going to be completed because we stopped receiving events and we'll
         # no longer `yield` new values and this asynchronous Python generator will end here
@@ -411,17 +393,15 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
 
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
-async def stream_pokemon_radio(
-    _: StreamPokemonRadioInput, context: Context
-) -> StreamPokemonRadioOutput:
+async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context) -> StreamPokemonRadioOutput:
     import aiohttp
 
     radio_url = context.get_random_radio_stream()
-    logging.info("Random radio URL for this stream is %s", radio_url)
+    logging.info("random radio URL for this stream is %s", radio_url)
     async with aiohttp.ClientSession() as session:
         async with session.get(radio_url) as response:
             data = ByteStream(await response.read())
-        logging.debug("Successfully fetched radio url %s", radio_url)
+        logging.debug("successfully fetched radio url %s", radio_url)
     return StreamPokemonRadioOutput(data=data)
 
 
