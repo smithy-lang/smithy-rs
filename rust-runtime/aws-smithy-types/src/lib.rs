@@ -22,8 +22,8 @@ pub mod retry;
 pub mod timeout;
 
 mod blob;
-mod number;
 mod document;
+mod number;
 
 pub use blob::Blob;
 pub use date_time::DateTime;
