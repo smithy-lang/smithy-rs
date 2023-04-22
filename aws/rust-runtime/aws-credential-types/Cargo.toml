@@ -6,10 +6,7 @@ description = "Types for AWS SDK credentials."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-[package.metadata.cargo-udeps.ignore]
-normal = ["regex"]
-development = ["regex"]
-build = ["regex"]
+
 [features]
 hardcoded-credentials = []
 test-util = []
@@ -17,7 +14,6 @@ test-util = []
 [dependencies]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-regex = { version = "1", features = ["unicode-case"] }
 fastrand = "1.4.0"
 tokio = { version = "1.23.1", features = ["sync"] }
 tracing = "0.1"
