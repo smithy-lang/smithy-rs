@@ -26,6 +26,9 @@ pin-utils = "0.1.0"
 tokio = { version = "1.25", features = [] }
 tracing = "0.1"
 
+[dev-dependencies]
+tokio = { version = "1.25", features = ["macros", "rt"] }
+
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]

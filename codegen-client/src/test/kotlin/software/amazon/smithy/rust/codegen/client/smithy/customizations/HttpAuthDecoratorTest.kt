@@ -35,12 +35,81 @@ class HttpAuthDecoratorTest {
     )
 
     @Test
-    fun allSchemes() {
+    fun multipleAuthSchemesSchemeSelection() {
         clientIntegrationTest(
             TestModels.allSchemes,
             IntegrationTestParams(additionalSettings = additionalSettings()),
-        ) { _, _ ->
-            // No-op: just checking that it compiles with all schemes enabled in a model
+        ) { codegenContext, rustCrate ->
+            rustCrate.integrationTest("tests") {
+                val moduleName = codegenContext.moduleUseName()
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn use_api_key_auth_when_api_key_provided() {
+                        use aws_smithy_runtime_api::client::identity::http::Token;
+
+                        let connector = #{TestConnection}::new(vec![(
+                            http::Request::builder()
+                                .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
+                                .body(#{SdkBody}::empty())
+                                .unwrap(),
+                            http::Response::builder().status(200).body("").unwrap(),
+                        )]);
+
+                        let config = $moduleName::Config::builder()
+                            .api_key(Token::new("some-api-key", None))
+                            .endpoint_resolver("http://localhost:1234")
+                            .http_connector(connector.clone())
+                            .build();
+                        let smithy_client = aws_smithy_client::Builder::new()
+                            .connector(connector.clone())
+                            .middleware_fn(|r| r)
+                            .build_dyn();
+                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let _ = client.some_operation()
+                            .send_v2()
+                            .await
+                            .expect("success");
+                        connector.assert_requests_match(&[]);
+                    }
+                    """,
+                    *codegenScope(codegenContext.runtimeConfig),
+                )
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn use_basic_auth_when_basic_auth_login_provided() {
+                        use aws_smithy_runtime_api::client::identity::http::Login;
+
+                        let connector = #{TestConnection}::new(vec![(
+                            http::Request::builder()
+                                .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
+                                .uri("http://localhost:1234/SomeOperation")
+                                .body(#{SdkBody}::empty())
+                                .unwrap(),
+                            http::Response::builder().status(200).body("").unwrap(),
+                        )]);
+
+                        let config = $moduleName::Config::builder()
+                            .basic_auth_login(Login::new("some-user", "some-pass", None))
+                            .endpoint_resolver("http://localhost:1234")
+                            .http_connector(connector.clone())
+                            .build();
+                        let smithy_client = aws_smithy_client::Builder::new()
+                            .connector(connector.clone())
+                            .middleware_fn(|r| r)
+                            .build_dyn();
+                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let _ = client.some_operation()
+                            .send_v2()
+                            .await
+                            .expect("success");
+                        connector.assert_requests_match(&[]);
+                    }
+                    """,
+                    *codegenScope(codegenContext.runtimeConfig),
+                )
+            }
         }
     }
 
@@ -83,10 +152,7 @@ class HttpAuthDecoratorTest {
                         connector.assert_requests_match(&[]);
                     }
                     """,
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                        .withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
-                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    *codegenScope(codegenContext.runtimeConfig),
                 )
             }
         }
