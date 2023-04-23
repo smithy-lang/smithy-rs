@@ -127,8 +127,8 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v7.0.0/wasmtime-v7.0.0-x86_64-linux.tar.xz
-ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8a5f3dce84cffec99
+ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v8.0.0/wasmtime-v8.0.0-x86_64-linux.tar.xz
+ARG wasmtime_precompiled_sha256=0ba34842bbac8896dbdd860173b2c554d93d63ecc490f725fe3331db913714ad
 ARG rust_nightly_version
 RUN set -eux; \
     curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
