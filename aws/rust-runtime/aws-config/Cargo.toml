@@ -48,7 +48,7 @@ hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
 [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
-wasi-http = { git = "https://github.com/bytecodealliance/wasi", rev = "43f1a2a45bbefdabe32551eac77885d31199b705" }
+wasi-http = { git = "https://github.com/bytecodealliance/wasi", rev = "b381fe3b35ba061a4f2ab7578c397424752e5e75" }
 
 [dev-dependencies]
 futures-util = { version = "0.3.16", default-features = false }
