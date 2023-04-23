@@ -18,5 +18,6 @@ pub async fn s3_list_buckets() -> ListBucketsOutput {
 #[tokio::test]
 pub async fn test_s3_list_buckets() {
     let result = s3_list_buckets().await;
-    assert!(result.buckets().unwrap().len() > 0);
+    let buckets = result.buckets().unwrap();
+    assert!(buckets.len() > 0);
 }
