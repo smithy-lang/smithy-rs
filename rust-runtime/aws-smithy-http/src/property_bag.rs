@@ -18,8 +18,33 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-type AnyMap =
-    HashMap<TypeId, (&'static str, Box<dyn Any + Send + Sync>), BuildHasherDefault<IdHasher>>;
+type AnyMap = HashMap<TypeId, NamedType, BuildHasherDefault<IdHasher>>;
+
+struct NamedType {
+    name: &'static str,
+    value: Box<dyn Any + Send + Sync>,
+}
+
+impl NamedType {
+    fn as_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.value.downcast_mut()
+    }
+
+    fn as_ref<T: 'static>(&self) -> Option<&T> {
+        self.value.downcast_ref()
+    }
+
+    fn assume<T: 'static>(self) -> Option<T> {
+        self.value.downcast().map(|t| *t).ok()
+    }
+
+    fn new<T: Any + Send + Sync>(value: T) -> Self {
+        Self {
+            name: std::any::type_name::<T>(),
+            value: Box::new(value),
+        }
+    }
+}
 
 // With TypeIds as keys, there's no need to hash them. They are already hashes
 // themselves, coming from the compiler. The IdHasher just holds the u64 of
@@ -83,16 +108,8 @@ impl PropertyBag {
     /// ```
     pub fn insert<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {
         self.map
-            .insert(
-                TypeId::of::<T>(),
-                (std::any::type_name::<T>(), Box::new(val)),
-            )
-            .and_then(|(_, boxed)| {
-                (boxed as Box<dyn Any + 'static>)
-                    .downcast()
-                    .ok()
-                    .map(|boxed| *boxed)
-            })
+            .insert(TypeId::of::<T>(), NamedType::new(val))
+            .and_then(|val| val.assume())
     }
 
     /// Get a reference to a type previously inserted on this `PropertyBag`.
@@ -110,12 +127,16 @@ impl PropertyBag {
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
         self.map
             .get(&TypeId::of::<T>())
-            .and_then(|(_, boxed)| (&**boxed as &(dyn Any + 'static)).downcast_ref())
+            .and_then(|val| val.as_ref())
     }
 
     /// Returns an iterator of the types contained in this PropertyBag
+    ///
+    /// # Stability
+    /// This method is unstable and may be removed or changed in a future release. The exact
+    /// format of the returned types may also change.
     pub fn contents(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.map.values().map(|(name, _)| *name)
+        self.map.values().map(|tpe| tpe.name)
     }
 
     /// Get a mutable reference to a type previously inserted on this `PropertyBag`.
@@ -133,7 +154,7 @@ impl PropertyBag {
     pub fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
         self.map
             .get_mut(&TypeId::of::<T>())
-            .and_then(|(_, boxed)| (&mut **boxed as &mut (dyn Any + 'static)).downcast_mut())
+            .map(|val| val.as_mut().expect("type mismatch!"))
     }
 
     /// Remove a type from this `PropertyBag`.
@@ -150,8 +171,8 @@ impl PropertyBag {
     /// assert!(props.get::<i32>().is_none());
     /// ```
     pub fn remove<T: Send + Sync + 'static>(&mut self) -> Option<T> {
-        self.map.remove(&TypeId::of::<T>()).and_then(|(_, boxed)| {
-            (boxed as Box<dyn Any + 'static>)
+        self.map.remove(&TypeId::of::<T>()).and_then(|tpe| {
+            (tpe.value as Box<dyn Any + 'static>)
                 .downcast()
                 .ok()
                 .map(|boxed| *boxed)
