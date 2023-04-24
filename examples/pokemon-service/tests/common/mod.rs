@@ -23,6 +23,10 @@ pub async fn run_server() -> ChildDrop {
     ChildDrop(child)
 }
 
+pub fn base_url() -> String {
+    format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}")
+}
+
 pub fn client() -> Client<DynConnector, DynMiddleware<DynConnector>> {
     let authority = Authority::from_str(&format!("{DEFAULT_ADDRESS}:{DEFAULT_PORT}"))
         .expect("could not parse authority");
