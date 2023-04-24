@@ -11,7 +11,9 @@ use crate::provider_config::ProviderConfig;
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, ProvideCredentials,
+};
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::operation::assume_role::AssumeRoleInput;
 use aws_sdk_sts::{config::Credentials, Config};
@@ -164,7 +166,7 @@ pub(super) mod named {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
     use std::borrow::Cow;
 
     #[derive(Debug)]

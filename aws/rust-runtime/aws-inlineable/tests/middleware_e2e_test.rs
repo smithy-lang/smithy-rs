@@ -10,7 +10,7 @@ use std::fmt::{Display, Formatter};
 use std::time::{Duration, UNIX_EPOCH};
 
 use aws_credential_types::cache::CredentialsCache;
-use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::provider::credentials::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;

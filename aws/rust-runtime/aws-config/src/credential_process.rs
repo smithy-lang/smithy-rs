@@ -6,7 +6,9 @@
 //! Credentials Provider for external process
 
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials, RefreshableCredentials};
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_credential_types::Credentials;
 use aws_smithy_json::deserialize::Token;
 use std::fmt;
@@ -260,7 +262,7 @@ pub(crate) fn parse_credential_process_json_credentials(
 #[cfg(test)]
 mod test {
     use crate::credential_process::CredentialProcessProvider;
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;

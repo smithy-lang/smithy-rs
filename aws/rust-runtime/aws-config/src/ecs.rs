@@ -51,7 +51,9 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::net::IpAddr;
 
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_smithy_client::erase::boxclone::BoxCloneService;
 use aws_smithy_http::endpoint::apply_endpoint;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -476,7 +478,7 @@ mod test {
     use crate::provider_config::ProviderConfig;
     use crate::test_case::GenericTestResult;
 
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
     use aws_credential_types::Credentials;
     use aws_types::os_shim_internal::Env;
 

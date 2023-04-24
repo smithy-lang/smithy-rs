@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use aws_credential_types::cache::CredentialsCache;
-use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::provider::credentials::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
@@ -331,7 +331,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::credentials::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
@@ -352,7 +352,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::credentials::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...

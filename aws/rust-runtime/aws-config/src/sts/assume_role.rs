@@ -7,7 +7,9 @@
 
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::cache::CredentialsCache;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::operation::assume_role::{AssumeRoleError, AssumeRoleInput};
 use aws_sdk_sts::types::PolicyDescriptorType;
@@ -300,7 +302,7 @@ mod test {
     use crate::provider_config::ProviderConfig;
     use crate::sts::AssumeRoleProvider;
     use aws_credential_types::credential_fn::provide_credentials_fn;
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
     use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::TokioSleep;

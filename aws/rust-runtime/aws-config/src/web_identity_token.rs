@@ -63,7 +63,9 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_sdk_sts::config::Region;
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::operation::assume_role_with_web_identity::AssumeRoleWithWebIdentityInput;
@@ -260,7 +262,7 @@ mod test {
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
-    use aws_credential_types::provider::error::CredentialsError;
+    use aws_credential_types::provider::credentials::error::CredentialsError;
     use aws_sdk_sts::config::Region;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_types::error::display::DisplayErrorContext;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_credential_types::provider::{self, error::CredentialsError};
+use aws_credential_types::provider::credentials::{self as provider, error::CredentialsError};
 use aws_credential_types::Credentials as AwsCredentials;
 use aws_sdk_sts::types::Credentials as StsCredentials;
 

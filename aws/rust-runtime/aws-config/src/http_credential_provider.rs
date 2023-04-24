@@ -8,7 +8,7 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
-use aws_credential_types::provider::{self, error::CredentialsError};
+use aws_credential_types::provider::credentials::{self as provider, error::CredentialsError};
 use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::ConnectorSettings;
@@ -207,7 +207,7 @@ mod test {
     use crate::http_credential_provider::{
         CredentialsResponseParser, HttpCredentialRetryClassifier,
     };
-    use aws_credential_types::provider::error::CredentialsError;
+    use aws_credential_types::provider::credentials::error::CredentialsError;
     use aws_credential_types::Credentials;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;

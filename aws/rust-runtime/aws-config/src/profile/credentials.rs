@@ -28,7 +28,9 @@ use crate::profile::parser::ProfileFileLoadError;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -82,7 +84,7 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// NOTE: Currently only the `Environment` credential source is supported although it is possible to
 /// provide custom sources:
 /// ```no_run
-/// use aws_credential_types::provider::{self, future, ProvideCredentials};
+/// use aws_credential_types::provider::credentials::{self as provider, future, ProvideCredentials};
 /// use aws_config::profile::ProfileFileCredentialsProvider;
 /// #[derive(Debug)]
 /// struct MyCustomProvider;
@@ -346,7 +348,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```no_run
-    /// use aws_credential_types::provider::{self, future, ProvideCredentials};
+    /// use aws_credential_types::provider::credentials::{self as provider, future, ProvideCredentials};
     /// use aws_config::profile::ProfileFileCredentialsProvider;
     /// #[derive(Debug)]
     /// struct MyCustomProvider;

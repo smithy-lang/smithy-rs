@@ -56,7 +56,7 @@
 //! Override configuration after construction of `SdkConfig`:
 //!
 //! ```no_run
-//! # use aws_credential_types::provider::ProvideCredentials;
+//! # use aws_credential_types::provider::credentials::ProvideCredentials;
 //! # use aws_types::SdkConfig;
 //! # mod aws_sdk_dynamodb {
 //! #   pub mod config {
@@ -64,7 +64,7 @@
 //! #     impl Builder {
 //! #       pub fn credentials_provider(
 //! #         self,
-//! #         credentials_provider: impl aws_credential_types::provider::ProvideCredentials + 'static) -> Self { self }
+//! #         credentials_provider: impl aws_credential_types::provider::credentials::ProvideCredentials + 'static) -> Self { self }
 //! #       pub fn build(self) -> Builder { self }
 //! #     }
 //! #     impl From<&aws_types::SdkConfig> for Builder {
@@ -153,7 +153,9 @@ mod loader {
     use std::sync::Arc;
 
     use aws_credential_types::cache::CredentialsCache;
-    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_credential_types::provider::credentials::{
+        ProvideCredentials, SharedCredentialsProvider,
+    };
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::HttpConnector;
     use aws_smithy_types::retry::RetryConfig;
@@ -607,7 +609,7 @@ mod loader {
 
     #[cfg(test)]
     mod test {
-        use aws_credential_types::provider::ProvideCredentials;
+        use aws_credential_types::provider::credentials::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::DynConnector;
         use aws_smithy_client::never::NeverConnector;

@@ -5,7 +5,7 @@
 
 use crate::provider_config::ProviderConfig;
 
-use aws_credential_types::provider::{self, ProvideCredentials};
+use aws_credential_types::provider::credentials::{self as provider, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;

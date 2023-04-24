@@ -5,7 +5,9 @@
 
 use std::env::VarError;
 
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
 
@@ -101,7 +103,9 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 
 #[cfg(test)]
 mod test {
-    use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
+    use aws_credential_types::provider::credentials::{
+        error::CredentialsError, ProvideCredentials,
+    };
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
 

@@ -13,7 +13,9 @@ use crate::imds;
 use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{
+    self as provider, error::CredentialsError, future, ProvideCredentials,
+};
 use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
@@ -299,7 +301,7 @@ mod test {
     };
     use crate::imds::credentials::ImdsCredentialsProvider;
     use crate::provider_config::ProviderConfig;
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
     use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
@@ -425,7 +427,7 @@ mod test {
         let actual = provider.provide_credentials().await;
         assert!(matches!(
             actual,
-            Err(aws_credential_types::provider::error::CredentialsError::CredentialsNotLoaded(_))
+            Err(aws_credential_types::provider::credentials::error::CredentialsError::CredentialsNotLoaded(_))
         ));
     }
 

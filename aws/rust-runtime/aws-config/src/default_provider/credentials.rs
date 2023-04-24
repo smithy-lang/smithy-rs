@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use aws_credential_types::provider::{self, future, ProvideCredentials};
+use aws_credential_types::provider::credentials::{self as provider, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use tracing::Instrument;
 
@@ -198,7 +198,7 @@ impl Builder {
 
 #[cfg(test)]
 mod test {
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::provider::credentials::ProvideCredentials;
 
     use crate::default_provider::credentials::DefaultCredentialsChain;
 
@@ -324,7 +324,7 @@ mod test {
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
         use crate::provider_config::ProviderConfig;
-        use aws_credential_types::provider::error::CredentialsError;
+        use aws_credential_types::provider::credentials::error::CredentialsError;
         use aws_credential_types::time_source::TimeSource;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::boxclone::BoxCloneService;
