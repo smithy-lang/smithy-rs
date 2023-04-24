@@ -10,14 +10,17 @@ use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
 use aws_runtime::recursion_detection::RecursionDetectionInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::endpoint::Params;
 use aws_sdk_s3::operation::list_objects_v2::{
     ListObjectsV2Error, ListObjectsV2Input, ListObjectsV2Output,
 };
 use aws_sdk_s3::primitives::SdkBody;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::endpoint::SharedEndpointResolver;
 use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
-use aws_smithy_runtime_api::client::endpoints::StaticUriEndpointResolver;
+use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver;
+use aws_smithy_runtime_api::client::interceptors::error::ContextAttachedError;
 use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
@@ -74,7 +77,11 @@ async fn sra_test() {
 async fn sra_manual_test() {
     tracing_subscriber::fmt::init();
 
-    struct ManualServiceRuntimePlugin(TestConnection<&'static str>);
+    struct ManualServiceRuntimePlugin {
+        connector: TestConnection<&'static str>,
+        endpoint_resolver: SharedEndpointResolver<Params>,
+        credentials_cache: SharedCredentialsCache,
+    }
 
     impl RuntimePlugin for ManualServiceRuntimePlugin {
         fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
@@ -83,9 +90,7 @@ async fn sra_manual_test() {
                     .identity_resolver(
                         aws_runtime::auth::sigv4::SCHEME_ID,
                         aws_runtime::identity::credentials::CredentialsIdentityResolver::new(
-                            SharedCredentialsCache::new(CredentialsCache::lazy().create_cache(
-                                SharedCredentialsProvider::new(Credentials::for_tests()),
-                            )),
+                            self.credentials_cache.clone(),
                         ),
                     )
                     .identity_resolver(
@@ -110,13 +115,9 @@ async fn sra_manual_test() {
                 ),
             );
 
-            cfg.set_endpoint_resolver(DefaultEndpointResolver::new(
-                aws_smithy_http::endpoint::SharedEndpointResolver::new(
-                    aws_sdk_s3::endpoint::DefaultResolver::new(),
-                ),
-            ));
+            cfg.set_endpoint_resolver(DefaultEndpointResolver::new(self.endpoint_resolver.clone()));
 
-            let params_builder = aws_sdk_s3::endpoint::Params::builder()
+            let params_builder = Params::builder()
                 .set_region(Some("us-east-1".to_owned()))
                 .set_endpoint(Some("https://s3.us-east-1.amazonaws.com/".to_owned()));
             cfg.put(params_builder);
@@ -125,8 +126,9 @@ async fn sra_manual_test() {
                 aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy::default(),
             );
 
-            let connection: Box<dyn Connection> =
-                Box::new(DynConnectorAdapter::new(DynConnector::new(self.0.clone())));
+            let connection: Box<dyn Connection> = Box::new(DynConnectorAdapter::new(
+                DynConnector::new(self.connector.clone()),
+            ));
             cfg.set_connection(connection);
 
             cfg.set_trace_probe({
@@ -189,12 +191,10 @@ async fn sra_manual_test() {
                     let input = context.input()?;
                     let input = input
                         .downcast_ref::<ListObjectsV2Input>()
-                        .ok_or_else(|| InterceptorError::invalid_input_access())?;
+                        .ok_or_else(|| "failed to downcast to ListObjectsV2Input")?;
                     let mut params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or(InterceptorError::read_before_execution(
-                            "missing endpoint params builder",
-                        ))?
+                        .ok_or_else(|| "missing endpoint params builder")?
                         .clone();
                     params_builder = params_builder.set_bucket(input.bucket.clone());
                     cfg.put(params_builder);
@@ -213,13 +213,11 @@ async fn sra_manual_test() {
                 ) -> Result<(), BoxError> {
                     let params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or(InterceptorError::read_before_execution(
-                            "missing endpoint params builder",
-                        ))?
+                        .ok_or_else(|| "missing endpoint params builder")?
                         .clone();
-                    let params = params_builder
-                        .build()
-                        .map_err(InterceptorError::read_before_execution)?;
+                    let params = params_builder.build().map_err(|err| {
+                        ContextAttachedError::new("endpoint params could not be built", err)
+                    })?;
                     cfg.put(
                         aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams::new(
                             params,
@@ -278,8 +276,21 @@ async fn sra_manual_test() {
         }
     }
 
+    let endpoint_resolver =
+        SharedEndpointResolver::new(aws_sdk_s3::endpoint::DefaultResolver::new());
+    let credentials_cache = SharedCredentialsCache::new(
+        CredentialsCache::lazy()
+            .create_cache(SharedCredentialsProvider::new(Credentials::for_tests())),
+    );
+
+    let service_runtime_plugin = ManualServiceRuntimePlugin {
+        connector: conn.clone(),
+        endpoint_resolver,
+        credentials_cache,
+    };
+
     let runtime_plugins = aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins::new()
-        .with_client_plugin(ManualServiceRuntimePlugin(conn.clone()))
+        .with_client_plugin(service_runtime_plugin)
         .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new())
         .with_operation_plugin(ListObjectsV2RetryClassifiers)
         .with_operation_plugin(ManualOperationRuntimePlugin);
