@@ -23,5 +23,7 @@ mod credentials_impl;
 pub mod provider;
 #[doc(hidden)]
 pub mod time_source;
+mod token_impl;
 
 pub use credentials_impl::Credentials;
+pub use token_impl::AccessToken;
