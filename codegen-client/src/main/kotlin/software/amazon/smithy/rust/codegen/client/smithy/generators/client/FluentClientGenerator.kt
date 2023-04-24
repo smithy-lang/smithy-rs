@@ -55,12 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
     private val reexportSmithyClientBuilder: Boolean = true,
-    private val generics: FluentClientGenerics = FlexibleClientGenerics(
-        connectorDefault = null,
-        middlewareDefault = null,
-        retryDefault = RuntimeType.smithyClient(codegenContext.runtimeConfig).resolve("retry::Standard"),
-        client = RuntimeType.smithyClient(codegenContext.runtimeConfig),
-    ),
+    private val generics: FluentClientGenerics,
     private val customizations: List<FluentClientCustomization> = emptyList(),
     private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
         .resolve("retry::DefaultResponseRetryClassifier"),
