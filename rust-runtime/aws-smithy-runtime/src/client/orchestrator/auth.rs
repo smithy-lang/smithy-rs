@@ -195,6 +195,7 @@ mod tests {
             .finish();
 
         assert_eq!(
+            // "YTpi" == "a:b" in base64
             "Basic YTpi",
             context
                 .request()
