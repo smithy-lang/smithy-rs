@@ -6,6 +6,8 @@
 use crate::operation::Operation;
 use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 
+use super::HttpLayer;
+
 /// A wrapper struct for composing [`Plugin`]s.
 /// It is used as input for the `builder_with_plugins` method on the generate service struct
 /// (e.g. `PokemonService::builder_with_plugins`).
@@ -167,6 +169,11 @@ impl<P> PluginPipeline<P> {
     /// in registration order.
     pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<NewPlugin, P>> {
         PluginPipeline(PluginStack::new(new_plugin, self.0))
+    }
+
+    /// Applies a single [`tower::Layer`] to all operations _before_ they are deserialized.
+    pub fn http_layer<L>(self, layer: L) -> PluginPipeline<PluginStack<HttpLayer<L>, P>> {
+        PluginPipeline(PluginStack::new(HttpLayer(layer), self.0))
     }
 }
 
