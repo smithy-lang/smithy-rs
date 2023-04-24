@@ -47,7 +47,7 @@ can be used directly.
 - `doc-open`: builds and opens the rustdoc documentation
 - `lambda_invoke`: invokes a running server 
 - `lambda_watch`: runs the service on an emulated AWS Lambda environment
-- `run`: runs the Pokemon service
+- `run`: runs the Pokémon service
 - `test`: runs integration and unit tests
 
 
