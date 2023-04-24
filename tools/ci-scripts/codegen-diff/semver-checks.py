@@ -34,9 +34,16 @@ def main(skip_generation=False):
     os.chdir(sdk_directory)
 
     failed = False
+    # TODO(enableNewSmithyRuntime): Remove the deny list below
+    deny_list = [
+        "aws-runtime",
+        "aws-runtime-api",
+        "aws-smithy-runtime",
+        "aws-smithy-runtime-api",
+    ]
     for path in os.listdir():
         eprint(f'checking {path}...', end='')
-        if get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
+        if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
             (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
                                     f'--baseline-rev {BASE_BRANCH} '
                                     # in order to get semver-checks to work with publish-false crates, need to specify
