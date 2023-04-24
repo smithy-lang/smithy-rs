@@ -38,17 +38,19 @@ fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
         CargoDependency.smithyRuntime(runtimeConfig).withFeature("http-auth").toType()
     val smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-auth").toType()
+    val authHttp = smithyRuntime.resolve("client::auth::http")
+    val authHttpApi = smithyRuntimeApi.resolve("client::auth::http")
     return arrayOf(
-        "ApiKeyAuthScheme" to smithyRuntime.resolve("client::auth::http::ApiKeyAuthScheme"),
-        "ApiKeyLocation" to smithyRuntime.resolve("client::auth::http::ApiKeyLocation"),
+        "ApiKeyAuthScheme" to authHttp.resolve("ApiKeyAuthScheme"),
+        "ApiKeyLocation" to authHttp.resolve("ApiKeyLocation"),
         "AuthOptionListResolver" to smithyRuntimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
-        "BasicAuthScheme" to smithyRuntime.resolve("client::auth::http::BasicAuthScheme"),
-        "BearerAuthScheme" to smithyRuntime.resolve("client::auth::http::BearerAuthScheme"),
-        "DigestAuthScheme" to smithyRuntime.resolve("client::auth::http::DigestAuthScheme"),
-        "HTTP_API_KEY_AUTH_SCHEME_ID" to smithyRuntimeApi.resolve("client::auth::http::HTTP_API_KEY_AUTH_SCHEME_ID"),
-        "HTTP_BASIC_AUTH_SCHEME_ID" to smithyRuntimeApi.resolve("client::auth::http::HTTP_BASIC_AUTH_SCHEME_ID"),
-        "HTTP_BEARER_AUTH_SCHEME_ID" to smithyRuntimeApi.resolve("client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID"),
-        "HTTP_DIGEST_AUTH_SCHEME_ID" to smithyRuntimeApi.resolve("client::auth::http::HTTP_DIGEST_AUTH_SCHEME_ID"),
+        "BasicAuthScheme" to authHttp.resolve("BasicAuthScheme"),
+        "BearerAuthScheme" to authHttp.resolve("BearerAuthScheme"),
+        "DigestAuthScheme" to authHttp.resolve("DigestAuthScheme"),
+        "HTTP_API_KEY_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_API_KEY_AUTH_SCHEME_ID"),
+        "HTTP_BASIC_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_BASIC_AUTH_SCHEME_ID"),
+        "HTTP_BEARER_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
+        "HTTP_DIGEST_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_DIGEST_AUTH_SCHEME_ID"),
         "HttpAuthOption" to smithyRuntimeApi.resolve("client::orchestrator::HttpAuthOption"),
         "IdentityResolver" to smithyRuntimeApi.resolve("client::identity::IdentityResolver"),
         "IdentityResolvers" to smithyRuntimeApi.resolve("client::identity::IdentityResolvers"),
@@ -58,17 +60,17 @@ fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     )
 }
 
-private data class AuthSchemes(
+private data class HttpAuthSchemes(
     val apiKey: Boolean,
     val basic: Boolean,
     val bearer: Boolean,
     val digest: Boolean,
 ) {
     companion object {
-        fun from(codegenContext: ClientCodegenContext): AuthSchemes {
+        fun from(codegenContext: ClientCodegenContext): HttpAuthSchemes {
             val authSchemes = ServiceIndex.of(codegenContext.model).getAuthSchemes(codegenContext.serviceShape).keys
             val newRuntimeEnabled = codegenContext.settings.codegenConfig.enableNewSmithyRuntime
-            return AuthSchemes(
+            return HttpAuthSchemes(
                 apiKey = newRuntimeEnabled && authSchemes.contains(HttpApiKeyAuthTrait.ID),
                 basic = newRuntimeEnabled && authSchemes.contains(HttpBasicAuthTrait.ID),
                 bearer = newRuntimeEnabled && authSchemes.contains(HttpBearerAuthTrait.ID),
@@ -90,7 +92,7 @@ class HttpAuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        AuthSchemes.from(codegenContext).let { authSchemes ->
+        HttpAuthSchemes.from(codegenContext).let { authSchemes ->
             baseCustomizations.letIf(authSchemes.anyEnabled()) {
                 it + HttpAuthConfigCustomization(codegenContext, authSchemes)
             }
@@ -100,7 +102,7 @@ class HttpAuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        AuthSchemes.from(codegenContext).let { authSchemes ->
+        HttpAuthSchemes.from(codegenContext).let { authSchemes ->
             baseCustomizations.letIf(authSchemes.anyEnabled()) {
                 it + HttpAuthServiceRuntimePluginCustomization(codegenContext, authSchemes)
             }
@@ -111,14 +113,14 @@ class HttpAuthDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
-        AuthSchemes.from(codegenContext).let { authSchemes ->
+        HttpAuthSchemes.from(codegenContext).let { authSchemes ->
             baseCustomizations.letIf(authSchemes.anyEnabled()) {
                 it + HttpAuthOperationRuntimePluginCustomization(codegenContext)
             }
         }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val authSchemes = AuthSchemes.from(codegenContext)
+        val authSchemes = HttpAuthSchemes.from(codegenContext)
         if (authSchemes.anyEnabled()) {
             rustCrate.withModule(ClientRustModule.Config) {
                 val codegenScope = codegenScope(codegenContext.runtimeConfig)
@@ -135,7 +137,7 @@ class HttpAuthDecorator : ClientCodegenDecorator {
 
 private class HttpAuthServiceRuntimePluginCustomization(
     codegenContext: ClientCodegenContext,
-    private val authSchemes: AuthSchemes,
+    private val authSchemes: HttpAuthSchemes,
 ) : ServiceRuntimePluginCustomization() {
     private val serviceShape = codegenContext.serviceShape
     private val codegenScope = codegenScope(codegenContext.runtimeConfig)
@@ -254,7 +256,7 @@ private class HttpAuthOperationRuntimePluginCustomization(
 
 private class HttpAuthConfigCustomization(
     codegenContext: ClientCodegenContext,
-    private val authSchemes: AuthSchemes,
+    private val authSchemes: HttpAuthSchemes,
 ) : ConfigCustomization() {
     private val codegenScope = codegenScope(codegenContext.runtimeConfig)
 
