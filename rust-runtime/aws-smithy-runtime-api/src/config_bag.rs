@@ -9,19 +9,39 @@
 //! with the following properties:
 //! 1. A new layer of configuration may be applied onto an existing configuration structure without modifying it or taking ownership.
 //! 2. No lifetime shenanigans to deal with
-use aws_smithy_http::property_bag::PropertyBag;
-use std::fmt::Debug;
-use std::ops::Deref;
+mod typeid_map;
+
+use crate::config_bag::typeid_map::TypeIdMap;
+
+use std::any::{type_name, Any, TypeId};
+use std::collections::HashSet;
+
+use std::fmt::{Debug, Formatter};
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// Layered Configuration Structure
 ///
 /// [`ConfigBag`] is the "unlocked" form of the bag. Only the top layer of the bag may be unlocked.
 #[must_use]
-#[derive(Debug)]
 pub struct ConfigBag {
     head: Layer,
     tail: Option<FrozenConfigBag>,
+}
+
+impl Debug for ConfigBag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        struct Layers<'a>(&'a ConfigBag);
+        impl Debug for Layers<'_> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                f.debug_list().entries(self.0.layers()).finish()
+            }
+        }
+        f.debug_struct("ConfigBag")
+            .field("layers", &Layers(&self))
+            .finish()
+    }
 }
 
 /// Layered Configuration Structure
@@ -39,26 +59,183 @@ impl Deref for FrozenConfigBag {
     }
 }
 
-pub trait Persist {
-    fn layer_name(&self) -> &'static str;
-    fn persist(&self, layer: &mut ConfigBag);
+pub(crate) mod value {
+    #[derive(Debug)]
+    pub enum Value<T> {
+        Set(T),
+        ExplicitlyUnset(&'static str),
+    }
+}
+use value::Value;
+
+impl<T: Default> Default for Value<T> {
+    fn default() -> Self {
+        Self::Set(Default::default())
+    }
 }
 
-pub trait Load: Sized {
-    fn load(bag: &ConfigBag) -> Option<Self>;
+impl Value<DebugErased> {
+    fn as_ref<T: Send + Sync + 'static>(&self) -> Value<&T> {
+        match self {
+            Value::Set(v) => Value::Set(v.as_ref().expect("typechecked")),
+            Value::ExplicitlyUnset(s) => Value::ExplicitlyUnset(s),
+        }
+    }
 }
 
-pub trait ConfigLayer: Persist + Load {}
-
-enum Value<T> {
-    Set(T),
-    ExplicitlyUnset,
+struct DebugErased {
+    field: Box<dyn Any + Send + Sync>,
+    type_name: &'static str,
+    debug: Box<dyn Fn(&DebugErased, &mut Formatter<'_>) -> std::fmt::Result>,
 }
 
-#[derive(Debug)]
-struct Layer {
+impl Debug for DebugErased {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        (self.debug)(&self, f)
+    }
+}
+
+impl DebugErased {
+    fn new<T: Send + Sync + Debug + 'static>(value: T) -> Self {
+        let debug = |value: &DebugErased, f: &mut Formatter<'_>| {
+            Debug::fmt(
+                value
+                    .as_ref::<T>()
+                    .expect(&format!("typechecked: {:?}", type_name::<T>())),
+                f,
+            )
+        };
+        let name = type_name::<T>();
+        dbg!("inserting: ", name, TypeId::of::<T>());
+        Self {
+            field: Box::new(value),
+            type_name: name,
+            debug: Box::new(debug),
+        }
+    }
+
+    fn as_ref<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.field.downcast_ref()
+    }
+
+    fn as_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.field.downcast_mut()
+    }
+}
+
+pub struct Layer {
     name: &'static str,
-    props: PropertyBag,
+    props: TypeIdMap<DebugErased>,
+    sentinels: HashSet<TypeId>,
+}
+
+pub trait Store: Sized + Send + Sync + 'static {
+    type ReturnedType<'a>: Default + Send + Sync;
+    type StoredType: Send + Sync + Debug;
+
+    fn merge<'a>(
+        accum: Self::ReturnedType<'a>,
+        item: &'a Self::StoredType,
+    ) -> Self::ReturnedType<'a>;
+}
+
+#[non_exhaustive]
+pub struct StoreReplace {}
+#[non_exhaustive]
+pub struct StoreAppend {}
+
+pub trait Storable: Send + Sync + Debug + 'static {
+    type Storer: Store;
+}
+
+impl<U: Send + Sync + Debug + 'static> Store for StoreReplace {
+    type ReturnedType<'a> = Option<&'a U>;
+    type StoredType = Value<U>;
+
+    fn merge<'a>(
+        _accum: Self::ReturnedType<'a>,
+        item: &'a Self::StoredType,
+    ) -> Self::ReturnedType<'a> {
+        match item {
+            Value::Set(item) => Some(item),
+            Value::ExplicitlyUnset(_) => None,
+        }
+    }
+}
+
+impl<U: Send + Sync + Debug + 'static> Store for StoreAppend {
+    type ReturnedType<'a> = Vec<&'a U>;
+    type StoredType = Value<Vec<U>>;
+
+    fn merge<'a>(
+        mut accum: Self::ReturnedType<'a>,
+        item: &'a Self::StoredType,
+    ) -> Self::ReturnedType<'a> {
+        match item {
+            Value::Set(item) => accum.extend(item.iter()),
+            Value::ExplicitlyUnset(_) => accum.clear(),
+        }
+        accum
+    }
+}
+
+impl Debug for Layer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        struct Items<'a>(&'a Layer);
+        impl Debug for Items<'_> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                f.debug_list().entries(self.0.props.values()).finish()
+            }
+        }
+        f.debug_struct("Layer")
+            .field("name", &self.name)
+            .field("items", &Items(self))
+            .finish()
+    }
+}
+
+impl Layer {
+    pub fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
+        self.props
+            .insert(TypeId::of::<T>(), DebugErased::new(value));
+        self
+    }
+
+    pub fn get<T: Send + Sync + Store + 'static>(&self) -> Option<&T::StoredType> {
+        self.props
+            .get(&TypeId::of::<T>())
+            .map(|t| t.as_ref().expect("typechecked"))
+    }
+
+    pub fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
+        self.props
+            .get_mut(&TypeId::of::<T>())
+            .map(|t| t.as_mut().expect("typechecked"))
+    }
+
+    pub fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
+    where
+        T::StoredType: Default,
+    {
+        self.props
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| DebugErased::new(T::StoredType::default()))
+            .as_mut()
+            .expect("typechecked")
+    }
+
+    pub fn len(&self) -> usize {
+        self.props.len()
+    }
+}
+
+pub trait Accessor {
+    type Setter: Setter;
+    fn config(&self) -> &ConfigBag;
+}
+
+pub trait Setter {
+    fn config(&mut self) -> &mut ConfigBag;
 }
 
 fn no_op(_: &mut ConfigBag) {}
@@ -89,15 +266,12 @@ impl FrozenConfigBag {
         self.with_fn(name, no_op)
     }
 
-    pub fn with(&self, layer: impl Persist) -> ConfigBag {
-        self.with_fn(layer.layer_name(), |bag| layer.persist(bag))
-    }
-
     /// Add more items to the config bag
     pub fn with_fn(&self, name: &'static str, next: impl Fn(&mut ConfigBag)) -> ConfigBag {
         let new_layer = Layer {
             name,
-            props: PropertyBag::new(),
+            props: Default::default(),
+            sentinels: Default::default(),
         };
         let mut bag = ConfigBag {
             head: new_layer,
@@ -114,27 +288,63 @@ impl ConfigBag {
             head: Layer {
                 name: "base",
                 props: Default::default(),
+                sentinels: Default::default(),
             },
             tail: None,
         }
     }
 
+    pub fn store_put<T>(&mut self, item: T) -> &mut Self
+    where
+        T: Storable<Storer = StoreReplace>,
+    {
+        self.head.put::<StoreReplace>(Value::Set(item));
+        self
+    }
+
+    pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
+    where
+        T: Storable<Storer = StoreReplace>,
+    {
+        let item = match item {
+            Some(item) => Value::Set(item),
+            None => Value::ExplicitlyUnset(type_name::<T>()),
+        };
+        self.head.put::<StoreReplace>(item);
+        self
+    }
+
+    pub fn store_append<T>(&mut self, item: T) -> &mut Self
+    where
+        T: Storable<Storer = StoreAppend>,
+    {
+        match self.head.get_mut_or_default::<StoreAppend>() {
+            Value::Set(list) => list.push(item),
+            v @ Value::ExplicitlyUnset(_) => *v = Value::Set(vec![item]),
+        }
+        self
+    }
+
+    pub fn load<T: Storable>(&self) -> <T::Storer as Store>::ReturnedType<'_> {
+        self.sourced_get::<T::Storer>()
+    }
+
     /// Retrieve the value of type `T` from the bag if exists
     pub fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
-        let mut source = vec![];
-        let out = self.sourced_get(&mut source);
+        let out = self.sourced_get::<StoreReplace>();
         out
     }
 
     /// Insert `value` into the bag
     pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
-        self.head.props.insert(Value::Set(value));
+        self.head.put::<StoreReplace>(Value::Set(value));
         self
     }
 
     /// Remove `T` from this bag
-    pub fn unset<T: Send + Sync + 'static>(&mut self) -> &mut Self {
-        self.head.props.insert(Value::<T>::ExplicitlyUnset);
+    pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
+        self.head
+            .put::<StoreReplace>(Value::ExplicitlyUnset(type_name::<T>()));
         self
     }
 
@@ -166,37 +376,40 @@ impl ConfigBag {
         self.freeze().with_fn(name, next)
     }
 
-    pub fn with(self, layer: impl Persist) -> ConfigBag {
-        self.freeze().with(layer)
-    }
-
     pub fn add_layer(self, name: &'static str) -> ConfigBag {
         self.freeze().add_layer(name)
     }
 
-    pub fn sourced_get<T: Send + Sync + Debug + 'static>(
-        &self,
-        source_trail: &mut Vec<SourceInfo>,
-    ) -> Option<&T> {
-        // todo: optimize so we don't need to compute the source if it's unused
-        let bag = &self.head;
-        let inner_item = self
-            .tail
-            .as_ref()
-            .and_then(|bag| bag.sourced_get(source_trail));
-        let (item, source) = match bag.props.get::<Value<T>>() {
-            Some(Value::ExplicitlyUnset) => (None, SourceInfo::Unset { layer: bag.name }),
-            Some(Value::Set(v)) => (
-                Some(v),
-                SourceInfo::Set {
-                    layer: bag.name,
-                    value: format!("{:?}", v),
-                },
-            ),
-            None => (inner_item, SourceInfo::Inherit { layer: bag.name }),
-        };
-        source_trail.push(source);
+    pub fn sourced_get<T: Store>(&self) -> T::ReturnedType<'_> {
+        // could rewrite recursively or collect to SmallVec to avoid allocation
+        let mut item = T::ReturnedType::default();
+        for layer in self.layers().collect::<Vec<_>>().iter().rev() {
+            if let Some(layerd_item) = layer.get::<T>() {
+                item = T::merge(item, layerd_item);
+            }
+        }
         item
+    }
+
+    fn layers(&self) -> impl Iterator<Item = &Layer> {
+        struct BagIter<'a> {
+            bag: Option<&'a ConfigBag>,
+        }
+        impl<'a> Iterator for BagIter<'a> {
+            type Item = &'a Layer;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                let next = match self.bag {
+                    Some(bag) => Some(&bag.head),
+                    None => None,
+                };
+                if let Some(bag) = &mut self.bag {
+                    self.bag = bag.tail.as_deref();
+                }
+                next
+            }
+        }
+        BagIter { bag: Some(self) }
     }
 }
 
@@ -216,7 +429,6 @@ pub enum SourceInfo {
 #[cfg(test)]
 mod test {
     use super::ConfigBag;
-    use crate::config_bag::{Load, Persist};
 
     #[test]
     fn layered_property_bag() {
@@ -258,6 +470,7 @@ mod test {
         assert!(final_bag.get::<Prop2>().is_some());
         // we unset prop3
         assert!(final_bag.get::<Prop3>().is_none());
+        println!("{:#?}", final_bag);
     }
 
     #[test]
@@ -283,47 +496,7 @@ mod test {
 
         let mut open_bag = operation_config.with_fn("my_custom_info", |_bag: &mut ConfigBag| {});
         open_bag.put("foo");
-    }
 
-    #[test]
-    fn persist_trait() {
-        #[derive(Debug, Eq, PartialEq, Clone)]
-        struct MyConfig {
-            a: bool,
-            b: String,
-        }
-
-        #[derive(Debug)]
-        struct A(bool);
-        #[derive(Debug)]
-        struct B(String);
-
-        impl Persist for MyConfig {
-            fn layer_name(&self) -> &'static str {
-                "my_config"
-            }
-
-            fn persist(&self, layer: &mut ConfigBag) {
-                layer.put(A(self.a));
-                layer.put(B(self.b.clone()));
-            }
-        }
-        impl Load for MyConfig {
-            fn load(bag: &ConfigBag) -> Option<Self> {
-                Some(MyConfig {
-                    a: bag.get::<A>().unwrap().0,
-                    b: bag.get::<B>().unwrap().0.clone(),
-                })
-            }
-        }
-
-        let conf = MyConfig {
-            a: true,
-            b: "hello!".to_string(),
-        };
-
-        let bag = ConfigBag::base().with(conf.clone());
-
-        assert_eq!(MyConfig::load(&bag), Some(conf));
+        assert_eq!(open_bag.layers().count(), 4);
     }
 }

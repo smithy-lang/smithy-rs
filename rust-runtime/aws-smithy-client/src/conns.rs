@@ -13,7 +13,7 @@ pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 #[cfg(feature = "native-tls")]
 /// A `hyper` connector that uses the `native-tls` crate for TLS. To use this in a smithy client,
 /// wrap it in a [hyper_ext::Adapter](crate::hyper_ext::Adapter).
-pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
+pub type NativeTls = aws_smithy_native_tls::HttpsConnector; // hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
 #[cfg(feature = "rustls")]
 /// A smithy connector that uses the `rustls` crate for TLS.
