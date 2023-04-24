@@ -8,11 +8,15 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
-    extension::OperationExtensionExt, instrumentation::InstrumentExt, plugin::PluginPipeline,
-    request::request_id::ServerRequestIdProviderLayer, AddExtensionLayer,
+    extension::OperationExtensionExt,
+    instrumentation::InstrumentExt,
+    plugin::{alb_health_check::AlbHealthCheckLayer, PluginPipeline},
+    request::request_id::ServerRequestIdProviderLayer,
+    AddExtensionLayer,
 };
 use clap::Parser;
 
+use hyper::StatusCode;
 use plugin::PrintExt;
 
 use pokemon_service::{
@@ -47,7 +51,12 @@ pub async fn main() {
         // `Response::extensions`, or infer routing failure when it's missing.
         .insert_operation_extension()
         // Adds `tracing` spans and events to the request lifecycle.
-        .instrument();
+        .instrument()
+        // Handle `/ping` health check requests.
+        .http_layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+            StatusCode::OK
+        }));
+
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
