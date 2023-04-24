@@ -45,6 +45,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
      * Should emit code that looks like the following:
      ```
      .with_classifier(AwsErrorCodeClassifier::new())
+     ```
      */
     data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
 
