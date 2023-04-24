@@ -135,8 +135,9 @@ mod orchestrator {
     use aws_smithy_http::endpoint::SharedEndpointResolver;
     use aws_smithy_runtime::client::connections::adapter::DynConnectorAdapter;
     use aws_smithy_runtime::client::orchestrator::endpoints::DefaultEndpointResolver;
+    use aws_smithy_runtime_api::client::interceptors::error::ContextAttachedError;
     use aws_smithy_runtime_api::client::interceptors::{
-        Interceptor, InterceptorContext, InterceptorError, Interceptors,
+        Interceptor, InterceptorContext, Interceptors,
     };
     use aws_smithy_runtime_api::client::orchestrator::{
         BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, TraceProbe,
@@ -156,7 +157,7 @@ mod orchestrator {
     impl RuntimePlugin for ManualServiceRuntimePlugin {
         fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
             let identity_resolvers =
-                aws_smithy_runtime_api::client::orchestrator::IdentityResolvers::builder()
+                aws_smithy_runtime_api::client::identity::IdentityResolvers::builder()
                     .identity_resolver(
                         aws_runtime::auth::sigv4::SCHEME_ID,
                         aws_runtime::identity::credentials::CredentialsIdentityResolver::new(

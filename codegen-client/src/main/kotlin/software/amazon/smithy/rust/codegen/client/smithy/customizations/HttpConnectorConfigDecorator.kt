@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -17,21 +17,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-// TODO(enableNewSmithyRuntime): Delete this decorator since it's now in `codegen-client`
-class HttpConnectorDecorator : ClientCodegenDecorator {
-    override val name: String = "HttpConnectorDecorator"
+class HttpConnectorConfigDecorator : ClientCodegenDecorator {
+    override val name: String = "HttpConnectorConfigDecorator"
     override val order: Byte = 0
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations.letIf(!codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
             it + HttpConnectorConfigCustomization(codegenContext)
         }
 }
 
-class HttpConnectorConfigCustomization(
+private class HttpConnectorConfigCustomization(
     codegenContext: CodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -45,6 +44,7 @@ class HttpConnectorConfigCustomization(
             is ServiceConfig.ConfigStruct -> writable {
                 rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
             }
+
             is ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
@@ -56,9 +56,11 @@ class HttpConnectorConfigCustomization(
                     *codegenScope,
                 )
             }
+
             is ServiceConfig.BuilderStruct -> writable {
                 rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
             }
+
             ServiceConfig.BuilderImpl -> writable {
                 rustTemplate(
                     """
@@ -144,9 +146,11 @@ class HttpConnectorConfigCustomization(
                     *codegenScope,
                 )
             }
+
             is ServiceConfig.BuilderBuild -> writable {
                 rust("http_connector: self.http_connector,")
             }
+
             else -> emptySection
         }
     }

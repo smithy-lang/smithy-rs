@@ -26,8 +26,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+
+// TODO(enableNewSmithyRuntime): Delete this decorator when switching to the orchestrator
 
 /**
  * Inserts a ApiKeyAuth configuration into the operation
@@ -37,7 +38,8 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
     override val order: Byte = 10
 
     private fun applies(codegenContext: ClientCodegenContext) =
-        isSupportedApiKeyAuth(codegenContext)
+        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime &&
+            isSupportedApiKeyAuth(codegenContext)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
