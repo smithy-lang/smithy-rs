@@ -39,7 +39,7 @@ can be used directly.
 
 ### Make targets:
 
-- `codegen`: generates the Pokemon service crates (default)
+- `codegen`: generates the Pokémon service crates (default)
 - `build`: compiles the generated client and server
 - `clean`: deletes build artifacts
 - `clippy`: lints the code
