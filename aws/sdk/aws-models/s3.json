@@ -22652,92 +22652,173 @@
             }
         },
         "com.amazonaws.s3#Event": {
-            "type": "string",
-            "traits": {
-                "smithy.api#documentation": "<p>The bucket event for which to send notifications.</p>",
-                "smithy.api#enum": [
-                    {
-                        "value": "s3:ReducedRedundancyLostObject"
-                    },
-                    {
-                        "value": "s3:ObjectCreated:*"
-                    },
-                    {
-                        "value": "s3:ObjectCreated:Put"
-                    },
-                    {
-                        "value": "s3:ObjectCreated:Post"
-                    },
-                    {
-                        "value": "s3:ObjectCreated:Copy"
-                    },
-                    {
-                        "value": "s3:ObjectCreated:CompleteMultipartUpload"
-                    },
-                    {
-                        "value": "s3:ObjectRemoved:*"
-                    },
-                    {
-                        "value": "s3:ObjectRemoved:Delete"
-                    },
-                    {
-                        "value": "s3:ObjectRemoved:DeleteMarkerCreated"
-                    },
-                    {
-                        "value": "s3:ObjectRestore:*"
-                    },
-                    {
-                        "value": "s3:ObjectRestore:Post"
-                    },
-                    {
-                        "value": "s3:ObjectRestore:Completed"
-                    },
-                    {
-                        "value": "s3:Replication:*"
-                    },
-                    {
-                        "value": "s3:Replication:OperationFailedReplication"
-                    },
-                    {
-                        "value": "s3:Replication:OperationNotTracked"
-                    },
-                    {
-                        "value": "s3:Replication:OperationMissedThreshold"
-                    },
-                    {
-                        "value": "s3:Replication:OperationReplicatedAfterThreshold"
-                    },
-                    {
-                        "value": "s3:ObjectRestore:Delete"
-                    },
-                    {
-                        "value": "s3:LifecycleTransition"
-                    },
-                    {
-                        "value": "s3:IntelligentTiering"
-                    },
-                    {
-                        "value": "s3:ObjectAcl:Put"
-                    },
-                    {
-                        "value": "s3:LifecycleExpiration:*"
-                    },
-                    {
-                        "value": "s3:LifecycleExpiration:Delete"
-                    },
-                    {
-                        "value": "s3:LifecycleExpiration:DeleteMarkerCreated"
-                    },
-                    {
-                        "value": "s3:ObjectTagging:*"
-                    },
-                    {
-                        "value": "s3:ObjectTagging:Put"
-                    },
-                    {
-                        "value": "s3:ObjectTagging:Delete"
+            "type": "enum",
+            "members": {
+                "s3_ReducedRedundancyLostObject": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ReducedRedundancyLostObject"
                     }
-                ]
+                },
+                "s3_ObjectCreated_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectCreated:*"
+                    }
+                },
+                "s3_ObjectCreated_Put": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectCreated:Put"
+                    }
+                },
+                "s3_ObjectCreated_Post": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectCreated:Post"
+                    }
+                },
+                "s3_ObjectCreated_Copy": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectCreated:Copy"
+                    }
+                },
+                "s3_ObjectCreated_CompleteMultipartUpload": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectCreated:CompleteMultipartUpload"
+                    }
+                },
+                "s3_ObjectRemoved_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRemoved:*"
+                    }
+                },
+                "s3_ObjectRemoved_Delete": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRemoved:Delete"
+                    }
+                },
+                "s3_ObjectRemoved_DeleteMarkerCreated": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRemoved:DeleteMarkerCreated"
+                    }
+                },
+                "s3_ObjectRestore_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRestore:*"
+                    }
+                },
+                "s3_ObjectRestore_Post": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRestore:Post"
+                    }
+                },
+                "s3_ObjectRestore_Completed": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRestore:Completed"
+                    }
+                },
+                "s3_Replication_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:Replication:*"
+                    }
+                },
+                "s3_Replication_OperationFailedReplication": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:Replication:OperationFailedReplication"
+                    }
+                },
+                "s3_Replication_OperationNotTracked": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:Replication:OperationNotTracked"
+                    }
+                },
+                "s3_Replication_OperationMissedThreshold": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:Replication:OperationMissedThreshold"
+                    }
+                },
+                "s3_Replication_OperationReplicatedAfterThreshold": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:Replication:OperationReplicatedAfterThreshold"
+                    }
+                },
+                "s3_ObjectRestore_Delete": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectRestore:Delete"
+                    }
+                },
+                "s3_LifecycleTransition": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:LifecycleTransition"
+                    }
+                },
+                "s3_IntelligentTiering": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:IntelligentTiering"
+                    }
+                },
+                "s3_ObjectAcl_Put": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectAcl:Put"
+                    }
+                },
+                "s3_LifecycleExpiration_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:LifecycleExpiration:*"
+                    }
+                },
+                "s3_LifecycleExpiration_Delete": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:LifecycleExpiration:Delete"
+                    }
+                },
+                "s3_LifecycleExpiration_DeleteMarkerCreated": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:LifecycleExpiration:DeleteMarkerCreated"
+                    }
+                },
+                "s3_ObjectTagging_": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectTagging:*"
+                    }
+                },
+                "s3_ObjectTagging_Put": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectTagging:Put"
+                    }
+                },
+                "s3_ObjectTagging_Delete": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "s3:ObjectTagging:Delete"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The bucket event for which to send notifications.</p>"
             }
         },
         "com.amazonaws.s3#EventBridgeConfiguration": {
@@ -29111,6 +29192,12 @@
                     "traits": {
                         "smithy.api#enumValue": "GLACIER_IR"
                     }
+                },
+                "SNOW": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "SNOW"
+                    }
                 }
             }
         },
@@ -33175,6 +33262,12 @@
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#enumValue": "GLACIER_IR"
+                    }
+                },
+                "SNOW": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "SNOW"
                     }
                 }
             }
