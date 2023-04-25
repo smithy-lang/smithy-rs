@@ -228,12 +228,25 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Clone, Debug, Default)]")
+        writer.raw("#[derive(Clone, Default)]")
         writer.rustBlock("pub struct Builder") {
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
+
+        // Custom implementation for Debug so we don't need to enforce Debug down the chain
+        writer.rustBlock("impl std::fmt::Debug for Builder") {
+            writer.rustTemplate(
+                """
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let mut config = f.debug_struct("Builder");
+                    config.finish()
+                }
+                """,
+            )
+        }
+
         writer.rustBlock("impl Builder") {
             writer.docs("Constructs a config builder.")
             writer.rustTemplate("pub fn new() -> Self { Self::default() }")
