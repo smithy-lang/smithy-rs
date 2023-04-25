@@ -23,6 +23,12 @@ pub struct InvocationIdInterceptor {
 impl InvocationIdInterceptor {
     /// Creates a new `InvocationIdInterceptor`
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for InvocationIdInterceptor {
+    fn default() -> Self {
         let id = Uuid::new_v4();
         let id = id
             .to_string()
