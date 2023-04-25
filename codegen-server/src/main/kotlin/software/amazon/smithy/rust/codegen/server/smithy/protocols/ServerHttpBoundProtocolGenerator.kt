@@ -199,7 +199,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     "application/octet-stream" -> "#{Mime}::Mime = #{Mime}::APPLICATION_OCTET_STREAM;"
                     "application/x-www-form-urlencoded" -> "#{Mime}::Mime = #{Mime}::APPLICATION_WWW_FORM_URLENCODED;"
                     else ->
-                    """
+                        """
                     #{OnceCell}::sync::Lazy<#{Mime}::Mime> = #{OnceCell}::sync::Lazy::new(|| {
                         ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
                     });
