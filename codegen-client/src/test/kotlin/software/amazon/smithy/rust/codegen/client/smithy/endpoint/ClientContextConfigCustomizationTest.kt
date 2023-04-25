@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.endpoint
+package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.ClientContextConfigCustomization
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
