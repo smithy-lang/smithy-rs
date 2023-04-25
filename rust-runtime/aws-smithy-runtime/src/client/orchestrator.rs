@@ -63,9 +63,11 @@ pub async fn invoke(
         match retry_strategy.should_attempt_initial_request(cfg) {
             // Yes, let's make a request
             Ok(ShouldAttempt::Yes) => {}
-            // No, this request shouldn't be retried
+            // No, this request shouldn't be sent
             Ok(ShouldAttempt::No) => {
-                todo!("Create a new dispatch error for this case.")
+                return Err(Phase::dispatch(context).fail(
+                    "The retry strategy indicates that an initial request shouldn't be made, but it didn't specify why.",
+                ))
             }
             // No, we shouldn't make a request because...
             Err(err) => return Err(Phase::dispatch(context).fail(err)),

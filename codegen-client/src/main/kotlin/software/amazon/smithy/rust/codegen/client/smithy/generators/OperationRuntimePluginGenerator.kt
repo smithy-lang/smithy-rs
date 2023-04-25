@@ -41,10 +41,28 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
         }
     }
 
-    data class RuntimePluginImpls(
+    /**
+     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
+     *
+     * Should emit 1+ lines of code that look like the following:
+     * ```rust
+     * .with_classifier(AwsErrorCodeClassifier::new())
+     * .with_classifier(HttpStatusCodeClassifier::new())
+     * ```
+     */
+    data class RetryClassifier(
         val configBagName: String,
         val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("RuntimePluginImpls")
+    ) : OperationRuntimePluginSection("RetryClassifier")
+
+    /**
+     * Hook for adding supporting types for operation-specific runtime plugins.
+     * Examples include various operation-specific types (retry classifiers, config bag types, etc.)
+     */
+    data class RuntimePluginSupportingTypes(
+        val configBagName: String,
+        val operationShape: OperationShape,
+    ) : OperationRuntimePluginSection("RuntimePluginSupportingTypes")
 }
 
 typealias OperationRuntimePluginCustomization = NamedCustomization<OperationRuntimePluginSection>
@@ -63,6 +81,7 @@ class OperationRuntimePluginGenerator(
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
         )
     }
@@ -84,12 +103,17 @@ class OperationRuntimePluginGenerator(
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
                     cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{AuthOptionListResolverParams}::new()));
 
+                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+                    cfg.set_retry_classifiers(retry_classifiers);
+
                     #{additional_config}
                     Ok(())
                 }
             }
 
-            #{runtime_plugin_impls}
+            #{runtime_plugin_supporting_types}
             """,
             *codegenScope,
             "additional_config" to writable {
@@ -98,10 +122,13 @@ class OperationRuntimePluginGenerator(
                     OperationRuntimePluginSection.AdditionalConfig("cfg", operationShape),
                 )
             },
-            "runtime_plugin_impls" to writable {
+            "retry_classifier_customizations" to writable {
+                writeCustomizations(customizations, OperationRuntimePluginSection.RetryClassifier("cfg", operationShape))
+            },
+            "runtime_plugin_supporting_types" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationRuntimePluginSection.RuntimePluginImpls("cfg", operationShape),
+                    OperationRuntimePluginSection.RuntimePluginSupportingTypes("cfg", operationShape),
                 )
             },
         )

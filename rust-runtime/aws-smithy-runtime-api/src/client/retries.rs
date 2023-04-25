@@ -50,6 +50,8 @@ pub struct RetryClassifiers {
 impl RetryClassifiers {
     pub fn new() -> Self {
         Self {
+            // It's always expected that at least one classifier will be defined,
+            // so we eagerly allocate for it.
             inner: Vec::with_capacity(1),
         }
     }
@@ -66,16 +68,12 @@ impl RetryClassifiers {
 
 impl ClassifyRetry for RetryClassifiers {
     fn classify_retry(&self, error: &Error) -> Option<RetryReason> {
-        let mut retry_reason = None;
-
         for retry_classifier in self.inner.iter() {
-            retry_reason = retry_classifier.classify_retry(error);
-
-            if retry_reason.is_some() {
-                break;
+            if let Some(retry_reason) = retry_classifier.classify_retry(error) {
+                return Some(retry_reason);
             }
         }
 
-        retry_reason
+        None
     }
 }

@@ -6,6 +6,7 @@
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::retries::RetryReason;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+use std::borrow::Cow;
 
 /// A retry classifier for checking if an error is modeled as retryable.
 #[derive(Debug)]
@@ -50,16 +51,16 @@ const TRANSIENT_ERROR_STATUS_CODES: &[u16] = &[500, 502, 503, 504];
 /// The `Default` version will retry 500, 502, 503, and 504 errors.
 #[derive(Debug)]
 pub struct HttpStatusCodeClassifier {
-    retryable_status_codes: Vec<u16>,
+    retryable_status_codes: Cow<'static, [u16]>,
 }
 
 impl HttpStatusCodeClassifier {
     /// Given a `Vec<u16>` where the `u16`s represent status codes, create a retry classifier that will
     /// treat HTTP response with those status codes as retryable. The `Default` version will retry
     /// 500, 502, 503, and 504 errors.
-    pub fn new_from_codes(retryable_status_codes: Vec<u16>) -> Self {
+    pub fn new_from_codes(retryable_status_codes: impl Into<Cow<'static, [u16]>>) -> Self {
         Self {
-            retryable_status_codes,
+            retryable_status_codes: retryable_status_codes.into(),
         }
     }
 

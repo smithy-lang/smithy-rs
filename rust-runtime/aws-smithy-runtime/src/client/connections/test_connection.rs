@@ -188,7 +188,7 @@ impl TestConnection {
 
 impl Connection for TestConnection {
     fn call(&self, request: HttpRequest) -> BoxFallibleFut<HttpResponse> {
-        // TODO(orchestrator) Validate request
+        // TODO(enableNewSmithyRuntime): Validate request
 
         let res = if let Some((expected, resp)) = self.data.lock().unwrap().pop() {
             self.requests.lock().unwrap().push(ValidateRequest {

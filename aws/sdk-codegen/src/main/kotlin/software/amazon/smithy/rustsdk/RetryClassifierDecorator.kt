@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRun
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -79,7 +78,7 @@ class OperationRetryClassifiersFeature(
     )
 
     override fun section(section: OperationRuntimePluginSection) = when (section) {
-        is OperationRuntimePluginSection.RuntimePluginImpls -> writable {
+        is OperationRuntimePluginSection.RuntimePluginSupportingTypes -> writable {
             Attribute(derive(RuntimeType.Debug)).render(this)
             rustTemplate(
                 """
@@ -174,22 +173,16 @@ class OperationRetryClassifiersFeature(
                 """,
                 *codegenScope,
             )
+        }
 
-            docs(
-                """THIS IS UNSTABLE! NO TOUCHING! Depend on this at your own risk.
-                Return the default set of retry classifiers for this operation""",
-            )
-            Attribute.DocHidden.render(this)
+        is OperationRuntimePluginSection.RetryClassifier -> writable {
             rustTemplate(
                 """
-                pub fn default_retry_classifiers() -> #{RetryClassifiers} {
-                    #{RetryClassifiers}::new()
-                        .with_classifier(SmithyErrorClassifier::new())
-                        .with_classifier(AmzRetryAfterHeaderClassifier::new())
-                        .with_classifier(ModeledAsRetryableClassifier::new())
-                        .with_classifier(AwsErrorCodeClassifier::new())
-                        .with_classifier(HttpStatusCodeClassifier::new())
-                }
+                .with_classifier(SmithyErrorClassifier::new())
+                .with_classifier(AmzRetryAfterHeaderClassifier::new())
+                .with_classifier(ModeledAsRetryableClassifier::new())
+                .with_classifier(AwsErrorCodeClassifier::new())
+                .with_classifier(HttpStatusCodeClassifier::new())
                 """,
                 *codegenScope,
             )

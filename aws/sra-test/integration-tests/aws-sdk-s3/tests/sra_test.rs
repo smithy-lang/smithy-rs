@@ -263,19 +263,6 @@ async fn sra_manual_test() {
 "#).unwrap(),
             )]);
 
-    struct ListObjectsV2RetryClassifiers;
-
-    // TODO(orchestrator) perform this step in Codegen
-    impl RuntimePlugin for ListObjectsV2RetryClassifiers {
-        fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
-            cfg.set_retry_classifiers(
-                aws_sdk_s3::operation::list_objects_v2::default_retry_classifiers(),
-            );
-
-            Ok(())
-        }
-    }
-
     let endpoint_resolver =
         SharedEndpointResolver::new(aws_sdk_s3::endpoint::DefaultResolver::new());
     let credentials_cache = SharedCredentialsCache::new(
@@ -292,7 +279,6 @@ async fn sra_manual_test() {
     let runtime_plugins = aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins::new()
         .with_client_plugin(service_runtime_plugin)
         .with_operation_plugin(aws_sdk_s3::operation::list_objects_v2::ListObjectsV2::new())
-        .with_operation_plugin(ListObjectsV2RetryClassifiers)
         .with_operation_plugin(ManualOperationRuntimePlugin);
 
     let input = ListObjectsV2Input::builder()
