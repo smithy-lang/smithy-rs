@@ -18,6 +18,7 @@ aws-types = { path = "../aws-types" }
 http = "0.2.3"
 percent-encoding = "2.1.0"
 tracing = "0.1"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
