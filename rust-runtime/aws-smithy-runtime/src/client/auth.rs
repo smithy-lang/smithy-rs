@@ -5,5 +5,3 @@
 
 #[cfg(feature = "http-auth")]
 pub mod http;
-
-pub mod option_resolver;

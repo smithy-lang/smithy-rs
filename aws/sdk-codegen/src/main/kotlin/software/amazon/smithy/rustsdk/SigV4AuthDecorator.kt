@@ -136,6 +136,7 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
+                        signing_options.request_timestamp = cfg.request_time().unwrap_or_default().system_time();
 
                         let mut sigv4_properties = #{PropertyBag}::new();
                         sigv4_properties.insert(#{SigV4OperationSigningConfig} {
