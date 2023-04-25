@@ -62,7 +62,7 @@ impl RetryClassifiers {
         self
     }
 
-    // TODO make a map function so users can front-run or second-guess the classifier's decision
+    // TODO(https://github.com/awslabs/smithy-rs/issues/2632) make a map function so users can front-run or second-guess the classifier's decision
     // pub fn map_classifiers(mut self, fun: Fn() -> RetryClassifiers)
 }
 
