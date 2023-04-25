@@ -9,7 +9,8 @@ use aws_smithy_runtime_api::client::retries::RetryReason;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
 
-const THROTTLING_ERRORS: &[&str] = &[
+/// AWS error codes that represent throttling errors.
+pub const THROTTLING_ERRORS: &[&str] = &[
     "Throttling",
     "ThrottlingException",
     "ThrottledException",
@@ -25,7 +26,9 @@ const THROTTLING_ERRORS: &[&str] = &[
     "PriorRequestNotComplete",
     "EC2ThrottledException",
 ];
-const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
+
+/// AWS error codes that represent transient errors.
+pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
 #[derive(Debug)]
