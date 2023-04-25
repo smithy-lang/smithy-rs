@@ -342,8 +342,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn retry_classifiers(&self) -> &RetryClassifiers {
-        &*self
-            .get::<RetryClassifiers>()
+        self.get::<RetryClassifiers>()
             .expect("retry classifiers must be set")
     }
 

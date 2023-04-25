@@ -172,7 +172,7 @@ async fn sra_manual_test() {
                         .ok_or_else(|| "failed to downcast to ListObjectsV2Input")?;
                     let mut params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or_else(|| "missing endpoint params builder")?
+                        .ok_or("missing endpoint params builder")?
                         .clone();
                     params_builder = params_builder.set_bucket(input.bucket.clone());
                     cfg.put(params_builder);
@@ -191,7 +191,7 @@ async fn sra_manual_test() {
                 ) -> Result<(), BoxError> {
                     let params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or_else(|| "missing endpoint params builder")?
+                        .ok_or("missing endpoint params builder")?
                         .clone();
                     let params = params_builder.build().map_err(|err| {
                         ContextAttachedError::new("endpoint params could not be built", err)
