@@ -68,12 +68,7 @@ impl RetryClassifiers {
 
 impl ClassifyRetry for RetryClassifiers {
     fn classify_retry(&self, error: &Error) -> Option<RetryReason> {
-        for retry_classifier in self.inner.iter() {
-            if let Some(retry_reason) = retry_classifier.classify_retry(error) {
-                return Some(retry_reason);
-            }
-        }
-
-        None
+        // return the first non-None result
+        self.inner.iter().find_map(|cr| cr.classify_retry(error))
     }
 }
