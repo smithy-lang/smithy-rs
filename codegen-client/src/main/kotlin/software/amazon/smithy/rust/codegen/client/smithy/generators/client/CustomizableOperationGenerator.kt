@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
@@ -20,10 +21,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
  * fluent client builders.
  */
 class CustomizableOperationGenerator(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val generics: FluentClientGenerics,
 ) {
-    private val includeFluentClient = codegenContext.settings.codegenConfig.includeFluentClient
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
     private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
@@ -45,10 +45,6 @@ class CustomizableOperationGenerator(
                 "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
             renderCustomizableOperationModule(this)
-
-            if (includeFluentClient) {
-                renderCustomizableOperationSend(this)
-            }
         }
     }
 
@@ -135,26 +131,28 @@ class CustomizableOperationGenerator(
             *codegenScope,
         )
     }
+}
 
-    private fun renderCustomizableOperationSend(writer: RustWriter) {
-        val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
-        val smithyClient = CargoDependency.smithyClient(runtimeConfig).toType()
+fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: FluentClientGenerics, writer: RustWriter) {
+    val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
+    val smithyClient = CargoDependency.smithyClient(runtimeConfig).toType()
 
-        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toRustGenerics()
-        val combinedGenerics = operationGenerics + handleGenerics
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
+    val combinedGenerics = operationGenerics + handleGenerics
 
-        val codegenScope = arrayOf(
-            "combined_generics_decl" to combinedGenerics.declaration(),
-            "handle_generics_bounds" to handleGenerics.bounds(),
-            "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
-            "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
-            "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
-            "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-            "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        )
+    val codegenScope = arrayOf(
+        "combined_generics_decl" to combinedGenerics.declaration(),
+        "handle_generics_bounds" to handleGenerics.bounds(),
+        "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
+        "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
+        "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
+        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+    )
 
+    if (generics is FlexibleClientGenerics) {
         writer.rustTemplate(
             """
             impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
@@ -169,6 +167,26 @@ class CustomizableOperationGenerator(
                     Retry: Send + Sync + Clone,
                     Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
                     <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + Clone,
+                {
+                    self.handle.client.call(self.operation).await
+                }
+            }
+            """,
+            *codegenScope,
+        )
+    } else {
+        writer.rustTemplate(
+            """
+            impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
+            where
+                #{handle_generics_bounds:W}
+            {
+                /// Sends this operation's request
+                pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+                where
+                    E: std::error::Error + Send + Sync + 'static,
+                    O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
+                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
                 {
                     self.handle.client.call(self.operation).await
                 }

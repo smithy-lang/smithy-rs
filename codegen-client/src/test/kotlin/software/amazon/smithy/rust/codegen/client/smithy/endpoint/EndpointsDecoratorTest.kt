@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.endpoint
+package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
