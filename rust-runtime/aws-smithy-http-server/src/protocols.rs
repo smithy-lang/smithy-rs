@@ -191,41 +191,62 @@ mod tests {
     #[test]
     fn valid_accept_header_classifier_multiple_values() {
         let valid_request = req_accept("text/strings, application/json, invalid");
-        assert!(accept_header_classifier(&valid_request, &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &valid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn invalid_accept_header_classifier() {
         let invalid_request = req_accept("text/invalid, invalid, invalid/invalid");
-        assert!(!accept_header_classifier(&invalid_request, &"application/json".parse().unwrap()));
+        assert!(!accept_header_classifier(
+            &invalid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn valid_accept_header_classifier_star() {
         let valid_request = req_accept("application/*");
-        assert!(accept_header_classifier(&valid_request, &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &valid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn valid_accept_header_classifier_star_star() {
         let valid_request = req_accept("*/*");
-        assert!(accept_header_classifier(&valid_request, &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &valid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn valid_empty_accept_header_classifier() {
-        assert!(accept_header_classifier(&HeaderMap::new(), &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &HeaderMap::new(),
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn valid_accept_header_classifier_with_params() {
         let valid_request = req_accept("application/json; q=30, */*");
-        assert!(accept_header_classifier(&valid_request, &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &valid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 
     #[test]
     fn valid_accept_header_classifier() {
         let valid_request = req_accept("application/json");
-        assert!(accept_header_classifier(&valid_request, &"application/json".parse().unwrap()));
+        assert!(accept_header_classifier(
+            &valid_request,
+            &"application/json".parse().unwrap()
+        ));
     }
 }
