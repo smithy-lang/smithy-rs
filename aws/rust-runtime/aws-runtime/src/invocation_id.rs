@@ -17,7 +17,7 @@ const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invoc
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct InvocationIdInterceptor {
-    id: HeaderValue,
+    id: InvocationId,
 }
 
 impl InvocationIdInterceptor {
@@ -29,12 +29,9 @@ impl InvocationIdInterceptor {
 
 impl Default for InvocationIdInterceptor {
     fn default() -> Self {
-        let id = Uuid::new_v4();
-        let id = id
-            .to_string()
-            .parse()
-            .expect("UUIDs always produce a valid header value");
-        Self { id }
+        Self {
+            id: InvocationId::from_uuid(),
+        }
     }
 }
 
@@ -45,8 +42,28 @@ impl Interceptor<HttpRequest, HttpResponse> for InvocationIdInterceptor {
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let headers = context.request_mut()?.headers_mut();
-        headers.append(AMZ_SDK_INVOCATION_ID, self.id.clone());
+        let id = _cfg.get::<InvocationId>().unwrap_or(&self.id);
+        headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct InvocationId(HeaderValue);
+impl InvocationId {
+    pub fn for_tests() -> Self {
+        InvocationId(HeaderValue::from_static(
+            "000000000000000000000000000000000000",
+        ))
+    }
+
+    pub fn from_uuid() -> Self {
+        let id = Uuid::new_v4();
+        let id = id
+            .to_string()
+            .parse()
+            .expect("UUIDs always produce a valid header value");
+        Self(id)
     }
 }
 

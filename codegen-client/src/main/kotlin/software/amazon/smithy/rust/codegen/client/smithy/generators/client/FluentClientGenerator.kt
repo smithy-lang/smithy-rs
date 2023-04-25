@@ -343,13 +343,16 @@ class FluentClientGenerator(
                     /// By default, any retryable failures will be retried twice. Retry behavior
                     /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                     /// set when configuring the client.
-                    pub async fn send_v2(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    pub async fn send_v2(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let mut runtime_plugins = #{RuntimePlugins}::new()
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()));
                         if let Some(config_override) = self.config_override {
                             runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
                         }
                         runtime_plugins = runtime_plugins.with_operation_plugin(#{Operation}::new());
+                        if let Some(final_plugin) = final_plugin {
+                            runtime_plugins = runtime_plugins.with_client_plugin(final_plugin);
+                        }
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                         let input = #{TypedBox}::new(input).erase();
                         let output = #{invoke}(input, &runtime_plugins)
@@ -369,6 +372,7 @@ class FluentClientGenerator(
                     "OperationError" to errorType,
                     "Operation" to symbolProvider.toSymbol(operation),
                     "OperationOutput" to outputType,
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::runtime_plugin::RuntimePlugins"),
                     "SdkError" to RuntimeType.sdkError(runtimeConfig),
