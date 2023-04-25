@@ -12,6 +12,7 @@ pub use expiring_cache::ExpiringCache;
 pub use lazy_caching::Builder as LazyBuilder;
 
 use crate::provider::{future, SharedCredentialsProvider};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::sync::Arc;
 
 /// Asynchronous Cached Credentials Provider
@@ -28,6 +29,10 @@ pub trait ProvideCachedCredentials: Send + Sync + std::fmt::Debug {
 /// `Arc`.
 #[derive(Clone, Debug)]
 pub struct SharedCredentialsCache(Arc<dyn ProvideCachedCredentials>);
+
+impl Storable for SharedCredentialsCache {
+    type Storer = StoreReplace<SharedCredentialsCache>;
+}
 
 impl SharedCredentialsCache {
     /// Create a new `SharedCredentialsCache` from `ProvideCachedCredentials`

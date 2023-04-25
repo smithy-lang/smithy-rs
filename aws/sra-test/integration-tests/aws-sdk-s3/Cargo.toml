@@ -18,6 +18,7 @@ aws-smithy-types = { path = "../../../../rust-runtime/aws-smithy-types" }
 aws-smithy-http = { path = "../../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api" }
+aws-config = { path = "../../../rust-runtime/aws-config" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 tracing = "0.1.37"

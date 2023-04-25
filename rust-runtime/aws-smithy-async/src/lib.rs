@@ -69,7 +69,9 @@ pub trait AsyncConfig: Accessor {
     }
 }
 
+/// Async configuration setter trait
 pub trait AsyncConfigBuilder: Setter {
+    /// Set the sleep implementation
     fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self
     where
         Self: Sized,
@@ -78,8 +80,9 @@ pub trait AsyncConfigBuilder: Setter {
         self
     }
 
+    /// Set the sleep implementation
     fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
-        self.config().store_put(sleep_impl.map(StorableSleep));
+        self.config().store_or_unset(sleep_impl.map(StorableSleep));
         self
     }
 }

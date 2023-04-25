@@ -17,7 +17,7 @@
 pub mod client;
 
 /// A typemap for storing configuration.
-pub mod config_bag;
+pub use aws_smithy_types::config_bag;
 
 /// Utilities for type erasure.
 pub mod type_erasure;

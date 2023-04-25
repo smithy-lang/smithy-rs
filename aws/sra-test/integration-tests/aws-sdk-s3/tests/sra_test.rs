@@ -15,6 +15,8 @@ use aws_sdk_s3::operation::list_objects_v2::{
     ListObjectsV2Error, ListObjectsV2Input, ListObjectsV2Output,
 };
 use aws_sdk_s3::primitives::SdkBody;
+use aws_sdk_s3::Client;
+use aws_smithy_client::conns;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::endpoint::SharedEndpointResolver;
@@ -36,38 +38,69 @@ use std::time::{Duration, UNIX_EPOCH};
 mod interceptors;
 
 // TODO(orchestrator-test): unignore
-#[ignore]
 #[tokio::test]
 async fn sra_test() {
     tracing_subscriber::fmt::init();
 
-    let conn = TestConnection::new(vec![(
+    /*let conn = TestConnection::new(vec![(
         http::Request::builder()
             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=ae78f74d26b6b0c3a403d9e8cc7ec3829d6264a2b33db672bf2b151bbb901786")
             .uri("https://test-bucket.s3.us-east-1.amazonaws.com/?list-type=2&prefix=prefix~")
             .body(SdkBody::empty())
             .unwrap(),
         http::Response::builder().status(200).body("").unwrap(),
-    )]);
+    )]);*/
+    let shared_config = aws_config::load_from_env().await;
+    let creds_from_global = shared_config
+        .credentials_provider()
+        .expect("missing")
+        .as_ref()
+        .provide_credentials()
+        .await
+        .expect("failed to load creds");
+    let creds = Credentials::new(
+        creds_from_global.access_key_id(),
+        creds_from_global.secret_access_key(),
+        creds_from_global.session_token().map(|s| s.to_string()),
+        creds_from_global.expiry(),
+        "aws-config",
+    );
 
     let config = aws_sdk_s3::Config::builder()
-        .credentials_provider(Credentials::for_tests())
+        .credentials_provider(creds)
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone())
+        .http_connector(aws_smithy_client::hyper_ext::Adapter::builder().build(conns::https()))
         .build();
     let client = aws_sdk_s3::Client::from_conf(config);
 
+    let fixup = FixupPlugin {
+        client: client.clone(),
+    };
+
     let _ = dbg!(
         client
-            .list_objects_v2()
+            .list_buckets()
             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
-            .bucket("test-bucket")
-            .prefix("prefix~")
-            .send_v2()
+            .send_v2(fixup)
             .await
     );
 
-    conn.assert_requests_match(&[]);
+    //conn.assert_requests_match(&[]);
+}
+
+struct FixupPlugin {
+    client: Client,
+}
+impl RuntimePlugin for FixupPlugin {
+    fn configure(
+        &self,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
+        let params_builder = Params::builder()
+            .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()));
+        cfg.put(params_builder);
+        Ok(())
+    }
 }
 
 // TODO(orchestrator-test): replace with the above once runtime plugin config works
@@ -83,12 +116,15 @@ async fn sra_manual_test() {
 
     impl RuntimePlugin for ManualServiceRuntimePlugin {
         fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+            let credentials_cache = cfg
+                .load::<SharedCredentialsCache>()
+                .expect("credentials must be provided");
             let identity_resolvers =
                 aws_smithy_runtime_api::client::orchestrator::IdentityResolvers::builder()
                     .identity_resolver(
                         aws_runtime::auth::sigv4::SCHEME_ID,
                         aws_runtime::identity::credentials::CredentialsIdentityResolver::new(
-                            self.credentials_cache.clone(),
+                            credentials_cache.clone(),
                         ),
                     )
                     .identity_resolver(

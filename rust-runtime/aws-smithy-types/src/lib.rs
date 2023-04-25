@@ -25,6 +25,8 @@ pub mod primitive;
 pub mod retry;
 pub mod timeout;
 
+pub mod config_bag;
+
 pub use crate::date_time::DateTime;
 
 // TODO(deprecated): Remove deprecated re-export

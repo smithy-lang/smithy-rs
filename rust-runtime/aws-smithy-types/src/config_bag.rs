@@ -18,7 +18,7 @@ use std::collections::HashSet;
 
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 
 /// Layered Configuration Structure
@@ -106,7 +106,6 @@ impl DebugErased {
             )
         };
         let name = type_name::<T>();
-        dbg!("inserting: ", name, TypeId::of::<T>());
         Self {
             field: Box::new(value),
             type_name: name,
@@ -140,15 +139,15 @@ pub trait Store: Sized + Send + Sync + 'static {
 }
 
 #[non_exhaustive]
-pub struct StoreReplace {}
+pub struct StoreReplace<U>(PhantomData<U>);
 #[non_exhaustive]
-pub struct StoreAppend {}
+pub struct StoreAppend<U>(PhantomData<U>);
 
 pub trait Storable: Send + Sync + Debug + 'static {
     type Storer: Store;
 }
 
-impl<U: Send + Sync + Debug + 'static> Store for StoreReplace {
+impl<U: Send + Sync + Debug + 'static> Store for StoreReplace<U> {
     type ReturnedType<'a> = Option<&'a U>;
     type StoredType = Value<U>;
 
@@ -163,7 +162,7 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreReplace {
     }
 }
 
-impl<U: Send + Sync + Debug + 'static> Store for StoreAppend {
+impl<U: Send + Sync + Debug + 'static> Store for StoreAppend<U> {
     type ReturnedType<'a> = Vec<&'a U>;
     type StoredType = Value<Vec<U>>;
 
@@ -296,33 +295,59 @@ impl ConfigBag {
 
     pub fn store_put<T>(&mut self, item: T) -> &mut Self
     where
-        T: Storable<Storer = StoreReplace>,
+        T: Storable<Storer = StoreReplace<T>>,
     {
-        self.head.put::<StoreReplace>(Value::Set(item));
+        self.head.put::<StoreReplace<T>>(Value::Set(item));
         self
     }
 
     pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
     where
-        T: Storable<Storer = StoreReplace>,
+        T: Storable<Storer = StoreReplace<T>>,
     {
         let item = match item {
             Some(item) => Value::Set(item),
             None => Value::ExplicitlyUnset(type_name::<T>()),
         };
-        self.head.put::<StoreReplace>(item);
+        self.head.put::<StoreReplace<T>>(item);
         self
     }
 
+    /// This can only be used for types that use Append storage
+    /// ```
+    /// use aws_smithy_runtime_api::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
+    /// let mut bag = ConfigBag::base();
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Interceptor(&'static str);
+    /// impl Storable for Interceptor {
+    ///     type Storer = StoreAppend<Interceptor>;
+    /// }
+    ///
+    /// bag.store_append(Interceptor("123"));
+    /// bag.store_append(Interceptor("456"));
+    ///
+    /// assert_eq!(
+    ///     bag.load::<Interceptor>(),
+    ///     vec![&Interceptor("123"), &Interceptor("456")]
+    /// );
+    /// ```
     pub fn store_append<T>(&mut self, item: T) -> &mut Self
     where
-        T: Storable<Storer = StoreAppend>,
+        T: Storable<Storer = StoreAppend<T>>,
     {
-        match self.head.get_mut_or_default::<StoreAppend>() {
+        match self.head.get_mut_or_default::<StoreAppend<T>>() {
             Value::Set(list) => list.push(item),
             v @ Value::ExplicitlyUnset(_) => *v = Value::Set(vec![item]),
         }
         self
+    }
+
+    pub fn clear<T>(&mut self)
+    where
+        T: Storable<Storer = StoreAppend<T>>,
+    {
+        self.head
+            .put::<StoreAppend<T>>(Value::ExplicitlyUnset(type_name::<T>()));
     }
 
     pub fn load<T: Storable>(&self) -> <T::Storer as Store>::ReturnedType<'_> {
@@ -331,20 +356,20 @@ impl ConfigBag {
 
     /// Retrieve the value of type `T` from the bag if exists
     pub fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
-        let out = self.sourced_get::<StoreReplace>();
+        let out = self.sourced_get::<StoreReplace<T>>();
         out
     }
 
     /// Insert `value` into the bag
     pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
-        self.head.put::<StoreReplace>(Value::Set(value));
+        self.head.put::<StoreReplace<T>>(Value::Set(value));
         self
     }
 
     /// Remove `T` from this bag
     pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
         self.head
-            .put::<StoreReplace>(Value::ExplicitlyUnset(type_name::<T>()));
+            .put::<StoreReplace<T>>(Value::ExplicitlyUnset(type_name::<T>()));
         self
     }
 
@@ -429,6 +454,7 @@ pub enum SourceInfo {
 #[cfg(test)]
 mod test {
     use super::ConfigBag;
+    use crate::config_bag::{Storable, Store, StoreAppend, StoreReplace};
 
     #[test]
     fn layered_property_bag() {
@@ -498,5 +524,26 @@ mod test {
         open_bag.put("foo");
 
         assert_eq!(open_bag.layers().count(), 4);
+    }
+
+    #[test]
+    fn store_append() {
+        let mut bag = ConfigBag::base();
+        #[derive(Debug, PartialEq, Eq)]
+        struct Interceptor(&'static str);
+        impl Storable for Interceptor {
+            type Storer = StoreAppend<Interceptor>;
+        }
+
+        // you can only call store_append because interceptor is marked with a vec
+        bag.store_append(Interceptor("123"));
+        bag.store_append(Interceptor("456"));
+
+        assert_eq!(
+            bag.load::<Interceptor>(),
+            vec![&Interceptor("123"), &Interceptor("456")]
+        );
+
+        bag.clear::<Interceptor>();
     }
 }

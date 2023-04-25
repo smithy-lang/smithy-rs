@@ -69,6 +69,7 @@ mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
     use crate::config_bag::ConfigBag;
 
+    #[derive(Debug)]
     struct SomeStruct;
 
     impl RuntimePlugin for SomeStruct {
