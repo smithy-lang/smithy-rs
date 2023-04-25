@@ -8,12 +8,12 @@ use aws_smithy_runtime_api::client::orchestrator::{BoxError, HttpRequest, HttpRe
 use aws_smithy_runtime_api::client::retries::{RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NeverRetryStrategy {}
 
 impl NeverRetryStrategy {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 

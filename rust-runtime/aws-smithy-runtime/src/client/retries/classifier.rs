@@ -19,10 +19,9 @@ impl ModeledAsRetryableClassifier {
         error: &SdkError<E, R>,
     ) -> Option<RetryReason> {
         match error {
-            SdkError::ServiceError(inner) => inner
-                .err()
-                .retryable_error_kind()
-                .map(|err| RetryReason::Error(err)),
+            SdkError::ServiceError(inner) => {
+                inner.err().retryable_error_kind().map(RetryReason::Error)
+            }
             _ => None,
         }
     }
@@ -39,7 +38,7 @@ impl SmithyErrorClassifier {
             SdkError::DispatchFailure(err) if (err.is_timeout() || err.is_io()) => {
                 Some(RetryReason::Error(ErrorKind::TransientError))
             }
-            SdkError::DispatchFailure(err) => err.is_other().map(|err| RetryReason::Error(err)),
+            SdkError::DispatchFailure(err) => err.is_other().map(RetryReason::Error),
             _ => None,
         }
     }
