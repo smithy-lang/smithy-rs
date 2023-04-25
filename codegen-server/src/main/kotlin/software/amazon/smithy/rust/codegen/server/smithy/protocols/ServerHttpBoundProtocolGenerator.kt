@@ -194,14 +194,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
         val verifyAcceptHeaderStaticContentTypeInit = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
-                rustTemplate(
+                val init = when (contentType) {
+                    "application/json" -> "#{Mime}::Mime = #{Mime}::APPLICATION_JSON;"
+                    "application/octet-stream" -> "#{Mime}::Mime = #{Mime}::APPLICATION_OCTET_STREAM;"
+                    "application/x-www-form-urlencoded" -> "#{Mime}::Mime = #{Mime}::APPLICATION_WWW_FORM_URLENCODED;"
+                    else ->
                     """
-            static $staticContentType: #{OnceCell}::sync::Lazy<#{Mime}::Mime> = #{OnceCell}::sync::Lazy::new(|| {
-                ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
-            });
-            """,
-                    *codegenScope
-                )
+                    #{OnceCell}::sync::Lazy<#{Mime}::Mime> = #{OnceCell}::sync::Lazy::new(|| {
+                        ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
+                    });
+                    """
+                }
+                rustTemplate("static $staticContentType: $init", *codegenScope)
             }
         }
         val verifyRequestContentTypeHeader = writable {
