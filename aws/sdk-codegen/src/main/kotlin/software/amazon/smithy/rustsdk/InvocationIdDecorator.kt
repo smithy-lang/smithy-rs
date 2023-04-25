@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class InvocationIdDecorator : ClientCodegenDecorator {
-    override val name: String get() = "RecursionDetectionDecorator"
+    override val name: String get() = "InvocationIdDecorator"
     override val order: Byte get() = 0
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
