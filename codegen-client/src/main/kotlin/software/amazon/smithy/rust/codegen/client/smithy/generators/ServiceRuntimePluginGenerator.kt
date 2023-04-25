@@ -66,8 +66,8 @@ class ServiceRuntimePluginGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val http = RuntimeType.smithyHttp(rc)
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "AuthOptionListResolver" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
@@ -80,7 +80,7 @@ class ServiceRuntimePluginGenerator(
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
-            "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
+            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
