@@ -84,10 +84,10 @@ class EndpointParamsInterceptorGenerator(
             let input = context.input()?;
             let _input = input
                 .downcast_ref::<${operationInput.name}>()
-                .ok_or_else(|| "failed to downcast to ${operationInput.name}")?;
+                .ok_or("failed to downcast to ${operationInput.name}")?;
             let params_builder = cfg
                 .get::<#{ParamsBuilder}>()
-                .ok_or_else(|| "missing endpoint params builder")?
+                .ok_or("missing endpoint params builder")?
                 .clone();
             ${"" /* TODO(EndpointResolver): Call setters on `params_builder` to update its fields by using values from `_input` */}
             cfg.put(params_builder);
@@ -131,7 +131,7 @@ class EndpointParamsInterceptorGenerator(
             let _ = context;
             let params_builder = cfg
                 .get::<#{ParamsBuilder}>()
-                .ok_or_else(|| "missing endpoint params builder")?
+                .ok_or("missing endpoint params builder")?
                 .clone();
             let params = params_builder
                 .build()

@@ -24,11 +24,13 @@ use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorConte
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, Connection, HttpRequest, HttpResponse, RequestTime, TraceProbe,
 };
+use aws_smithy_runtime_api::client::retries::RetryClassifiers;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_runtime_api::type_erasure::TypedBox;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
+use http::Uri;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -104,7 +106,7 @@ async fn sra_manual_test() {
             cfg.put(params_builder);
 
             cfg.set_retry_strategy(
-                aws_smithy_runtime_api::client::retries::NeverRetryStrategy::new(),
+                aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy::default(),
             );
 
             let connection: Box<dyn Connection> = Box::new(DynConnectorAdapter::new(
@@ -170,7 +172,7 @@ async fn sra_manual_test() {
                         .ok_or_else(|| "failed to downcast to ListObjectsV2Input")?;
                     let mut params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or_else(|| "missing endpoint params builder")?
+                        .ok_or("missing endpoint params builder")?
                         .clone();
                     params_builder = params_builder.set_bucket(input.bucket.clone());
                     cfg.put(params_builder);
@@ -189,7 +191,7 @@ async fn sra_manual_test() {
                 ) -> Result<(), BoxError> {
                     let params_builder = cfg
                         .get::<aws_sdk_s3::endpoint::ParamsBuilder>()
-                        .ok_or_else(|| "missing endpoint params builder")?
+                        .ok_or("missing endpoint params builder")?
                         .clone();
                     let params = params_builder.build().map_err(|err| {
                         ContextAttachedError::new("endpoint params could not be built", err)

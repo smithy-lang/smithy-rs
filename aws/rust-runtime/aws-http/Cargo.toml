@@ -28,7 +28,6 @@ aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
 bytes-utils = "0.1.2"
 env_logger = "0.9"
-http = "0.2.3"
 tokio = { version = "1.23.1", features = ["macros", "rt", "rt-multi-thread", "test-util", "time"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 proptest = "1"
