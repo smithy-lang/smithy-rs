@@ -250,6 +250,8 @@ private class HttpAuthOperationRuntimePluginCustomization(
 
                 rustTemplate("${section.configBagName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
             }
+
+            else -> emptySection
         }
     }
 }
