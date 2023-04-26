@@ -17,8 +17,10 @@ use std::any::{type_name, Any, TypeId};
 use std::collections::HashSet;
 
 use std::fmt::{Debug, Formatter};
+use std::iter::Rev;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::slice;
 use std::sync::Arc;
 
 /// Layered Configuration Structure
@@ -86,7 +88,7 @@ impl Value<DebugErased> {
 struct DebugErased {
     field: Box<dyn Any + Send + Sync>,
     type_name: &'static str,
-    debug: Box<dyn Fn(&DebugErased, &mut Formatter<'_>) -> std::fmt::Result>,
+    debug: Box<dyn Fn(&DebugErased, &mut Formatter<'_>) -> std::fmt::Result + Send + Sync>,
 }
 
 impl Debug for DebugErased {
@@ -128,14 +130,13 @@ pub struct Layer {
     sentinels: HashSet<TypeId>,
 }
 
+struct LayerIter;
+
 pub trait Store: Sized + Send + Sync + 'static {
-    type ReturnedType<'a>: Default + Send + Sync;
+    type ReturnedType<'a>: Send + Sync;
     type StoredType: Send + Sync + Debug;
 
-    fn merge<'a>(
-        accum: Self::ReturnedType<'a>,
-        item: &'a Self::StoredType,
-    ) -> Self::ReturnedType<'a>;
+    fn merge_iter<'a>(iter: ItemIter<'a, Self>) -> Self::ReturnedType<'a>;
 }
 
 #[non_exhaustive]
@@ -151,30 +152,55 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreReplace<U> {
     type ReturnedType<'a> = Option<&'a U>;
     type StoredType = Value<U>;
 
-    fn merge<'a>(
-        _accum: Self::ReturnedType<'a>,
-        item: &'a Self::StoredType,
-    ) -> Self::ReturnedType<'a> {
-        match item {
-            Value::Set(item) => Some(item),
-            Value::ExplicitlyUnset(_) => None,
+    fn merge_iter<'a>(iter: ItemIter<'a, Self>) -> Self::ReturnedType<'a> {
+        for item in iter {
+            return match item {
+                Value::Set(item) => Some(item),
+                Value::ExplicitlyUnset(_) => None,
+            };
         }
+        None
     }
 }
 
 impl<U: Send + Sync + Debug + 'static> Store for StoreAppend<U> {
-    type ReturnedType<'a> = Vec<&'a U>;
+    type ReturnedType<'a> = AppendItemIter<'a, U>;
     type StoredType = Value<Vec<U>>;
 
-    fn merge<'a>(
-        mut accum: Self::ReturnedType<'a>,
-        item: &'a Self::StoredType,
-    ) -> Self::ReturnedType<'a> {
-        match item {
-            Value::Set(item) => accum.extend(item.iter()),
-            Value::ExplicitlyUnset(_) => accum.clear(),
+    fn merge_iter<'a>(iter: ItemIter<'a, Self>) -> Self::ReturnedType<'a> {
+        AppendItemIter {
+            inner: iter,
+            cur: None,
         }
-        accum
+    }
+}
+
+pub struct AppendItemIter<'a, U> {
+    inner: ItemIter<'a, StoreAppend<U>>,
+    cur: Option<Rev<slice::Iter<'a, U>>>,
+}
+
+impl<'a, U: 'a> Iterator for AppendItemIter<'a, U>
+where
+    U: Send + Sync + Debug + 'static,
+{
+    type Item = &'a U;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(buf) = &mut self.cur {
+            match buf.next() {
+                Some(item) => return Some(item),
+                None => self.cur = None,
+            }
+        }
+        match self.inner.next() {
+            None => None,
+            Some(Value::Set(u)) => {
+                self.cur = Some(u.iter().rev());
+                self.next()
+            }
+            Some(Value::ExplicitlyUnset(_)) => return None,
+        }
     }
 }
 
@@ -406,35 +432,51 @@ impl ConfigBag {
     }
 
     pub fn sourced_get<T: Store>(&self) -> T::ReturnedType<'_> {
-        // could rewrite recursively or collect to SmallVec to avoid allocation
-        let mut item = T::ReturnedType::default();
-        for layer in self.layers().collect::<Vec<_>>().iter().rev() {
-            if let Some(layerd_item) = layer.get::<T>() {
-                item = T::merge(item, layerd_item);
-            }
-        }
-        item
+        let stored_type_iter = ItemIter {
+            inner: self.layers(),
+            t: PhantomData::default(),
+        };
+        T::merge_iter(stored_type_iter)
     }
 
-    fn layers(&self) -> impl Iterator<Item = &Layer> {
-        struct BagIter<'a> {
-            bag: Option<&'a ConfigBag>,
-        }
-        impl<'a> Iterator for BagIter<'a> {
-            type Item = &'a Layer;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                let next = match self.bag {
-                    Some(bag) => Some(&bag.head),
-                    None => None,
-                };
-                if let Some(bag) = &mut self.bag {
-                    self.bag = bag.tail.as_deref();
-                }
-                next
-            }
-        }
+    fn layers(&self) -> BagIter<'_> {
         BagIter { bag: Some(self) }
+    }
+}
+
+pub struct ItemIter<'a, T> {
+    inner: BagIter<'a>,
+    t: PhantomData<T>,
+}
+impl<'a, T: 'a> Iterator for ItemIter<'a, T>
+where
+    T: Store,
+{
+    type Item = &'a T::StoredType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            Some(layer) => layer.get::<T>().or_else(|| self.next()),
+            None => None,
+        }
+    }
+}
+
+struct BagIter<'a> {
+    bag: Option<&'a ConfigBag>,
+}
+impl<'a> Iterator for BagIter<'a> {
+    type Item = &'a Layer;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = match self.bag {
+            Some(bag) => Some(&bag.head),
+            None => None,
+        };
+        if let Some(bag) = &mut self.bag {
+            self.bag = bag.tail.as_deref();
+        }
+        next
     }
 }
 
@@ -535,15 +577,24 @@ mod test {
             type Storer = StoreAppend<Interceptor>;
         }
 
+        bag.clear::<Interceptor>();
         // you can only call store_append because interceptor is marked with a vec
         bag.store_append(Interceptor("123"));
         bag.store_append(Interceptor("456"));
 
+        let mut bag = bag.add_layer("next");
+        bag.store_append(Interceptor("789"));
+
         assert_eq!(
-            bag.load::<Interceptor>(),
-            vec![&Interceptor("123"), &Interceptor("456")]
+            bag.load::<Interceptor>().collect::<Vec<_>>(),
+            vec![
+                &Interceptor("789"),
+                &Interceptor("456"),
+                &Interceptor("123")
+            ]
         );
 
         bag.clear::<Interceptor>();
+        assert_eq!(bag.load::<Interceptor>().count(), 0);
     }
 }
