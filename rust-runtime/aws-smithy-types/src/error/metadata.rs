@@ -62,8 +62,23 @@ impl ProvideErrorMetadata for ErrorMetadata {
 }
 
 /// Builder for [`ErrorMetadata`].
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-deserialize"),
+    derive(serde::Deserialize)
+)]
 #[derive(Debug, Default)]
 pub struct Builder {
+    #[cfg_attr(
+        any(
+            all(aws_sdk_unstable, feature = "serde-deserialize"),
+            all(aws_sdk_unstable, feature = "serde-serialize")
+        ),
+        serde(flatten)
+    )]
     inner: ErrorMetadata,
 }
 
@@ -179,3 +194,36 @@ impl fmt::Display for ErrorMetadata {
 }
 
 impl std::error::Error for ErrorMetadata {}
+
+#[cfg(all(
+    test,
+    any(
+        all(aws_sdk_unstable, feature = "serde-deserialize"),
+        all(aws_sdk_unstable, feature = "serde-serialize")
+    )
+))]
+mod test {
+    use super::*;
+
+    #[test]
+    /// tests de/ser on ErrorMetaData.
+    fn test_error_meta_data() {
+        let mut data = Builder::default()
+            .code("code")
+            .message("message")
+            .custom("hello", "world");
+        let ok = serde_json::to_string_pretty(&EMPTY_ERROR_METADATA).unwrap();
+        assert_eq!(
+            &ok,
+            include_str!("../../test-data/error_meta_data_empty.json")
+        );
+        assert_eq!(
+            serde_json::from_str(include_str!("../../test-data/error_meta_data.json")).unwrap(),
+            &data
+        );
+        assert_eq!(
+            serde_json::from_str(include_str!("../../test-data/error_meta_data.json")).unwrap(),
+            data.build()
+        );
+    }
+}
