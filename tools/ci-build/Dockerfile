@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.66.1
+ARG rust_stable_version=1.67.1
 ARG rust_nightly_version=nightly-2022-11-16
 
 FROM ${base_image} AS bare_base_image
@@ -139,7 +139,7 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.19.0
+ARG cargo_semver_checks_version=0.20.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 #
