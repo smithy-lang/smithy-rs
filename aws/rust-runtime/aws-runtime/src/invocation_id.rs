@@ -48,16 +48,18 @@ impl Interceptor<HttpRequest, HttpResponse> for InvocationIdInterceptor {
     }
 }
 
+/// InvocationId provides a consistent ID across retries
 #[derive(Debug)]
 pub struct InvocationId(HeaderValue);
 impl InvocationId {
+    /// A test invocation id to allow deterministic requests
     pub fn for_tests() -> Self {
         InvocationId(HeaderValue::from_static(
-            "000000000000000000000000000000000000",
+            "00000000-0000-4000-8000-000000000000",
         ))
     }
 
-    pub fn from_uuid() -> Self {
+    fn from_uuid() -> Self {
         let id = Uuid::new_v4();
         let id = id
             .to_string()
