@@ -11,12 +11,6 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "Implements serde support for ErrorMetaData on aws-smithy-types crate."
-references = ["smithy-rs#2637"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "thomas-k-cameron"
-
 [[smithy-rs]]
 message = """
 Implement layer for servers to handle [ALB health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html).
@@ -177,3 +171,9 @@ message = "Update MSRV to Rust 1.67.1"
 references = ["smithy-rs#2611"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add RUSTFLAGS = aws_sdk_unstable as environment variable when running Cargo from kotlin."
+references = ["smithy-rs#2614"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "thomas-k-cameron"
