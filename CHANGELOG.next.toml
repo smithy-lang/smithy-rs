@@ -10,3 +10,10 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "The `Debug` implementation for `PropertyBag` now prints a list of the types it contains. This significantly improves debuggability."
+author = "rcoh"
+references = ["smithy-rs#2612"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
