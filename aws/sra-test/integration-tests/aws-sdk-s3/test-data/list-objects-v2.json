@@ -100,6 +100,6 @@
       }
     }
   ],
-  "docs": "todo docs",
+  "docs": "Test sending an S3 ListObjectsV2 operation with a successful response.",
   "version": "V0"
 }
