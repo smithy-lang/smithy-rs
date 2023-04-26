@@ -55,6 +55,12 @@ pub struct ErrorMetadata {
     extras: Option<HashMap<Cow<'static, str>, String>>,
 }
 
+impl ProvideErrorMetadata for ErrorMetadata {
+    fn meta(&self) -> &ErrorMetadata {
+        self
+    }
+}
+
 /// Builder for [`ErrorMetadata`].
 #[derive(Debug, Default)]
 pub struct Builder {
