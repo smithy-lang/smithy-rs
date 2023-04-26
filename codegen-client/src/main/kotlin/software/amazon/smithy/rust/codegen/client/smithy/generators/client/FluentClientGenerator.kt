@@ -343,7 +343,13 @@ class FluentClientGenerator(
                     /// By default, any retryable failures will be retried twice. Retry behavior
                     /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                     /// set when configuring the client.
-                    pub async fn send_v2(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    pub async fn send_v2(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                        self.send_v2_with_plugin(Option::<Box<dyn #{RuntimePlugin}>>::None).await
+                    }
+
+                    // TODO(enableNewSmithyRuntime): Delete when unused
+                    /// Equivalent to [`Self::send_v2`] but adds a final runtime plugin to shim missing behavior
+                    pub async fn send_v2_with_plugin(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let mut runtime_plugins = #{RuntimePlugins}::new()
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()));
                         if let Some(config_override) = self.config_override {
