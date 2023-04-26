@@ -18,11 +18,9 @@ pub mod orchestrator;
 /// This code defines when and how failed requests should be retried. It also defines the behavior
 /// used to limit the rate that requests are sent.
 pub mod retries;
+
 /// Runtime plugin type definitions.
 pub mod runtime_plugin;
-
-/// Smithy endpoint resolution runtime plugins
-pub mod endpoints;
 
 /// Smithy auth runtime plugins
 pub mod auth;

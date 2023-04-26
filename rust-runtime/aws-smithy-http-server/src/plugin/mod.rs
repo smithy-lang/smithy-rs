@@ -118,6 +118,7 @@
 //! ```
 //!
 
+pub mod alb_health_check;
 mod closure;
 mod either;
 mod filter;

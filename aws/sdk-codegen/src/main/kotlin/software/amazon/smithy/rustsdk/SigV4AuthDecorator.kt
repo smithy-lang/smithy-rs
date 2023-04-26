@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -38,6 +39,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
 
     override fun operationRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
+        operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
         baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
@@ -134,6 +136,7 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
+                        signing_options.request_timestamp = cfg.request_time().unwrap_or_default().system_time();
 
                         let mut sigv4_properties = #{PropertyBag}::new();
                         sigv4_properties.insert(#{SigV4OperationSigningConfig} {

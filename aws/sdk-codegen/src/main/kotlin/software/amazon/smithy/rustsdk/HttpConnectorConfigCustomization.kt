@@ -15,7 +15,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
+// TODO(enableNewSmithyRuntime): Delete this decorator since it's now in `codegen-client`
 class HttpConnectorDecorator : ClientCodegenDecorator {
     override val name: String = "HttpConnectorDecorator"
     override val order: Byte = 0
@@ -23,9 +25,10 @@ class HttpConnectorDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + HttpConnectorConfigCustomization(codegenContext)
-    }
+    ): List<ConfigCustomization> =
+        baseCustomizations.letIf(!codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            it + HttpConnectorConfigCustomization(codegenContext)
+        }
 }
 
 class HttpConnectorConfigCustomization(

@@ -9,6 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServiceErrorGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -40,14 +41,20 @@ class ServiceGenerator(
         ).render(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Config) {
-            ServiceConfigGenerator.withBaseBehavior(
+            val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
                 codegenContext,
                 extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
-            ).render(this)
+            )
+            serviceConfigGenerator.render(this)
 
             if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+                // Enable users to opt in to the test-utils in the runtime crate
+                rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
+
                 ServiceRuntimePluginGenerator(codegenContext)
                     .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
+
+                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this, codegenContext)
             }
         }
 
