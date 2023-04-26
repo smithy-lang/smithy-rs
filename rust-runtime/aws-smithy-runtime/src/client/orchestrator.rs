@@ -22,6 +22,7 @@ mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
+pub mod interceptors;
 pub(self) mod phase;
 
 pub async fn invoke(
