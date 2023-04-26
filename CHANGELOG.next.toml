@@ -166,6 +166,12 @@ references = ["smithy-rs#2611"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.67.1"
+references = ["smithy-rs#2611"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
+
 [[aws-sdk-rust]]
 message = "Refactor aws-smithy-types crate. Blob, Datetime, Number and Document structs now goes to it's own files. No breaking changes."
 references = ["smithy-rs#2616"]
