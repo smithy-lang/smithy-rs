@@ -206,7 +206,7 @@ impl fmt::Debug for PropertyBag {
                 f.debug_list().entries(self.0.contents()).finish()
             }
         }
-        fmt.field("contents", &Contents(&self));
+        fmt.field("contents", &Contents(self));
         fmt.finish()
     }
 }

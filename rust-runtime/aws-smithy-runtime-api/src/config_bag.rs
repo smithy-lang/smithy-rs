@@ -39,7 +39,7 @@ impl Debug for ConfigBag {
             }
         }
         f.debug_struct("ConfigBag")
-            .field("layers", &Layers(&self))
+            .field("layers", &Layers(self))
             .finish()
     }
 }
@@ -90,7 +90,7 @@ impl Debug for Layer {
         }
         f.debug_struct("Layer")
             .field("name", &self.name)
-            .field("properties", &Contents(&self))
+            .field("properties", &Contents(self))
             .finish()
     }
 }
