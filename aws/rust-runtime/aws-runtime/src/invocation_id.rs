@@ -103,8 +103,8 @@ mod tests {
             .unwrap();
 
         let header = expect_header(&context, "amz-sdk-invocation-id");
-        assert_eq!(&interceptor.id, header);
+        assert_eq!(&interceptor.id.0, header);
         // UUID should include 32 chars and 4 dashes
-        assert_eq!(interceptor.id.len(), 36);
+        assert_eq!(interceptor.id.0.len(), 36);
     }
 }
