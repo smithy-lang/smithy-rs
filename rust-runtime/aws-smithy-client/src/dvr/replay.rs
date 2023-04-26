@@ -63,7 +63,7 @@ impl ReplayingConnection {
 
     /// Validate all headers and bodies
     pub async fn full_validate(self, media_type: MediaType) -> Result<(), Box<dyn Error>> {
-        self.validate(None, |b1, b2| {
+        self.validate_base(None, |b1, b2| {
             aws_smithy_protocol_test::validate_body(
                 b1,
                 std::str::from_utf8(b2).unwrap(),
@@ -76,6 +76,15 @@ impl ReplayingConnection {
 
     /// Validate actual requests against expected requests
     pub async fn validate(
+        self,
+        checked_headers: &[&str],
+        body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
+    ) -> Result<(), Box<dyn Error>> {
+        self.validate_base(Some(checked_headers), body_comparer)
+            .await
+    }
+
+    async fn validate_base(
         self,
         checked_headers: Option<&[&str]>,
         body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
