@@ -106,7 +106,7 @@ async fn sra_manual_test() {
             cfg.put(params_builder);
 
             cfg.set_retry_strategy(
-                aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy::default(),
+                aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy::default(),
             );
 
             let connection: Box<dyn Connection> = Box::new(DynConnectorAdapter::new(
