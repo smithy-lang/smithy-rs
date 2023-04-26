@@ -31,15 +31,14 @@ pub async fn invoke(
     let mut cfg = ConfigBag::base();
     let cfg = &mut cfg;
 
-    let interceptors = Interceptors::new();
-    cfg.put(interceptors.clone());
+    let mut interceptors = Interceptors::new();
 
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration
-        .include(|_| runtime_plugins.apply_client_configuration(cfg))?
+        .include(|_| runtime_plugins.apply_client_configuration(cfg, &mut interceptors))?
         .include(|ctx| interceptors.client_read_before_execution(ctx, cfg))?
         // Operation configuration
-        .include(|_| runtime_plugins.apply_operation_configuration(cfg))?
+        .include(|_| runtime_plugins.apply_operation_configuration(cfg, &mut interceptors))?
         .include(|ctx| interceptors.operation_read_before_execution(ctx, cfg))?
         // Before serialization
         .include(|ctx| interceptors.read_before_serialization(ctx, cfg))?
