@@ -177,3 +177,21 @@ message = "Add RUSTFLAGS = aws_sdk_unstable as environment variable when running
 references = ["smithy-rs#2614"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
 author = "thomas-k-cameron"
+
+[[smithy-rs]]
+message = """
+- Implements serde support to Number, Blob, Document, DateTime and ErrorMetaData.
+- &'static str on Error type is replaced with Cow to allow serde support. No breaking changes are introduced.
+"""
+references = ["smithy-rs#2616"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "thomas-k-cameron"
+
+[[aws-sdk-rust]]
+message = """
+- Implements serde support to Number, Blob, Document, DateTime and ErrorMetaData.
+- &'static str on Error type is replaced with Cow to allow serde support. No breaking changes are introduced.
+"""
+references = ["smithy-rs#2616"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "thomas-k-cameron"
