@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::rejection::MissingContentTypeReason;
+use crate::rejection::{MissingContentTypeReason, NotAcceptableReason};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -18,8 +18,8 @@ pub enum ResponseRejection {
 pub enum RequestRejection {
     #[error("error converting non-streaming body to bytes: {0}")]
     BufferHttpBodyBytes(crate::Error),
-    #[error("request contains invalid value for `Accept` header")]
-    NotAcceptable,
+    #[error("request is not acceptable: {0}")]
+    NotAcceptable(#[from] NotAcceptableReason),
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
     #[error("error deserializing request HTTP body as JSON: {0}")]

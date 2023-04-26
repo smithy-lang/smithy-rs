@@ -4,8 +4,8 @@
  */
 
 //! Protocol helpers.
-use crate::rejection::MissingContentTypeReason;
-use http::HeaderMap;
+use crate::rejection::{MissingContentTypeReason, NotAcceptableReason};
+use http::{HeaderMap, HeaderValue};
 
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
@@ -66,17 +66,18 @@ pub fn content_type_header_classifier(
     Ok(())
 }
 
-pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str) -> bool {
+pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str) -> Result<(), NotAcceptableReason> {
     if !headers.contains_key(http::header::ACCEPT) {
-        return true;
+        return Ok(());
     }
-    // Must be of the form: type/subtype
+    // Must be of the form: `type/subtype`.
     let content_type = content_type
         .parse::<mime::Mime>()
-        .expect("BUG: MIME parsing failed, content_type is not valid");
-    headers
-        .get_all(http::header::ACCEPT)
-        .into_iter()
+        // `expect` safety: content_type` is sent in from the generated server SDK and we know it's valid.
+        .expect("MIME parsing failed, `content_type` is not valid; please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+    let accept_headers = headers.get_all(http::header::ACCEPT);
+    let can_satisfy_some_accept_header = accept_headers
+        .iter()
         .flat_map(|header| {
             header
                 .to_str()
@@ -88,20 +89,30 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str)
                  * and remove the optional "; q=x" parameters
                  * NOTE: the `unwrap`() is safe, because it takes the first element (if there's nothing to split, returns the string)
                  */
-                .flat_map(|s| s.split(',').map(|typ| typ.split(';').next().unwrap().trim()))
+                .flat_map(|s| s.split(',').map(|type_| type_.split(';').next().unwrap().trim()))
         })
         .filter_map(|h| h.parse::<mime::Mime>().ok())
-        .any(|mim| {
-            let typ = content_type.type_();
+        .any(|mime| {
+            let type_ = content_type.type_();
             let subtype = content_type.subtype();
             // Accept: */*, type/*, type/subtype
-            match (mim.type_(), mim.subtype()) {
-                (t, s) if t == typ && s == subtype => true,
-                (t, mime::STAR) if t == typ => true,
+            match (mime.type_(), mime.subtype()) {
+                (t, s) if t == type_ && s == subtype => true,
+                (t, mime::STAR) if t == type_ => true,
                 (mime::STAR, mime::STAR) => true,
                 _ => false,
             }
-        })
+        });
+    if can_satisfy_some_accept_header {
+        Ok(())
+    } else {
+        // We can't make `NotAcceptableReason`/`RequestRejection` borrow the header values because
+        // non-static lifetimes are not allowed in the source of an error, because
+        // `std::error::Error` requires the source is `dyn Error + 'static`. So we clone them into
+        // a vector in the case of a request rejection.
+        let cloned_accept_headers: Vec<HeaderValue> = accept_headers.into_iter().cloned().collect();
+        Err(NotAcceptableReason::CannotSatisfyAcceptHeaders(cloned_accept_headers))
+    }
 }
 
 #[cfg(test)]
@@ -115,9 +126,9 @@ mod tests {
         headers
     }
 
-    fn req_accept(accept: &'static str) -> HeaderMap {
+    fn req_accept(accept: &str) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, HeaderValue::from_static(accept));
+        headers.insert(ACCEPT, HeaderValue::from_str(accept).unwrap());
         headers
     }
 
@@ -192,44 +203,80 @@ mod tests {
         assert!(matches!(result.unwrap_err(), MissingContentTypeReason::ToStrError(_)));
     }
 
-    #[test]
-    fn valid_accept_header_classifier_multiple_values() {
-        let valid_request = req_accept("text/strings, application/json, invalid");
-        assert!(accept_header_classifier(&valid_request, "application/json"));
-    }
+    mod accept_header_classifier {
+        use super::*;
 
-    #[test]
-    fn invalid_accept_header_classifier() {
-        let invalid_request = req_accept("text/invalid, invalid, invalid/invalid");
-        assert!(!accept_header_classifier(&invalid_request, "application/json"));
-    }
+        #[test]
+        fn valid_single_value() {
+            let valid_request = req_accept("application/json");
+            assert!(accept_header_classifier(&valid_request, "application/json").is_ok());
+        }
 
-    #[test]
-    fn valid_accept_header_classifier_star() {
-        let valid_request = req_accept("application/*");
-        assert!(accept_header_classifier(&valid_request, "application/json"));
-    }
+        #[test]
+        fn valid_multiple_values() {
+            let valid_request = req_accept("text/strings, application/json, invalid");
+            assert!(accept_header_classifier(&valid_request, "application/json").is_ok());
+        }
 
-    #[test]
-    fn valid_accept_header_classifier_star_star() {
-        let valid_request = req_accept("*/*");
-        assert!(accept_header_classifier(&valid_request, "application/json"));
-    }
+        #[test]
+        fn subtype_star() {
+            let valid_request = req_accept("application/*");
+            assert!(accept_header_classifier(&valid_request, "application/json").is_ok());
+        }
 
-    #[test]
-    fn valid_empty_accept_header_classifier() {
-        assert!(accept_header_classifier(&HeaderMap::new(), "application/json"));
-    }
+        #[test]
+        fn type_star_subtype_star() {
+            let valid_request = req_accept("*/*");
+            assert!(accept_header_classifier(&valid_request, "application/json").is_ok());
+        }
 
-    #[test]
-    fn valid_accept_header_classifier_with_params() {
-        let valid_request = req_accept("application/json; q=30, */*");
-        assert!(accept_header_classifier(&valid_request, "application/json"));
-    }
+        #[test]
+        fn empty() {
+            assert!(accept_header_classifier(&HeaderMap::new(), "application/json").is_ok());
+        }
 
-    #[test]
-    fn valid_accept_header_classifier() {
-        let valid_request = req_accept("application/json");
-        assert!(accept_header_classifier(&valid_request, "application/json"));
+        #[test]
+        fn valid_with_params() {
+            let valid_request = req_accept("application/json; q=30, */*");
+            assert!(accept_header_classifier(&valid_request, "application/json").is_ok());
+        }
+
+        #[test]
+        fn unstatisfiable_multiple_values() {
+            let accept_header_values = ["text/invalid, invalid, invalid/invalid"];
+            let joined = accept_header_values.join(", ");
+            let invalid_request = req_accept(&joined);
+            match accept_header_classifier(&invalid_request, "application/json").unwrap_err() {
+                NotAcceptableReason::CannotSatisfyAcceptHeaders(returned_accept_header_values) => {
+                    for header_value in accept_header_values {
+                        let header_value = HeaderValue::from_str(header_value).unwrap();
+                        assert!(returned_accept_header_values.contains(&header_value));
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn unstatisfiable_unparseable() {
+            let header_value = "foo_"; // Not a valid MIME type.
+            assert!(header_value.parse::<mime::Mime>().is_err());
+            let invalid_request = req_accept(header_value);
+            match accept_header_classifier(&invalid_request, "application/json").unwrap_err() {
+                NotAcceptableReason::CannotSatisfyAcceptHeaders(returned_accept_header_values) => {
+                    let header_value = HeaderValue::from_str(header_value).unwrap();
+                    assert!(returned_accept_header_values.contains(&header_value));
+                }
+            }
+        }
+
+        #[test]
+        #[should_panic]
+        fn panic_if_content_type_not_parseable() {
+            let header_value = "foo_"; // Not a valid MIME type.
+            let mut headers = HeaderMap::new();
+            headers.insert(ACCEPT, HeaderValue::from_str(header_value).unwrap());
+            assert!(header_value.parse::<mime::Mime>().is_err());
+            let _res = accept_header_classifier(&headers, header_value);
+        }
     }
 }
