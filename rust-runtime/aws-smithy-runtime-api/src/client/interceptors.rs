@@ -6,11 +6,12 @@
 pub mod context;
 pub mod error;
 
+use crate::client::orchestrator::{HttpRequest, HttpResponse};
 use crate::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 pub use context::InterceptorContext;
 pub use error::{BoxError, InterceptorError};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 macro_rules! interceptor_trait_fn {
     ($name:ident, $docs:tt) => {
@@ -560,8 +561,8 @@ impl<TxReq, TxRes> Clone for Inner<TxReq, TxRes> {
 }
 
 #[derive(Debug)]
-pub struct Interceptors<TxReq, TxRes> {
-    inner: Arc<Mutex<Inner<TxReq, TxRes>>>,
+pub struct Interceptors<TxReq = HttpRequest, TxRes = HttpResponse> {
+    inner: Inner<TxReq, TxRes>,
 }
 
 // The compiler isn't smart enough to realize that TxReq and TxRes don't need to implement `Clone`
@@ -576,10 +577,10 @@ impl<TxReq, TxRes> Clone for Interceptors<TxReq, TxRes> {
 impl<TxReq, TxRes> Default for Interceptors<TxReq, TxRes> {
     fn default() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(Inner {
+            inner: Inner {
                 client_interceptors: Vec::new(),
                 operation_interceptors: Vec::new(),
-            })),
+            },
         }
     }
 }
@@ -628,43 +629,28 @@ impl<TxReq, TxRes> Interceptors<TxReq, TxRes> {
         Self::default()
     }
 
-    fn interceptors(&self) -> Vec<SharedInterceptor<TxReq, TxRes>> {
+    fn interceptors(&self) -> impl Iterator<Item = &SharedInterceptor<TxReq, TxRes>> {
         // Since interceptors can modify the interceptor list (since its in the config bag), copy the list ahead of time.
         // This should be cheap since the interceptors inside the list are Arcs.
-        // TODO(enableNewSmithyRuntime): Remove the ability for interceptors to modify the interceptor list and then simplify this
-        let mut interceptors = self.inner.lock().unwrap().client_interceptors.clone();
-        interceptors.extend(
-            self.inner
-                .lock()
-                .unwrap()
-                .operation_interceptors
-                .iter()
-                .cloned(),
-        );
-        interceptors
+        self.inner
+            .client_interceptors
+            .iter()
+            .chain(self.inner.operation_interceptors.iter())
     }
 
     pub fn register_client_interceptor(
-        &self,
+        &mut self,
         interceptor: SharedInterceptor<TxReq, TxRes>,
-    ) -> &Self {
-        self.inner
-            .lock()
-            .unwrap()
-            .client_interceptors
-            .push(interceptor);
+    ) -> &mut Self {
+        self.inner.client_interceptors.push(interceptor);
         self
     }
 
     pub fn register_operation_interceptor(
-        &self,
+        &mut self,
         interceptor: SharedInterceptor<TxReq, TxRes>,
-    ) -> &Self {
-        self.inner
-            .lock()
-            .unwrap()
-            .operation_interceptors
-            .push(interceptor);
+    ) -> &mut Self {
+        self.inner.operation_interceptors.push(interceptor);
         self
     }
 

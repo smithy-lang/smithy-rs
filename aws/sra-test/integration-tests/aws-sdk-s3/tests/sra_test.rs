@@ -95,6 +95,7 @@ impl RuntimePlugin for FixupPlugin {
     fn configure(
         &self,
         cfg: &mut ConfigBag,
+        _interceptors: &mut Interceptors,
     ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
         let params_builder = Params::builder()
             .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()));
@@ -115,7 +116,11 @@ async fn sra_manual_test() {
     }
 
     impl RuntimePlugin for ManualServiceRuntimePlugin {
-        fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+        fn configure(
+            &self,
+            cfg: &mut ConfigBag,
+            interceptors: &mut Interceptors,
+        ) -> Result<(), BoxError> {
             let credentials_cache = cfg
                 .load::<SharedCredentialsCache>()
                 .expect("credentials must be provided");
@@ -198,8 +203,7 @@ async fn sra_manual_test() {
 
             cfg.put(ApiMetadata::new("unused", "unused"));
             cfg.put(AwsUserAgent::for_tests()); // Override the user agent with the test UA
-            cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
-                .expect("interceptors set")
+            interceptors
                 .register_client_interceptor(Arc::new(UserAgentInterceptor::new()) as _)
                 .register_client_interceptor(Arc::new(RecursionDetectionInterceptor::new()) as _)
                 .register_client_interceptor(Arc::new(OverrideSigningTimeInterceptor) as _);
@@ -213,7 +217,11 @@ async fn sra_manual_test() {
     struct ManualOperationRuntimePlugin;
 
     impl RuntimePlugin for ManualOperationRuntimePlugin {
-        fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+        fn configure(
+            &self,
+            cfg: &mut ConfigBag,
+            interceptors: &mut Interceptors,
+        ) -> Result<(), BoxError> {
             #[derive(Debug)]
             struct ListObjectsV2EndpointParamsInterceptor;
             impl Interceptor<HttpRequest, HttpResponse> for ListObjectsV2EndpointParamsInterceptor {
@@ -262,8 +270,7 @@ async fn sra_manual_test() {
                 }
             }
 
-            cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
-                .expect("interceptors set")
+            interceptors
                 .register_operation_interceptor(
                     Arc::new(ListObjectsV2EndpointParamsInterceptor) as _
                 )
