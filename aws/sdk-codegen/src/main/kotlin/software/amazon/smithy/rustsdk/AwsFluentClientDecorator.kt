@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -14,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.NoClientGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
@@ -50,37 +50,6 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
 
-private class AwsClientGenerics(private val types: Types) : FluentClientGenerics {
-    /** Declaration with defaults set */
-    override val decl = writable { }
-
-    /** Instantiation of the Smithy client generics */
-    override val smithyInst = writable {
-        rustTemplate(
-            "<#{DynConnector}, #{DynMiddleware}<#{DynConnector}>>",
-            "DynConnector" to types.dynConnector,
-            "DynMiddleware" to types.dynMiddleware,
-        )
-    }
-
-    /** Instantiation */
-    override val inst = ""
-
-    /** Trait bounds */
-    override val bounds = writable { }
-
-    /** Bounds for generated `send()` functions */
-    override fun sendBounds(
-        operation: Symbol,
-        operationOutput: Symbol,
-        operationError: Symbol,
-        retryClassifier: RuntimeType,
-    ): Writable =
-        writable { }
-
-    override fun toRustGenerics() = RustGenerics()
-}
-
 class AwsFluentClientDecorator : ClientCodegenDecorator {
     override val name: String = "FluentClient"
 
@@ -90,7 +59,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val runtimeConfig = codegenContext.runtimeConfig
         val types = Types(runtimeConfig)
-        val generics = AwsClientGenerics(types)
+        val generics = NoClientGenerics(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
             reexportSmithyClientBuilder = false,

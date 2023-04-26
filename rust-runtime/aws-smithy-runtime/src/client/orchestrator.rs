@@ -4,6 +4,7 @@
  */
 
 use self::auth::orchestrate_auth;
+use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
 use crate::client::orchestrator::phase::Phase;
 use aws_smithy_http::result::SdkError;
@@ -12,11 +13,14 @@ use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Intercept
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, HttpRequest, HttpResponse,
 };
+use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use tracing::{debug_span, Instrument};
 
 mod auth;
+/// Defines types that implement a trait for endpoint resolution
+pub mod endpoints;
 mod http;
 pub(self) mod phase;
 
@@ -58,9 +62,18 @@ pub async fn invoke(
         let retry_strategy = cfg.retry_strategy();
         match retry_strategy.should_attempt_initial_request(cfg) {
             // Yes, let's make a request
-            Ok(_) => {}
+            Ok(ShouldAttempt::Yes) => {}
+            // No, this request shouldn't be sent
+            Ok(ShouldAttempt::No) => {
+                return Err(Phase::dispatch(context).fail(
+                    "The retry strategy indicates that an initial request shouldn't be made, but it didn't specify why.",
+                ))
+            }
             // No, we shouldn't make a request because...
             Err(err) => return Err(Phase::dispatch(context).fail(err)),
+            Ok(ShouldAttempt::YesAfterDelay(_)) => {
+                unreachable!("Delaying the initial request is currently unsupported. If this feature is important to you, please file an issue in GitHub.")
+            }
         }
     }
 
@@ -76,9 +89,12 @@ pub async fn invoke(
         let retry_strategy = cfg.retry_strategy();
         match retry_strategy.should_attempt_retry(&context, cfg) {
             // Yes, let's retry the request
-            Ok(true) => continue,
+            Ok(ShouldAttempt::Yes) => continue,
             // No, this request shouldn't be retried
-            Ok(false) => {}
+            Ok(ShouldAttempt::No) => {}
+            Ok(ShouldAttempt::YesAfterDelay(_delay)) => {
+                todo!("implement retries with an explicit delay.")
+            }
             // I couldn't determine if the request should be retried because an error occurred.
             Err(err) => {
                 return Err(Phase::response_handling(context).fail(err));
@@ -105,12 +121,7 @@ async fn make_an_attempt(
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
     let dispatch_phase = dispatch_phase
         .include(|ctx| interceptors.read_before_attempt(ctx, cfg))?
-        .include_mut(|ctx| {
-            let request = ctx.request_mut().expect("request has been set");
-
-            let endpoint_resolver = cfg.endpoint_resolver();
-            endpoint_resolver.resolve_and_apply_endpoint(request)
-        })?
+        .include_mut(|ctx| orchestrate_endpoint(ctx, cfg))?
         .include_mut(|ctx| interceptors.modify_before_signing(ctx, cfg))?
         .include(|ctx| interceptors.read_before_signing(ctx, cfg))?;
 

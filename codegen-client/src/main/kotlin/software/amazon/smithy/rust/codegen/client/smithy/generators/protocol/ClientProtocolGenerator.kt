@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -101,13 +102,16 @@ open class ClientProtocolGenerator(
                 operationWriter,
                 operationShape,
                 operationName,
-                codegenDecorator.operationRuntimePluginCustomizations(codegenContext, emptyList()),
+                codegenDecorator.operationRuntimePluginCustomizations(codegenContext, operationShape, emptyList()),
             )
 
             ResponseDeserializerGenerator(codegenContext, protocol)
                 .render(operationWriter, operationShape, operationCustomizations)
             RequestSerializerGenerator(codegenContext, protocol, bodyGenerator)
                 .render(operationWriter, operationShape, operationCustomizations)
+
+            EndpointParamsInterceptorGenerator(codegenContext)
+                .render(operationWriter, operationShape)
         }
     }
 }

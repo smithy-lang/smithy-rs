@@ -10,6 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+http-auth = ["aws-smithy-runtime-api/http-auth"]
 test-util = ["dep:aws-smithy-protocol-test"]
 
 [dependencies]
@@ -24,6 +25,9 @@ http-body = "0.4.5"
 pin-utils = "0.1.0"
 tokio = { version = "1.25", features = [] }
 tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.25", features = ["macros", "rt"] }
 
 [package.metadata.docs.rs]
 all-features = true

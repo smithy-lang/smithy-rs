@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /*
  * Generate unions that are compatible with Python by wrapping the Rust implementation into
@@ -34,11 +35,13 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstrin
  */
 class PythonServerUnionGenerator(
     model: Model,
-    private val symbolProvider: SymbolProvider,
+    private val codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     shape: UnionShape,
     private val renderUnknownVariant: Boolean = true,
-) : UnionGenerator(model, symbolProvider, writer, shape, renderUnknownVariant) {
+) : UnionGenerator(model, codegenContext.symbolProvider, writer, shape, renderUnknownVariant) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private val unionSymbol = symbolProvider.toSymbol(shape)
 
@@ -121,11 +124,11 @@ class PythonServerUnionGenerator(
             )
             writer.rust("/// :rtype ${unionSymbol.name}:")
             writer.rustBlock("pub fn $funcNamePart() -> Self") {
-                rust("Self(${unionSymbol.name}::$variantName")
+                rust("Self(${unionSymbol.name}::$variantName)")
             }
         } else {
             val memberSymbol = symbolProvider.toSymbol(member)
-            val pythonType = memberSymbol.rustType().pythonType()
+            val pythonType = memberSymbol.rustType().pythonType(libName)
             val targetType = memberSymbol.rustType()
             Attribute("staticmethod").render(writer)
             writer.rust(
@@ -157,7 +160,7 @@ class PythonServerUnionGenerator(
             writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<()>", "pyo3" to pyo3) {
                 rustTemplate(
                     """
-                    self.0.as_$funcNamePart().map_err(#{pyo3}::exceptions::PyValueError::new_err(
+                    self.0.as_$funcNamePart().map_err(|_| #{pyo3}::exceptions::PyValueError::new_err(
                         "${unionSymbol.name} variant is not None"
                     ))
                     """,
@@ -166,7 +169,7 @@ class PythonServerUnionGenerator(
             }
         } else {
             val memberSymbol = symbolProvider.toSymbol(member)
-            val pythonType = memberSymbol.rustType().pythonType()
+            val pythonType = memberSymbol.rustType().pythonType(libName)
             val targetSymbol = symbolProvider.toSymbol(model.expectShape(member.target))
             val rustType = memberSymbol.rustType()
             writer.rust(
@@ -181,12 +184,13 @@ class PythonServerUnionGenerator(
                 } else {
                     "variant.clone()"
                 }
+                val errorVariant = memberSymbol.rustType().pythonType(libName).renderAsDocstring()
                 rustTemplate(
                     """
                     match self.0.as_$funcNamePart() {
                         Ok(variant) => Ok($variantType),
                         Err(_) => Err(#{pyo3}::exceptions::PyValueError::new_err(
-                            r"${unionSymbol.name} variant is not of type ${memberSymbol.rustType().pythonType().renderAsDocstring()}"
+                            r"${unionSymbol.name} variant is not of type $errorVariant"
                         )),
                     }
                     """,

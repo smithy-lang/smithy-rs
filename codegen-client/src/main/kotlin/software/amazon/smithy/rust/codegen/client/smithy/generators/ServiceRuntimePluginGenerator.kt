@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -18,16 +19,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 
 sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
-    /**
-     * Hook for adding identity resolvers.
-     *
-     * Should emit code that looks like the following:
-     * ```
-     * .identity_resolver("name", path::to::MyIdentityResolver::new())
-     * ```
-     */
-    data class IdentityResolver(val configBagName: String) : ServiceRuntimePluginSection("IdentityResolver")
-
     /**
      * Hook for adding HTTP auth schemes.
      *
@@ -72,9 +63,11 @@ typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimeP
 class ServiceRuntimePluginGenerator(
     codegenContext: ClientCodegenContext,
 ) {
+    private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val http = RuntimeType.smithyHttp(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "AuthOptionListResolver" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
@@ -83,13 +76,15 @@ class ServiceRuntimePluginGenerator(
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
+            "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
-            "IdentityResolvers" to runtimeApi.resolve("client::orchestrator::IdentityResolvers"),
-            "NeverRetryStrategy" to runtimeApi.resolve("client::retries::NeverRetryStrategy"),
+            "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
+            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
+            "Params" to endpointTypesGenerator.paramsStruct(),
+            "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "StaticUriEndpointResolver" to runtimeApi.resolve("client::endpoints::StaticUriEndpointResolver"),
-            "TestConnection" to runtime.resolve("client::connections::test_connection::TestConnection"),
+            "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
@@ -111,12 +106,6 @@ class ServiceRuntimePluginGenerator(
                 fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
-                    let identity_resolvers = #{IdentityResolvers}::builder()
-                        #{identity_resolver_customizations}
-                        .identity_resolver("anonymous", #{AnonymousIdentityResolver}::new())
-                        .build();
-                    cfg.set_identity_resolvers(identity_resolvers);
-
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
                         .build();
@@ -125,8 +114,12 @@ class ServiceRuntimePluginGenerator(
                     // Set an empty auth option resolver to be overridden by operations that need auth.
                     cfg.set_auth_option_resolver(#{AuthOptionListResolver}::new(Vec::new()));
 
-                    // TODO(RuntimePlugins): Resolve the correct endpoint
-                    cfg.set_endpoint_resolver(#{StaticUriEndpointResolver}::http_localhost(1234));
+                    let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
+                        #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
+                    cfg.set_endpoint_resolver(endpoint_resolver);
+
+                    ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
+                    cfg.put(#{Params}::builder());
 
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
@@ -136,7 +129,7 @@ class ServiceRuntimePluginGenerator(
                     let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
                             .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
                             .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
-                            .unwrap_or_else(|| Box::new(#{TestConnection}::new(vec![])) as _);
+                            .expect("connection set");
                     cfg.set_connection(connection);
 
                     // TODO(RuntimePlugins): Add the TraceProbe to the config bag
@@ -157,9 +150,6 @@ class ServiceRuntimePluginGenerator(
             }
             """,
             *codegenScope,
-            "identity_resolver_customizations" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.IdentityResolver("cfg"))
-            },
             "http_auth_scheme_customizations" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
             },

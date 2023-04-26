@@ -64,10 +64,7 @@ struct SentinelPlugin {
 
 impl SentinelPlugin {
     pub fn new(name: &'static str, output: Arc<Mutex<Vec<&'static str>>>) -> Self {
-        Self {
-            name,
-            output: output,
-        }
+        Self { name, output }
     }
 }
 

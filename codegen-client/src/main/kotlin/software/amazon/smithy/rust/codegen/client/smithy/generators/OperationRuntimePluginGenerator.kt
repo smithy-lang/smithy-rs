@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -22,7 +24,45 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
     data class AdditionalConfig(
         val configBagName: String,
         val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("AdditionalConfig")
+    ) : OperationRuntimePluginSection("AdditionalConfig") {
+        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+            writer.rustTemplate(
+                """
+                $configBagName.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
+                    .expect("interceptors set")
+                    .register_operation_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                """,
+                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
+                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
+                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
+                "interceptor" to interceptor,
+            )
+        }
+    }
+
+    /**
+     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
+     *
+     * Should emit 1+ lines of code that look like the following:
+     * ```rust
+     * .with_classifier(AwsErrorCodeClassifier::new())
+     * .with_classifier(HttpStatusCodeClassifier::new())
+     * ```
+     */
+    data class RetryClassifier(
+        val configBagName: String,
+        val operationShape: OperationShape,
+    ) : OperationRuntimePluginSection("RetryClassifier")
+
+    /**
+     * Hook for adding supporting types for operation-specific runtime plugins.
+     * Examples include various operation-specific types (retry classifiers, config bag types, etc.)
+     */
+    data class RuntimePluginSupportingTypes(
+        val configBagName: String,
+        val operationShape: OperationShape,
+    ) : OperationRuntimePluginSection("RuntimePluginSupportingTypes")
 }
 
 typealias OperationRuntimePluginCustomization = NamedCustomization<OperationRuntimePluginSection>
@@ -41,6 +81,7 @@ class OperationRuntimePluginGenerator(
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
         )
     }
@@ -62,16 +103,32 @@ class OperationRuntimePluginGenerator(
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
                     cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{AuthOptionListResolverParams}::new()));
 
+                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+                    cfg.set_retry_classifiers(retry_classifiers);
+
                     #{additional_config}
                     Ok(())
                 }
             }
+
+            #{runtime_plugin_supporting_types}
             """,
             *codegenScope,
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
                     OperationRuntimePluginSection.AdditionalConfig("cfg", operationShape),
+                )
+            },
+            "retry_classifier_customizations" to writable {
+                writeCustomizations(customizations, OperationRuntimePluginSection.RetryClassifier("cfg", operationShape))
+            },
+            "runtime_plugin_supporting_types" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationRuntimePluginSection.RuntimePluginSupportingTypes("cfg", operationShape),
                 )
             },
         )
