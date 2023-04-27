@@ -26,10 +26,8 @@ public object RenderSerdeAttribute {
         }
     }
 
-    public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape? = null) {
-        if (member.isEventStream(model) || (shape != null && shape.hasTrait<ErrorTrait>())) {
-            return
-        }
+    public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
+        if (member.isEventStream(model) || shape.hasTrait<ErrorTrait>().not()) return
         if (member.isStreaming(model)) {
             Attribute("").SerdeSkip().render(writer)
         }
