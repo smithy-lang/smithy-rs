@@ -150,6 +150,11 @@ internal class BuilderGeneratorTest {
                 BuilderGenerator.renderConvenienceMethod(this, provider, errorStruct)
             }
             unitTest("check_serde_on_error_types") {
+                // it doesn't check if ser is implemented this is because
+                // there is no way to check if a trait is implemented on runtime
+                // since de/ser will both be implemented for any struct that implements it
+                // this will work
+                // not the best but better than nothing
                 rust(
                     """
                     let json_str = r##"{"message": "something"}"##;
