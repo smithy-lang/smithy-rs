@@ -24,7 +24,7 @@ message = """
 
 - Core codegen code
   - Add sensitive warning
-  - Add `serde` attributes 
+  - Add `serde` attributes
   - Import `serde` crate to enable `serde(skip)` on some namespaces
   - Add `serde` crate behind unstable feature gate on `Cargo.toml`
 
@@ -43,7 +43,7 @@ message = """
 
 - Core codegen code
   - Add sensitive warning
-  - Add `serde` attributes 
+  - Add `serde` attributes
   - Import `serde` crate to enable `serde(skip)` on some namespaces
   - Add `serde` crate behind unstable feature gate on `Cargo.toml`
 
