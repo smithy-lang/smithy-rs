@@ -168,8 +168,10 @@ mod test {
 
     #[test]
     fn is_serde_impled_when_serde_is_not_enabled() {
-        if cfg!(not(all(aws_sdk_unstable, feature = "serde-deserialize"))) {
+        if cfg!(all(aws_sdk_unstable, feature = "serde-deserialize")) {
             assert!(serde_json::from_str::<Blob>("QVdT").is_err());
+        } else {
+            assert!(serde_json::from_str::<Blob>("QVdT").is_ok());
         }
     }
 }
