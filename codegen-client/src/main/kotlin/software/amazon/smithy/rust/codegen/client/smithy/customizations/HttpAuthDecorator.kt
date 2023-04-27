@@ -43,7 +43,7 @@ fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     return arrayOf(
         "ApiKeyAuthScheme" to authHttp.resolve("ApiKeyAuthScheme"),
         "ApiKeyLocation" to authHttp.resolve("ApiKeyLocation"),
-        "AuthOptionListResolver" to smithyRuntimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
+        "StaticAuthOptionResolver" to smithyRuntimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
         "BasicAuthScheme" to authHttp.resolve("BasicAuthScheme"),
         "BearerAuthScheme" to authHttp.resolve("BearerAuthScheme"),
         "DigestAuthScheme" to authHttp.resolve("DigestAuthScheme"),
@@ -207,7 +207,7 @@ private class HttpAuthOperationRuntimePluginCustomization(
         when (section) {
             is OperationRuntimePluginSection.AdditionalConfig -> {
                 withBlockTemplate(
-                    "let auth_option_resolver = #{AuthOptionListResolver}::new(vec![",
+                    "let auth_option_resolver = #{StaticAuthOptionResolver}::new(vec![",
                     "]);",
                     *codegenScope,
                 ) {

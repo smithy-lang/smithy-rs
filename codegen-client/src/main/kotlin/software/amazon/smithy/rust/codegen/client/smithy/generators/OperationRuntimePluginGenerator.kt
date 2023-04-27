@@ -76,7 +76,7 @@ class OperationRuntimePluginGenerator(
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
-            "AuthOptionListResolverParams" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolverParams"),
+            "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
@@ -101,7 +101,7 @@ class OperationRuntimePluginGenerator(
                     cfg.set_response_deserializer(${operationStructName}ResponseDeserializer);
 
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
-                    cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{AuthOptionListResolverParams}::new()));
+                    cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StaticAuthOptionResolverParams}::new()));
 
                     // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
                     let retry_classifiers = #{RetryClassifiers}::new()

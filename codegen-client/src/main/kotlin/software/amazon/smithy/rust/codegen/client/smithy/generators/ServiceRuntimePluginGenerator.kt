@@ -70,7 +70,7 @@ class ServiceRuntimePluginGenerator(
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
-            "AuthOptionListResolver" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
+            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
@@ -112,7 +112,7 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_http_auth_schemes(http_auth_schemes);
 
                     // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{AuthOptionListResolver}::new(Vec::new()));
+                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(Vec::new()));
 
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));

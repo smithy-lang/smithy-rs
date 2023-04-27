@@ -57,7 +57,7 @@ pub(super) async fn orchestrate_auth(
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::auth::option_resolver::AuthOptionListResolver;
+    use aws_smithy_runtime_api::client::auth::option_resolver::StaticAuthOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthOptionResolverParams, AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
     };
@@ -122,7 +122,7 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         cfg.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        cfg.set_auth_option_resolver(AuthOptionListResolver::new(vec![TEST_SCHEME_ID]));
+        cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![TEST_SCHEME_ID]));
         cfg.set_identity_resolvers(
             IdentityResolvers::builder()
                 .identity_resolver(TEST_SCHEME_ID, TestIdentityResolver)
@@ -165,7 +165,7 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         cfg.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        cfg.set_auth_option_resolver(AuthOptionListResolver::new(vec![
+        cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
             HTTP_BASIC_AUTH_SCHEME_ID,
             HTTP_BEARER_AUTH_SCHEME_ID,
         ]));
