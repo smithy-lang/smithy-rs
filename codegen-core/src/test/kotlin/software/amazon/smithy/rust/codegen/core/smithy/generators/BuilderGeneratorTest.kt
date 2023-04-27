@@ -25,6 +25,7 @@ internal class BuilderGeneratorTest {
     private val struct = StructureGeneratorTest.struct
     private val credentials = StructureGeneratorTest.credentials
     private val secretStructure = StructureGeneratorTest.secretStructure
+    private val errorStruct = StructureGeneratorTest.error
 
     @Test
     fun `generate builders`() {
@@ -140,10 +141,9 @@ internal class BuilderGeneratorTest {
 
     @Test
     fun `don't add serde to error types`() {
-        print("don't add serde to error types")
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.moduleFor(inner) {
+        project.moduleFor(errorStruct) {
             rust("##![allow(deprecated)]")
             StructureGenerator(model, provider, this, inner, emptyList()).render()
             StructureGenerator(model, provider, this, struct, emptyList()).render()
