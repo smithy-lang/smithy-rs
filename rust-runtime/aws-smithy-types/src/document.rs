@@ -10,6 +10,7 @@ use crate::Number;
 ))]
 use serde;
 use std::collections::HashMap;
+
 /* ANCHOR: document */
 
 /// Document Type
@@ -90,6 +91,7 @@ impl From<i32> for Document {
         Document::Number(Number::NegInt(value as i64))
     }
 }
+
 
 /* ANCHOR END: document */
 
