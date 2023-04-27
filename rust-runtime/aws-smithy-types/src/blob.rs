@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for Blob {
     feature = "serde-serialize",
     feature = "serde-deserialize"
 ))]
-mod test {
+mod test_serde {
     use crate::Blob;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
@@ -161,5 +161,16 @@ mod test {
 
         let de: ForTest = ciborium::de::from_reader(std::io::Cursor::new(buf)).unwrap();
         assert_eq!(for_test, de);
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::Blob;
+
+    #[test]
+    fn is_serde_enabled() {
+        assert!(serde_json::from_str::<Blob>("QVdT").is_err());
     }
 }
