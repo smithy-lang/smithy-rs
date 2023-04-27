@@ -191,7 +191,7 @@ mod orchestrator {
             let params_builder = aws_sdk_s3::endpoint::Params::builder()
                 .set_region(Some("us-east-1".to_owned()))
                 .set_endpoint(Some("https://s3.us-east-1.amazonaws.com/".to_owned()));
-            cfg.put(params_builder);
+            cfg.put_legacy(params_builder);
 
             cfg.set_retry_strategy(
                 aws_smithy_runtime_api::client::retries::NeverRetryStrategy::new(),
@@ -212,11 +212,11 @@ mod orchestrator {
                 StubTraceProbe
             });
 
-            cfg.put(SigningService::from_static("s3"));
-            cfg.put(SigningRegion::from(Region::from_static("us-east-1")));
+            cfg.put_legacy(SigningService::from_static("s3"));
+            cfg.put_legacy(SigningRegion::from(Region::from_static("us-east-1")));
 
-            cfg.put(ApiMetadata::new("unused", "unused"));
-            cfg.put(AwsUserAgent::for_tests()); // Override the user agent with the test UA
+            cfg.put_legacy(ApiMetadata::new("unused", "unused"));
+            cfg.put_legacy(AwsUserAgent::for_tests()); // Override the user agent with the test UA
             cfg.get::<Interceptors<HttpRequest, HttpResponse>>()
                 .expect("interceptors set")
                 .register_client_interceptor(Arc::new(UserAgentInterceptor::new()) as _)
@@ -249,7 +249,7 @@ mod orchestrator {
                         .ok_or_else(|| "missing endpoint params builder")?
                         .clone();
                     params_builder = params_builder.set_bucket(input.bucket.clone());
-                    cfg.put(params_builder);
+                    cfg.put_legacy(params_builder);
 
                     Ok(())
                 }
@@ -270,7 +270,7 @@ mod orchestrator {
                     let params = params_builder.build().map_err(|err| {
                         ContextAttachedError::new("endpoint params could not be built", err)
                     })?;
-                    cfg.put(
+                    cfg.put_legacy(
                         aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams::new(
                             params,
                         ),

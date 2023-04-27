@@ -35,7 +35,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class AdditionalConfig(val configBagName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
-            writer.rust("$configBagName.put(#T);", value)
+            writer.rust("$configBagName.put_legacy(#T);", value)
         }
 
         /** Generates the code to register an interceptor */
@@ -119,7 +119,7 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
                     ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
-                    cfg.put(#{Params}::builder());
+                    cfg.put_legacy(#{Params}::builder());
 
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());

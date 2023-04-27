@@ -255,7 +255,7 @@ impl ConfigBagAccessors for ConfigBag {
         &mut self,
         auth_option_resolver_params: AuthOptionResolverParams,
     ) {
-        self.put::<AuthOptionResolverParams>(auth_option_resolver_params);
+        self.put_legacy::<AuthOptionResolverParams>(auth_option_resolver_params);
     }
 
     fn auth_option_resolver(&self) -> &dyn AuthOptionResolver {
@@ -268,7 +268,7 @@ impl ConfigBagAccessors for ConfigBag {
         &mut self,
         auth_option_resolver: impl AuthOptionResolver + 'static,
     ) {
-        self.put::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
+        self.put_legacy::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
     }
 
     fn endpoint_resolver_params(&self) -> &EndpointResolverParams {
@@ -277,7 +277,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams) {
-        self.put::<EndpointResolverParams>(endpoint_resolver_params);
+        self.put_legacy::<EndpointResolverParams>(endpoint_resolver_params);
     }
 
     fn endpoint_resolver(&self) -> &dyn EndpointResolver {
@@ -287,7 +287,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static) {
-        self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
+        self.put_legacy::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
     }
 
     fn identity_resolvers(&self) -> &IdentityResolvers {
@@ -296,7 +296,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers) {
-        self.put::<IdentityResolvers>(identity_resolvers);
+        self.put_legacy::<IdentityResolvers>(identity_resolvers);
     }
 
     fn connection(&self) -> &dyn Connection {
@@ -306,7 +306,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_connection(&mut self, connection: impl Connection + 'static) {
-        self.put::<Box<dyn Connection>>(Box::new(connection));
+        self.put_legacy::<Box<dyn Connection>>(Box::new(connection));
     }
 
     fn http_auth_schemes(&self) -> &HttpAuthSchemes {
@@ -315,7 +315,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes) {
-        self.put::<HttpAuthSchemes>(http_auth_schemes);
+        self.put_legacy::<HttpAuthSchemes>(http_auth_schemes);
     }
 
     fn request_serializer(&self) -> &dyn RequestSerializer {
@@ -325,7 +325,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static) {
-        self.put::<Box<dyn RequestSerializer>>(Box::new(request_serializer));
+        self.put_legacy::<Box<dyn RequestSerializer>>(Box::new(request_serializer));
     }
 
     fn response_deserializer(&self) -> &dyn ResponseDeserializer {
@@ -338,7 +338,7 @@ impl ConfigBagAccessors for ConfigBag {
         &mut self,
         response_deserializer: impl ResponseDeserializer + 'static,
     ) {
-        self.put::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
+        self.put_legacy::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
     }
 
     fn retry_classifiers(&self) -> &RetryClassifiers {
@@ -347,7 +347,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_retry_classifiers(&mut self, retry_classifiers: RetryClassifiers) {
-        self.put::<RetryClassifiers>(retry_classifiers);
+        self.put_legacy::<RetryClassifiers>(retry_classifiers);
     }
 
     fn retry_strategy(&self) -> &dyn RetryStrategy {
@@ -357,7 +357,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
-        self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
+        self.put_legacy::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
     }
 
     fn trace_probe(&self) -> &dyn TraceProbe {
@@ -367,7 +367,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static) {
-        self.put::<Box<dyn TraceProbe>>(Box::new(trace_probe));
+        self.put_legacy::<Box<dyn TraceProbe>>(Box::new(trace_probe));
     }
 
     fn request_time(&self) -> Option<RequestTime> {
@@ -375,7 +375,7 @@ impl ConfigBagAccessors for ConfigBag {
     }
 
     fn set_request_time(&mut self, request_time: RequestTime) {
-        self.put::<RequestTime>(request_time);
+        self.put_legacy::<RequestTime>(request_time);
     }
 }
 
