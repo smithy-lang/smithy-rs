@@ -6,7 +6,6 @@
 //! Error metadata
 
 use crate::retry::{ErrorKind, ProvideErrorKind};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -40,19 +39,11 @@ pub const EMPTY_ERROR_METADATA: ErrorMetadata = ErrorMetadata {
 /// For many services, Errors are modeled. However, many services only partially model errors or don't
 /// model errors at all. In these cases, the SDK will return this generic error type to expose the
 /// `code`, `message` and `request_id`.
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-serialize"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    derive(serde::Deserialize)
-)]
 #[derive(Debug, Eq, PartialEq, Default, Clone)]
 pub struct ErrorMetadata {
     code: Option<String>,
     message: Option<String>,
-    extras: Option<HashMap<Cow<'static, str>, String>>,
+    extras: Option<HashMap<&'static str, String>
 }
 
 impl ProvideErrorMetadata for ErrorMetadata {
@@ -62,23 +53,8 @@ impl ProvideErrorMetadata for ErrorMetadata {
 }
 
 /// Builder for [`ErrorMetadata`].
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-serialize"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    derive(serde::Deserialize)
-)]
 #[derive(Debug, Default)]
 pub struct Builder {
-    #[cfg_attr(
-        any(
-            all(aws_sdk_unstable, feature = "serde-deserialize"),
-            all(aws_sdk_unstable, feature = "serde-serialize")
-        ),
-        serde(flatten)
-    )]
     inner: ErrorMetadata,
 }
 
@@ -128,7 +104,7 @@ impl Builder {
             .extras
             .as_mut()
             .unwrap()
-            .insert(Cow::Borrowed(key), value.into());
+            .insert(key, value.into());
         self
     }
 
@@ -194,36 +170,3 @@ impl fmt::Display for ErrorMetadata {
 }
 
 impl std::error::Error for ErrorMetadata {}
-
-#[cfg(all(
-    test,
-    any(
-        all(aws_sdk_unstable, feature = "serde-deserialize"),
-        all(aws_sdk_unstable, feature = "serde-serialize")
-    )
-))]
-mod test {
-    use super::*;
-
-    #[test]
-    /// tests de/ser on ErrorMetaData.
-    fn test_error_meta_data() {
-        let mut data = Builder::default()
-            .code("code")
-            .message("message")
-            .custom("hello", "world");
-        let ok = serde_json::to_string_pretty(&EMPTY_ERROR_METADATA).unwrap();
-        assert_eq!(
-            &ok,
-            include_str!("../../test-data/error_meta_data_empty.json")
-        );
-        assert_eq!(
-            serde_json::from_str(include_str!("../../test-data/error_meta_data.json")).unwrap(),
-            &data
-        );
-        assert_eq!(
-            serde_json::from_str(include_str!("../../test-data/error_meta_data.json")).unwrap(),
-            data.build()
-        );
-    }
-}
