@@ -22,19 +22,23 @@ public object RenderSerdeAttribute {
     private const val warningMessage = "/// This data may contain sensitive information; It will not be obscured when serialized.\n"
 
     // guards to check if you want to add serde attributes
-    private fun isApplicable(shape: Shape? = null, model: Model? = null): Boolean {
-        if (shape == null || model == null) return false
+    private fun isApplicable(shape: Shape, model: Model): Boolean {
         if (shape.hasTrait<ErrorTrait>() || shape.members().none { it.isEventStream(model) }) return false
         return true
     }
 
-    public fun addSensitiveWarningDoc(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
+    public fun addSensitiveWarningDoc(writer: RustWriter, shape: Shape, model: Model) {
         if (isApplicable(shape, model) && shape.hasTrait<SensitiveTrait>()) {
             writer.writeInline(warningMessage)
         }
     }
 
-    public fun addSerde(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
+    public fun addSerdeWithoutShapeModel(writer: RustWriter) {
+        Attribute("").SerdeSerialize().render(writer)
+        Attribute("").SerdeDeserialize().render(writer)
+    }
+
+    public fun addSerde(writer: RustWriter, shape: Shape, model: Model) {
         if (isApplicable(shape, model)) {
             Attribute("").SerdeSerialize().render(writer)
             Attribute("").SerdeDeserialize().render(writer)
