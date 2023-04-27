@@ -99,7 +99,7 @@ data class InfallibleEnumType(
                 """.trimIndent(),
             )
 
-            RenderSerdeAttribute.writeAttributes(this)
+            RenderSerdeAttribute.addSerde(this, null, null)
             context.enumMeta.render(this)
             rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {

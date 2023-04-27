@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.shape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -213,7 +212,7 @@ class BuilderGenerator(
         writer.docs("A builder for #D.", structureSymbol)
         metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
-        RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        RenderSerdeAttribute.addSerde(writer, shape, model)
         SensitiveWarning.addDoc(writer, shape)
         writer.rustBlock("pub struct $builderName") {
             // add serde

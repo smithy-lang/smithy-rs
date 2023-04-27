@@ -164,7 +164,7 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-        RenderSerdeAttribute.forStructureShape(writer, shape, model)
+        RenderSerdeAttribute.addSerde(writer, shape, model)
         SensitiveWarning.addDoc(writer, shape)
         containerMeta.render(writer)
 
