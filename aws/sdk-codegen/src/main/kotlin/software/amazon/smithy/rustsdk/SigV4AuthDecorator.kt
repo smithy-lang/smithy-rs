@@ -102,10 +102,8 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
         val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "AuthOptionListResolver" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
-            "HttpAuthOption" to runtimeApi.resolve("client::orchestrator::HttpAuthOption"),
+            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "HttpSignatureType" to awsRuntime.resolve("auth::sigv4::HttpSignatureType"),
-            "PropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::PropertyBag"),
             "SIGV4_SCHEME_ID" to awsRuntime.resolve("auth::sigv4::SCHEME_ID"),
             "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::sigv4::SigV4OperationSigningConfig"),
             "SigningOptions" to awsRuntime.resolve("auth::sigv4::SigningOptions"),
@@ -136,16 +134,15 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
-                        signing_options.request_timestamp = cfg.request_time().unwrap_or_default().system_time();
 
-                        let mut sigv4_properties = #{PropertyBag}::new();
-                        sigv4_properties.insert(#{SigV4OperationSigningConfig} {
+                        ${section.configBagName}.put(#{SigV4OperationSigningConfig} {
                             region: signing_region,
                             service: signing_service,
                             signing_options,
                         });
-                        let auth_option_resolver = #{AuthOptionListResolver}::new(
-                            vec![#{HttpAuthOption}::new(#{SIGV4_SCHEME_ID}, std::sync::Arc::new(sigv4_properties))]
+                        // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
+                        let auth_option_resolver = #{StaticAuthOptionResolver}::new(
+                            vec![#{SIGV4_SCHEME_ID}]
                         );
                         ${section.configBagName}.set_auth_option_resolver(auth_option_resolver);
                         """,
