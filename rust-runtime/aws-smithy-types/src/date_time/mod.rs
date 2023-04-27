@@ -609,6 +609,7 @@ mod test {
     const MIN_RFC_3339_MILLIS: i64 = -62135596800000;
     const MAX_RFC_3339_MILLIS: i64 = 253402300799999;
 
+    // This test uses milliseconds, because `Format::DateTime` does not support nanoseconds.
     proptest! {
         #[test]
         fn ord_proptest(
