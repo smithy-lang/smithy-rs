@@ -7,25 +7,22 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 // Part of RFC30
 public object RenderSerdeAttribute {
     public fun forStructureShape(writer: RustWriter, shape: StructureShape, model: Model) {
-        if (shape.members().none { it.isEventStream(model) }) {
+        if (shape.hasTrait<ErrorTrait>().not() && shape.members().none { it.isEventStream(model) }) {
             writeAttributes(writer)
-        }
-    }
-
-    public fun forBuilders(writer: RustWriter, shape: StructureShape, model: Model) {
-        if (shape.members().none { it.isEventStream(model) }) {
-            writeAttributes(writer)
-        }
+        };
     }
 
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model) {

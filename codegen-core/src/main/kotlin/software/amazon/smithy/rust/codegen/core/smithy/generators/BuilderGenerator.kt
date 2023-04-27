@@ -213,7 +213,7 @@ class BuilderGenerator(
         writer.docs("A builder for #D.", structureSymbol)
         metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
-        RenderSerdeAttribute.forBuilders(writer, shape, model)
+        RenderSerdeAttribute.forStructureShape(writer, shape, model)
         SensitiveWarning.addDoc(writer, shape)
         writer.rustBlock("pub struct $builderName") {
             // add serde
