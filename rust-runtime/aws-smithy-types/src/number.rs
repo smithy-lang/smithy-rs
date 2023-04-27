@@ -13,8 +13,6 @@ use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 ))]
 use serde;
 
-use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
-
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -209,7 +207,7 @@ impl TryFrom<Number> for f32 {
 }
 
 #[cfg(test)]
-mod test {
+mod number {
     use super::*;
     use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 

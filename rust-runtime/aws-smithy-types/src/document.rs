@@ -4,13 +4,13 @@
  */
 
 use crate::Number;
+
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 use serde;
 use std::collections::HashMap;
-
 /* ANCHOR: document */
 
 /// Document Type
@@ -91,7 +91,6 @@ impl From<i32> for Document {
         Document::Number(Number::NegInt(value as i64))
     }
 }
-
 
 /* ANCHOR END: document */
 
