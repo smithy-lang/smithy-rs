@@ -20,14 +20,15 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 public object RenderSerdeAttribute {
     public fun addSerde(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
         if (shape == null || model == null) return
-        if (shape.hasTrait<ErrorTrait>().not() && shape.members().none { it.isEventStream(model) }) {
+        if (shape.hasTrait<ErrorTrait>()) return
+        if (shape.members().none { it.isEventStream(model) }) {
             Attribute("").SerdeSerialize().render(writer)
             Attribute("").SerdeDeserialize().render(writer)
         }
     }
 
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
-        if (member.isEventStream(model) || shape.hasTrait<ErrorTrait>().not()) return
+        if (shape.hasTrait<ErrorTrait>() || member.isEventStream(model)) return
         if (member.isStreaming(model)) {
             Attribute("").SerdeSkip().render(writer)
         }
