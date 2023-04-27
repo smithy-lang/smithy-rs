@@ -54,9 +54,8 @@ fn extract_time_sent_from_response(
     let date_header = res
         .headers()
         .get("date")
-        .ok_or_else(|| "Response from server is missing expected 'date' header")?
-        .to_str()
-        .expect("date header is always valid UTF-8");
+        .ok_or_else(|| "Response from server does not include a `date` header")?
+        .to_str()?;
     DateTime::from_str(date_header, Format::HttpDate).map_err(Into::into)
 }
 
@@ -70,12 +69,10 @@ impl Interceptor<HttpRequest, HttpResponse> for ServiceClockSkewInterceptor {
         let time_sent = match extract_time_sent_from_response(ctx) {
             Ok(time_sent) => time_sent,
             Err(e) => {
-                // We don't want to fail a request on account of this, but it's very strange for
-                // this to fail, so we emit a log.
-                tracing::warn!(
-                    "failed to calculate clock skew of service from response: {}",
-                    e
-                );
+                // We don't want to fail a request for this because 1xx and 5xx responses and
+                // responses from servers with no clock may omit this header. We still log it at the
+                // trace level to aid in debugging.
+                tracing::trace!("failed to calculate clock skew of service from response: {e}",);
                 return Ok(());
             }
         };
