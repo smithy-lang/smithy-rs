@@ -36,7 +36,7 @@ author = "thomas-k-cameron"
 references = ["smithy-rs#2615"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 
-[[smithy-rs]]
+[[aws-sdk-rust]]
 message = """
 - rust runtime
   - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
