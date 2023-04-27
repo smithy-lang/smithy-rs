@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 // Part of RFC30
 public object RenderSerdeAttribute {
     public fun addSerde(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
-        if (shape == null || model == null) return;
+        if (shape == null || model == null) return
         if (shape.hasTrait<ErrorTrait>() && shape.members().none { it.isEventStream(model) }) {
             writeAttributes(writer)
         }

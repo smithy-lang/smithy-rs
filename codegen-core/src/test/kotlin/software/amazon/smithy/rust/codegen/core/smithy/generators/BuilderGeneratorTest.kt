@@ -158,7 +158,7 @@ internal class BuilderGeneratorTest {
                     assert!(err.is_err());
                     let err: Builder = serde_json::from_str(json_str);
                     assert!(err.is_err());
-                    
+
                     let my_struct1 = MyError::builder().message("something".to_string()).build();
                     assert!(serde_json::to_string(my_struct1).is_err());
                     let my_struct2 = MyError::builder().message("something".to_string());
