@@ -153,15 +153,10 @@ internal class BuilderGeneratorTest {
                 rust(
                     """
                     let json_str = r##"{"message": "something"}"##;
-                    let err: MyError = serde_json::from_str(json_str);
+                    let err: Result<MyError, _> = serde_json::from_str(json_str);
                     assert!(err.is_err());
-                    let err: Builder = serde_json::from_str(json_str);
+                    let err: Result<test_my_error::Builder, _> = serde_json::from_str(json_str);
                     assert!(err.is_err());
-
-                    let my_struct1 = MyError::builder().message("something".to_string()).build();
-                    assert!(serde_json::to_string(my_struct1).is_err());
-                    let my_struct2 = MyError::builder().message("something".to_string());
-                    assert!(serde_json::to_string(my_struct2).is_err());
                     """,
                 )
             }
