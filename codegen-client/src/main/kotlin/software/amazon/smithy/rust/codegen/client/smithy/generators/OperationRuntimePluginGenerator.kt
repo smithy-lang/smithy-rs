@@ -77,7 +77,7 @@ class OperationRuntimePluginGenerator(
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AuthOptionListResolverParams" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolverParams"),
-            "AuthOptionResolverParams" to runtimeApi.resolve("client::orchestrator::AuthOptionResolverParams"),
+            "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
