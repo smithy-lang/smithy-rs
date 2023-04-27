@@ -12,6 +12,7 @@ use crate::base64;
 use serde::Serialize;
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 use serde::{de::Visitor, Deserialize};
+
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
@@ -39,6 +40,7 @@ impl AsRef<[u8]> for Blob {
         &self.inner
     }
 }
+
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 impl Serialize for Blob {

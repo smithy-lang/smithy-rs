@@ -12,6 +12,7 @@ use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
     any(feature = "serde-serialize", feature = "serde-deserialize")
 ))]
 use serde;
+use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>

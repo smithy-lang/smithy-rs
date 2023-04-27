@@ -4,6 +4,7 @@
  */
 
 use crate::Number;
+
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
