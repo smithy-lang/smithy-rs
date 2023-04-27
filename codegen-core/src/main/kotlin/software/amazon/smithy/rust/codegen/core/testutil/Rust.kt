@@ -44,15 +44,15 @@ import kotlin.io.path.absolutePathString
 
 object Commands {
     val CargoEnvDWarnings = mapOf(
-        "RUSTFLAGS" to "-D warnings --cfg aws_sdk_unstable"
+        "RUSTFLAGS" to "-D warnings --cfg aws_sdk_unstable",
     )
     val CargoEnvDDeadCode = mapOf(
-        "RUSTFLAGS" to "-A dead_code --cfg aws_sdk_unstable"
+        "RUSTFLAGS" to "-A dead_code --cfg aws_sdk_unstable",
     )
-    val CargoTest = "cargo test --all-features"
-    val CargoCheck = "cargo check --all-features"
-    val CargoFmt = "cargo fmt "
-    val CargoClippy = "cargo clippy"
+    const val CargoTest = "cargo test --all-features"
+    const val CargoCheck = "cargo check --all-features"
+    const val CargoFmt = "cargo fmt "
+    const val CargoClippy = "cargo clippy"
 }
 
 val TestModuleDocProvider = object : ModuleDocProvider {
