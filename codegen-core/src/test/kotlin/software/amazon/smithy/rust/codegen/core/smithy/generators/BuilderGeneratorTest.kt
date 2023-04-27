@@ -146,8 +146,8 @@ internal class BuilderGeneratorTest {
         project.moduleFor(errorStruct) {
             rust("##![allow(deprecated)]")
             StructureGenerator(model, provider, this, errorStruct, emptyList()).render()
-            implBlock(provider.toSymbol(struct)) {
-                BuilderGenerator.renderConvenienceMethod(this, provider, struct)
+            implBlock(provider.toSymbol(errorStruct)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, errorStruct)
             }
             unitTest("check_serde_on_error_types") {
                 rust(
