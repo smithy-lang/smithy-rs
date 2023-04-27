@@ -220,7 +220,7 @@ class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                RenderSerdeAttribute.skipIfStream(writer, member, model)
+                RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
                 SensitiveWarning.addDoc(writer, member)
                 renderBuilderMember(this, memberName, memberSymbol)
             }

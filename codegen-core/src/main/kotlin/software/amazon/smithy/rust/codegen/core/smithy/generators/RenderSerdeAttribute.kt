@@ -20,13 +20,14 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 public object RenderSerdeAttribute {
     public fun addSerde(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
         if (shape == null || model == null) return
-        if (shape.hasTrait<ErrorTrait>() && shape.members().none { it.isEventStream(model) }) {
-            writeAttributes(writer)
+        if (shape.hasTrait<ErrorTrait>().not() && shape.members().none { it.isEventStream(model) }) {
+            Attribute("").SerdeSerialize().render(writer)
+            Attribute("").SerdeDeserialize().render(writer)
         }
     }
 
-    public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model) {
-        if (member.isEventStream(model)) {
+    public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape? = null) {
+        if (member.isEventStream(model) || (shape != null && shape.hasTrait<ErrorTrait>())) {
             return
         }
         if (member.isStreaming(model)) {
@@ -39,10 +40,5 @@ public object RenderSerdeAttribute {
         Attribute.AllowUnusedImports.render(writer)
         Attribute("").SerdeSerializeOrDeserialize().render(writer)
         writer.raw("use serde;")
-    }
-
-    public fun writeAttributes(writer: RustWriter) {
-        Attribute("").SerdeSerialize().render(writer)
-        Attribute("").SerdeDeserialize().render(writer)
     }
 }

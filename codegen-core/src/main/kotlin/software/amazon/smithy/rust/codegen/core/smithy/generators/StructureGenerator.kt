@@ -171,7 +171,7 @@ open class StructureGenerator(
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 SensitiveWarning.addDoc(writer, shape)
-                RenderSerdeAttribute.skipIfStream(writer, member, model)
+                RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
             writeCustomizations(customizations, StructureSection.AdditionalFields(shape))
