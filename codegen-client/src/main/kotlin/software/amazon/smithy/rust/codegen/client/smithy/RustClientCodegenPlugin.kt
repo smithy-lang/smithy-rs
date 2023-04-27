@@ -36,11 +36,11 @@ import java.util.logging.Logger
 
 /**
  * Rust Client Codegen Plugin
-*
-* This is the entrypoint for code generation, triggered by the smithy-build plugin.
-* `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
-* enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
-*/
+ *
+ * This is the entrypoint for code generation, triggered by the smithy-build plugin.
+ * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
+ * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
+ */
 class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
     override fun getName(): String = "rust-client-codegen"
 
@@ -78,10 +78,10 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
     companion object {
         /**
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
-        *
-        * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
-        * with other symbol providers, documented inline, to handle the full scope of Smithy types.
-        */
+         *
+         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
+         * with other symbol providers, documented inline, to handle the full scope of Smithy types.
+         */
         fun baseSymbolProvider(
             settings: ClientRustSettings,
             model: Model,
