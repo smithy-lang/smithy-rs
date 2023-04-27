@@ -267,6 +267,8 @@ class FluentClientGenerator(
         ) {
             val outputType = symbolProvider.toSymbol(operation.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operation)
+            val inputBuilderType = symbolProvider.symbolForBuilder(input)
+            val fnName = clientOperationFnName(operation, symbolProvider)
 
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
@@ -316,6 +318,7 @@ class FluentClientGenerator(
                         .map_err(#{SdkError}::construction_failure)?;
                     self.handle.client.call(op).await
                 }
+
                 """,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
@@ -331,6 +334,43 @@ class FluentClientGenerator(
                     generics.toRustGenerics(),
                 ),
             )
+
+            // this fixes this error
+            //  error[E0592]: duplicate definitions with name `set_fields`
+            //     --> sdk/connectcases/src/operation/update_case/builders.rs:115:5
+            //      |
+            //  78  | /     pub fn set_fields(
+            //  79  | |         mut self,
+            //  80  | |         data: crate::operation::update_case::builders::UpdateCaseInputBuilder,
+            //  81  | |     ) -> Self {
+            //      | |_____________- other definition for `set_fields`
+            //  ...
+            //  115 | /     pub fn set_fields(
+            //  116 | |         mut self,
+            //  117 | |         input: std::option::Option<std::vec::Vec<crate::types::FieldValue>>,
+            //  118 | |     ) -> Self {
+            //      | |_____________^ duplicate definitions for `set_fields`
+            if (inputBuilderType.toString().endsWith("Builder")) {
+                rustTemplate(
+                    """
+                    ##[#{AwsSdkUnstableAttribute}]
+                    /// This function replaces the parameter with new one.
+                    /// It is useful when you want to replace the existing data with de-serialized data.
+                    /// ```compile_fail
+                    /// let result_future = async {
+                    ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
+                    ///     client.$fnName().set_fields(&deserialized_parameters).send().await
+                    /// };
+                    /// ```
+                    pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
+                        self.inner = data;
+                        self
+                    }
+                    """,
+                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
+                )
+            }
+
             if (enableNewSmithyRuntime) {
                 rustTemplate(
                     """
