@@ -16,3 +16,4 @@ message = "The `Debug` implementation for `PropertyBag` now prints a list of the
 author = "rcoh"
 references = ["smithy-rs#2612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
+
