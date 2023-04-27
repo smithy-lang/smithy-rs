@@ -3,19 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #[cfg(aws_sdk_unstable)]
 use impl_serde::*;
 #[cfg(aws_sdk_unstable)]
 mod impl_serde {
-    #[cfg(feature = "serde-deserialize")]
-    pub use serde::{de::Visitor, Deserialize};
-    #[cfg(feature = "serde-serialize")]
-    pub use serde::Serialize;
     #[cfg(any(feature = "serde-deserialize", feature = "serde-serialize"))]
     pub use crate::base64;
+    #[cfg(feature = "serde-serialize")]
+    pub use serde::Serialize;
+    #[cfg(feature = "serde-deserialize")]
+    pub use serde::{de::Visitor, Deserialize};
 }
-
 
 /// Binary Blob Type
 ///
@@ -163,7 +161,6 @@ mod test_serde {
         assert_eq!(for_test, de);
     }
 }
-
 
 #[cfg(test)]
 mod test {
