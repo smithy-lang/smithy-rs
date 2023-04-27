@@ -41,7 +41,6 @@ impl AsRef<[u8]> for Blob {
     }
 }
 
-
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 impl Serialize for Blob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
