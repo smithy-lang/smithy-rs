@@ -10,9 +10,7 @@ use crate::client::orchestrator::phase::Phase;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
-use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, HttpRequest, HttpResponse,
-};
+use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpResponse};
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -116,7 +114,7 @@ pub async fn invoke(
 async fn make_an_attempt(
     dispatch_phase: Phase,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors<HttpRequest, HttpResponse>,
+    interceptors: &Interceptors,
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
     let dispatch_phase = dispatch_phase
         .include(|ctx| interceptors.read_before_attempt(ctx, cfg))?
