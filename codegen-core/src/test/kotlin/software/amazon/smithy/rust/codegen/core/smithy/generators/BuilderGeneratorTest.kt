@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertAll
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import kotlin.io.path.readText
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
@@ -149,26 +151,16 @@ internal class BuilderGeneratorTest {
             implBlock(provider.toSymbol(errorStruct)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, errorStruct)
             }
-            unitTest("check_serde_on_error_types") {
-                // it doesn't check if ser is implemented this is because
-                // there is no way to check if a trait is implemented on runtime
-                // since de/ser will both be implemented for any struct that implements it
-                // this will work
-                // not the best but better than nothing
-                rust(
-                    """
-                    let json_str = r##"{"message": "something"}"##;
-                    let err: Result<MyError, _> = serde_json::from_str(json_str);
-                    assert!(err.is_err());
-                    let err: Result<test_my_error::Builder, _> = serde_json::from_str(json_str);
-                    assert!(err.is_err());
-                    """,
-                )
-            }
         }
         project.withModule(provider.moduleForBuilder(errorStruct)) {
             BuilderGenerator(model, provider, errorStruct, emptyList()).render(this)
         }
         project.compileAndTest()
+        // checks if there is a serde derive in the code
+        project.generatedFiles().forEach {
+            val file = it.readText()
+            val check = file.contains("derive(serde::Deserialize)") || file.contains("derive(serde::Serialize)")
+            assert(!check)
+        }
     }
 }
