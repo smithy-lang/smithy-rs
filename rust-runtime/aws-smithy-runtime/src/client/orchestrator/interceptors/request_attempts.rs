@@ -7,7 +7,7 @@ use crate::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct RequestAttempts {
     attempts: u32,
@@ -15,7 +15,7 @@ pub struct RequestAttempts {
 
 impl RequestAttempts {
     pub fn new() -> Self {
-        Self { attempts: 0 }
+        Self::default()
     }
 
     // There is no legitimate reason to set this unless you're testing things.
@@ -35,13 +35,13 @@ impl RequestAttempts {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct RequestAttemptsInterceptor {}
 
 impl RequestAttemptsInterceptor {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 
