@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
@@ -18,10 +19,23 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 // Part of RFC30
 public object RenderSerdeAttribute {
+    private const val warningMessage = "/// This data may contain sensitive information; It will not be obscured when serialized.\n"
+
+    // guards to check if you want to add serde attributes
+    private fun isApplicable(shape: Shape? = null, model: Model? = null): Boolean {
+        if (shape == null || model == null) return false
+        if (shape.hasTrait<ErrorTrait>() || shape.members().none { it.isEventStream(model) }) return false
+        return true
+    }
+
+    public fun addSensitiveWarningDoc(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
+        if (isApplicable(shape, model) && shape.hasTrait<SensitiveTrait>()) {
+            writer.writeInline(warningMessage)
+        }
+    }
+
     public fun addSerde(writer: RustWriter, shape: Shape? = null, model: Model? = null) {
-        if (shape == null || model == null) return
-        if (shape.hasTrait<ErrorTrait>()) return
-        if (shape.members().none { it.isEventStream(model) }) {
+        if (isApplicable(shape, model)) {
             Attribute("").SerdeSerialize().render(writer)
             Attribute("").SerdeDeserialize().render(writer)
         }

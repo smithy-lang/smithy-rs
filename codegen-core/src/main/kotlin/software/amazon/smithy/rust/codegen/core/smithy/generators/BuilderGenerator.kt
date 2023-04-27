@@ -213,7 +213,7 @@ class BuilderGenerator(
         metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
         RenderSerdeAttribute.addSerde(writer, shape, model)
-        SensitiveWarning.addDoc(writer, shape)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         writer.rustBlock("pub struct $builderName") {
             // add serde
             for (member in members) {
@@ -221,7 +221,7 @@ class BuilderGenerator(
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
                 RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
-                SensitiveWarning.addDoc(writer, member)
+                RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
             writeCustomizations(customizations, BuilderSection.AdditionalFields(shape))

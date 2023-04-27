@@ -165,12 +165,12 @@ open class StructureGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
         RenderSerdeAttribute.addSerde(writer, shape, model)
-        SensitiveWarning.addDoc(writer, shape)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
-                SensitiveWarning.addDoc(writer, shape)
+                RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
                 RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }

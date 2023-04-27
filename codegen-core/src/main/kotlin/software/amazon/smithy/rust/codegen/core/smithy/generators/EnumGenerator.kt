@@ -222,7 +222,7 @@ open class EnumGenerator(
         documentShape(shape, model)
         deprecatedShape(shape)
         RenderSerdeAttribute.addSerde(this, shape, model)
-        SensitiveWarning.addDoc(this, shape)
+        RenderSerdeAttribute.addSensitiveWarningDoc(this, shape, model)
         context.enumMeta.render(this)
         rust("struct ${context.enumName}(String);")
         implBlock(
@@ -259,7 +259,7 @@ open class EnumGenerator(
         deprecatedShape(shape)
 
         RenderSerdeAttribute.addSerde(this, shape, model)
-        SensitiveWarning.addDoc(this, shape)
+        RenderSerdeAttribute.addSensitiveWarningDoc(this, shape, model)
         context.enumMeta.render(this)
         rustBlock("enum ${context.enumName}") {
             context.sortedMembers.forEach { member -> member.render(this) }
