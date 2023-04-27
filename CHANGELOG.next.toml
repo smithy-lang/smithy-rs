@@ -17,3 +17,40 @@ author = "rcoh"
 references = ["smithy-rs#2612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 
+[[smithy-rs]]
+message = """
+- rust runtime
+  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
+
+- Core codegen code
+  - Add sensitive warning
+  - Add `serde` attributes 
+  - Import `serde` crate to enable `serde(skip)` on some namespaces
+  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
+
+- Client codegen code
+  - add `serde` as dependency behind feature gate
+  - add `serde` support to uknown variant types
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2615"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = """
+- rust runtime
+  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
+
+- Core codegen code
+  - Add sensitive warning
+  - Add `serde` attributes 
+  - Import `serde` crate to enable `serde(skip)` on some namespaces
+  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
+
+- Client codegen code
+  - add `serde` as dependency behind feature gate
+  - add `serde` support to uknown variant types
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2615"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
