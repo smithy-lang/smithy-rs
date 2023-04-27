@@ -14,7 +14,7 @@ mod typeid_map;
 use crate::config_bag::typeid_map::TypeIdMap;
 
 use std::any::{type_name, Any, TypeId};
-use std::collections::HashSet;
+use std::borrow::Cow;
 
 use std::fmt::{Debug, Formatter};
 use std::iter::Rev;
@@ -61,6 +61,7 @@ impl Deref for FrozenConfigBag {
     }
 }
 
+/// Private module to keep Value type while avoiding "private type in public latest"
 pub(crate) mod value {
     #[derive(Debug)]
     pub enum Value<T> {
@@ -78,6 +79,7 @@ impl<T: Default> Default for Value<T> {
 
 struct DebugErased {
     field: Box<dyn Any + Send + Sync>,
+    #[allow(dead_code)]
     type_name: &'static str,
     debug: Box<dyn Fn(&DebugErased, &mut Formatter<'_>) -> std::fmt::Result + Send + Sync>,
 }
@@ -116,19 +118,24 @@ impl DebugErased {
 }
 
 pub struct Layer {
-    name: &'static str,
+    name: Cow<'static, str>,
     props: TypeIdMap<DebugErased>,
 }
 
+/// Trait defining how types can be stored and loaded from the config bag
 pub trait Store: Sized + Send + Sync + 'static {
     type ReturnedType<'a>: Send + Sync;
     type StoredType: Send + Sync + Debug;
 
+    /// Create a returned type from an iterable of items
     fn merge_iter(iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_>;
 }
 
+/// Store an item in the config bag by replacing the existing value
 #[non_exhaustive]
 pub struct StoreReplace<U>(PhantomData<U>);
+
+/// Store an item in the config bag by effectively appending it to a list
 #[non_exhaustive]
 pub struct StoreAppend<U>(PhantomData<U>);
 
@@ -140,7 +147,7 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreReplace<U> {
     type ReturnedType<'a> = Option<&'a U>;
     type StoredType = Value<U>;
 
-    fn merge_iter<'a>(iter: ItemIter<'a, Self>) -> Self::ReturnedType<'a> {
+    fn merge_iter(iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_> {
         for item in iter {
             return match item {
                 Value::Set(item) => Some(item),
@@ -155,7 +162,7 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreAppend<U> {
     type ReturnedType<'a> = AppendItemIter<'a, U>;
     type StoredType = Value<Vec<U>>;
 
-    fn merge_iter<'a>(iter: ItemIter<'a, Self>) -> Self::ReturnedType<'a> {
+    fn merge_iter(iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_> {
         AppendItemIter {
             inner: iter,
             cur: None,
@@ -163,6 +170,7 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreAppend<U> {
     }
 }
 
+/// Iterator of items returned by [`StoreAppend`]
 pub struct AppendItemIter<'a, U> {
     inner: ItemIter<'a, StoreAppend<U>>,
     cur: Option<Rev<slice::Iter<'a, U>>>,
@@ -275,14 +283,18 @@ impl FrozenConfigBag {
     /// add_more_config(&mut bag);
     /// let bag = bag.freeze();
     /// ```
-    pub fn add_layer(&self, name: &'static str) -> ConfigBag {
+    pub fn add_layer(&self, name: impl Into<Cow<'static, str>>) -> ConfigBag {
         self.with_fn(name, no_op)
     }
 
     /// Add more items to the config bag
-    pub fn with_fn(&self, name: &'static str, next: impl Fn(&mut ConfigBag)) -> ConfigBag {
+    pub fn with_fn(
+        &self,
+        name: impl Into<Cow<'static, str>>,
+        next: impl Fn(&mut ConfigBag),
+    ) -> ConfigBag {
         let new_layer = Layer {
-            name,
+            name: name.into(),
             props: Default::default(),
         };
         let mut bag = ConfigBag {
@@ -298,7 +310,7 @@ impl ConfigBag {
     pub fn base() -> Self {
         ConfigBag {
             head: Layer {
-                name: "base",
+                name: Cow::Borrowed("base"),
                 props: Default::default(),
             },
             tail: None,
@@ -372,6 +384,33 @@ impl ConfigBag {
         out
     }
 
+    pub fn get_mut_or_else<T: Send + Sync + Debug + Clone + 'static>(
+        &mut self,
+        default: impl Fn() -> T,
+    ) -> &mut T
+    where
+        T: Storable<Storer = StoreReplace<T>>,
+    {
+        if matches!(self.head.get_mut::<StoreReplace<T>>(), None) {
+            let new_item = match self.tail.as_deref().and_then(|b| b.load::<T>()) {
+                Some(item) => item.clone(),
+                None => (default)(),
+            };
+            self.store_put(new_item);
+            self.get_mut_or_else(default)
+        } else if matches!(
+            self.head.get::<StoreReplace<T>>(),
+            Some(Value::ExplicitlyUnset(_))
+        ) {
+            self.store_put((default)());
+            self.get_mut_or_else(default)
+        } else if let Some(Value::Set(t)) = self.head.get_mut::<StoreReplace<T>>() {
+            t
+        } else {
+            unreachable!()
+        }
+    }
+
     /// Insert `value` into the bag
     pub fn put_legacy<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
         self.head.put::<StoreReplace<T>>(Value::Set(value));
@@ -413,7 +452,7 @@ impl ConfigBag {
         self.freeze().with_fn(name, next)
     }
 
-    pub fn add_layer(self, name: &'static str) -> ConfigBag {
+    pub fn add_layer(self, name: impl Into<Cow<'static, str>>) -> ConfigBag {
         self.freeze().add_layer(name)
     }
 
@@ -430,6 +469,7 @@ impl ConfigBag {
     }
 }
 
+/// Iterator of items returned from config_bag
 pub struct ItemIter<'a, T> {
     inner: BagIter<'a>,
     t: PhantomData<T>,
@@ -584,5 +624,59 @@ mod test {
 
         bag.clear::<Interceptor>();
         assert_eq!(bag.load::<Interceptor>().count(), 0);
+    }
+
+    #[test]
+    fn store_append_many_layers() {
+        #[derive(Debug, PartialEq, Eq, Clone)]
+        struct TestItem(i32, i32);
+        impl Storable for TestItem {
+            type Storer = StoreAppend<TestItem>;
+        }
+        let mut expected = vec![];
+        let mut bag = ConfigBag::base();
+        for layer in 0..100 {
+            bag = bag.add_layer(format!("{}", layer));
+            for item in 0..100 {
+                expected.push(TestItem(layer, item));
+                bag.store_append(TestItem(layer, item));
+            }
+        }
+        expected.reverse();
+        assert_eq!(
+            bag.load::<TestItem>()
+                .map(|i| i.clone())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn get_mut_or_else() {
+        #[derive(Clone, Debug)]
+        struct Foo(usize);
+        impl Storable for Foo {
+            type Storer = StoreReplace<Foo>;
+        }
+
+        let mut bag = ConfigBag::base();
+        bag.get_mut_or_else::<Foo>(|| Foo(0)).0 += 1;
+
+        let bag = bag.freeze();
+
+        let old_ref = bag.load::<Foo>().unwrap();
+        assert_eq!(old_ref.0, 1);
+
+        let mut next = bag.add_layer("next");
+        next.get_mut_or_else(|| {
+            todo!();
+            #[allow(unreachable_code)]
+            Foo(0)
+        })
+        .0 += 1;
+        let new_ref = next.load::<Foo>().unwrap();
+        assert_eq!(new_ref.0, 2);
+        // no funny business
+        assert_eq!(old_ref.0, 1);
     }
 }
