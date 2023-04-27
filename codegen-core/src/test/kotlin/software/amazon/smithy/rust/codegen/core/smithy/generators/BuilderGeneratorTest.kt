@@ -137,4 +137,39 @@ internal class BuilderGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `don't add serde to error types`() {
+        print("don't add serde to error types")
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(inner) {
+            rust("##![allow(deprecated)]")
+            StructureGenerator(model, provider, this, inner, emptyList()).render()
+            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            implBlock(provider.toSymbol(struct)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, struct)
+            }
+            unitTest("check_serde_on_error_types") {
+                rust(
+                    """
+                    let json_str = r##"{"message": "something"}"##;
+                    let err: MyError = serde_json::from_str(json_str);
+                    assert!(err.is_err());
+                    let err: Builder = serde_json::from_str(json_str);
+                    assert!(err.is_err());
+                    
+                    let my_struct1 = MyError::builder().message("something".to_string()).build();
+                    assert!(serde_json::to_string(my_struct1).is_err());
+                    let my_struct2 = MyError::builder().message("something".to_string());
+                    assert!(serde_json::to_string(my_struct2).is_err());
+                    """,
+                )
+            }
+        }
+        project.withModule(provider.moduleForBuilder(struct)) {
+            BuilderGenerator(model, provider, struct, emptyList()).render(this)
+        }
+        project.compileAndTest()
+    }
 }
