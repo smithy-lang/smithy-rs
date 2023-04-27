@@ -43,7 +43,7 @@ pub const EMPTY_ERROR_METADATA: ErrorMetadata = ErrorMetadata {
 pub struct ErrorMetadata {
     code: Option<String>,
     message: Option<String>,
-    extras: Option<HashMap<&'static str, String>
+    extras: Option<HashMap<&'static str, String>,
 }
 
 impl ProvideErrorMetadata for ErrorMetadata {
