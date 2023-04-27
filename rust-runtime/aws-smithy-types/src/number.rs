@@ -207,7 +207,7 @@ impl TryFrom<Number> for f32 {
 }
 
 #[cfg(test)]
-mod test {
+mod number {
     use super::*;
     use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 
