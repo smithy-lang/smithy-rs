@@ -166,8 +166,8 @@ internal class BuilderGeneratorTest {
                 )
             }
         }
-        project.withModule(provider.moduleForBuilder(struct)) {
-            BuilderGenerator(model, provider, struct, emptyList()).render(this)
+        project.withModule(provider.moduleForBuilder(errorStruct)) {
+            BuilderGenerator(model, provider, errorStruct, emptyList()).render(this)
         }
         project.compileAndTest()
     }
