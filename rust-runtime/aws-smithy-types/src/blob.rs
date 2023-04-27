@@ -170,7 +170,9 @@ mod test {
     use crate::Blob;
 
     #[test]
-    fn is_serde_enabled() {
-        assert!(serde_json::from_str::<Blob>("QVdT").is_err());
+    fn is_serde_impled_when_serde_is_not_enabled() {
+        if cfg!(all(aws_sdk_unstable, feature = "serde-deserialize")) {
+            assert!(serde_json::from_str::<Blob>("QVdT").is_err());
+        }
     }
 }
