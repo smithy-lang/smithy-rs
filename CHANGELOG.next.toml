@@ -18,6 +18,12 @@ references = ["smithy-rs#2612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 
 [[smithy-rs]]
+message = "Implement `Ord` and `PartialOrd` for `DateTime`."
+author = "henriiik"
+references = ["smithy-rs#2653"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
 message = """
 - rust runtime
   - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
@@ -53,9 +59,3 @@ message = """
 """
 author = "thomas-k-cameron"
 references = ["smithy-rs#2615"]
-
-[[smithy-rs]]
-message = "Implement `Ord` and `PartialOrd` for `DateTime`."
-author = "henriiik"
-references = ["smithy-rs#2653"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
