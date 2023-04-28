@@ -12,18 +12,18 @@ fn base(dt: &str) {
     let data_type = format!("aws_smithy_types::{dt}");
     // commands 2 run
     let array = [
-        ("cargo build --all-features", [true; 2], false),
-        ("cargo build --features serde-serialize", [true; 2], false),
-        ("cargo build --features serde-deserialize", [true; 2], false),
+        ("cargo check --all-features", [true; 2], false),
+        ("cargo check --features serde-serialize", [true; 2], false),
+        ("cargo check --features serde-deserialize", [true; 2], false),
         // checks if features are properly gated behind serde-serialize/deserialize
-        ("cargo build", [true; 2], true),
+        ("cargo check", [true; 2], true),
         (
-            "cargo build --features serde-serialize",
+            "cargo check --features serde-serialize",
             [false, true],
             true,
         ),
         (
-            "cargo build --features serde-deserialize",
+            "cargo check --features serde-deserialize",
             [true, false],
             true,
         ),
