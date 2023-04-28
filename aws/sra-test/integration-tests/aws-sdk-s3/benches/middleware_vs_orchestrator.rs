@@ -107,7 +107,7 @@ async fn orchestrator(client: &s3::Client) {
         .list_objects_v2()
         .bucket("test-bucket")
         .prefix("prefix~")
-        .send_v2_with_plugin(Some(FixupPlugin {
+        .send_orchestrator_with_plugin(Some(FixupPlugin {
             region: client
                 .conf()
                 .region()

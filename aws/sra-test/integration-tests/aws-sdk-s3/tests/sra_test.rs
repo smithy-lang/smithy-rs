@@ -41,7 +41,7 @@ async fn sra_test() {
             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
-            .send_v2_with_plugin(Some(fixup))
+            .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
     // To regenerate the test:
