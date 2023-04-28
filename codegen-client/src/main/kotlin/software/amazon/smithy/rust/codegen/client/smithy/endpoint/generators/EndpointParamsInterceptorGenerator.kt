@@ -118,7 +118,7 @@ class EndpointParamsInterceptorGenerator(
                 endpointTraitBindings.render(
                     this,
                     "_input",
-                    codegenContext.settings.codegenConfig.enableNewSmithyRuntime,
+                    codegenContext.smithyRuntimeMode,
                 )
             }
             rust("cfg.put(endpoint_prefix);")
