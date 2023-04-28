@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.rustFormatString
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -44,7 +45,7 @@ class EndpointTraitBindings(
      *
      * The returned expression is a `Result<EndpointPrefix, UriError>`
      */
-    fun render(writer: RustWriter, input: String, enableNewSmithyRuntime: Boolean) {
+    fun render(writer: RustWriter, input: String, smithyRuntimeMode: SmithyRuntimeMode) {
         // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
         val formatLiteral = endpointTrait.prefixFormatString()
         if (endpointTrait.hostPrefix.labels.isEmpty()) {
@@ -67,7 +68,7 @@ class EndpointTraitBindings(
                         // NOTE: this is dead code until we start respecting @required
                         rust("let $field = &$input.$field;")
                     }
-                    val contents = if (enableNewSmithyRuntime) {
+                    val contents = if (smithyRuntimeMode.generateOrchestrator) {
                         // TODO(enableNewSmithyRuntime): Remove the allow attribute once all places need .into method
                         """
                         if $field.is_empty() {

@@ -44,7 +44,7 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
 
     // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime
+        codegenContext.smithyRuntimeMode.exclusivelyGenerateMiddleware
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
