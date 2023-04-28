@@ -1,10 +1,10 @@
-use std::{path::PathBuf, process::Command, str::FromStr};
+use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
 
 /// ensures serde features is not enabled when features are not enabled
 /// Checks whether features are properly gated behind aws_sdk_unstable
 fn base(dt: &str) {
     // data type
-    let data_type = format!("aws-smithy-types::{dt}");
+    let data_type = format!("aws_smithy_types::{dt}");
     // commands 2 run
     let array = [
         ("cargo build --all-features", [true; 2], false),
@@ -14,11 +14,13 @@ fn base(dt: &str) {
         ("cargo build", [true; 2], true),
         (
             "cargo build --features serde-serialize",
-            [true; 2], true,
+            [false, true],
+            true,
         ),
         (
             "cargo build --features serde-deserialize",
-            [true; 2], true,
+            [true, false],
+            true,
         ),
     ];
 
@@ -28,40 +30,46 @@ fn base(dt: &str) {
     // templates
     let deser = include_str!("../test_data/template/ser.rs");
     let ser = include_str!("../test_data/template/deser.rs");
-    let cargo = include_str!("../test_data/template/Cargo.toml");
+    let cargo = include_str!("../test_data/template/Cargo.toml").replace(
+        r#"aws-smithy-types = { path = "./" }"#,
+        &format!(
+            "aws-smithy-types = {{ path = {:#?} }}",
+            current_dir().unwrap().to_str().unwrap().to_string()
+        ),
+    );
 
     // paths
-    let cmdpath = "/tmp/cmd.sh";
-    let base_path = PathBuf::from_str("/tmp/").unwrap().join(dt);
+
+    let base_path = PathBuf::from_str("/tmp/smithy-rust-test").unwrap().join(dt);
+    let cmdpath = base_path.join("cmd.sh");
     let src_path = base_path.join("src");
     let main_path = src_path.join("main.rs");
 
-    for (cmd, b, env) in array {
-        std::fs::write(cmdpath, cmd).unwrap();
+    for (cmd_txt, [check_deser, check_ser], env) in array {
+        std::fs::create_dir_all(&base_path).unwrap();
+        std::fs::create_dir_all(&src_path).unwrap();
+
+        std::fs::write(&cmdpath, cmd_txt).unwrap();
         let func = || {
             let mut cmd = Command::new("bash");
-            cmd.arg(cmdpath);
+            cmd.current_dir(&base_path);
+            cmd.arg(&cmdpath.to_str().unwrap().to_string());
             if env {
                 cmd.env("RUSTFLAGS", "--cfg aws_sdk_unstable");
             }
 
-            let check = cmd.spawn()
-                .unwrap()
-                .wait()
-                .unwrap()
-                .success();
-            assert!(!check);
+            let check = cmd.spawn().unwrap().wait_with_output().unwrap();
+            
+            assert!(!check.status.success(), "{:#?}", (cmd, cmd_txt, check_ser, check_deser, env, dt));
         };
 
-        std::fs::create_dir_all(&base_path).unwrap();
-        std::fs::create_dir_all(&src_path).unwrap();
-        std::fs::write(&base_path.join("Cargo.toml"), cargo).unwrap();
+        std::fs::write(&base_path.join("Cargo.toml"), &cargo).unwrap();
 
-        if b[0] {
+        if check_ser {
             std::fs::write(&main_path, ser.replace(replace_data_type, &data_type)).unwrap();
             func();
         }
-        if b[1] {
+        if check_deser {
             std::fs::write(&main_path, deser.replace(replace_data_type, &data_type)).unwrap();
             func();
         }
