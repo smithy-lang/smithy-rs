@@ -7,18 +7,18 @@ fn base(dt: &str) {
     let data_type = format!("aws-smithy-types::{dt}");
     // commands 2 run
     let array = [
-        ("cargo build --all-features", [true; 2]),
-        ("cargo build --features serde-serialize", [true; 2]),
-        ("cargo build --features serde-deserialize", [true; 2]),
+        ("cargo build --all-features", [true; 2], false),
+        ("cargo build --features serde-serialize", [true; 2], false),
+        ("cargo build --features serde-deserialize", [true; 2], false),
         // checks if features are properly gated behind serde-serialize/deserialize
-        ("cargo build --cfg aws_sdk_unstable", [true; 2]),
+        ("cargo build", [true; 2], true),
         (
-            "cargo build --features serde-serialize --cfg aws_sdk_unstable",
-            [true; 2],
+            "cargo build --features serde-serialize",
+            [true; 2], true,
         ),
         (
-            "cargo build --features serde-deserialize --cfg aws_sdk_unstable",
-            [true; 2],
+            "cargo build --features serde-deserialize",
+            [true; 2], true,
         ),
     ];
 
@@ -36,12 +36,16 @@ fn base(dt: &str) {
     let src_path = base_path.join("src");
     let main_path = src_path.join("main.rs");
 
-    for (cmd, b) in array {
+    for (cmd, b, env) in array {
         std::fs::write(cmdpath, cmd).unwrap();
         let func = || {
-            let check = Command::new("bash")
-                .arg(cmdpath)
-                .spawn()
+            let mut cmd = Command::new("bash");
+            cmd.arg(cmdpath);
+            if env {
+                cmd.env("RUSTFLAGS", "--cfg aws_sdk_unstable");
+            }
+
+            let check = cmd.spawn()
                 .unwrap()
                 .wait()
                 .unwrap()
