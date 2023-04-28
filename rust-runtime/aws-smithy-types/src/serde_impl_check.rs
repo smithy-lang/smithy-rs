@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
 
 /// ensures serde features is not enabled when features are not enabled
@@ -59,8 +64,12 @@ fn base(dt: &str) {
             }
 
             let check = cmd.spawn().unwrap().wait_with_output().unwrap();
-            
-            assert!(!check.status.success(), "{:#?}", (cmd, cmd_txt, check_ser, check_deser, env, dt));
+
+            assert!(
+                !check.status.success(),
+                "{:#?}",
+                (cmd, cmd_txt, check_ser, check_deser, env, dt)
+            );
         };
 
         std::fs::write(&base_path.join("Cargo.toml"), &cargo).unwrap();
@@ -86,7 +95,6 @@ fn blob() {
     base("Blob");
 }
 
-
 #[test]
 fn document() {
     base("Document");
@@ -96,4 +104,3 @@ fn document() {
 fn date_time() {
     base("DateTime");
 }
-
