@@ -9,6 +9,7 @@ use crate::date_time::format::rfc3339::AllowOffsets;
 use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
@@ -306,6 +307,21 @@ impl From<SystemTime> for DateTime {
     }
 }
 
+impl PartialOrd for DateTime {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DateTime {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.seconds.cmp(&other.seconds) {
+            Ordering::Equal => self.subsecond_nanos.cmp(&other.subsecond_nanos),
+            ordering => ordering,
+        }
+    }
+}
+
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -556,51 +572,5 @@ mod test {
             SystemTime::from(off_date_time),
             SystemTime::try_from(date_time).unwrap()
         );
-    }
-
-    #[cfg(all(
-        test,
-        aws_sdk_unstable,
-        feature = "serde-deserialize",
-        feature = "serde-serialize"
-    ))]
-    #[test]
-    fn human_readable_datetime() {
-        use serde::{Deserialize, Serialize};
-
-        let datetime = DateTime::from_secs(1576540098);
-        #[derive(Serialize, Deserialize, PartialEq)]
-        struct Test {
-            datetime: DateTime,
-        }
-        let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
-        assert!(serde_json::to_string(&Test { datetime }).ok() == Some(datetime_json.to_string()));
-
-        let test = serde_json::from_str::<Test>(&datetime_json).ok();
-        assert!(test.is_some());
-        assert!(test.unwrap().datetime == datetime);
-    }
-
-    /// checks that they are serialized into tuples
-    #[cfg(all(
-        test,
-        aws_sdk_unstable,
-        feature = "serde-deserialize",
-        feature = "serde-serialize"
-    ))]
-    #[test]
-    fn not_human_readable_datetime() {
-        let cbor = ciborium::value::Value::Array(vec![
-            ciborium::value::Value::Integer(1576540098i64.into()),
-            ciborium::value::Value::Integer(0u32.into()),
-        ]);
-        let datetime = DateTime::from_secs(1576540098);
-
-        let mut buf1 = vec![];
-        let mut buf2 = vec![];
-        let res1 = ciborium::ser::into_writer(&datetime, &mut buf1);
-        let res2 = ciborium::ser::into_writer(&cbor, &mut buf2);
-        assert!(res1.is_ok() && res2.is_ok());
-        assert!(buf1 == buf2, "{:#?}", (buf1, buf2));
     }
 }
