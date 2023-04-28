@@ -7,17 +7,13 @@ use aws_http::user_agent::AwsUserAgent;
 use aws_runtime::invocation_id::InvocationId;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::endpoint::Params;
-
 use aws_sdk_s3::Client;
-
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIST_BUCKETS_PATH: &str = "test-data/list-objects-v2.json";
