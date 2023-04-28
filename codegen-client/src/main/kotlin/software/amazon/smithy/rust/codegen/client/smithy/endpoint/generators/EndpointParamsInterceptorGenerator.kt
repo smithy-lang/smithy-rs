@@ -45,29 +45,19 @@ class EndpointParamsInterceptorGenerator(
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
-            "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
+            "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Interceptor" to interceptors.resolve("Interceptor"),
             "InterceptorContext" to interceptors.resolve("InterceptorContext"),
             "InterceptorError" to interceptors.resolve("error::InterceptorError"),
-            "ParamsBuilder" to endpointTypesGenerator.paramsBuilder(),
+            "Params" to endpointTypesGenerator.paramsStruct(),
         )
     }
 
     fun render(writer: RustWriter, operationShape: OperationShape) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        renderInterceptor(
-            writer,
-            "${operationName}EndpointParamsInterceptor",
-            implInterceptorBodyForEndpointParams(operationShape),
-        )
-        renderInterceptor(
-            writer, "${operationName}EndpointParamsFinalizerInterceptor",
-            implInterceptorBodyForEndpointParamsFinalizer,
-        )
-    }
-
-    private fun renderInterceptor(writer: RustWriter, interceptorName: String, implBody: Writable) {
+        val operationInput = symbolProvider.toSymbol(operationShape.inputShape(model))
+        val interceptorName = "${operationName}EndpointParamsInterceptor"
         writer.rustTemplate(
             """
             ##[derive(Debug)]
@@ -79,38 +69,26 @@ class EndpointParamsInterceptorGenerator(
                     context: &#{InterceptorContext}<#{HttpRequest}, #{HttpResponse}>,
                     cfg: &mut #{ConfigBag},
                 ) -> Result<(), #{BoxError}> {
-                    #{body:W}
+                    let _input = context.input()?;
+                    let _input = _input
+                        .downcast_ref::<${operationInput.name}>()
+                        .ok_or("failed to downcast to ${operationInput.name}")?;
+
+                    #{endpoint_prefix:W}
+
+                    // HACK: pull the handle out of the config bag until config is implemented right
+                    let handle = cfg.get::<std::sync::Arc<crate::client::Handle>>()
+                        .expect("the handle is hacked into the config bag");
+                    let _config = &handle.conf;
+
+                    let params = #{Params}::builder()
+                        #{param_setters}
+                        .build()
+                        .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
+                    cfg.put(#{EndpointResolverParams}::new(params));
+                    Ok(())
                 }
             }
-            """,
-            *codegenScope,
-            "body" to implBody,
-        )
-    }
-
-    private fun implInterceptorBodyForEndpointParams(operationShape: OperationShape): Writable = writable {
-        val operationInput = symbolProvider.toSymbol(operationShape.inputShape(model))
-        rustTemplate(
-            """
-            // HACK: pull the handle out of the config bag until config is implemented right
-            let handle = cfg.get::<std::sync::Arc<crate::client::Handle>>()
-                .expect("the handle is hacked into the config bag");
-            let config = &handle.conf;
-            let input = context.input()?;
-            let _input = input
-                .downcast_ref::<${operationInput.name}>()
-                .ok_or("failed to downcast to ${operationInput.name}")?;
-            let params_builder = cfg
-                .get::<#{ParamsBuilder}>()
-                .ok_or("missing endpoint params builder")?
-                .clone();
-            cfg.put(params_builder
-                #{param_setters}
-            );
-
-            #{endpoint_prefix:W}
-
-            Ok(())
             """,
             *codegenScope,
             "endpoint_prefix" to endpointPrefix(operationShape),
@@ -124,7 +102,7 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            endpointTypesGenerator.builtInFor(param, "config")?.also { defaultValue ->
+            endpointTypesGenerator.builtInFor(param, "_config")?.also { defaultValue ->
                 rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
@@ -133,9 +111,9 @@ class EndpointParamsInterceptorGenerator(
             val paramName = EndpointParamsGenerator.memberName(name)
             val setterName = EndpointParamsGenerator.setterName(name)
             if (param.type == ShapeType.BOOLEAN) {
-                rust(".$setterName(config.$paramName)")
+                rust(".$setterName(_config.$paramName)")
             } else {
-                rust(".$setterName(config.$paramName.clone())")
+                rust(".$setterName(_config.$paramName.clone())")
             }
         }
 
@@ -187,26 +165,5 @@ class EndpointParamsInterceptorGenerator(
             }
             rust("cfg.put(endpoint_prefix);")
         }
-    }
-
-    private val implInterceptorBodyForEndpointParamsFinalizer: Writable = writable {
-        rustTemplate(
-            """
-            let _ = context;
-            let params_builder = cfg
-                .get::<#{ParamsBuilder}>()
-                .ok_or("missing endpoint params builder")?
-                .clone();
-            let params = params_builder
-                .build()
-                .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
-            cfg.put(
-                #{EndpointResolverParams}::new(params)
-            );
-
-            Ok(())
-            """,
-            *codegenScope,
-        )
     }
 }

@@ -47,10 +47,6 @@ private class EndpointParametersRuntimePluginCustomization(
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rust("${operationName}EndpointParamsInterceptor")
             }
-            // The finalizer interceptor should be registered last
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust("${operationName}EndpointParamsFinalizerInterceptor")
-            }
         }
     }
 }
