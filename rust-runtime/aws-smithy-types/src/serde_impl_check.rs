@@ -86,6 +86,7 @@ fn blob() {
     base("Blob");
 }
 
+
 #[test]
 fn document() {
     base("Document");
@@ -95,3 +96,4 @@ fn document() {
 fn date_time() {
     base("DateTime");
 }
+
