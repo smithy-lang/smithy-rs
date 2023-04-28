@@ -78,7 +78,7 @@ class FluentClientGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
-    private val enableNewSmithyRuntime = codegenContext.settings.codegenConfig.enableNewSmithyRuntime
+    private val smithyRuntimeMode = codegenContext.smithyRuntimeMode
 
     fun render(crate: RustCrate) {
         renderFluentClient(crate)
@@ -255,7 +255,7 @@ class FluentClientGenerator(
                 "Inner" to symbolProvider.symbolForBuilder(input),
                 "generics" to generics.decl,
             )
-            if (enableNewSmithyRuntime) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 rust("config_override: std::option::Option<crate::config::Builder>,")
             }
         }
@@ -279,7 +279,7 @@ class FluentClientGenerator(
                     "}",
                 ) {
                     rust("handle, inner: Default::default(),")
-                    if (enableNewSmithyRuntime) {
+                    if (smithyRuntimeMode.generateOrchestrator) {
                         rust("config_override: None,")
                     }
                 }
@@ -331,7 +331,7 @@ class FluentClientGenerator(
                     generics.toRustGenerics(),
                 ),
             )
-            if (enableNewSmithyRuntime) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
                     // TODO(enableNewSmithyRuntime): Replace `send` with `send_v2`

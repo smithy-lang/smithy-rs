@@ -31,7 +31,7 @@ class EndpointParamsDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(EndpointParametersRuntimePluginCustomization(codegenContext, operation))
         }
 }

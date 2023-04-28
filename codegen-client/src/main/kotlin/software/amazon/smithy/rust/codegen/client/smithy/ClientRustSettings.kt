@@ -72,6 +72,35 @@ data class ClientRustSettings(
     }
 }
 
+// TODO(enableNewSmithyRuntime): Remove this mode after switching to the orchestrator
+enum class SmithyRuntimeMode {
+    Middleware,
+    BothDefaultMiddleware,
+    BothDefaultOrchestrator,
+    Orchestrator,
+    ;
+
+    val generateMiddleware: Boolean get() = when (this) {
+        Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+        else -> false
+    }
+
+    val generateOrchestrator: Boolean get() = when (this) {
+        Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+        else -> false
+    }
+
+    companion object {
+        fun fromString(value: String): SmithyRuntimeMode = when (value) {
+            "middleware" -> Middleware
+            "orchestrator" -> Orchestrator
+            "both_default_middleware" -> BothDefaultMiddleware
+            "both_default_orchestrator" -> BothDefaultOrchestrator
+            else -> throw IllegalArgumentException("unknown runtime mode: $value")
+        }
+    }
+}
+
 /**
  * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
  * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
@@ -87,7 +116,7 @@ data class ClientCodegenConfig(
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
-    val enableNewSmithyRuntime: Boolean = defaultEnableNewSmithyRuntime,
+    val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -96,7 +125,7 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private const val defaultEnableNewSmithyRuntime = false
+        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Middleware
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -109,7 +138,9 @@ data class ClientCodegenConfig(
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewSmithyRuntime = node.get().getBooleanMemberOrDefault("enableNewSmithyRuntime", defaultEnableNewSmithyRuntime),
+                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(
+                        node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware"),
+                    ),
                 )
             } else {
                 ClientCodegenConfig(
