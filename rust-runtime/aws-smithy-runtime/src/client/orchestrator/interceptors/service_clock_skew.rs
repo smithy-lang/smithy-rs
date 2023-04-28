@@ -72,7 +72,7 @@ impl Interceptor<HttpRequest, HttpResponse> for ServiceClockSkewInterceptor {
                 // We don't want to fail a request for this because 1xx and 5xx responses and
                 // responses from servers with no clock may omit this header. We still log it at the
                 // trace level to aid in debugging.
-                tracing::trace!("failed to calculate clock skew of service from response: {e}",);
+                tracing::trace!("failed to calculate clock skew of service from response: {e}. Ignoring this error...",);
                 return Ok(());
             }
         };

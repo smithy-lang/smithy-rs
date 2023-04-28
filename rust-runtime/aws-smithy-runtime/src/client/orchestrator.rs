@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::auth::orchestrate_auth;
-use crate::client::orchestrator::endpoints::orchestrate_endpoint;
-use crate::client::orchestrator::http::read_body;
-use crate::client::orchestrator::phase::Phase;
+use tokio::time::sleep;
+use tracing::{debug_span, Instrument};
+
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
@@ -16,7 +15,12 @@ use aws_smithy_runtime_api::client::orchestrator::{
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use tracing::{debug_span, Instrument};
+
+use crate::client::orchestrator::endpoints::orchestrate_endpoint;
+use crate::client::orchestrator::http::read_body;
+use crate::client::orchestrator::phase::Phase;
+
+use self::auth::orchestrate_auth;
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
@@ -68,7 +72,7 @@ pub async fn invoke(
             Ok(ShouldAttempt::No) => {
                 return Err(Phase::dispatch(context).fail(
                     "The retry strategy indicates that an initial request shouldn't be made, but it didn't specify why.",
-                ))
+                ));
             }
             // No, we shouldn't make a request because...
             Err(err) => return Err(Phase::dispatch(context).fail(err)),
@@ -90,14 +94,27 @@ pub async fn invoke(
         let retry_strategy = cfg.retry_strategy();
         match retry_strategy.should_attempt_retry(&context, cfg) {
             // Yes, let's retry the request
-            Ok(ShouldAttempt::Yes) => continue,
+            Ok(ShouldAttempt::Yes) => {
+                tracing::trace!("The response error is retryable");
+                continue;
+            }
+            // Yes, but let's wait a moment first
+            Ok(ShouldAttempt::YesAfterDelay(delay)) => {
+                tracing::trace!(
+                    "The response error is retryable. Waiting for {:?} before retrying request",
+                    delay
+                );
+                // TODO(enableSmithyRuntime) Grab a sleep impl from the bag
+                sleep(delay).await;
+                continue;
+            }
             // No, this request shouldn't be retried
-            Ok(ShouldAttempt::No) => {}
-            Ok(ShouldAttempt::YesAfterDelay(_delay)) => {
-                todo!("implement retries with an explicit delay.")
+            Ok(ShouldAttempt::No) => {
+                tracing::trace!("The response error is unretryable");
             }
             // I couldn't determine if the request should be retried because an error occurred.
             Err(err) => {
+                tracing::trace!("Failed to determine if the response error is retryable: {err}");
                 return Err(Phase::response_handling(context).fail(err));
             }
         }
