@@ -8,7 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -16,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -54,6 +58,38 @@ class HttpChecksumRequiredGenerator(
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )
             }
+
+            else -> emptySection
+        }
+    }
+}
+
+class HttpChecksumRequiredInterceptorGenerator(
+    private val codegenContext: CodegenContext,
+    private val operationShape: OperationShape,
+) : OperationRuntimePluginCustomization() {
+    override fun section(section: OperationRuntimePluginSection): Writable {
+        // Ensure that the operation has the `HttpChecksumRequiredTrait`
+        if (!operationShape.hasTrait<HttpChecksumRequiredTrait>()) {
+            return emptySection
+        }
+        // Ensure that this isn't a streaming operation, as those aren't supported by this interceptor
+        if (operationShape.inputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
+            throw CodegenException("HttpChecksumRequiredInterceptor doesn't support operations with a streaming body")
+        }
+
+        PANIC("ZELDA: found a shape that will have the checksum thing! ${operationShape.id}")
+        return when (section) {
+            is OperationRuntimePluginSection.AdditionalConfig -> writable {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    rust(
+                        "#T::new()",
+                        RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
+                            .resolve("http_checksum_required::HttpChecksumRequiredInterceptor"),
+                    )
+                }
+            }
+
             else -> emptySection
         }
     }
