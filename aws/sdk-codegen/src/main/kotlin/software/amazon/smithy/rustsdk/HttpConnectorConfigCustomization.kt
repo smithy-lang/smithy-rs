@@ -26,7 +26,7 @@ class HttpConnectorDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.exclusivelyGenerateMiddleware) {
             it + HttpConnectorConfigCustomization(codegenContext)
         }
 }

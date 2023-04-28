@@ -284,6 +284,21 @@ class FluentClientGenerator(
                     }
                 }
             }
+            val middlewareScope = arrayOf(
+                "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                    .resolve("CustomizableOperation"),
+                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+                "customizable_op_type_params" to rustTypeParameters(
+                    symbolProvider.toSymbol(operation),
+                    retryClassifier,
+                    generics.toRustGenerics(),
+                ),
+            )
             rustTemplate(
                 """
                 /// Consume this builder, creating a customizable operation that can be modified before being
@@ -300,15 +315,9 @@ class FluentClientGenerator(
                     Ok(#{CustomizableOperation} { handle, operation })
                 }
 
-                /// Sends the request and returns the response.
-                ///
-                /// If an error occurs, an `SdkError` will be returned with additional details that
-                /// can be matched against.
-                ///
-                /// By default, any retryable failures will be retried twice. Retry behavior
-                /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                /// set when configuring the client.
-                pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                // This function will go away in the near future. Do not rely on it.
+                ##[doc(hidden)]
+                pub async fn send_middleware(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                 #{send_bounds:W} {
                     let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
                         .make_operation(&self.handle.conf)
@@ -317,24 +326,11 @@ class FluentClientGenerator(
                     self.handle.client.call(op).await
                 }
                 """,
-                "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                    .resolve("CustomizableOperation"),
-                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
-                "customizable_op_type_params" to rustTypeParameters(
-                    symbolProvider.toSymbol(operation),
-                    retryClassifier,
-                    generics.toRustGenerics(),
-                ),
+                *middlewareScope,
             )
-            if (smithyRuntimeMode.generateOrchestrator) {
+            if (smithyRuntimeMode.defaultToMiddleware) {
                 rustTemplate(
                     """
-                    // TODO(enableNewSmithyRuntime): Replace `send` with `send_v2`
                     /// Sends the request and returns the response.
                     ///
                     /// If an error occurs, an `SdkError` will be returned with additional details that
@@ -343,13 +339,40 @@ class FluentClientGenerator(
                     /// By default, any retryable failures will be retried twice. Retry behavior
                     /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                     /// set when configuring the client.
-                    pub async fn send_v2(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                        self.send_v2_with_plugin(Option::<Box<dyn #{RuntimePlugin}>>::None).await
+                    pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                    #{send_bounds:W} {
+                        self.send_middleware().await
+                    }
+                    """,
+                    *middlewareScope,
+                )
+            }
+
+            if (smithyRuntimeMode.generateOrchestrator) {
+                val orchestratorScope = arrayOf(
+                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::orchestrator::HttpResponse"),
+                    "OperationError" to errorType,
+                    "Operation" to symbolProvider.toSymbol(operation),
+                    "OperationOutput" to outputType,
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::runtime_plugin::RuntimePlugins"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                    "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
+                    "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
+                )
+                rustTemplate(
+                    """
+                    ##[doc(hidden)]
+                    pub async fn send_orchestrator(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                        self.send_orchestrator_with_plugin(Option::<Box<dyn #{RuntimePlugin}>>::None).await
                     }
 
+                    ##[doc(hidden)]
                     // TODO(enableNewSmithyRuntime): Delete when unused
-                    /// Equivalent to [`Self::send_v2`] but adds a final runtime plugin to shim missing behavior
-                    pub async fn send_v2_with_plugin(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    /// Equivalent to [`Self::send_orchestrator`] but adds a final runtime plugin to shim missing behavior
+                    pub async fn send_orchestrator_with_plugin(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let mut runtime_plugins = #{RuntimePlugins}::new()
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()));
                         if let Some(config_override) = self.config_override {
@@ -373,18 +396,26 @@ class FluentClientGenerator(
                         Ok(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
                     }
                     """,
-                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::orchestrator::HttpResponse"),
-                    "OperationError" to errorType,
-                    "Operation" to symbolProvider.toSymbol(operation),
-                    "OperationOutput" to outputType,
-                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::runtime_plugin::RuntimePlugins"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                    "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
+                    *orchestratorScope,
                 )
+                if (smithyRuntimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Sends the request and returns the response.
+                        ///
+                        /// If an error occurs, an `SdkError` will be returned with additional details that
+                        /// can be matched against.
+                        ///
+                        /// By default, any retryable failures will be retried twice. Retry behavior
+                        /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
+                        /// set when configuring the client.
+                        pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                            self.send_orchestrator().await
+                        }
+                        """,
+                        *orchestratorScope,
+                    )
+                }
 
                 rustTemplate(
                     """
@@ -426,20 +457,24 @@ class FluentClientGenerator(
                     """,
                 )
             }
-            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
-                ?.also { paginatorType ->
-                    rustTemplate(
-                        """
-                        /// Create a paginator for this request
-                        ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
-                            #{Paginator}::new(self.handle, self.inner)
-                        }
-                        """,
-                        "Paginator" to paginatorType,
-                    )
-                }
+
+            // TODO(enableNewSmithyRuntime): Port paginators to the orchestrator
+            if (smithyRuntimeMode.generateMiddleware) {
+                PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+                    ?.also { paginatorType ->
+                        rustTemplate(
+                            """
+                            /// Create a paginator for this request
+                            ///
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                                #{Paginator}::new(self.handle, self.inner)
+                            }
+                            """,
+                            "Paginator" to paginatorType,
+                        )
+                    }
+            }
             writeCustomizations(
                 customizations,
                 FluentClientSection.FluentBuilderImpl(

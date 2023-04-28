@@ -65,7 +65,8 @@ val allCodegenTests = servicesToGenerate.map {
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewSmithyRuntime": "both_default_middleware"
+                ${ ""/* "enableNewSmithyRuntime": "both_default_middleware" */ }
+                "enableNewSmithyRuntime": "orchestrator"
             },
             "customizationConfig": {
                 "awsSdk": {

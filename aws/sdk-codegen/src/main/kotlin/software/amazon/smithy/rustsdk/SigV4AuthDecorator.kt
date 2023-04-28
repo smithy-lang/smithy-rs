@@ -42,7 +42,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(AuthOperationRuntimePluginCustomization(codegenContext))
         }
 }

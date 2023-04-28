@@ -80,6 +80,8 @@ enum class SmithyRuntimeMode {
     Orchestrator,
     ;
 
+    val exclusivelyGenerateMiddleware: Boolean get() = generateMiddleware && !generateOrchestrator
+
     val generateMiddleware: Boolean get() = when (this) {
         Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
         else -> false
@@ -89,6 +91,12 @@ enum class SmithyRuntimeMode {
         Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
         else -> false
     }
+
+    val defaultToMiddleware: Boolean get() = when (this) {
+        Middleware, BothDefaultMiddleware -> true
+        else -> false
+    }
+    val defaultToOrchestrator: Boolean get() = !defaultToMiddleware
 
     companion object {
         fun fromString(value: String): SmithyRuntimeMode = when (value) {
