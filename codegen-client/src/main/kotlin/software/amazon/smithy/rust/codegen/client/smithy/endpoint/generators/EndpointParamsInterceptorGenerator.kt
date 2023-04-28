@@ -5,10 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.model.node.BooleanNode
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
+import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -17,13 +24,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class EndpointParamsInterceptorGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
         val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
@@ -81,6 +92,10 @@ class EndpointParamsInterceptorGenerator(
         val operationInput = symbolProvider.toSymbol(operationShape.inputShape(model))
         rustTemplate(
             """
+            // HACK: pull the handle out of the config bag until config is implemented right
+            let handle = cfg.get::<std::sync::Arc<crate::client::Handle>>()
+                .expect("the handle is hacked into the config bag");
+            let config = &handle.conf;
             let input = context.input()?;
             let _input = input
                 .downcast_ref::<${operationInput.name}>()
@@ -89,8 +104,9 @@ class EndpointParamsInterceptorGenerator(
                 .get::<#{ParamsBuilder}>()
                 .ok_or("missing endpoint params builder")?
                 .clone();
-            ${"" /* TODO(EndpointResolver): Call setters on `params_builder` to update its fields by using values from `_input` */}
-            cfg.put(params_builder);
+            cfg.put(params_builder
+                #{param_setters}
+            );
 
             #{endpoint_prefix:W}
 
@@ -98,7 +114,55 @@ class EndpointParamsInterceptorGenerator(
             """,
             *codegenScope,
             "endpoint_prefix" to endpointPrefix(operationShape),
+            "param_setters" to paramSetters(operationShape, endpointTypesGenerator.params),
         )
+    }
+
+    private fun paramSetters(operationShape: OperationShape, params: Parameters) = writable {
+        val idx = ContextIndex.of(codegenContext.model)
+        val memberParams = idx.getContextParams(operationShape).toList().sortedBy { it.first.memberName }
+        val builtInParams = params.toList().filter { it.isBuiltIn }
+        // first load builtins and their defaults
+        builtInParams.forEach { param ->
+            endpointTypesGenerator.builtInFor(param, "config")?.also { defaultValue ->
+                rust(".set_${param.name.rustName()}(#W)", defaultValue)
+            }
+        }
+
+        idx.getClientContextParams(codegenContext.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
+            val paramName = EndpointParamsGenerator.memberName(name)
+            val setterName = EndpointParamsGenerator.setterName(name)
+            if (param.type == ShapeType.BOOLEAN) {
+                rust(".$setterName(config.$paramName)")
+            } else {
+                rust(".$setterName(config.$paramName.clone())")
+            }
+        }
+
+        idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
+            val setterName = EndpointParamsGenerator.setterName(name)
+            val value = param.value.toWritable()
+            rust(".$setterName(#W)", value)
+        }
+
+        // lastly, allow these to be overridden by members
+        memberParams.forEach { (memberShape, param) ->
+            val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
+            rust(
+                ".${EndpointParamsGenerator.setterName(param.name)}(_input.$memberName.clone())",
+            )
+        }
+    }
+
+    private fun Node.toWritable(): Writable {
+        val node = this
+        return writable {
+            when (node) {
+                is StringNode -> rust("Some(${node.value.dq()}.to_string())")
+                is BooleanNode -> rust("Some(${node.value})")
+                else -> PANIC("unsupported default value: $node")
+            }
+        }
     }
 
     private fun endpointPrefix(operationShape: OperationShape): Writable = writable {

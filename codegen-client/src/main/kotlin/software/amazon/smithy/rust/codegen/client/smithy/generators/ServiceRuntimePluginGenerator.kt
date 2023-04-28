@@ -106,6 +106,9 @@ class ServiceRuntimePluginGenerator(
                 fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
+                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
+                    cfg.put(self.handle.clone());
+
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
                         .build();
