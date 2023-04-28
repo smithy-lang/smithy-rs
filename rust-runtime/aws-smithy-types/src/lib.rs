@@ -36,6 +36,5 @@ pub use document::Document;
 pub use error::ErrorMetadata as Error;
 pub use number::Number;
 
-
 #[cfg(test)]
 mod serde_impl_check;
