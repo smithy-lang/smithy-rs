@@ -70,7 +70,6 @@ class ServiceRuntimePluginGenerator(
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
-            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
@@ -85,6 +84,7 @@ class ServiceRuntimePluginGenerator(
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
+            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
@@ -106,6 +106,9 @@ class ServiceRuntimePluginGenerator(
                 fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
+                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
+                    cfg.put(self.handle.clone());
+
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
                         .build();
@@ -117,9 +120,6 @@ class ServiceRuntimePluginGenerator(
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
-
-                    ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
-                    cfg.put(#{Params}::builder());
 
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
