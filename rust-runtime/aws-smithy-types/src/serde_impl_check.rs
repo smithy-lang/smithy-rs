@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
 
 /// ensures serde features is not enabled when features are not enabled
@@ -7,18 +12,18 @@ fn base(dt: &str) {
     let data_type = format!("aws_smithy_types::{dt}");
     // commands 2 run
     let array = [
-        ("cargo build --all-features", [true; 2], false),
-        ("cargo build --features serde-serialize", [true; 2], false),
-        ("cargo build --features serde-deserialize", [true; 2], false),
+        ("cargo check --all-features", [true; 2], false),
+        ("cargo check --features serde-serialize", [true; 2], false),
+        ("cargo check --features serde-deserialize", [true; 2], false),
         // checks if features are properly gated behind serde-serialize/deserialize
-        ("cargo build", [true; 2], true),
+        ("cargo check", [true; 2], true),
         (
-            "cargo build --features serde-serialize",
+            "cargo check --features serde-serialize",
             [false, true],
             true,
         ),
         (
-            "cargo build --features serde-deserialize",
+            "cargo check --features serde-deserialize",
             [true, false],
             true,
         ),
@@ -59,8 +64,12 @@ fn base(dt: &str) {
             }
 
             let check = cmd.spawn().unwrap().wait_with_output().unwrap();
-            
-            assert!(!check.status.success(), "{:#?}", (cmd, cmd_txt, check_ser, check_deser, env, dt));
+
+            assert!(
+                !check.status.success(),
+                "{:#?}",
+                (cmd, cmd_txt, check_ser, check_deser, env, dt)
+            );
         };
 
         std::fs::write(&base_path.join("Cargo.toml"), &cargo).unwrap();

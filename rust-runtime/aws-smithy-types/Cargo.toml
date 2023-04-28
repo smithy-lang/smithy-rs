@@ -39,6 +39,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 name = "base64"
 harness = false
 
+
+[target."cfg(aws_sdk_unstable)".dependencies.serde]
+version = "1"
+features = ["derive"]
+
 [features]
 serde-serialize = []
 serde-deserialize = []
