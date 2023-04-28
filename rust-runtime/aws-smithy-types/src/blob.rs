@@ -67,7 +67,7 @@ mod serde_deserialize {
         fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             formatter.write_str("expected base64 encoded string")
         }
-    
+
         fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
         where
             E: serde::de::Error,
@@ -78,14 +78,14 @@ mod serde_deserialize {
             }
         }
     }
-    
+
     struct NotHumanReadableBlobVisitor;
     impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
         type Value = Blob;
         fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             formatter.write_str("expected base64 encoded string")
         }
-    
+
         fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
         where
             E: serde::de::Error,
@@ -93,7 +93,7 @@ mod serde_deserialize {
             Ok(Blob { inner: v })
         }
     }
-    
+
     impl<'de> Deserialize<'de> for Blob {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
