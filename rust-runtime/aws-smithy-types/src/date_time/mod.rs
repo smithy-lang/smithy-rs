@@ -573,7 +573,7 @@ mod test {
             SystemTime::try_from(date_time).unwrap()
         );
     }
-    
+
     #[test]
     fn ord() {
         let first = DateTime::from_secs_and_nanos(-1, 0);
@@ -601,7 +601,7 @@ mod test {
         assert!(fourth > third);
         assert!(fourth == fourth);
     }
-    
+
     #[cfg(all(
         test,
         aws_sdk_unstable,
