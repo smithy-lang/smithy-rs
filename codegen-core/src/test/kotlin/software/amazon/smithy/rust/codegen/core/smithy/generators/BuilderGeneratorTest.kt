@@ -158,7 +158,7 @@ internal class BuilderGeneratorTest {
         project.compileAndTest()
         // checks if there is a serde derive in the code
         project.generatedFiles().forEach {
-            val file = it.readText()
+            val file = it.toFile().readText()
             val check = file.contains("derive(serde::Deserialize)") || file.contains("derive(serde::Serialize)")
             assert(!check)
         }
