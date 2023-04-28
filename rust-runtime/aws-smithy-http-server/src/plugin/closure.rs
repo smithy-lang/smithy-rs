@@ -6,6 +6,7 @@
 use tower::layer::util::Stack;
 
 use crate::operation::{Operation, OperationShape};
+use crate::extension::OperationId;
 
 use super::Plugin;
 
@@ -16,14 +17,15 @@ pub struct OperationNameFn<F> {
 
 impl<P, Op, S, ExistingLayer, NewLayer, F> Plugin<P, Op, S, ExistingLayer> for OperationNameFn<F>
 where
-    F: Fn(&'static str) -> NewLayer,
+    F: Fn(OperationId) -> NewLayer,
     Op: OperationShape,
 {
     type Service = S;
     type Layer = Stack<ExistingLayer, NewLayer>;
 
     fn map(&self, input: Operation<S, ExistingLayer>) -> Operation<Self::Service, Self::Layer> {
-        input.layer((self.f)(Op::NAME))
+        let operation_id = OperationId(Op::NAME);
+        input.layer((self.f)(operation_id))
     }
 }
 
@@ -55,7 +57,7 @@ where
 /// ```
 pub fn plugin_from_operation_name_fn<L, F>(f: F) -> OperationNameFn<F>
 where
-    F: Fn(&'static str) -> L,
+    F: Fn(OperationId) -> L,
 {
     OperationNameFn { f }
 }

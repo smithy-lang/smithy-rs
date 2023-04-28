@@ -12,12 +12,13 @@ use aws_smithy_http_server::{
 use tower::{layer::util::Stack, Layer, Service};
 
 use std::task::{Context, Poll};
+use aws_smithy_http_server::extension::OperationId;
 
 /// A [`Service`] that prints a given string.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
-    name: &'static str,
+    name: OperationId,
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -41,7 +42,7 @@ where
 /// A [`Layer`] which constructs the [`PrintService`].
 #[derive(Debug)]
 pub struct PrintLayer {
-    name: &'static str,
+    name: OperationId,
 }
 impl<S> Layer<S> for PrintLayer {
     type Service = PrintService<S>;
@@ -49,7 +50,7 @@ impl<S> Layer<S> for PrintLayer {
     fn layer(&self, service: S) -> Self::Service {
         PrintService {
             inner: service,
-            name: self.name,
+            name: self.name.clone(),
         }
     }
 }
@@ -66,7 +67,7 @@ where
     type Layer = Stack<L, PrintLayer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: Op::NAME })
+        input.layer(PrintLayer { name: OperationId(Op::NAME) })
     }
 }
 

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::shape_id::ShapeId;
 use super::{Handler, IntoService, Normalize, Operation, OperationService};
 
 /// Models the [Smithy Operation shape].
@@ -10,7 +11,7 @@ use super::{Handler, IntoService, Normalize, Operation, OperationService};
 /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
 pub trait OperationShape {
     /// The name of the operation.
-    const NAME: &'static str;
+    const NAME: ShapeId;
 
     /// The operation input.
     type Input;

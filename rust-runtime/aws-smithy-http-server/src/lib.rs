@@ -28,6 +28,7 @@ pub mod response;
 pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
+pub mod shape_id;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;

@@ -16,6 +16,8 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
+use crate::extension::OperationId;
+
 use super::{MakeDebug, MakeDisplay, MakeIdentity};
 
 pin_project_lite::pin_project! {
@@ -103,14 +105,14 @@ where
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
-    operation_name: &'static str,
+    operation_name: OperationId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: S, operation_name: &'static str) -> Self {
+    pub fn new(inner: S, operation_name: OperationId) -> Self {
         Self {
             inner,
             operation_name,

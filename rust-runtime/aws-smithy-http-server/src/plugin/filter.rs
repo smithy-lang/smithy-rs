@@ -6,6 +6,7 @@
 use tower::util::Either;
 
 use crate::operation::{Operation, OperationShape};
+use crate::shape_id::ShapeId;
 
 use super::Plugin;
 
@@ -38,7 +39,7 @@ pub struct FilterByOperationName<Inner, F> {
 /// ```
 pub fn filter_by_operation_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
 where
-    F: Fn(&str) -> bool,
+    F: Fn(ShapeId) -> bool,
 {
     FilterByOperationName::new(plugins, predicate)
 }
@@ -52,7 +53,7 @@ impl<Inner, F> FilterByOperationName<Inner, F> {
 
 impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationName<Inner, F>
 where
-    F: Fn(&str) -> bool,
+    F: Fn(ShapeId) -> bool,
     Inner: Plugin<P, Op, S, L>,
     Op: OperationShape,
 {

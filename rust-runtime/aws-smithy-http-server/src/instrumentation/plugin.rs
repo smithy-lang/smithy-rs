@@ -7,6 +7,7 @@ use tower::layer::util::Stack;
 
 use crate::plugin::{PluginPipeline, PluginStack};
 use crate::{
+    extension::OperationId,
     operation::{Operation, OperationShape},
     plugin::Plugin,
 };
@@ -26,7 +27,8 @@ where
     type Layer = Stack<L, InstrumentLayer<Op::RequestFmt, Op::ResponseFmt>>;
 
     fn map(&self, operation: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let layer = InstrumentLayer::new(Op::NAME)
+        let operation_id = OperationId(Op::NAME);
+        let layer = InstrumentLayer::new(operation_id)
             .request_fmt(Op::request_fmt())
             .response_fmt(Op::response_fmt());
         operation.layer(layer)
