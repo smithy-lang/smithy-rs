@@ -491,4 +491,5 @@ mod number {
         assert_eq!("0", serde_json::to_string(&Number::PosInt(0)).unwrap());
         assert_eq!("-1", serde_json::to_string(&Number::NegInt(-1)).unwrap());
     }
+
 }
