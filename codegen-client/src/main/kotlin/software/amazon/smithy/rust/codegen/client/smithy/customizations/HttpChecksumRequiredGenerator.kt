@@ -78,7 +78,6 @@ class HttpChecksumRequiredInterceptorGenerator(
             throw CodegenException("HttpChecksumRequiredInterceptor doesn't support operations with a streaming body")
         }
 
-        PANIC("ZELDA: found a shape that will have the checksum thing! ${operationShape.id}")
         return when (section) {
             is OperationRuntimePluginSection.AdditionalConfig -> writable {
                 section.registerInterceptor(codegenContext.runtimeConfig, this) {
