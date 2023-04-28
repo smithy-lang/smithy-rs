@@ -108,7 +108,6 @@ mod serde_deserialize {
     }
 }
 
-
 #[cfg(test)]
 #[cfg(all(
     aws_sdk_unstable,
