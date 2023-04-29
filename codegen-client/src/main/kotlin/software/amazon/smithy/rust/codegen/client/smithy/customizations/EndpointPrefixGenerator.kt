@@ -32,7 +32,7 @@ class EndpointPrefixGenerator(private val codegenContext: ClientCodegenContext, 
                     endpointTraitBindings.render(
                         this,
                         "self",
-                        codegenContext.settings.codegenConfig.enableNewSmithyRuntime,
+                        codegenContext.smithyRuntimeMode,
                     )
                 }
                 rust("request.properties_mut().insert(endpoint_prefix);")

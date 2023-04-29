@@ -97,7 +97,7 @@ open class ClientProtocolGenerator(
         }
         traitGenerator.generateTraitImpls(operationWriter, operationShape, operationCustomizations)
 
-        if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
             OperationRuntimePluginGenerator(codegenContext).render(
                 operationWriter,
                 operationShape,
