@@ -11,6 +11,7 @@ use bytes::Bytes;
 use http::{Request, Response};
 use std::task::{Context, Poll};
 use tower::Service;
+use wasi_preview2_prototype::http_client::DefaultClient;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct Adapter {}
@@ -31,7 +32,7 @@ impl Service<Request<SdkBody>> for Adapter {
 
     fn call(&mut self, req: Request<SdkBody>) -> Self::Future {
         println!("Adapter: sending request...");
-        let client = wasi_http::DefaultClient::new(None);
+        let client = DefaultClient::new(None);
         // Right now only synchronous calls can be made through WASI
         let fut = client.handle(req.map(|body| match body.bytes() {
             Some(value) => Bytes::copy_from_slice(value),
