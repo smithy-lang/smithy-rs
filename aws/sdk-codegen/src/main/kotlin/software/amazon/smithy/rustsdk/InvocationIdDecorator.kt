@@ -21,7 +21,7 @@ class InvocationIdDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(InvocationIdRuntimePluginCustomization(codegenContext))
         }
 }
