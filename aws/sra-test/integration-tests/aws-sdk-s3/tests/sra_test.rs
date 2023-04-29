@@ -6,7 +6,6 @@
 use aws_http::user_agent::AwsUserAgent;
 use aws_runtime::invocation_id::InvocationId;
 use aws_sdk_s3::config::{Credentials, Region};
-use aws_sdk_s3::endpoint::Params;
 use aws_sdk_s3::Client;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
@@ -31,7 +30,6 @@ async fn sra_test() {
         .build();
     let client = Client::from_conf(config);
     let fixup = FixupPlugin {
-        client: client.clone(),
         timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
     };
 
@@ -41,7 +39,7 @@ async fn sra_test() {
             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
-            .send_v2_with_plugin(Some(fixup))
+            .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
     // To regenerate the test:
@@ -52,7 +50,6 @@ async fn sra_test() {
 }
 
 struct FixupPlugin {
-    client: Client,
     timestamp: SystemTime,
 }
 impl RuntimePlugin for FixupPlugin {
@@ -60,11 +57,6 @@ impl RuntimePlugin for FixupPlugin {
         &self,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
-        let params_builder = Params::builder()
-            .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()))
-            .bucket("test-bucket");
-
-        cfg.put(params_builder);
         cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
         cfg.put(AwsUserAgent::for_tests());
         cfg.put(InvocationId::for_tests());
