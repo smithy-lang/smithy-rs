@@ -29,4 +29,3 @@ aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 http = "0.2.8"
 tokio = { version = "1.24.2", features = ["macros", "rt"] }
 tower = "0.4.13"
-wasi = "0.11.0"
