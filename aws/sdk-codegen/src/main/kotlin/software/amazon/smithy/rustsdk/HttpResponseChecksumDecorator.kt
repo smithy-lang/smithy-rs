@@ -35,7 +35,7 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
 
     // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
     private fun applies(codegenContext: ClientCodegenContext, operationShape: OperationShape): Boolean =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
+        codegenContext.smithyRuntimeMode.generateMiddleware && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
