@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import software.amazon.smithy.codegen.core.SymbolContainer
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -20,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 // Part of RFC30
 public object RenderSerdeAttribute {
     private const val warningMessage = "/// This data may contain sensitive information; It will not be obscured when serialized.\n"
+    private const val skipFieldMessage = "/// This field will note be serialized or deserialized because it's a stream type.\n"
 
     // guards to check if you want to add serde attributes
     private fun isApplicable(shape: Shape, model: Model): Boolean {
@@ -46,9 +48,11 @@ public object RenderSerdeAttribute {
     }
 
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
-        if (shape.hasTrait<ErrorTrait>() || member.isEventStream(model)) return
+        if (shape.hasTrait<ErrorTrait>() || member.isEventStream(model))return
         if (member.isStreaming(model)) {
             Attribute("").SerdeSkip().render(writer)
+        } else {
+            writer.writeInline(skipFieldMessage)
         }
     }
 
@@ -56,6 +60,6 @@ public object RenderSerdeAttribute {
         // we need this for skip serde to work
         Attribute.AllowUnusedImports.render(writer)
         Attribute("").SerdeSerializeOrDeserialize().render(writer)
-        writer.raw("use serde;")
+        writer.writeInline("use serde;");
     }
 }
