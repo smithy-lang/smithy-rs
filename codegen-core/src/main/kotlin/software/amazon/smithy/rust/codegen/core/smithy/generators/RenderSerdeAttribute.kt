@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolContainer
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -59,6 +58,6 @@ public object RenderSerdeAttribute {
         // we need this for skip serde to work
         Attribute.AllowUnusedImports.render(writer)
         Attribute("").SerdeSerializeOrDeserialize().render(writer)
-        writer.raw("use serde;");
+        writer.raw("use serde;")
     }
 }
