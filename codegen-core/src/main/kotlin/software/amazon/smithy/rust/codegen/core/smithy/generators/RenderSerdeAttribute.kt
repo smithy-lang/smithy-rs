@@ -50,9 +50,8 @@ public object RenderSerdeAttribute {
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
         if (shape.hasTrait<ErrorTrait>() || member.isEventStream(model))return
         if (member.isStreaming(model)) {
-            Attribute("").SerdeSkip().render(writer)
-        } else {
             writer.writeInline(skipFieldMessage)
+            Attribute("").SerdeSkip().render(writer)
         }
     }
 
@@ -60,6 +59,6 @@ public object RenderSerdeAttribute {
         // we need this for skip serde to work
         Attribute.AllowUnusedImports.render(writer)
         Attribute("").SerdeSerializeOrDeserialize().render(writer)
-        writer.writeInline("use serde;");
+        writer.raw("use serde;");
     }
 }
