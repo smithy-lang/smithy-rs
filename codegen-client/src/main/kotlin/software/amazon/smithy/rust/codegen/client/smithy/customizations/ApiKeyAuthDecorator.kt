@@ -38,7 +38,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
     override val order: Byte = 10
 
     private fun applies(codegenContext: ClientCodegenContext) =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime &&
+        codegenContext.smithyRuntimeMode.generateMiddleware &&
             isSupportedApiKeyAuth(codegenContext)
 
     override fun configCustomizations(

@@ -70,7 +70,6 @@ class ServiceRuntimePluginGenerator(
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
-            "AuthOptionListResolver" to runtimeApi.resolve("client::auth::option_resolver::AuthOptionListResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
@@ -78,13 +77,14 @@ class ServiceRuntimePluginGenerator(
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
             "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
-            "HttpAuthSchemes" to runtimeApi.resolve("client::orchestrator::HttpAuthSchemes"),
+            "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
+            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
@@ -106,20 +106,20 @@ class ServiceRuntimePluginGenerator(
                 fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
+                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
+                    cfg.put(self.handle.clone());
+
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
                         .build();
                     cfg.set_http_auth_schemes(http_auth_schemes);
 
                     // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{AuthOptionListResolver}::new(Vec::new()));
+                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(Vec::new()));
 
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
-
-                    ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
-                    cfg.put(#{Params}::builder());
 
                     // TODO(RuntimePlugins): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
