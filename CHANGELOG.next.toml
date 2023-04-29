@@ -59,3 +59,4 @@ message = """
 """
 author = "thomas-k-cameron"
 references = ["smithy-rs#2615"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
