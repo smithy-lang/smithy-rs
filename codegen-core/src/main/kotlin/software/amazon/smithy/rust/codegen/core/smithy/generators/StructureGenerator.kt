@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 /** StructureGenerator customization sections */
@@ -154,7 +155,9 @@ open class StructureGenerator(
     }
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
         writer.renderMemberDoc(member, memberSymbol)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
@@ -168,17 +171,14 @@ open class StructureGenerator(
         RenderSerdeAttribute.addSerde(writer, shape, model)
         RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         containerMeta.render(writer)
-
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
-                RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
-                RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
             writeCustomizations(customizations, StructureSection.AdditionalFields(shape))
         }
 
-        RenderSerdeAttribute.importSerde(writer)
+        RenderSerdeAttribute.importSerde(writer, shape, model)
         renderStructureImpl()
         if (!containerMeta.hasDebugDerive()) {
             renderDebugImpl()

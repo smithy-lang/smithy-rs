@@ -24,8 +24,7 @@ public object RenderSerdeAttribute {
 
     // guards to check if you want to add serde attributes
     private fun isApplicable(shape: Shape, model: Model): Boolean {
-        if (shape.hasTrait<ErrorTrait>() || shape.members().none { it.isEventStream(model) }) return false
-        return true
+        return !shape.hasTrait<ErrorTrait>() && shape.members().none { it.isEventStream(model) }
     }
 
     public fun addSensitiveWarningDoc(writer: RustWriter, shape: Shape, model: Model) {
@@ -41,23 +40,23 @@ public object RenderSerdeAttribute {
 
     public fun addSerde(writer: RustWriter, shape: Shape, model: Model) {
         if (isApplicable(shape, model)) {
-            Attribute("").SerdeSerialize().render(writer)
-            Attribute("").SerdeDeserialize().render(writer)
+            addSerdeWithoutShapeModel(writer)
         }
     }
 
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
-        if (shape.hasTrait<ErrorTrait>() || member.isEventStream(model))return
-        if (member.isStreaming(model)) {
+        if (isApplicable(shape, model) && member.isStreaming(model)) {
             writer.writeInline(skipFieldMessage)
             Attribute("").SerdeSkip().render(writer)
         }
     }
 
-    public fun importSerde(writer: RustWriter) {
-        // we need this for skip serde to work
-        Attribute.AllowUnusedImports.render(writer)
-        Attribute("").SerdeSerializeOrDeserialize().render(writer)
-        writer.raw("use serde;")
+    public fun importSerde(writer: RustWriter, shape: Shape, model: Model) {
+        if (isApplicable(shape, model)) {
+            // we need this for skip serde to work
+            Attribute.AllowUnusedImports.render(writer)
+            Attribute("").SerdeSerializeOrDeserialize().render(writer)
+            writer.raw("use serde;")
+        }
     }
 }
