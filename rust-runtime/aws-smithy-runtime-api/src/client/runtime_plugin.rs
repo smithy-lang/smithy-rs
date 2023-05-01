@@ -26,18 +26,10 @@ impl RuntimePlugin for Box<dyn RuntimePlugin> {
     }
 }
 
+#[derive(Default)]
 pub struct RuntimePlugins {
     client_plugins: Vec<Box<dyn RuntimePlugin>>,
     operation_plugins: Vec<Box<dyn RuntimePlugin>>,
-}
-
-impl Default for RuntimePlugins {
-    fn default() -> Self {
-        Self {
-            client_plugins: vec![],
-            operation_plugins: vec![],
-        }
-    }
 }
 
 impl RuntimePlugins {
