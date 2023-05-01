@@ -412,7 +412,7 @@ impl ConfigBag {
     }
 
     /// Insert `value` into the bag
-    pub fn put_legacy<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
+    pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
         self.head.put::<StoreReplace<T>>(Value::Set(value));
         self
     }
@@ -438,8 +438,8 @@ impl ConfigBag {
     /// ```
     /// use aws_smithy_runtime_api::config_bag::ConfigBag;
     /// let bag = ConfigBag::base();
-    /// let first_layer = bag.with_fn("a", |b: &mut ConfigBag| { b.put_legacy("a"); }).freeze();
-    /// let second_layer = first_layer.with_fn("other", |b: &mut ConfigBag| { b.put_legacy(1i32); });
+    /// let first_layer = bag.with_fn("a", |b: &mut ConfigBag| { b.put("a"); }).freeze();
+    /// let second_layer = first_layer.with_fn("other", |b: &mut ConfigBag| { b.put(1i32); });
     /// // The number is only in the second layer
     /// assert_eq!(first_layer.get::<i32>(), None);
     /// assert_eq!(second_layer.get::<i32>(), Some(&1));
@@ -533,11 +533,11 @@ mod test {
         #[derive(Debug)]
         struct Prop2;
         let layer_a = |bag: &mut ConfigBag| {
-            bag.put_legacy(Prop1);
+            bag.put(Prop1);
         };
 
         let layer_b = |bag: &mut ConfigBag| {
-            bag.put_legacy(Prop2);
+            bag.put(Prop2);
         };
 
         #[derive(Debug)]
@@ -546,14 +546,14 @@ mod test {
         let mut base_bag = ConfigBag::base()
             .with_fn("a", layer_a)
             .with_fn("b", layer_b);
-        base_bag.put_legacy(Prop3);
+        base_bag.put(Prop3);
         assert!(base_bag.get::<Prop1>().is_some());
 
         #[derive(Debug)]
         struct Prop4;
 
         let layer_c = |bag: &mut ConfigBag| {
-            bag.put_legacy(Prop4);
+            bag.put(Prop4);
             bag.unset::<Prop3>();
         };
 
@@ -575,7 +575,7 @@ mod test {
         #[derive(Debug)]
         struct Region(&'static str);
         let bag = bag.with_fn("service config", |layer: &mut ConfigBag| {
-            layer.put_legacy(Region("asdf"));
+            layer.put(Region("asdf"));
         });
 
         assert_eq!(bag.get::<Region>().unwrap().0, "asdf");
@@ -584,14 +584,14 @@ mod test {
         struct SigningName(&'static str);
         let bag = bag.freeze();
         let operation_config = bag.with_fn("operation", |layer: &mut ConfigBag| {
-            layer.put_legacy(SigningName("s3"));
+            layer.put(SigningName("s3"));
         });
 
         assert!(bag.get::<SigningName>().is_none());
         assert_eq!(operation_config.get::<SigningName>().unwrap().0, "s3");
 
         let mut open_bag = operation_config.with_fn("my_custom_info", |_bag: &mut ConfigBag| {});
-        open_bag.put_legacy("foo");
+        open_bag.put("foo");
 
         assert_eq!(open_bag.layers().count(), 4);
     }

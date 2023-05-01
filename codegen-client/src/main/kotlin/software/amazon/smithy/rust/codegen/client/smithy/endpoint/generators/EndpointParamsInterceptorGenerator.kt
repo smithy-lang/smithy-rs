@@ -90,7 +90,7 @@ class EndpointParamsInterceptorGenerator(
                 .ok_or("missing endpoint params builder")?
                 .clone();
             ${"" /* TODO(EndpointResolver): Call setters on `params_builder` to update its fields by using values from `_input` */}
-            cfg.put_legacy(params_builder);
+            cfg.put(params_builder);
 
             #{endpoint_prefix:W}
 
@@ -121,7 +121,7 @@ class EndpointParamsInterceptorGenerator(
                     codegenContext.settings.codegenConfig.enableNewSmithyRuntime,
                 )
             }
-            rust("cfg.put_legacy(endpoint_prefix);")
+            rust("cfg.put(endpoint_prefix);")
         }
     }
 
@@ -136,7 +136,7 @@ class EndpointParamsInterceptorGenerator(
             let params = params_builder
                 .build()
                 .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
-            cfg.put_legacy(
+            cfg.put(
                 #{EndpointResolverParams}::new(params)
             );
 

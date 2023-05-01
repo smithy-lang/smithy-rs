@@ -32,7 +32,7 @@ pub async fn invoke(
     let cfg = &mut cfg;
 
     let interceptors = Interceptors::new();
-    cfg.put_legacy(interceptors.clone());
+    cfg.put(interceptors.clone());
 
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration

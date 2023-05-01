@@ -68,10 +68,10 @@ impl RuntimePlugin for FixupPlugin {
             .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()))
             .bucket("test-bucket");
 
-        cfg.put_legacy(params_builder);
+        cfg.put(params_builder);
         cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
-        cfg.put_legacy(AwsUserAgent::for_tests());
-        cfg.put_legacy(InvocationId::for_tests());
+        cfg.put(AwsUserAgent::for_tests());
+        cfg.put(InvocationId::for_tests());
         Ok(())
     }
 }
