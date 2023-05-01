@@ -73,7 +73,6 @@ mod tests {
     use crate::invocation_id::InvocationIdInterceptor;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use http::HeaderValue;
