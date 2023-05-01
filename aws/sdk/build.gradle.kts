@@ -360,7 +360,7 @@ tasks.register<ExecRustBuildTool>("hydrateReadme") {
     binaryName = "publisher"
     arguments = listOf(
         "hydrate-readme",
-        "--versions-manifest", outputDir.resolve("versions.toml").toString(),
+        "--versions-manifest", sdkOutputDir.resolve("versions.toml").toString(),
         "--msrv", getRustMSRV(),
         "--input", rootProject.projectDir.resolve("aws/SDK_README.md.hb").toString(),
         "--output", outputDir.resolve("README.md").absolutePath,
@@ -385,7 +385,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     arguments = mutableListOf(
         "generate-version-manifest",
         "--location",
-        outputDir.absolutePath,
+        sdkOutputDir.absolutePath,
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,
         "--examples-revision",
