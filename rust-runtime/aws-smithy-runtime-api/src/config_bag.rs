@@ -41,7 +41,7 @@ impl Debug for ConfigBag {
             }
         }
         f.debug_struct("ConfigBag")
-            .field("layers", &Layers(&self))
+            .field("layers", &Layers(self))
             .finish()
     }
 }
@@ -81,24 +81,20 @@ struct DebugErased {
     field: Box<dyn Any + Send + Sync>,
     #[allow(dead_code)]
     type_name: &'static str,
+    #[allow(clippy::type_complexity)]
     debug: Box<dyn Fn(&DebugErased, &mut Formatter<'_>) -> std::fmt::Result + Send + Sync>,
 }
 
 impl Debug for DebugErased {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        (self.debug)(&self, f)
+        (self.debug)(self, f)
     }
 }
 
 impl DebugErased {
     fn new<T: Send + Sync + Debug + 'static>(value: T) -> Self {
         let debug = |value: &DebugErased, f: &mut Formatter<'_>| {
-            Debug::fmt(
-                value
-                    .as_ref::<T>()
-                    .expect(&format!("typechecked: {:?}", type_name::<T>())),
-                f,
-            )
+            Debug::fmt(value.as_ref::<T>().expect("typechecked"), f)
         };
         let name = type_name::<T>();
         Self {
@@ -147,14 +143,11 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreReplace<U> {
     type ReturnedType<'a> = Option<&'a U>;
     type StoredType = Value<U>;
 
-    fn merge_iter(iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_> {
-        for item in iter {
-            return match item {
-                Value::Set(item) => Some(item),
-                Value::ExplicitlyUnset(_) => None,
-            };
-        }
-        None
+    fn merge_iter(mut iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_> {
+        iter.next().and_then(|item| match item {
+            Value::Set(item) => Some(item),
+            Value::ExplicitlyUnset(_) => None,
+        })
     }
 }
 
@@ -195,7 +188,7 @@ where
                 self.cur = Some(u.iter().rev());
                 self.next()
             }
-            Some(Value::ExplicitlyUnset(_)) => return None,
+            Some(Value::ExplicitlyUnset(_)) => None,
         }
     }
 }
@@ -243,6 +236,10 @@ impl Layer {
             .or_insert_with(|| DebugErased::new(T::StoredType::default()))
             .as_mut()
             .expect("typechecked")
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.props.is_empty()
     }
 
     pub fn len(&self) -> usize {
@@ -534,10 +531,7 @@ impl<'a> Iterator for BagIter<'a> {
     type Item = &'a Layer;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = match self.bag {
-            Some(bag) => Some(&bag.head),
-            None => None,
-        };
+        let next = self.bag.map(|b| &b.head);
         if let Some(bag) = &mut self.bag {
             self.bag = bag.tail.as_deref();
         }
