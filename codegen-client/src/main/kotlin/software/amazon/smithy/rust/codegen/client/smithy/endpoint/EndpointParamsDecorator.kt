@@ -31,7 +31,7 @@ class EndpointParamsDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(EndpointParametersRuntimePluginCustomization(codegenContext, operation))
         }
 }
@@ -46,10 +46,6 @@ private class EndpointParametersRuntimePluginCustomization(
         if (section is OperationRuntimePluginSection.AdditionalConfig) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rust("${operationName}EndpointParamsInterceptor")
-            }
-            // The finalizer interceptor should be registered last
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust("${operationName}EndpointParamsFinalizerInterceptor")
             }
         }
     }
