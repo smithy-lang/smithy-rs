@@ -63,10 +63,10 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor}<#{HttpRequest}, #{HttpResponse}> for $interceptorName {
+            impl #{Interceptor} for $interceptorName {
                 fn read_before_execution(
                     &self,
-                    context: &#{InterceptorContext}<#{HttpRequest}, #{HttpResponse}>,
+                    context: &#{InterceptorContext},
                     cfg: &mut #{ConfigBag},
                 ) -> Result<(), #{BoxError}> {
                     let _input = context.input()?;

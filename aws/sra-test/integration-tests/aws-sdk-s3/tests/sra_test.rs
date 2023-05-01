@@ -10,6 +10,7 @@ use aws_sdk_s3::Client;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
+use aws_smithy_runtime_api::client::interceptors::Interceptors;
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -56,6 +57,7 @@ impl RuntimePlugin for FixupPlugin {
     fn configure(
         &self,
         cfg: &mut ConfigBag,
+        _interceptors: &mut Interceptors,
     ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
         cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
         cfg.put(AwsUserAgent::for_tests());
