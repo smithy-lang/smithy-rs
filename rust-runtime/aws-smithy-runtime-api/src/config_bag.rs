@@ -384,6 +384,50 @@ impl ConfigBag {
         out
     }
 
+    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
+    pub fn get_mut<T: Send + Sync + Debug + Clone + 'static>(&mut self) -> Option<&mut T>
+    where
+        T: Storable<Storer = StoreReplace<T>>,
+    {
+        // this code looks weird to satisfy the borrow checker—we can't keep the result of `get_mut`
+        // alive (even in a returned branch) and then call `store_put`. So: drop the borrow immediately
+        // store, the value, then pull it right back
+        if matches!(self.head.get_mut::<StoreReplace<T>>(), None) {
+            let new_item = match self.tail.as_deref().and_then(|b| b.load::<T>()) {
+                Some(item) => item.clone(),
+                None => return None,
+            };
+            self.store_put(new_item);
+            self.get_mut()
+        } else if matches!(
+            self.head.get::<StoreReplace<T>>(),
+            Some(Value::ExplicitlyUnset(_))
+        ) {
+            None
+        } else if let Some(Value::Set(t)) = self.head.get_mut::<StoreReplace<T>>() {
+            Some(t)
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
+    ///
+    /// - If `T` is in a deeper layer of the bag, that value will be cloned and inserted into the top layer
+    /// - If `T` is not present in the bag, the [`Default`] implementation will be used.
+    pub fn get_mut_or_default<T: Send + Sync + Debug + Clone + Default + 'static>(
+        &mut self,
+    ) -> &mut T
+    where
+        T: Storable<Storer = StoreReplace<T>>,
+    {
+        self.get_mut_or_else(|| T::default())
+    }
+
+    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
+    ///
+    /// - If `T` is in a deeper layer of the bag, that value will be cloned and inserted into the top layer
+    /// - If `T` is not present in the bag, `default` will be used to construct a new value
     pub fn get_mut_or_else<T: Send + Sync + Debug + Clone + 'static>(
         &mut self,
         default: impl Fn() -> T,
@@ -391,24 +435,17 @@ impl ConfigBag {
     where
         T: Storable<Storer = StoreReplace<T>>,
     {
-        if matches!(self.head.get_mut::<StoreReplace<T>>(), None) {
-            let new_item = match self.tail.as_deref().and_then(|b| b.load::<T>()) {
-                Some(item) => item.clone(),
-                None => (default)(),
-            };
-            self.store_put(new_item);
-            self.get_mut_or_else(default)
-        } else if matches!(
-            self.head.get::<StoreReplace<T>>(),
-            Some(Value::ExplicitlyUnset(_))
-        ) {
+        // this code looks weird to satisfy the borrow checker—we can't keep the result of `get_mut`
+        // alive (even in a returned branch) and then call `store_put`. So: drop the borrow immediately
+        // store, the value, then pull it right back
+        if self.get_mut::<T>().is_none() {
             self.store_put((default)());
-            self.get_mut_or_else(default)
-        } else if let Some(Value::Set(t)) = self.head.get_mut::<StoreReplace<T>>() {
-            t
-        } else {
-            unreachable!()
+            return self
+                .get_mut()
+                .expect("item was just stored in the top layer");
         }
+        // above it was None
+        self.get_mut().unwrap()
     }
 
     /// Insert `value` into the bag
@@ -653,30 +690,34 @@ mod test {
 
     #[test]
     fn get_mut_or_else() {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, PartialEq, Eq, Default)]
         struct Foo(usize);
         impl Storable for Foo {
             type Storer = StoreReplace<Foo>;
         }
 
         let mut bag = ConfigBag::base();
-        bag.get_mut_or_else::<Foo>(|| Foo(0)).0 += 1;
+        assert_eq!(bag.get_mut::<Foo>(), None);
+        assert_eq!(bag.get_mut_or_default::<Foo>(), &Foo(0));
+        bag.get_mut_or_default::<Foo>().0 += 1;
+        assert_eq!(bag.get::<Foo>(), Some(&Foo(1)));
 
         let bag = bag.freeze();
 
         let old_ref = bag.load::<Foo>().unwrap();
-        assert_eq!(old_ref.0, 1);
+        assert_eq!(old_ref, &Foo(1));
 
+        // there is one in the bag, so it can be returned
         let mut next = bag.add_layer("next");
-        next.get_mut_or_else(|| {
-            todo!();
-            #[allow(unreachable_code)]
-            Foo(0)
-        })
-        .0 += 1;
+        next.get_mut::<Foo>().unwrap().0 += 1;
         let new_ref = next.load::<Foo>().unwrap();
-        assert_eq!(new_ref.0, 2);
+        assert_eq!(new_ref, &Foo(2));
         // no funny business
-        assert_eq!(old_ref.0, 1);
+        assert_eq!(old_ref, &Foo(1));
+
+        next.unset::<Foo>();
+        // if it was unset, we can't clone the current one, that would be wrong
+        assert_eq!(next.get_mut::<Foo>(), None);
+        assert_eq!(next.get_mut_or_default::<Foo>(), &Foo(0));
     }
 }
