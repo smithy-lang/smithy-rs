@@ -334,7 +334,7 @@ impl ConfigBag {
         self
     }
 
-    /// This can only be used for types that use Append storage
+    /// This can only be used for types that use [`StoreAppend`]
     /// ```
     /// use aws_smithy_runtime_api::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
     /// let mut bag = ConfigBag::base();
@@ -348,8 +348,8 @@ impl ConfigBag {
     /// bag.store_append(Interceptor("456"));
     ///
     /// assert_eq!(
-    ///     bag.load::<Interceptor>(),
-    ///     vec![&Interceptor("123"), &Interceptor("456")]
+    ///     bag.load::<Interceptor>().collect::<Vec<_>>(),
+    ///     vec![&Interceptor("456"), &Interceptor("123")]
     /// );
     /// ```
     pub fn store_append<T>(&mut self, item: T) -> &mut Self
