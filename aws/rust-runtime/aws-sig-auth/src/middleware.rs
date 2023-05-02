@@ -20,21 +20,10 @@ use crate::signer::{
     OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
 };
 
-/// Container for the request signature for use in the property bag.
-#[non_exhaustive]
-pub struct Signature(String);
-
-impl Signature {
-    pub fn new(signature: String) -> Self {
-        Self(signature)
-    }
-}
-
-impl AsRef<str> for Signature {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
+#[cfg(feature = "sign-eventstream")]
+use crate::event_stream::SigV4Signer as EventStreamSigV4Signer;
+#[cfg(feature = "sign-eventstream")]
+use aws_smithy_eventstream::frame::DeferredSignerSender;
 
 /// Middleware stage to sign requests with SigV4
 ///
@@ -177,11 +166,26 @@ impl MapRequest for SigV4SigningStage {
                     SigningRequirements::Required => signing_config(config)?,
                 };
 
-            let signature = self
+            let _signature = self
                 .signer
                 .sign(operation_config, &request_config, &creds, &mut req)
                 .map_err(SigningStageErrorKind::SigningFailure)?;
-            config.insert(signature);
+
+            // If this is an event stream operation, set up the event stream signer
+            #[cfg(feature = "sign-eventstream")]
+            if let Some(signer_sender) = config.get::<DeferredSignerSender>() {
+                let time_override = config.get::<SystemTime>().copied();
+                signer_sender
+                    .send(Box::new(EventStreamSigV4Signer::new(
+                        _signature,
+                        creds,
+                        request_config.region.clone(),
+                        request_config.service.clone(),
+                        time_override,
+                    )) as _)
+                    .expect("failed to send deferred signer");
+            }
+
             Ok(req)
         })
     }
@@ -202,13 +206,17 @@ mod test {
     use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
 
-    use crate::middleware::{
-        SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
-    };
+    use crate::middleware::{SigV4SigningStage, SigningStageError, SigningStageErrorKind};
     use crate::signer::{OperationSigningConfig, SigV4Signer};
 
+    #[cfg(feature = "sign-eventstream")]
     #[test]
-    fn places_signature_in_property_bag() {
+    fn sends_event_stream_signer_for_event_stream_operations() {
+        use crate::event_stream::SigV4Signer as EventStreamSigV4Signer;
+        use aws_smithy_eventstream::frame::{DeferredSigner, SignMessage};
+        use std::time::SystemTime;
+
+        let (mut deferred_signer, deferred_signer_sender) = DeferredSigner::new();
         let req = http::Request::builder()
             .uri("https://test-service.test-region.amazonaws.com/")
             .body(SdkBody::from(""))
@@ -217,21 +225,31 @@ mod test {
         let req = operation::Request::new(req)
             .augment(|req, properties| {
                 properties.insert(region.clone());
-                properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                properties.insert::<SystemTime>(UNIX_EPOCH + Duration::new(1611160427, 0));
                 properties.insert(SigningService::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
                 properties.insert(Credentials::for_tests());
-                properties.insert(SigningRegion::from(region));
+                properties.insert(SigningRegion::from(region.clone()));
+                properties.insert(deferred_signer_sender);
                 Result::<_, Infallible>::Ok(req)
             })
             .expect("succeeds");
 
         let signer = SigV4SigningStage::new(SigV4Signer::new());
-        let req = signer.apply(req).unwrap();
+        let _ = signer.apply(req).unwrap();
 
-        let property_bag = req.properties();
-        let signature = property_bag.get::<Signature>();
-        assert!(signature.is_some());
+        let mut signer_for_comparison = EventStreamSigV4Signer::new(
+            // This is the expected SigV4 signature for the HTTP request above
+            "abac477b4afabf5651079e7b9a0aa6a1a3e356a7418a81d974cdae9d4c8e5441".into(),
+            Credentials::for_tests(),
+            SigningRegion::from(region),
+            SigningService::from_static("kinesis"),
+            Some(UNIX_EPOCH + Duration::new(1611160427, 0)),
+        );
+
+        let expected_signed_empty = signer_for_comparison.sign_empty().unwrap().unwrap();
+        let actual_signed_empty = deferred_signer.sign_empty().unwrap().unwrap();
+        assert_eq!(expected_signed_empty, actual_signed_empty);
     }
 
     // check that the endpoint middleware followed by signing middleware produce the expected result

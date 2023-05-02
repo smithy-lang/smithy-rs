@@ -36,13 +36,13 @@ interface ProtocolPayloadGenerator {
     /**
      * Write the payload into [writer].
      *
-     * [self] is the name of the variable binding for the Rust struct that is to be serialized into the payload.
+     * [shapeName] is the name of the variable binding for the Rust struct that is to be serialized into the payload.
      *
      * This should be an expression that returns bytes:
      *     - a `Vec<u8>` for non-streaming operations; or
      *     - a `ByteStream` for streaming operations.
      */
-    fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape)
+    fun generatePayload(writer: RustWriter, shapeName: String, operationShape: OperationShape)
 }
 
 /**

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::middleware::Signature;
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableRequest,
@@ -191,7 +190,7 @@ impl SigV4Signer {
         request_config: &RequestConfig<'_>,
         credentials: &Credentials,
         request: &mut http::Request<SdkBody>,
-    ) -> Result<Signature, SigningError> {
+    ) -> Result<String, SigningError> {
         let settings = Self::settings(operation_config);
         let signing_params = Self::signing_params(settings, credentials, request_config);
 
@@ -223,7 +222,7 @@ impl SigV4Signer {
 
         signing_instructions.apply_to_request(request);
 
-        Ok(Signature::new(signature))
+        Ok(signature)
     }
 }
 

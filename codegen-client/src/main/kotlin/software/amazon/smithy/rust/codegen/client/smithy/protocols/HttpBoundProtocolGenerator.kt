@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolParserGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -29,11 +31,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
+// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime` (replace with ClientProtocolGenerator)
 class HttpBoundProtocolGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
-    bodyGenerator: ProtocolPayloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+    bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
 ) : ClientProtocolGenerator(
     codegenContext,
     protocol,
@@ -46,6 +48,35 @@ class HttpBoundProtocolGenerator(
     ),
     bodyGenerator,
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
+)
+
+class ClientHttpBoundProtocolPayloadGenerator(
+    codegenContext: ClientCodegenContext,
+    protocol: Protocol,
+) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
+    codegenContext, protocol, HttpMessageType.REQUEST,
+    renderEventStreamBody = { writer, params ->
+        writer.rustTemplate(
+            """
+            {
+                let error_marshaller = #{errorMarshallerConstructorFn}();
+                let marshaller = #{marshallerConstructorFn}();
+                let (signer, signer_sender) = #{DeferredSigner}::new();
+                properties.acquire_mut().insert(signer_sender);
+                let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
+                    ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
+            "hyper" to CargoDependency.HyperWithStream.toType(),
+            "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+            "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+            "DeferredSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::DeferredSigner"),
+            "marshallerConstructorFn" to params.marshallerConstructorFn,
+            "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+        )
+    },
 )
 
 // TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
