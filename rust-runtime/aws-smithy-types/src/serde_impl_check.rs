@@ -106,15 +106,15 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
     let contents = match target {
         Target::De => deser.replace(place_holder, datatype),
         Target::Ser => {
-            let s =  match datatype {
+            let s = match datatype {
                 "Blob" => "Blob::new([1, 2,3])",
                 "Number" => "Number::PosInt(1)",
                 "Document" => "Document::from(0)",
                 "DateTime" => "DateTime::from_secs(0)",
-                _ => panic!()
-             };
+                _ => panic!(),
+            };
             ser.replace(place_holder, s)
-        },
+        }
     };
     std::fs::write(&src_path.join("main.rs"), contents).unwrap();
 

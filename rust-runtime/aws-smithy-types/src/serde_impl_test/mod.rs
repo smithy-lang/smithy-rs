@@ -5,9 +5,9 @@
 
 use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
 mod blob;
-mod number;
 mod date_time;
 mod document;
+mod number;
 
 #[derive(Debug)]
 pub(crate) enum Target {
