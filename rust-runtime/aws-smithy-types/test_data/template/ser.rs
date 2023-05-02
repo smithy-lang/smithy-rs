@@ -4,5 +4,5 @@
  */
 
 fn main() {
-    serde_json::to_string(&$PLACE_HOLDER$::default());
+    serde_json::to_string(&aws_smithy_types::$PLACE_HOLDER$::default());
 }
