@@ -156,8 +156,8 @@ class ResponseDeserializerGenerator(
             """
             pub(crate) fn $fnName<O, E>(result: Result<O, E>) -> Result<#{Output}, #{Error}>
             where
-                O: Send + Sync + 'static,
-                E: Send + Sync + 'static,
+                O: std::fmt::Debug + Send + Sync + 'static,
+                E: std::fmt::Debug + Send + Sync + 'static,
             {
                 result.map(|output| #{TypedBox}::new(output).erase())
                     .map_err(|error| #{TypedBox}::new(error).erase())

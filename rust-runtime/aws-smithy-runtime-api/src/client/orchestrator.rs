@@ -13,8 +13,7 @@ use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::EndpointPrefix;
-use std::any::Any;
-use std::fmt::Debug;
+use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::time::SystemTime;
@@ -25,15 +24,15 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
-pub trait TraceProbe: Send + Sync + Debug {
+pub trait TraceProbe: Send + Sync + fmt::Debug {
     fn dispatch_events(&self);
 }
 
-pub trait RequestSerializer: Send + Sync + Debug {
+pub trait RequestSerializer: Send + Sync + fmt::Debug {
     fn serialize_input(&self, input: Input) -> Result<HttpRequest, BoxError>;
 }
 
-pub trait ResponseDeserializer: Send + Sync + Debug {
+pub trait ResponseDeserializer: Send + Sync + fmt::Debug {
     fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
         let _ = response;
         None
@@ -42,7 +41,7 @@ pub trait ResponseDeserializer: Send + Sync + Debug {
     fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
 }
 
-pub trait Connection: Send + Sync + Debug {
+pub trait Connection: Send + Sync + fmt::Debug {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
@@ -56,16 +55,16 @@ impl Connection for Box<dyn Connection> {
 pub struct EndpointResolverParams(TypeErasedBox);
 
 impl EndpointResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
         Self(TypedBox::new(params).erase())
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
 
-pub trait EndpointResolver: Send + Sync + Debug {
+pub trait EndpointResolver: Send + Sync + fmt::Debug {
     fn resolve_and_apply_endpoint(
         &self,
         params: &EndpointResolverParams,
