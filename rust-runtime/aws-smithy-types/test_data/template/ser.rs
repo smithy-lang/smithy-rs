@@ -4,5 +4,5 @@
  */
 
 fn main() {
-    serde_json::to_string(&ReplaceDataType::default());
+    serde_json::to_string(&$PLACE_HOLDER$::default());
 }

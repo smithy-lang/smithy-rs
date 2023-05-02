@@ -4,5 +4,5 @@
  */
 
 fn main() {
-    let _dt: Result<ReplaceDataType, _> = serde_json::from_str("some_str");
+    let _dt: Result<$PLACE_HOLDER$, _> = serde_json::from_str("some_str");
 }
