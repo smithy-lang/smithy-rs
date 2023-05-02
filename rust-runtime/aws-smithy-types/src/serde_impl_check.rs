@@ -5,6 +5,7 @@
 
 use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
 
+#[derive(Debug)]
 enum Target {
     Ser,
     De,
@@ -76,30 +77,38 @@ fn feature_gate_test_for_blob_serialization() {
 
 // create directory and files for testing
 fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
-    let deser = include_str!("../test_data/template/ser.rs");
-    let ser = include_str!("../test_data/template/deser.rs");
-
-    let cargo = include_str!("../test_data/template/Cargo.toml").replace(
-        r#"aws-smithy-types = { path = "./" }"#,
-        &format!(
-            "aws-smithy-types = {{ path = {:#?} }}",
-            current_dir().unwrap().to_str().unwrap().to_string()
-        ),
-    );
-
-    // create temp directory
-    let base_path = PathBuf::from_str("/tmp/smithy-rust-test")
+    let base_path = PathBuf::from_str("/tmp/smithy-rust-test/")
         .unwrap()
+        .join(format!("{target:#?}"))
         .join(datatype);
     let src_path = base_path.join("src");
+
+    // write cargo
+    {
+        let cargo = include_str!("../test_data/template/Cargo.toml").replace(
+            r#"aws-smithy-types = { path = "./" }"#,
+            &format!(
+                "aws-smithy-types = {{ path = {:#?} }}",
+                current_dir().unwrap().to_str().unwrap().to_string()
+            ),
+        );
+        std::fs::write(&base_path.join("Cargo.toml"), cargo).unwrap();
+    };
+
+    // create temp directory
     std::fs::create_dir_all(&base_path).unwrap();
     std::fs::create_dir_all(&src_path).unwrap();
+
+    // write main.rs
+    let deser = include_str!("../test_data/template/ser.rs");
+    let ser = include_str!("../test_data/template/deser.rs");
     let place_holder = "$PLACE_HOLDER$";
     let contents = match target {
         Target::De => deser.replace(place_holder, datatype),
         Target::Ser => ser.replace(place_holder, datatype),
     };
-    std::fs::write(&src_path.join("main.rs"), contents);
+    std::fs::write(&src_path.join("main.rs"), contents).unwrap();
+
     base_path
 }
 fn ser_test(cargo_project_path: &PathBuf) {
