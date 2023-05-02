@@ -100,8 +100,8 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
     std::fs::create_dir_all(&src_path).unwrap();
 
     // write main.rs
-    let deser = include_str!("../test_data/template/ser.rs");
-    let ser = include_str!("../test_data/template/deser.rs");
+    let ser = include_str!("../test_data/template/ser");
+    let deser = include_str!("../test_data/template/deser");
     let place_holder = "$PLACE_HOLDER$";
     let contents = match target {
         Target::De => deser.replace(place_holder, datatype),
