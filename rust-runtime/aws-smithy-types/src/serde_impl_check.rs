@@ -83,6 +83,10 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
         .join(datatype);
     let src_path = base_path.join("src");
 
+    // create temp directory
+    std::fs::create_dir_all(&base_path).unwrap();
+    std::fs::create_dir_all(&src_path).unwrap();
+
     // write cargo
     {
         let cargo = include_str!("../test_data/template/Cargo.toml").replace(
@@ -94,10 +98,6 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
         );
         std::fs::write(&base_path.join("Cargo.toml"), cargo).unwrap();
     };
-
-    // create temp directory
-    std::fs::create_dir_all(&base_path).unwrap();
-    std::fs::create_dir_all(&src_path).unwrap();
 
     // write main.rs
     let ser = include_str!("../test_data/template/ser");
