@@ -15,3 +15,9 @@ pub mod connections;
 /// This code defines when and how failed requests should be retried. It also defines the behavior
 /// used to limit the rate at which requests are sent.
 pub mod retries;
+
+/// Utilities for testing orchestrators. An orchestrator missing required components will panic when
+/// run. This module contains stub components that can be used when you only care about testing some
+/// specific aspect of the orchestrator.
+#[cfg(feature = "test-util")]
+pub mod test_util;
