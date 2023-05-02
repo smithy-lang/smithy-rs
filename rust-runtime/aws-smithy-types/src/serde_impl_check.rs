@@ -111,11 +111,12 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
 
     base_path
 }
+
 fn ser_test(cargo_project_path: &PathBuf) {
     // runs cargo check --all-features without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -127,8 +128,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-serialize without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -140,8 +141,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-deserialize without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -153,8 +154,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -167,8 +168,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-serialize with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to fail to compile.
-    let mut cmd = Command::new("bash");
+    // it is  expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -181,8 +182,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-deserialize with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -197,8 +198,8 @@ fn ser_test(cargo_project_path: &PathBuf) {
 fn de_test(cargo_project_path: &PathBuf) {
     // runs cargo check --all-features without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -210,8 +211,8 @@ fn de_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-serialize without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -223,8 +224,8 @@ fn de_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-deserialize without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -236,8 +237,8 @@ fn de_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -250,8 +251,8 @@ fn de_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-serialize with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to successfully compile.
-    let mut cmd = Command::new("bash");
+    // it is not expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
@@ -264,8 +265,8 @@ fn de_test(cargo_project_path: &PathBuf) {
 
     // runs cargo check --features serde-deserialize with "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
-    // it is expected to fail to compile.
-    let mut cmd = Command::new("bash");
+    // it is  expected to compile.
+    let cmd = Command::new("bash");
 
     let child = cmd
         .current_dir(&cargo_project_path)
