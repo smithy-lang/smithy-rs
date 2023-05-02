@@ -64,11 +64,11 @@ where
 
 impl<T> fmt::Debug for TypedBox<T>
 where
-    T: fmt::Debug + Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("TypedBox:")?;
-        self.inner.downcast_ref::<T>().expect("typechecked").fmt(f)
+        (self.inner.debug)(&self.inner, f)
     }
 }
 
@@ -97,6 +97,7 @@ pub struct TypeErasedBox {
 
 impl fmt::Debug for TypeErasedBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TypeErasedBox:")?;
         (self.debug)(self, f)
     }
 }
@@ -104,7 +105,6 @@ impl fmt::Debug for TypeErasedBox {
 impl TypeErasedBox {
     pub fn new<T: Send + Sync + fmt::Debug + 'static>(value: T) -> Self {
         let debug = |value: &TypeErasedBox, f: &mut fmt::Formatter<'_>| {
-            f.write_str("TypeErasedBox:")?;
             fmt::Debug::fmt(value.downcast_ref::<T>().expect("typechecked"), f)
         };
         let name = type_name::<T>();
