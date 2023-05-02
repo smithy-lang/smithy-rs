@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredInterceptorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredInterceptorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
@@ -65,7 +65,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationRuntimePluginCustomization>,
     ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations + HttpChecksumRequiredInterceptorGenerator(codegenContext, operation)
+        baseCustomizations + HttpChecksumRequiredInterceptorCustomization(codegenContext, operation)
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`

@@ -63,7 +63,7 @@ class HttpChecksumRequiredGenerator(
     }
 }
 
-class HttpChecksumRequiredInterceptorGenerator(
+class HttpChecksumRequiredInterceptorCustomization(
     private val codegenContext: CodegenContext,
     private val operationShape: OperationShape,
 ) : OperationRuntimePluginCustomization() {
