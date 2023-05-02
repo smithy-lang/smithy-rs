@@ -36,7 +36,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
             return
         }
 
-        val generics = if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        val generics = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
             NoClientGenerics(codegenContext.runtimeConfig)
         } else {
             FlexibleClientGenerics(
