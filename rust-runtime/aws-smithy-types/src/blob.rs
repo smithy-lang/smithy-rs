@@ -45,6 +45,7 @@ impl AsRef<[u8]> for Blob {
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
+    use super::*;
     impl Serialize for Blob {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -61,6 +62,8 @@ mod serde_serialize {
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod serde_deserialize {
+    use super::*;
+
     struct HumanReadableBlobVisitor;
     impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
         type Value = Blob;

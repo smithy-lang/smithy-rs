@@ -4,79 +4,19 @@
  */
 
 use std::{env::current_dir, path::PathBuf, process::Command, str::FromStr};
+mod blob;
+mod number;
+mod date_time;
+mod document;
 
 #[derive(Debug)]
-enum Target {
+pub(crate) enum Target {
     Ser,
     De,
 }
 
-/// Tests whether de-serialization feature for number is properly feature gated
-#[test]
-fn feature_gate_test_for_number_deserialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Number", Target::De);
-    de_test(&cargo_project_path);
-}
-
-/// Tests whether serialization feature for number is properly feature gated
-#[test]
-fn feature_gate_test_for_number_serialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Number", Target::Ser);
-    ser_test(&cargo_project_path);
-}
-
-/// Tests whether de-serialization feature for document is properly feature gated
-#[test]
-fn feature_gate_test_for_document_deserialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Document", Target::De);
-    de_test(&cargo_project_path);
-}
-
-/// Tests whether serialization feature for document is properly feature gated
-#[test]
-fn feature_gate_test_for_document_serialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Document", Target::Ser);
-    ser_test(&cargo_project_path);
-}
-
-/// Tests whether de-serialization feature for datetime is properly feature gated
-#[test]
-fn feature_gate_test_for_datetime_deserialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("DateTime", Target::De);
-    de_test(&cargo_project_path);
-}
-
-/// Tests whether serialization feature for datetime is properly feature gated
-#[test]
-fn feature_gate_test_for_datetime_serialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("DateTime", Target::Ser);
-    ser_test(&cargo_project_path);
-}
-
-/// Tests whether de-serialization feature for blob is properly feature gated
-#[test]
-fn feature_gate_test_for_blob_deserialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Blob", Target::De);
-    de_test(&cargo_project_path);
-}
-
-/// Tests whether serialization feature for blob is properly feature gated
-#[test]
-fn feature_gate_test_for_blob_serialization() {
-    // create files
-    let cargo_project_path = create_cargo_dir("Blob", Target::Ser);
-    ser_test(&cargo_project_path);
-}
-
 // create directory and files for testing
-fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
+pub(crate) fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
     let base_path = PathBuf::from_str("/tmp/smithy-rust-test/")
         .unwrap()
         .join(format!("{target:#?}"))
@@ -89,7 +29,7 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
 
     // write cargo
     {
-        let cargo = include_str!("../test_data/template/Cargo.toml").replace(
+        let cargo = include_str!("../../test_data/template/Cargo.toml").replace(
             r#"aws-smithy-types = { path = "./" }"#,
             &format!(
                 "aws-smithy-types = {{ path = {:#?} }}",
@@ -100,28 +40,28 @@ fn create_cargo_dir(datatype: &str, target: Target) -> PathBuf {
     };
 
     // write main.rs
-    let ser = include_str!("../test_data/template/ser");
-    let deser = include_str!("../test_data/template/deser");
+    let ser = include_str!("../../test_data/template/ser");
+    let deser = include_str!("../../test_data/template/deser");
     let place_holder = "$PLACE_HOLDER$";
     let contents = match target {
         Target::De => deser.replace(place_holder, datatype),
         Target::Ser => {
-            let s =  match datatype {
+            let s = match datatype {
                 "Blob" => "Blob::new([1, 2,3])",
                 "Number" => "Number::PosInt(1)",
                 "Document" => "Document::from(0)",
                 "DateTime" => "DateTime::from_secs(0)",
-                _ => panic!()
-             };
+                _ => panic!(),
+            };
             ser.replace(place_holder, s)
-        },
+        }
     };
     std::fs::write(&src_path.join("main.rs"), contents).unwrap();
 
     base_path
 }
 
-fn ser_test(cargo_project_path: &PathBuf) {
+pub(crate) fn ser_test(cargo_project_path: &PathBuf) {
     // runs cargo check --all-features without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require serialization feature.
     // it is not expected to compile.
@@ -204,7 +144,7 @@ fn ser_test(cargo_project_path: &PathBuf) {
     assert_eq!(is_success, false);
 }
 
-fn de_test(cargo_project_path: &PathBuf) {
+pub(crate) fn de_test(cargo_project_path: &PathBuf) {
     // runs cargo check --all-features without "--cfg aws_sdk_unstable" enabled.
     // the code that it compiles require de-serialization feature.
     // it is not expected to compile.
