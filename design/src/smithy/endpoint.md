@@ -4,7 +4,7 @@
 The core codegen generates HTTP requests that do not contain an authority, scheme or post. These properties must be set later based on configuration. Existing AWS services have a number of requirements that increase the complexity:
 
 1. Endpoints must support manual configuration by end users:
-```rust,ignore,ignore
+```rust,ignore
 let config = dynamodb::Config::builder()
     .endpoint(StaticEndpoint::for_uri("http://localhost:8000"))
 ```
@@ -29,7 +29,7 @@ Configuration objects for services _must_ contain an `Endpoint`. This endpoint m
 During operation construction (see [Operation Construction](../transport/operation.md#operation-construction)) an `EndpointPrefix` may be set on the property bag. The eventual endpoint middleware will search for this in the property bag and (depending on the URI mutability) utilize this prefix when setting the endpoint.
 
 In the case of endpoint discovery, we envision a different pattern:
-```rust,ignore,ignore
+```rust,ignore
 // EndpointClient manages the endpoint cache
 let (tx, rx) = dynamodb::EndpointClient::new();
 let client = aws_hyper::Client::new();
