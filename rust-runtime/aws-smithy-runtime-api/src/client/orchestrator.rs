@@ -3,20 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::identity::{IdentityResolver, IdentityResolvers};
-use crate::client::identity::Identity;
+use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, HttpAuthSchemes};
+use crate::client::identity::IdentityResolvers;
 use crate::client::interceptors::context::{Input, OutputOrError};
 use crate::client::retries::RetryClassifiers;
 use crate::client::retries::RetryStrategy;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::EndpointPrefix;
-use aws_smithy_http::property_bag::PropertyBag;
-use std::any::Any;
-use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -28,15 +26,15 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
-pub trait TraceProbe: Send + Sync + Debug {
+pub trait TraceProbe: Send + Sync + fmt::Debug {
     fn dispatch_events(&self);
 }
 
-pub trait RequestSerializer: Send + Sync + Debug {
+pub trait RequestSerializer: Send + Sync + fmt::Debug {
     fn serialize_input(&self, input: Input) -> Result<HttpRequest, BoxError>;
 }
 
-pub trait ResponseDeserializer: Send + Sync + Debug {
+pub trait ResponseDeserializer: Send + Sync + fmt::Debug {
     fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
         let _ = response;
         None
@@ -45,7 +43,7 @@ pub trait ResponseDeserializer: Send + Sync + Debug {
     fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
 }
 
-pub trait Connection: Send + Sync + Debug {
+pub trait Connection: Send + Sync + fmt::Debug {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
@@ -56,117 +54,19 @@ impl Connection for Box<dyn Connection> {
 }
 
 #[derive(Debug)]
-pub struct AuthOptionResolverParams(TypeErasedBox);
-
-impl AuthOptionResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
-        Self(TypedBox::new(params).erase())
-    }
-
-    pub fn get<T: 'static>(&self) -> Option<&T> {
-        self.0.downcast_ref()
-    }
-}
-
-pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options<'a>(
-        &'a self,
-        params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [HttpAuthOption]>, BoxError>;
-}
-
-impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
-    fn resolve_auth_options<'a>(
-        &'a self,
-        params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [HttpAuthOption]>, BoxError> {
-        (**self).resolve_auth_options(params)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct HttpAuthOption {
-    scheme_id: &'static str,
-    properties: Arc<PropertyBag>,
-}
-
-impl HttpAuthOption {
-    pub fn new(scheme_id: &'static str, properties: Arc<PropertyBag>) -> Self {
-        Self {
-            scheme_id,
-            properties,
-        }
-    }
-
-    pub fn scheme_id(&self) -> &'static str {
-        self.scheme_id
-    }
-
-    pub fn properties(&self) -> &PropertyBag {
-        &self.properties
-    }
-}
-
-#[derive(Debug)]
-struct HttpAuthSchemesInner {
-    schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
-}
-#[derive(Debug)]
-pub struct HttpAuthSchemes {
-    inner: Arc<HttpAuthSchemesInner>,
-}
-
-impl HttpAuthSchemes {
-    pub fn builder() -> builders::HttpAuthSchemesBuilder {
-        Default::default()
-    }
-
-    pub fn scheme(&self, name: &'static str) -> Option<&dyn HttpAuthScheme> {
-        self.inner
-            .schemes
-            .iter()
-            .find(|scheme| scheme.0 == name)
-            .map(|scheme| &*scheme.1)
-    }
-}
-
-pub trait HttpAuthScheme: Send + Sync + Debug {
-    fn scheme_id(&self) -> &'static str;
-
-    fn identity_resolver<'a>(
-        &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver>;
-
-    fn request_signer(&self) -> &dyn HttpRequestSigner;
-}
-
-pub trait HttpRequestSigner: Send + Sync + Debug {
-    /// Return a signed version of the given request using the given identity.
-    ///
-    /// If the provided identity is incompatible with this signer, an error must be returned.
-    fn sign_request(
-        &self,
-        request: &mut HttpRequest,
-        identity: &Identity,
-        signing_properties: &PropertyBag,
-    ) -> Result<(), BoxError>;
-}
-
-#[derive(Debug)]
 pub struct EndpointResolverParams(TypeErasedBox);
 
 impl EndpointResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
         Self(TypedBox::new(params).erase())
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
 
-pub trait EndpointResolver: Send + Sync + Debug {
+pub trait EndpointResolver: Send + Sync + fmt::Debug {
     fn resolve_and_apply_endpoint(
         &self,
         params: &EndpointResolverParams,
@@ -243,6 +143,9 @@ pub trait ConfigBagAccessors {
 
     fn request_time(&self) -> Option<RequestTime>;
     fn set_request_time(&mut self, request_time: RequestTime);
+
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>>;
+    fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>);
 }
 
 impl ConfigBagAccessors for ConfigBag {
@@ -377,36 +280,16 @@ impl ConfigBagAccessors for ConfigBag {
     fn set_request_time(&mut self, request_time: RequestTime) {
         self.put::<RequestTime>(request_time);
     }
-}
 
-pub mod builders {
-    use super::*;
-
-    #[derive(Debug, Default)]
-    pub struct HttpAuthSchemesBuilder {
-        schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.get::<Arc<dyn AsyncSleep>>().cloned()
     }
 
-    impl HttpAuthSchemesBuilder {
-        pub fn new() -> Self {
-            Default::default()
-        }
-
-        pub fn auth_scheme(
-            mut self,
-            name: &'static str,
-            auth_scheme: impl HttpAuthScheme + 'static,
-        ) -> Self {
-            self.schemes.push((name, Box::new(auth_scheme) as _));
-            self
-        }
-
-        pub fn build(self) -> HttpAuthSchemes {
-            HttpAuthSchemes {
-                inner: Arc::new(HttpAuthSchemesInner {
-                    schemes: self.schemes,
-                }),
-            }
+    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        if let Some(sleep_impl) = sleep_impl {
+            self.put::<Arc<dyn AsyncSleep>>(sleep_impl);
+        } else {
+            self.unset::<Arc<dyn AsyncSleep>>();
         }
     }
 }

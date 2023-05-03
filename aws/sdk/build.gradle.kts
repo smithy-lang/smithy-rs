@@ -102,8 +102,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true,
-                            "enableNewSmithyRuntime": false
+                            "enableNewSmithyRuntime": "middleware"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
