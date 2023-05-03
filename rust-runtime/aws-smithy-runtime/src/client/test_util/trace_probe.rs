@@ -5,12 +5,12 @@
 
 use aws_smithy_runtime_api::client::orchestrator::TraceProbe;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NoOpTraceProbe {}
 
 impl NoOpTraceProbe {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 

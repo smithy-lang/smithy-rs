@@ -228,7 +228,7 @@ mod tests {
             cfg.set_response_deserializer(new_response_deserializer());
             cfg.set_retry_strategy(NeverRetryStrategy::new());
             cfg.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
-            cfg.set_endpoint_resolver_params(EmptyEndpointResolverParams::new());
+            cfg.set_endpoint_resolver_params(EmptyEndpointResolverParams::new().into());
             cfg.set_auth_option_resolver_params(EmptyAuthOptionResolverParams::new().into());
             cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
                 ANONYMOUS_AUTH_SCHEME_ID,

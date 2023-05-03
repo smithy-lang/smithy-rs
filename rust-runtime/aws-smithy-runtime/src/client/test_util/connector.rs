@@ -8,12 +8,12 @@ use aws_smithy_runtime_api::client::orchestrator::{
     BoxFuture, Connection, Future, HttpRequest, HttpResponse,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OkConnector {}
 
 impl OkConnector {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 

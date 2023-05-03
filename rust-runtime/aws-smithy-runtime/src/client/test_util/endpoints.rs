@@ -5,10 +5,17 @@
 
 use aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams;
 
+#[derive(Debug, Default)]
 pub struct EmptyEndpointResolverParams {}
 
 impl EmptyEndpointResolverParams {
-    pub fn new() -> EndpointResolverParams {
-        EndpointResolverParams::new(Self {})
+    pub fn new() -> EmptyEndpointResolverParams {
+        Self::default()
+    }
+}
+
+impl From<EmptyEndpointResolverParams> for EndpointResolverParams {
+    fn from(params: EmptyEndpointResolverParams) -> Self {
+        Self::new(params)
     }
 }

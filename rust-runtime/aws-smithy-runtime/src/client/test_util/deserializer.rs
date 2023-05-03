@@ -34,11 +34,9 @@ impl CannedResponseDeserializer {
 
 impl ResponseDeserializer for CannedResponseDeserializer {
     fn deserialize_nonstreaming(&self, _response: &HttpResponse) -> OutputOrError {
-        let res = self
-            .take()
+        self.take()
             .ok_or("CannedResponseDeserializer's inner value has already been taken.")
-            .unwrap();
-        res
+            .unwrap()
     }
 }
 
