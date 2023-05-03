@@ -19,7 +19,7 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 
 and
 
-```rust
+```rust,ignore
 let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 ```
 
@@ -63,7 +63,7 @@ This is applied by default and can be enabled and disabled by filtering on `aws_
 
 The Pokémon service example, located at `rust-runtime/aws-smithy-http-server/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
-```rust
+```rust,ignore
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();

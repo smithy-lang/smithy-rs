@@ -37,7 +37,7 @@ tokio = { version = "1", features = ["full"] }
 
 Let's write a small example project to list tables:
 
-```rust
+```rust,ignore
 use aws_sdk_dynamodb as dynamodb;
 
 #[tokio::main]
@@ -58,7 +58,7 @@ Next, we'll explore some other ways to configure the SDK. Perhaps you want to ov
 environment with your region. In this case, we'll want more control over how we load config,
 using `aws_config::from_env()` directly:
 
-```rust
+```rust,ignore
 use aws_sdk_dynamodb as dynamodb;
 
 #[tokio::main]
@@ -88,7 +88,7 @@ tokio = { version = "1", features = ["full"] }
 
 Then, we can use the shared configuration to build both service clients. The region override will apply to both clients:
 
-```rust
+```rust,ignore
 use aws_sdk_dynamodb as dynamodb;
 use aws_sdk_polly as polly;
 
@@ -135,7 +135,7 @@ To do this, implement the `ProvideCredentials` trait.
 
 > NOTE: `aws_types::Credentials` already implements `ProvideCredentials`. If you want to use the SDK with static credentials, you're already done!
 
-```rust
+```rust,ignore
 use aws_types::credentials::{ProvideCredentials, provide_credentials::future, Result};
 
 struct MyCustomProvider;
@@ -160,7 +160,7 @@ impl ProvideCredentials for MyCustomProvider {
 
 After writing your custom provider, you'll use it in when constructing the configuration:
 
-```rust
+```rust,ignore
 #[tokio::main]
 async fn main() {
     let config = aws_config::from_env().credentials_provider(MyCustomProvider).load().await;
@@ -192,7 +192,7 @@ however, they won't have any default resolvers built in. Each AWS config will im
 This RFC proposes adding region and credentials providers support to the shared config. A future RFC will propose
 integration with HTTP settings, HTTPs connectors, and async sleep.
 
-```rust
+```rust,ignore
 struct Config {
     // private fields
     ...
@@ -239,7 +239,7 @@ uses `Config` that is incompatible, they will get confusing compiler errors.
 
 An example of a problematic set of dependent versions:
 
-```
+```markdown
 ┌─────────────────┐                 ┌───────────────┐
 │ aws-types = 0.1 │                 │aws-types= 0.2 │
 └─────────────────┘                 └───────────────┘

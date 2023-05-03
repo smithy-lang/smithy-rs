@@ -39,7 +39,7 @@ _The default number of retries is 3 as specified in the [AWS SDKs and Tools Refe
 
 Here's an example app that logs your AWS user's identity
 
-```rust
+```rust,ignore
 use aws_sdk_sts as sts;
 
 #[tokio::main]
@@ -66,7 +66,7 @@ cargo run
 
 Here's an example app that creates a shared config with custom retry behavior and then logs your AWS user's identity
 
-```rust
+```rust,ignore
 use aws_sdk_sts as sts;
 use aws_types::retry_config::StandardRetryConfig;
 
@@ -86,7 +86,7 @@ async fn main() -> Result<(), sts::Error> {
 
 Here's an example app that creates a service-specific config with custom retry behavior and then logs your AWS user's identity
 
-```rust
+```rust,ignore
 use aws_sdk_sts as sts;
 use aws_types::retry_config::StandardRetryConfig;
 
@@ -107,7 +107,7 @@ async fn main() -> Result<(), sts::Error> {
 
 Here's an example app that creates a shared config that disables retries and then logs your AWS user's identity
 
-```rust
+```rust,ignore
 use aws_sdk_sts as sts;
 use aws_types::config::Config;
 
@@ -125,7 +125,7 @@ async fn main() -> Result<(), sts::Error> {
 
 Retries can also be disabled by explicitly passing the `RetryConfig::NoRetries` enum variant to the `retry_config` builder method:
 
-```rust
+```rust,ignore
 use aws_sdk_sts as sts;
 use aws_types::retry_config::RetryConfig;
 
