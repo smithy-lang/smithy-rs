@@ -388,7 +388,7 @@ class FluentClientGenerator(
                             .await
                             .map_err(|err| {
                                 err.map_service_error(|err| {
-                                    #{TypedBox}::<#{OperationError}>::assume_from(err.downgrade())
+                                    #{TypedBox}::<#{OperationError}>::assume_from(err.into())
                                         .expect("correct error type")
                                         .unwrap()
                                 })

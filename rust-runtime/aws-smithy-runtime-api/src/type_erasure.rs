@@ -128,10 +128,7 @@ impl TypeErasedBox {
     // Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
     pub fn downcast<T: fmt::Debug + Send + Sync + 'static>(self) -> Result<Box<T>, Self> {
         let TypeErasedBox { field, debug } = self;
-        match field.downcast() {
-            Ok(t) => Ok(t),
-            Err(s) => Err(Self { field: s, debug }),
-        }
+        field.downcast().map_err(|field| Self { field, debug })
     }
 
     /// Downcast as a `&T`, or return `None` if it is not a `T`.
@@ -142,6 +139,15 @@ impl TypeErasedBox {
     /// Downcast as a `&mut T`, or return `None` if it is not a `T`.
     pub fn downcast_mut<T: fmt::Debug + Send + Sync + 'static>(&mut self) -> Option<&mut T> {
         self.field.downcast_mut()
+    }
+}
+
+impl From<TypeErasedError> for TypeErasedBox {
+    fn from(value: TypeErasedError) -> Self {
+        TypeErasedBox {
+            field: value.field,
+            debug: value.debug,
+        }
     }
 }
 
@@ -189,14 +195,6 @@ impl TypeErasedError {
         }
     }
 
-    /// Downgrades the type erased error to a type erased box.
-    pub fn downgrade(self) -> TypeErasedBox {
-        TypeErasedBox {
-            field: self.field,
-            debug: self.debug,
-        }
-    }
-
     // Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
     pub fn downcast<T: StdError + fmt::Debug + Send + Sync + 'static>(
         self,
@@ -206,14 +204,11 @@ impl TypeErasedError {
             debug,
             as_error,
         } = self;
-        match field.downcast() {
-            Ok(t) => Ok(t),
-            Err(s) => Err(Self {
-                field: s,
-                debug,
-                as_error,
-            }),
-        }
+        field.downcast().map_err(|field| Self {
+            field,
+            debug,
+            as_error,
+        })
     }
 
     /// Downcast as a `&T`, or return `None` if it is not a `T`.

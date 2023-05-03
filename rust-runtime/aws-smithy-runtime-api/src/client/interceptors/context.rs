@@ -157,8 +157,8 @@ pub mod phase {
 /// A container for the data currently available to an interceptor.
 ///
 /// Different context is available based on which phase the operation is currently in. For example,
-/// context in the [`phase::Construction`] phase won't have a `request` yet since the input hasn't been
-/// serialized at that point. But once it gets into the [`phase::Dispatch`] phase, the `request` will be set.
+/// context in the [`phase::BeforeSerialization`] phase won't have a `request` yet since the input hasn't been
+/// serialized at that point. But once it gets into the [`phase::BeforeTransmit`] phase, the `request` will be set.
 pub struct InterceptorContext<Phase, I = Input, O = Output, E = Error> {
     input: Option<I>,
     output_or_error: Option<Result<O, E>>,
@@ -473,18 +473,6 @@ impl<I, O, E> InterceptorContext<phase::AfterDeserialization, I, O, E> {
                         .expect("raw response already populated in the response handling phase"),
                 )
             })
-    }
-
-    #[doc(hidden)]
-    pub fn into_before_transmit_phase(self) -> InterceptorContext<phase::BeforeTransmit, I, O, E> {
-        InterceptorContext {
-            input: self.input,
-            request: self.request,
-            // Clear out things that should not go back into BeforeTransmit
-            output_or_error: None,
-            response: None,
-            phase: Default::default(),
-        }
     }
 }
 
