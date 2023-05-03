@@ -1,5 +1,6 @@
 # These are the allowed external types in the `aws-sdk-*` generated crates, checked by CI.
 allowed_external_types = [
+    "aws_credential_types::*",
     "aws_endpoint::*",
     "aws_http::*",
     "aws_sig_auth::*",

@@ -14,7 +14,7 @@ import software.amazon.smithy.model.shapes.ShapeId
  *
  * Code-generation context is pervasive read-only global data that gets passed around to the generators.
  *
- * If your data is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your data is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your data is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  */
 open class CodegenContext(
@@ -30,6 +30,11 @@ open class CodegenContext(
      * The "canonical" symbol provider to convert Smithy [Shape]s into [Symbol]s, which have an associated [RustType].
      */
     open val symbolProvider: RustSymbolProvider,
+
+    /**
+     * Provider of documentation for generated Rust modules.
+     */
+    open val moduleDocProvider: ModuleDocProvider?,
 
     /**
      * Entrypoint service shape for code generation.
@@ -79,4 +84,9 @@ open class CodegenContext(
      * it must be in snake-case. Call this method to get this crate's name in snake-case.
      */
     fun moduleUseName() = moduleName.replace("-", "_")
+
+    /** Return a ModuleDocProvider or panic if one wasn't configured */
+    fun expectModuleDocProvider(): ModuleDocProvider = checkNotNull(moduleDocProvider) {
+        "A ModuleDocProvider must be set on the CodegenContext"
+    }
 }

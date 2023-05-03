@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -42,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
@@ -54,17 +52,15 @@ class HttpBoundProtocolPayloadGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
-
-    private val operationSerModule = RustModule.private("operation_ser")
-
-    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
+    private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.toType(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+        "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
     )
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
@@ -106,7 +102,7 @@ class HttpBoundProtocolPayloadGenerator(
         val payloadMemberName = httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, self, serializerGenerator.operationInputSerializer(operationShape))
         } else {
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
@@ -117,7 +113,7 @@ class HttpBoundProtocolPayloadGenerator(
         val payloadMemberName = httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, self, serializerGenerator.operationOutputSerializer(operationShape))
         } else {
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
@@ -130,7 +126,7 @@ class HttpBoundProtocolPayloadGenerator(
         operationShape: OperationShape,
         payloadMemberName: String,
     ) {
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+        val serializerGenerator = protocol.structuredDataSerializer()
 
         if (operationShape.isEventStream(model)) {
             if (operationShape.isInputEventStream(model) && target == CodegenTarget.CLIENT) {
@@ -241,10 +237,13 @@ class HttpBoundProtocolPayloadGenerator(
         member: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
     ) {
-        val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
-        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
-            val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
+        val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
+            val outputT = if (member.isStreaming(model)) {
+                symbolProvider.toSymbol(member)
+            } else {
+                RuntimeType.ByteSlab.toSymbol()
+            }
             rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),

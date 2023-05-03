@@ -862,4 +862,6 @@ A toy implementation of the combined proposal is presented in [this PR](https://
   - <https://github.com/awslabs/smithy-rs/pull/1679>
 - [x] Add code generation which outputs new service builder.
   - <https://github.com/awslabs/smithy-rs/pull/1693>
-- [ ] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
+- [x] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
+  - <https://github.com/awslabs/smithy-rs/pull/1886>
+  - <https://github.com/awslabs/smithy-rs/pull/2161>

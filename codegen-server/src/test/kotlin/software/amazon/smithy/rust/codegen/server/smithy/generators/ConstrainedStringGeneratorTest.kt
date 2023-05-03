@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -15,12 +16,15 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
@@ -79,8 +83,14 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+        project.withModule(ServerRustModule.Model) {
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
 
             unitTest(
                 name = "try_from_success",
@@ -132,9 +142,15 @@ class ConstrainedStringGeneratorTest {
 
         val codegenContext = serverTestCodegenContext(model)
 
-        val writer = RustWriter.forModule(ModelsModule.name)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
-        ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape).render()
+        ConstrainedStringGenerator(
+            codegenContext,
+            writer.createTestInlineModuleCreator(),
+            writer,
+            constrainedStringShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
@@ -159,9 +175,22 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
-        project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
-            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape).render()
+        project.withModule(ServerRustModule.Model) {
+            val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                sensitiveConstrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
 
             unitTest(
                 name = "non_sensitive_string_display_implementation",
@@ -183,5 +212,33 @@ class ConstrainedStringGeneratorTest {
         }
 
         project.compileAndTest()
+    }
+
+    @Test
+    fun `A regex that is accepted by Smithy but not by the regex crate causes tests to fail`() {
+        val model = """
+            namespace test
+
+            @pattern("import (?!static).+")
+            string PatternStringWithLookahead
+        """.asSmithyModel()
+
+        val constrainedStringShape = model.lookup<StringShape>("test#PatternStringWithLookahead")
+        val codegenContext = serverTestCodegenContext(model)
+        val project = TestWorkspace.testProject(codegenContext.symbolProvider)
+
+        project.withModule(ServerRustModule.Model) {
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
+        }
+
+        assertThrows<CommandFailed> {
+            project.compileAndTest()
+        }
     }
 }

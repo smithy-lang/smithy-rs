@@ -7,7 +7,7 @@ use crate::body::{empty, BoxBody};
 use crate::extension::RuntimeErrorExtension;
 use crate::proto::aws_json::router::Error;
 use crate::response::IntoResponse;
-use crate::routers::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
+use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::AwsJson1_1;
 
@@ -24,7 +24,7 @@ impl IntoResponse<AwsJson1_1> for Error {
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for AWS JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
+                .expect("invalid HTTP response for AWS JSON 1.1 routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
     }
 }

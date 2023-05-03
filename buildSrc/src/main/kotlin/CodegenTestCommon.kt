@@ -37,6 +37,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                     "runtimeConfig": {
                         "relativePath": "$projectDir/rust-runtime"
                     },
+                    "codegen": {
+                    },
                     "service": "${it.service}",
                     "module": "${it.module}",
                     "moduleVersion": "0.0.1",
@@ -61,8 +63,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
 enum class Cargo(val toString: String) {
     CHECK("cargoCheck"),
     TEST("cargoTest"),
-    DOCS("cargoDocs"),
-    CLIPPY("cargoClippy");
+    DOCS("cargoDoc"),
+    CLIPPY("cargoClippy"),
 }
 
 private fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
@@ -86,7 +88,9 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
         allTests
     }
     require(ret.isNotEmpty()) {
-        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map { it.module }}`)"
+        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map {
+            it.module
+        }}`)"
     }
     return ret
 }
@@ -102,9 +106,9 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         when (it) {
             "check" -> Cargo.CHECK
             "test" -> Cargo.TEST
-            "docs" -> Cargo.DOCS
+            "doc" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
-            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
+            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `doc`, `clippy`)")
         }
     }
 
@@ -115,7 +119,9 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         AllCargoCommands
     }
     require(ret.isNotEmpty()) {
-        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map { it.toString }}`)"
+        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map {
+            it.toString
+        }}`)"
     }
     return ret
 }
@@ -129,6 +135,7 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        allCodegenTests.flatMap { it.imports }.forEach { inputs.file(project.projectDir.resolve(it)) }
 
         doFirst {
             project.projectDir.resolve("smithy-build.json")
@@ -174,7 +181,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
-            outputDir.resolve(".cargo").mkdir()
+            outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """
@@ -233,28 +240,33 @@ fun Project.registerCargoCommandsTasks(
             "generateCargoConfigToml",
             this.tasks.findByName("modifyMtime")?.let { "modifyMtime" },
         )
+
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "check", "--lib", "--tests", "--benches")
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "test")
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "test", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
     }
 }

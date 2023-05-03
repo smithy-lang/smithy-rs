@@ -10,6 +10,8 @@ use super::Plugin;
 /// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
 ///
 /// The `Inner::map` is run _then_ the `Outer::map`.
+///
+/// Note that the primary tool for composing plugins is [`PluginPipeline`](crate::plugin::PluginPipeline).
 pub struct PluginStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,

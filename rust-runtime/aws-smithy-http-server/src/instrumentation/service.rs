@@ -76,9 +76,9 @@ where
 }
 
 /// A middleware [`Service`](tower::Service) responsible for:
-///     - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
+///   - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
 ///     [`Uri`](http::Uri), and the request headers.
-///     - A [`tracing::debug`] during response, which includes the response status code and headers.
+///   - A [`tracing::debug`] during response, which includes the response status code and headers.
 ///
 /// The [`Display`](std::fmt::Display) and [`Debug`] of the request and response components can be modified using
 /// [`request_fmt`](InstrumentOperation::request_fmt) and [`response_fmt`](InstrumentOperation::response_fmt).
@@ -101,16 +101,16 @@ where
 /// # svc.call(Request::new(()));
 /// ```
 #[derive(Debug, Clone)]
-pub struct InstrumentOperation<Svc, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
-    inner: Svc,
+pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
+    inner: S,
     operation_name: &'static str,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
-impl<Svc> InstrumentOperation<Svc> {
+impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: Svc, operation_name: &'static str) -> Self {
+    pub fn new(inner: S, operation_name: &'static str) -> Self {
         Self {
             inner,
             operation_name,
@@ -120,11 +120,11 @@ impl<Svc> InstrumentOperation<Svc> {
     }
 }
 
-impl<Svc, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<Svc, RequestMakeFmt, ResponseMakeFmt> {
+impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, ResponseMakeFmt> {
     /// Configures the request format.
     ///
     /// The argument is typically [`RequestFmt`](super::sensitivity::RequestFmt).
-    pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<Svc, R, ResponseMakeFmt> {
+    pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<S, R, ResponseMakeFmt> {
         InstrumentOperation {
             inner: self.inner,
             operation_name: self.operation_name,
@@ -136,7 +136,7 @@ impl<Svc, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<Svc, RequestMakeF
     /// Configures the response format.
     ///
     /// The argument is typically [`ResponseFmt`](super::sensitivity::ResponseFmt).
-    pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<Svc, RequestMakeFmt, R> {
+    pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<S, RequestMakeFmt, R> {
         InstrumentOperation {
             inner: self.inner,
             operation_name: self.operation_name,
@@ -146,10 +146,10 @@ impl<Svc, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<Svc, RequestMakeF
     }
 }
 
-impl<Svc, U, V, RequestMakeFmt, ResponseMakeFmt> Service<Request<U>>
-    for InstrumentOperation<Svc, RequestMakeFmt, ResponseMakeFmt>
+impl<S, U, V, RequestMakeFmt, ResponseMakeFmt> Service<Request<U>>
+    for InstrumentOperation<S, RequestMakeFmt, ResponseMakeFmt>
 where
-    Svc: Service<Request<U>, Response = Response<V>>,
+    S: Service<Request<U>, Response = Response<V>>,
 
     for<'a> RequestMakeFmt: MakeDebug<&'a HeaderMap>,
     for<'a> RequestMakeFmt: MakeDisplay<&'a Uri>,
@@ -158,9 +158,9 @@ where
     for<'a> ResponseMakeFmt: MakeDebug<&'a HeaderMap>,
     for<'a> ResponseMakeFmt: MakeDisplay<StatusCode>,
 {
-    type Response = Svc::Response;
-    type Error = Svc::Error;
-    type Future = InstrumentedFuture<Svc::Future, ResponseMakeFmt>;
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = InstrumentedFuture<S::Future, ResponseMakeFmt>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)

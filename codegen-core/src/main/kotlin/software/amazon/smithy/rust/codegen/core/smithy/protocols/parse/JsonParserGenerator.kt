@@ -24,8 +24,6 @@ import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -39,9 +37,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -49,11 +46,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
@@ -62,22 +60,26 @@ import software.amazon.smithy.utils.StringUtils
  */
 sealed class JsonParserSection(name: String) : Section(name) {
     data class BeforeBoxingDeserializedMember(val shape: MemberShape) : JsonParserSection("BeforeBoxingDeserializedMember")
+
+    data class AfterTimestampDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterTimestampDeserializedMember")
+
+    data class AfterBlobDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterBlobDeserializedMember")
+
+    data class AfterDocumentDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterDocumentDeserializedMember")
 }
 
 /**
  * Customization for the JSON parser.
  */
-typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
+typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
 data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
-    /** Function that maps a StructureShape into its builder symbol */
-    private val builderSymbol: (StructureShape) -> Symbol,
     /**
      * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
      * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
@@ -97,23 +99,22 @@ class JsonParserGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
-    private val jsonDeserModule = RustModule.private("json_deser")
-    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope = arrayOf(
-        "Error" to smithyJson.member("deserialize::error::DeserializeError"),
-        "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
-        "expect_bool_or_null" to smithyJson.member("deserialize::token::expect_bool_or_null"),
-        "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-        "expect_number_or_null" to smithyJson.member("deserialize::token::expect_number_or_null"),
-        "expect_start_array" to smithyJson.member("deserialize::token::expect_start_array"),
-        "expect_start_object" to smithyJson.member("deserialize::token::expect_start_object"),
-        "expect_string_or_null" to smithyJson.member("deserialize::token::expect_string_or_null"),
-        "expect_timestamp_or_null" to smithyJson.member("deserialize::token::expect_timestamp_or_null"),
-        "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
-        "Peekable" to RuntimeType.std.member("iter::Peekable"),
-        "skip_value" to smithyJson.member("deserialize::token::skip_value"),
-        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
-        "Token" to smithyJson.member("deserialize::Token"),
+        "Error" to smithyJson.resolve("deserialize::error::DeserializeError"),
+        "expect_blob_or_null" to smithyJson.resolve("deserialize::token::expect_blob_or_null"),
+        "expect_bool_or_null" to smithyJson.resolve("deserialize::token::expect_bool_or_null"),
+        "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+        "expect_number_or_null" to smithyJson.resolve("deserialize::token::expect_number_or_null"),
+        "expect_start_array" to smithyJson.resolve("deserialize::token::expect_start_array"),
+        "expect_start_object" to smithyJson.resolve("deserialize::token::expect_start_object"),
+        "expect_string_or_null" to smithyJson.resolve("deserialize::token::expect_string_or_null"),
+        "expect_timestamp_or_null" to smithyJson.resolve("deserialize::token::expect_timestamp_or_null"),
+        "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+        "Peekable" to RuntimeType.std.resolve("iter::Peekable"),
+        "skip_value" to smithyJson.resolve("deserialize::token::skip_value"),
+        "skip_to_end" to smithyJson.resolve("deserialize::token::skip_to_end"),
+        "Token" to smithyJson.resolve("deserialize::Token"),
         "or_empty" to orEmptyJson(),
     )
 
@@ -124,11 +125,12 @@ class JsonParserGenerator(
      * generation requires parsers for all input structures.
      */
     private fun structureParser(
-        fnName: String,
+        shape: Shape,
         builderSymbol: Symbol,
         includedMembers: List<MemberShape>,
+        fnNameSuffix: String? = null,
     ): RuntimeType {
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+        return protocolFunctions.deserializeFn(shape, fnNameSuffix) { fnName ->
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             rustBlockTemplate(
                 "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
@@ -152,13 +154,15 @@ class JsonParserGenerator(
 
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) { "payload parser should only be used on structures & unions" }
-        val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+        val returnSymbolToParse = returnSymbolToParse(shape)
+        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) {
+            "Payload parser should only be used on structure shapes, union shapes, and document shapes."
+        }
+        return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
+                "pub(crate) fn $fnName(input: &[u8]) -> Result<#{ReturnType}, #{Error}>",
                 *codegenScope,
-                "Shape" to symbolProvider.toSymbol(shape),
+                "ReturnType" to returnSymbolToParse.symbol,
             ) {
                 val input = if (shape is DocumentShape) {
                     "input"
@@ -189,19 +193,22 @@ class JsonParserGenerator(
             return null
         }
         val outputShape = operationShape.outputShape(model)
-        val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(outputShape), httpDocumentMembers)
+        return structureParser(operationShape, symbolProvider.symbolForBuilder(outputShape), httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
         if (errorShape.members().isEmpty()) {
             return null
         }
-        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
-        return structureParser(fnName, builderSymbol(errorShape), errorShape.members().toList())
+        return structureParser(
+            errorShape,
+            symbolProvider.symbolForBuilder(errorShape),
+            errorShape.members().toList(),
+            fnNameSuffix = "json_err",
+        )
     }
 
-    private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
+    private fun orEmptyJson(): RuntimeType = ProtocolFunctions.crossOperationFn("or_empty_doc") {
         rust(
             """
             pub(crate) fn or_empty_doc(data: &[u8]) -> &[u8] {
@@ -221,8 +228,7 @@ class JsonParserGenerator(
             return null
         }
         val inputShape = operationShape.inputShape(model)
-        val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, builderSymbol(inputShape), includedMembers)
+        return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {
@@ -275,13 +281,13 @@ class JsonParserGenerator(
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
-            is BlobShape -> deserializeBlob(target)
+            is BlobShape -> deserializeBlob(memberShape)
             is TimestampShape -> deserializeTimestamp(target, memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
             is UnionShape -> deserializeUnion(target)
-            is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
+            is DocumentShape -> deserializeDocument(memberShape)
             else -> PANIC("unexpected shape: $target")
         }
         val symbol = symbolProvider.toSymbol(memberShape)
@@ -293,12 +299,21 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeBlob(target: BlobShape) {
+    private fun RustWriter.deserializeDocument(member: MemberShape) {
+        rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
+        for (customization in customizations) {
+            customization.section(JsonParserSection.AfterDocumentDeserializedMember(member))(this)
+        }
+    }
+
+    private fun RustWriter.deserializeBlob(member: MemberShape) {
         rustTemplate(
-            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
+            "#{expect_blob_or_null}(tokens.next())?",
             *codegenScope,
         )
+        for (customization in customizations) {
+            customization.section(JsonParserSection.AfterBlobDeserializedMember(member))(this)
+        }
     }
 
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
@@ -311,6 +326,7 @@ class JsonParserGenerator(
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
                 }
+
                 else -> rust("u.into_owned()")
             }
         }
@@ -334,7 +350,7 @@ class JsonParserGenerator(
                     .map(#{NumberType}::try_from)
                     .transpose()?
                 """,
-                "NumberType" to symbolProvider.toSymbol(target),
+                "NumberType" to returnSymbolToParse(target).symbol,
                 *codegenScope,
             )
         }
@@ -344,25 +360,24 @@ class JsonParserGenerator(
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
-                TimestampFormatTrait.Format.EPOCH_SECONDS,
+                TimestampFormatTrait.Format.EPOCH_SECONDS, model,
             )
-        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+        val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
         rustTemplate(
-            "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
-            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
+            "#{expect_timestamp_or_null}(tokens.next(), #{T})?",
+            "T" to timestampFormatType, *codegenScope,
         )
+        for (customization in customizations) {
+            customization.section(JsonParserSection.AfterTimestampDeserializedMember(member))(this)
+        }
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
-        val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
-            // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
+        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 """
-                ##[allow(non_snake_case)]
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
@@ -385,8 +400,22 @@ class JsonParserGenerator(
                                     withBlock("let value =", ";") {
                                         deserializeMember(shape.member)
                                     }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                    rust(
+                                        """
+                                        if let Some(value) = value {
+                                            items.push(value);
+                                        }
+                                        """,
+                                    )
+                                    codegenTarget.ifServer {
+                                        rustTemplate(
+                                            """
+                                            else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
+                                            }
+                                            """,
+                                            *codegenScope,
+                                        )
                                     }
                                 }
                             }
@@ -405,15 +434,11 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
         val keyTarget = model.expectShape(shape.key.target) as StringShape
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
         val returnSymbolToParse = returnSymbolToParse(shape)
-        val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
-            // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
+        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 """
-                ##[allow(non_snake_case)]
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
@@ -421,7 +446,7 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
+                    rust("let mut map = #T::new();", RuntimeType.HashMap)
                     objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
@@ -432,8 +457,24 @@ class JsonParserGenerator(
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
-                            rustBlock("if let Some(value) = value") {
-                                rust("map.insert(key, value);")
+                            codegenTarget.ifServer {
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                            }""",
+                                    *codegenScope,
+                                )
+                            }
+                            codegenTarget.ifClient {
+                                rustTemplate(
+                                    """
+                                    if let Some(value) = value {
+                                        map.insert(key, value);
+                                    }
+                                    """,
+                                )
                             }
                         }
                     }
@@ -449,9 +490,8 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val returnSymbolToParse = returnSymbolToParse(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+        val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 """
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
@@ -462,7 +502,11 @@ class JsonParserGenerator(
             ) {
                 startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
-                    rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to builderSymbol(shape))
+                    rustTemplate(
+                        "let mut builder = #{Builder}::default();",
+                        *codegenScope,
+                        "Builder" to symbolProvider.symbolForBuilder(shape),
+                    )
                     deserializeStructInner(shape.members())
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
                     if (returnSymbolToParse.isUnconstrained) {
@@ -477,9 +521,8 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
-        val fnName = symbolProvider.deserializeFunctionName(shape)
         val returnSymbolToParse = returnSymbolToParse(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+        val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
             rustBlockTemplate(
                 """
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
@@ -489,6 +532,7 @@ class JsonParserGenerator(
                 "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
+                val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
@@ -510,9 +554,19 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
-                                            deserializeMember(member)
-                                            unwrapOrDefaultOrError(member)
+                                        if (member.isTargetUnit()) {
+                                            rustTemplate(
+                                                """
+                                                #{skip_value}(tokens)?;
+                                                Some(#{Union}::$variantName)
+                                                """,
+                                                "Union" to returnSymbolToParse.symbol, *codegenScope,
+                                            )
+                                        } else {
+                                            withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
+                                                deserializeMember(member)
+                                                unwrapOrDefaultOrError(member, checkValueSet)
+                                            }
                                         }
                                     }
                                 }
@@ -549,8 +603,8 @@ class JsonParserGenerator(
         rust("#T(tokens)?", nestedParser)
     }
 
-    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
-        if (symbolProvider.toSymbol(member).canUseDefault()) {
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
+        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
             rust(".unwrap_or_default()")
         } else {
             rustTemplate(

@@ -24,17 +24,16 @@
 
 use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
-use crate::profile::parser::ProfileParseError;
+use crate::profile::parser::ProfileFileLoadError;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::Instrument;
 
@@ -46,10 +45,7 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.load_credentials().instrument(tracing::debug_span!(
-            "load_credentials",
-            provider = %"Profile"
-        )))
+        future::ProvideCredentials::new(self.load_credentials())
     }
 }
 
@@ -65,9 +61,8 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// let provider = ProfileFileCredentialsProvider::builder().build();
 /// ```
 ///
-/// _Note: Profile providers to not implement any caching. They will reload and reparse the profile
-/// from the file system when called. See [lazy_caching](crate::meta::credentials::LazyCachingCredentialsProvider) for
-/// more information about caching._
+/// _Note: Profile providers, when called, will load and parse the profile from the file system
+/// only once. Parsed file contents will be cached indefinitely._
 ///
 /// This provider supports several different credentials formats:
 /// ### Credentials defined explicitly within the file
@@ -87,12 +82,12 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// NOTE: Currently only the `Environment` credential source is supported although it is possible to
 /// provide custom sources:
 /// ```no_run
-/// use aws_types::credentials::{self, ProvideCredentials, future};
+/// use aws_credential_types::provider::{self, future, ProvideCredentials};
 /// use aws_config::profile::ProfileFileCredentialsProvider;
 /// #[derive(Debug)]
 /// struct MyCustomProvider;
 /// impl MyCustomProvider {
-///     async fn load_credentials(&self) -> credentials::Result {
+///     async fn load_credentials(&self) -> provider::Result {
 ///         todo!()
 ///     }
 /// }
@@ -148,8 +143,6 @@ pub struct ProfileFileCredentialsProvider {
     factory: NamedProviderFactory,
     client_config: ClientConfiguration,
     provider_config: ProviderConfig,
-    profile_override: Option<String>,
-    profile_files: ProfileFiles,
 }
 
 impl ProfileFileCredentialsProvider {
@@ -158,24 +151,19 @@ impl ProfileFileCredentialsProvider {
         Builder::default()
     }
 
-    async fn load_credentials(&self) -> credentials::Result {
-        let inner_provider = build_provider_chain(
-            &self.provider_config,
-            &self.factory,
-            self.profile_override.as_deref(),
-            &self.profile_files,
-        )
-        .await
-        .map_err(|err| match err {
-            ProfileFileError::NoProfilesDefined
-            | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
-                CredentialsError::not_loaded(err)
-            }
-            _ => CredentialsError::invalid_configuration(format!(
-                "ProfileFile provider could not be built: {}",
-                &err
-            )),
-        })?;
+    async fn load_credentials(&self) -> provider::Result {
+        let inner_provider = build_provider_chain(&self.provider_config, &self.factory)
+            .await
+            .map_err(|err| match err {
+                ProfileFileError::NoProfilesDefined
+                | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
+                    CredentialsError::not_loaded(err)
+                }
+                _ => CredentialsError::invalid_configuration(format!(
+                    "ProfileFile provider could not be built: {}",
+                    &err
+                )),
+            })?;
         let mut creds = match inner_provider
             .base()
             .provide_credentials()
@@ -211,20 +199,13 @@ impl ProfileFileCredentialsProvider {
     }
 }
 
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct CouldNotReadProfileFile {
-    pub(crate) path: PathBuf,
-    pub(crate) cause: std::io::Error,
-}
-
 /// An Error building a Credential source from an AWS Profile
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProfileFileError {
     /// The profile was not a valid AWS profile
     #[non_exhaustive]
-    CouldNotParseProfile(ProfileParseError),
+    InvalidProfile(ProfileFileLoadError),
 
     /// No profiles existed (the profile was empty)
     #[non_exhaustive]
@@ -276,10 +257,6 @@ pub enum ProfileFileError {
         /// The name of the provider
         name: String,
     },
-
-    /// A custom profile file location didn't exist or could not be read
-    #[non_exhaustive]
-    CouldNotReadProfileFile(CouldNotReadProfileFile),
 }
 
 impl ProfileFileError {
@@ -291,11 +268,20 @@ impl ProfileFileError {
     }
 }
 
+impl Error for ProfileFileError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ProfileFileError::InvalidProfile(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
 impl Display for ProfileFileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProfileFileError::CouldNotParseProfile(err) => {
-                write!(f, "could not parse profile file: {}", err)
+            ProfileFileError::InvalidProfile(err) => {
+                write!(f, "invalid profile: {}", err)
             }
             ProfileFileError::CredentialLoop { profiles, next } => write!(
                 f,
@@ -323,30 +309,7 @@ impl Display for ProfileFileError {
                 "profile `{}` did not contain credential information",
                 profile
             ),
-            ProfileFileError::CouldNotReadProfileFile(details) => {
-                write!(
-                    f,
-                    "Failed to read custom profile file at {:?}",
-                    details.path
-                )
-            }
         }
-    }
-}
-
-impl Error for ProfileFileError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ProfileFileError::CouldNotParseProfile(err) => Some(err),
-            ProfileFileError::CouldNotReadProfileFile(details) => Some(&details.cause),
-            _ => None,
-        }
-    }
-}
-
-impl From<ProfileParseError> for ProfileFileError {
-    fn from(err: ProfileParseError) -> Self {
-        ProfileFileError::CouldNotParseProfile(err)
     }
 }
 
@@ -383,12 +346,12 @@ impl Builder {
     /// # Examples
     ///
     /// ```no_run
-    /// use aws_types::credentials::{self, ProvideCredentials, future};
+    /// use aws_credential_types::provider::{self, future, ProvideCredentials};
     /// use aws_config::profile::ProfileFileCredentialsProvider;
     /// #[derive(Debug)]
     /// struct MyCustomProvider;
     /// impl MyCustomProvider {
-    ///     async fn load_credentials(&self) -> credentials::Result {
+    ///     async fn load_credentials(&self) -> provider::Result {
     ///         todo!()
     ///     }
     /// }
@@ -431,7 +394,10 @@ impl Builder {
     pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::debug_span!("build_profile_provider");
         let _enter = build_span.enter();
-        let conf = self.provider_config.unwrap_or_default();
+        let conf = self
+            .provider_config
+            .unwrap_or_default()
+            .with_profile_config(self.profile_files, self.profile_override);
         let mut named_providers = self.custom_providers.clone();
         named_providers
             .entry("Environment".into())
@@ -470,8 +436,6 @@ impl Builder {
                 region: conf.region(),
             },
             provider_config: conf,
-            profile_override: self.profile_override,
-            profile_files: self.profile_files.unwrap_or_default(),
         }
     }
 }
@@ -479,32 +443,31 @@ impl Builder {
 async fn build_provider_chain(
     provider_config: &ProviderConfig,
     factory: &NamedProviderFactory,
-    profile_override: Option<&str>,
-    profile_files: &ProfileFiles,
 ) -> Result<ProviderChain, ProfileFileError> {
-    let profile_set =
-        super::parser::load(&provider_config.fs(), &provider_config.env(), profile_files).await?;
-    let repr = repr::resolve_chain(&profile_set, profile_override)?;
+    let profile_set = provider_config
+        .try_profile()
+        .await
+        .map_err(|parse_err| ProfileFileError::InvalidProfile(parse_err.clone()))?;
+    let repr = repr::resolve_chain(profile_set)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
     exec::ProviderChain::from_repr(provider_config, repr, factory)
 }
 
 #[cfg(test)]
 mod test {
-    use tracing_test::traced_test;
 
     use crate::profile::credentials::Builder;
     use crate::test_case::TestEnvironment;
 
     macro_rules! make_test {
         ($name: ident) => {
-            #[traced_test]
             #[tokio::test]
             async fn $name() {
                 TestEnvironment::from_dir(concat!(
                     "./test-data/profile-provider/",
                     stringify!($name)
                 ))
+                .await
                 .unwrap()
                 .execute(|conf| async move { Builder::default().configure(&conf).build() })
                 .await

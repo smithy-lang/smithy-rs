@@ -109,7 +109,7 @@ impl<S> tower::Layer<S> for AwsMiddleware {
   fn layer(&self, inner: S) -> Self::Service {
     let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
     let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
-    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsAuthStage);
     let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
     ServiceBuilder::new()
             .layer(endpoint_resolver)

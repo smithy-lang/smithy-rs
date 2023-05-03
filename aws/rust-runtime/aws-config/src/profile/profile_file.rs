@@ -18,26 +18,19 @@ use std::path::PathBuf;
 /// will produce errors if they don't exist, while the default config/credentials files paths are
 /// allowed to not exist even if they're included.
 ///
-/// # Example: Using a custom profile file path for credentials and region
+/// # Example: Using a custom profile file path
 ///
-/// ```
+/// ```no_run
 /// use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
 /// use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+/// use std::sync::Arc;
 ///
 /// # async fn example() {
 /// let profile_files = ProfileFiles::builder()
 ///     .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
 ///     .build();
-/// let credentials_provider = ProfileFileCredentialsProvider::builder()
-///     .profile_files(profile_files.clone())
-///     .build();
-/// let region_provider = ProfileFileRegionProvider::builder()
-///     .profile_files(profile_files)
-///     .build();
-///
 /// let sdk_config = aws_config::from_env()
-///     .credentials_provider(credentials_provider)
-///     .region(region_provider)
+///     .profile_files(profile_files)
 ///     .load()
 ///     .await;
 /// # }

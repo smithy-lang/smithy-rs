@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![warn(
+    // missing_docs,
+    // rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
 pub mod dispatch;
 pub mod map_request;
 pub mod parse_response;
@@ -76,6 +84,11 @@ mod tests {
         struct AddHeader;
         impl MapRequest for AddHeader {
             type Error = Infallible;
+
+            fn name(&self) -> &'static str {
+                "add_header"
+            }
+
             fn apply(&self, request: Request) -> Result<Request, Self::Error> {
                 request.augment(|mut req, _| {
                     req.headers_mut()

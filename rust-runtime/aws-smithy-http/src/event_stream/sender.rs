@@ -13,6 +13,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tracing::trace;
 
 /// Input type for Event Streams.
 pub struct EventStreamSender<T, E> {
@@ -48,6 +49,7 @@ where
     }
 }
 
+/// An error that occurs within a message stream.
 #[derive(Debug)]
 pub struct MessageStreamError {
     kind: MessageStreamErrorKind,
@@ -104,6 +106,7 @@ impl fmt::Display for MessageStreamError {
 ///
 /// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
 /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
+#[allow(missing_debug_implementations)]
 pub struct MessageStreamAdapter<T, E: StdError + Send + Sync + 'static> {
     marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
     error_marshaller: Box<dyn MarshallMessage<Input = E> + Send + Sync>,
@@ -116,6 +119,7 @@ pub struct MessageStreamAdapter<T, E: StdError + Send + Sync + 'static> {
 impl<T, E: StdError + Send + Sync + 'static> Unpin for MessageStreamAdapter<T, E> {}
 
 impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+    /// Create a new `MessageStreamAdapter`.
     pub fn new(
         marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
         error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
@@ -150,14 +154,18 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
                             .marshall(message)
                             .map_err(SdkError::construction_failure)?,
                     };
+
+                    trace!(unsigned_message = ?message, "signing event stream message");
                     let message = self
                         .signer
                         .sign(message)
                         .map_err(SdkError::construction_failure)?;
+
                     let mut buffer = Vec::new();
                     message
                         .write_to(&mut buffer)
                         .map_err(SdkError::construction_failure)?;
+                    trace!(signed_message = ?buffer, "sending signed event stream message");
                     Poll::Ready(Some(Ok(Bytes::from(buffer))))
                 } else if !self.end_signal_sent {
                     self.end_signal_sent = true;
@@ -167,6 +175,7 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
                             sign.map_err(SdkError::construction_failure)?
                                 .write_to(&mut buffer)
                                 .map_err(SdkError::construction_failure)?;
+                            trace!(signed_message = ?buffer, "sending signed empty message to terminate the event stream");
                             Poll::Ready(Some(Ok(Bytes::from(buffer))))
                         }
                         None => Poll::Ready(None),
@@ -222,9 +231,7 @@ mod tests {
         type Input = TestServiceError;
 
         fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
-            Err(Message::read_from(&b""[..])
-                .err()
-                .expect("this should always fail"))
+            Err(Message::read_from(&b""[..]).expect_err("this should always fail"))
         }
     }
 

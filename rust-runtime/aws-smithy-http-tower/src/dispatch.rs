@@ -5,13 +5,14 @@
 
 use crate::SendOperationError;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::connection::CaptureSmithyConnection;
 use aws_smithy_http::operation;
 use aws_smithy_http::result::ConnectorError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
-use tracing::trace;
+use tracing::{debug_span, trace, Instrument};
 
 /// Connects Operation driven middleware to an HTTP implementation.
 ///
@@ -41,16 +42,23 @@ where
     }
 
     fn call(&mut self, req: operation::Request) -> Self::Future {
-        let (req, property_bag) = req.into_parts();
+        let (mut req, property_bag) = req.into_parts();
+        // copy the smithy connection
+        if let Some(smithy_conn) = property_bag.acquire().get::<CaptureSmithyConnection>() {
+            req.extensions_mut().insert(smithy_conn.clone());
+        } else {
+            println!("nothing to copy!");
+        }
         let mut inner = self.inner.clone();
         let future = async move {
-            trace!(request = ?req);
+            trace!(request = ?req, "dispatching request");
             inner
                 .call(req)
                 .await
                 .map(|resp| operation::Response::from_parts(resp, property_bag))
                 .map_err(|e| SendOperationError::RequestDispatchError(e.into()))
-        };
+        }
+        .instrument(debug_span!("dispatch"));
         Box::pin(future)
     }
 }

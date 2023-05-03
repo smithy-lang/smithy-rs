@@ -17,9 +17,11 @@ use http_body::Body;
 use pin_utils::pin_mut;
 use std::error::Error;
 use std::future::Future;
-use tracing::trace;
+use tracing::{debug_span, trace, Instrument};
 
 type BoxError = Box<dyn Error + Send + Sync>;
+
+const LOG_SENSITIVE_BODIES: &str = "LOG_SENSITIVE_BODIES";
 
 /// [`AsyncMapRequest`] defines an asynchronous middleware that transforms an [`operation::Request`].
 ///
@@ -30,9 +32,15 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// including signing & endpoint resolution. `AsyncMapRequest` is used for async credential
 /// retrieval (e.g., from AWS STS's AssumeRole operation).
 pub trait AsyncMapRequest {
+    /// The type returned when this [`AsyncMapRequest`] encounters an error.
     type Error: Into<BoxError> + 'static;
+    /// The type returned when [`AsyncMapRequest::apply`] is called.
     type Future: Future<Output = Result<operation::Request, Self::Error>> + Send + 'static;
 
+    /// Returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> &'static str;
+
+    /// Call this middleware, returning a future that resolves to a request or an error.
     fn apply(&self, request: operation::Request) -> Self::Future;
 }
 
@@ -42,16 +50,26 @@ pub trait AsyncMapRequest {
 /// augment the request. Most fundamental middleware is expressed as `MapRequest`, including
 /// signing & endpoint resolution.
 ///
+/// ## Examples
+///
 /// ```rust
 /// # use aws_smithy_http::middleware::MapRequest;
 /// # use std::convert::Infallible;
 /// # use aws_smithy_http::operation;
 /// use http::header::{HeaderName, HeaderValue};
-/// struct AddHeader(HeaderName, HeaderValue);
+///
 /// /// Signaling struct added to the request property bag if a header should be added
 /// struct NeedsHeader;
+///
+/// struct AddHeader(HeaderName, HeaderValue);
+///
 /// impl MapRequest for AddHeader {
 ///     type Error = Infallible;
+///
+///     fn name(&self) -> &'static str {
+///         "add_header"
+///     }
+///
 ///     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
 ///         request.augment(|mut request, properties| {
 ///             if properties.get::<NeedsHeader>().is_some() {
@@ -67,6 +85,9 @@ pub trait MapRequest {
     ///
     /// If this middleware never fails use [std::convert::Infallible] or similar.
     type Error: Into<BoxError>;
+
+    /// Returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> &'static str;
 
     /// Apply this middleware to a request.
     ///
@@ -90,14 +111,16 @@ pub async fn load_response<T, E, O>(
 where
     O: ParseHttpResponse<Output = Result<T, E>>,
 {
-    if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
-        trace!(response = ?response);
+    if let Some(parsed_response) =
+        debug_span!("parse_unloaded").in_scope(&mut || handler.parse_unloaded(&mut response))
+    {
+        trace!(response = ?response, "read HTTP headers for streaming response");
         return sdk_result(parsed_response, response);
     }
 
     let (http_response, properties) = response.into_parts();
     let (parts, body) = http_response.into_parts();
-    let body = match read_body(body).await {
+    let body = match read_body(body).instrument(debug_span!("read_body")).await {
         Ok(body) => body,
         Err(err) => {
             return Err(SdkError::response_error(
@@ -111,12 +134,22 @@ where
     };
 
     let http_response = http::Response::from_parts(parts, Bytes::from(body));
-    trace!(http_response = ?http_response);
-    let parsed = handler.parse_loaded(&http_response);
-    sdk_result(
-        parsed,
-        operation::Response::from_parts(http_response.map(SdkBody::from), properties),
-    )
+    if !handler.sensitive()
+        || std::env::var(LOG_SENSITIVE_BODIES)
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or_default()
+    {
+        trace!(http_response = ?http_response, "read HTTP response body");
+    } else {
+        trace!(http_response = "** REDACTED **. To print, set LOG_SENSITIVE_BODIES=true")
+    }
+    debug_span!("parse_loaded").in_scope(move || {
+        let parsed = handler.parse_loaded(&http_response);
+        sdk_result(
+            parsed,
+            operation::Response::from_parts(http_response.map(SdkBody::from), properties),
+        )
+    })
 }
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {

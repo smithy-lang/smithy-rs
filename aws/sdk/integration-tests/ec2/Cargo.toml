@@ -2,10 +2,14 @@
 name = "ec2-tests"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [dev-dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"]}
-tokio = { version = "1.8.4", features = ["full"]}
+tokio = { version = "1.23.1", features = ["full"]}
 http = "0.2.0"
 tokio-stream = "0.1.5"

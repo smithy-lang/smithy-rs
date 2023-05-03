@@ -13,7 +13,7 @@ use std::sync::Arc;
 // unused when all crate features are disabled
 /// Unwrap an [`Option<DynConnector>`](aws_smithy_client::erase::DynConnector), and panic with a helpful error message if it's `None`
 pub(crate) fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
-    connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
+    connector.expect("No HTTP connector was available. Enable the `rustls` or `native-tls` crate feature or set a connector to fix this.")
 }
 
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
@@ -35,6 +35,7 @@ pub fn default_connector(
     settings: &ConnectorSettings,
     sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> Option<DynConnector> {
+    tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new connector");
     let hyper = base(settings, sleep).build(aws_smithy_client::conns::https());
     Some(DynConnector::new(hyper))
 }

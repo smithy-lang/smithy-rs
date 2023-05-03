@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 /**
@@ -47,21 +46,6 @@ interface ProtocolPayloadGenerator {
 }
 
 /**
- * Protocol Trait implementation generator
- *
- * **Note:** There is only one real implementation of this interface. The other implementation is test-only.
- * All protocols use the same class.
- *
- * Protocols implement one of two traits to enable parsing HTTP responses:
- * 1. `ParseHttpResponse`: Streaming binary operations
- * 2. `ParseStrictResponse`: Non-streaming operations for the body must be "strict" (as in, not lazy) where the parser
- *                           must have the complete body to return a result.
- */
-interface ProtocolTraitImplGenerator {
-    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>)
-}
-
-/**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
 abstract class ProtocolGenerator(
@@ -72,16 +56,6 @@ abstract class ProtocolGenerator(
      * and an output shape is build from an `http::Response`.
      */
     private val protocol: Protocol,
-    /**
-     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
-     * This is the serializer side of request dispatch
-     */
-    private val makeOperationGenerator: MakeOperationGenerator,
-    /**
-     * Operations generate implementations of ParseHttpResponse or ParseStrictResponse.
-     * This is the deserializer side of request dispatch (parsing the response)
-     */
-    private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
     protected val symbolProvider = codegenContext.symbolProvider
     protected val model = codegenContext.model

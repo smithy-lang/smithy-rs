@@ -16,6 +16,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem;
+use tracing::trace;
 
 /// Wrapper around SegmentedBuf that tracks the state of the stream.
 #[derive(Debug)]
@@ -108,6 +109,7 @@ enum ReceiverErrorKind {
     UnexpectedEndOfStream,
 }
 
+/// An error that occurs within an event stream receiver.
 #[derive(Debug)]
 pub struct ReceiverError {
     kind: ReceiverErrorKind,
@@ -126,7 +128,7 @@ impl StdError for ReceiverError {}
 /// Receives Smithy-modeled messages out of an Event Stream.
 #[derive(Debug)]
 pub struct Receiver<T, E> {
-    unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E> + Send>,
+    unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E> + Send + Sync>,
     decoder: MessageFrameDecoder,
     buffer: RecvBuf,
     body: SdkBody,
@@ -141,7 +143,7 @@ pub struct Receiver<T, E> {
 impl<T, E> Receiver<T, E> {
     /// Creates a new `Receiver` with the given message unmarshaller and SDK body.
     pub fn new(
-        unmarshaller: impl UnmarshallMessage<Output = T, Error = E> + Send + 'static,
+        unmarshaller: impl UnmarshallMessage<Output = T, Error = E> + Send + Sync + 'static,
         body: SdkBody,
     ) -> Self {
         Receiver {
@@ -198,6 +200,7 @@ impl<T, E> Receiver<T, E> {
                         )
                     })?
                 {
+                    trace!(message = ?message, "received complete event stream message");
                     return Ok(Some(message));
                 }
             }
@@ -205,6 +208,7 @@ impl<T, E> Receiver<T, E> {
             self.buffer_next_chunk().await?;
         }
         if self.buffer.has_data() {
+            trace!(remaining_data = ?self.buffer, "data left over in the event stream response stream");
             return Err(SdkError::response_error(
                 ReceiverError {
                     kind: ReceiverErrorKind::UnexpectedEndOfStream,
@@ -544,10 +548,10 @@ mod tests {
         );
     }
 
-    fn assert_send<T: Send>() {}
+    fn assert_send_and_sync<T: Send + Sync>() {}
 
     #[tokio::test]
-    async fn receiver_is_send() {
-        assert_send::<Receiver<(), ()>>();
+    async fn receiver_is_send_and_sync() {
+        assert_send_and_sync::<Receiver<(), ()>>();
     }
 }

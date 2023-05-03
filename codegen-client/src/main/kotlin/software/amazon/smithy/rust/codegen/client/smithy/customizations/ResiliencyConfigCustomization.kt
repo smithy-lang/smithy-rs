@@ -5,9 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -16,15 +20,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val sleepModule = smithyAsyncRtSleep(codegenContext.runtimeConfig)
-    private val timeoutModule = smithyTypesTimeout(codegenContext.runtimeConfig)
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
+    private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
+    private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "AsyncSleep" to sleepModule.member("AsyncSleep"),
-        "RetryConfig" to retryConfig.member("RetryConfig"),
-        "Sleep" to sleepModule.member("Sleep"),
-        "TimeoutConfig" to timeoutModule.member("TimeoutConfig"),
+        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
+        "RetryConfig" to retryConfig.resolve("RetryConfig"),
+        "Sleep" to sleepModule.resolve("Sleep"),
+        "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -212,9 +217,16 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                     )
 
                 ServiceConfig.BuilderBuild -> rustTemplate(
+                    // We call clone on sleep_impl because the field is used by
+                    // initializing the credentials_cache field later in the build
+                    // method of a Config builder.
+                    // We could rearrange the order of decorators so that AwsCodegenDecorator
+                    // runs before RequiredCustomizations, which in turns renders
+                    // CredentialsCacheDecorator before this class, but that is a bigger
+                    // change than adding a call to the clone method on sleep_impl.
                     """
                     retry_config: self.retry_config,
-                    sleep_impl: self.sleep_impl,
+                    sleep_impl: self.sleep_impl.clone(),
                     timeout_config: self.timeout_config,
                     """,
                     *codegenScope,
@@ -227,7 +239,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
     fun extras(rustCrate: RustCrate) {
-        rustCrate.withModule(RustModule.Config) {
+        rustCrate.withModule(ClientRustModule.Config) {
             rustTemplate(
                 """
                 pub use #{sleep}::{AsyncSleep, Sleep};
@@ -245,22 +257,27 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                     pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
                 }
                 """,
-                "types_retry" to smithyTypesRetry(runtimeConfig),
-                "sleep" to smithyAsyncRtSleep(runtimeConfig),
-                "timeout" to smithyTypesTimeout(runtimeConfig),
+                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+                "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
+                "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
             )
         }
     }
 }
 
-// Generate path to the retry module in aws_smithy_types
-private fun smithyTypesRetry(runtimeConfig: RuntimeConfig) =
-    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")
-
-// Generate path to the root module in aws_smithy_async
-private fun smithyAsyncRtSleep(runtimeConfig: RuntimeConfig) =
-    RuntimeType("sleep", runtimeConfig.runtimeCrate("async"), "aws_smithy_async::rt")
-
-// Generate path to the timeout module in aws_smithy_types
-private fun smithyTypesTimeout(runtimeConfig: RuntimeConfig) =
-    RuntimeType("timeout", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")
+class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+            rust(
+                """
+                if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
+                    ${section.configBagName}.put(sleep_impl);
+                }
+                if let Some(timeout_config) = self.handle.conf.timeout_config() {
+                    ${section.configBagName}.put(timeout_config.clone());
+                }
+                """,
+            )
+        }
+    }
+}

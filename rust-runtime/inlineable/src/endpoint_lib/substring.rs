@@ -13,12 +13,12 @@ use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 /// - When `reverse` is false, indexes are evaluated from the beginning of the string
 /// - When `reverse` is true, indexes are evaluated from the end of the string (however, the result
 ///   will still be "forwards" and `start` MUST be less than `end`.
-pub(crate) fn substring<'a, 'b>(
+pub(crate) fn substring<'a>(
     input: &'a str,
     start: usize,
     stop: usize,
     reverse: bool,
-    e: &'b mut DiagnosticCollector,
+    e: &mut DiagnosticCollector,
 ) -> Option<&'a str> {
     if start >= stop {
         e.capture(Err("start > stop"))?;
@@ -37,7 +37,7 @@ pub(crate) fn substring<'a, 'b>(
     Some(&input[effective_start..effective_stop])
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "gated-tests"))]
 mod test {
     use super::*;
     use proptest::proptest;

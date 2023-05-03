@@ -5,14 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
-import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import com.moandjiezana.toml.TomlWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -22,7 +22,8 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRunt
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import java.io.File
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -31,7 +32,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * name = "$CRATE_NAME"
  * crate-type = ["cdylib"]
  */
-class CdylibManifestDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class CdylibManifestDecorator : ServerCodegenDecorator {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
@@ -45,9 +46,6 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerProtocolGenerator, Se
                 "crate-type" to listOf("cdylib"),
             ),
         )
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -59,8 +57,9 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
             is LibRsSection.Body -> writable {
                 docs("Re-exported Python types from supporting crates.")
                 rustBlock("pub mod python_types") {
-                    rust("pub use #T;", PythonServerRuntimeType.Blob(codegenContext.runtimeConfig).toSymbol())
-                    rust("pub use #T;", PythonServerRuntimeType.DateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.dateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.document(codegenContext.runtimeConfig).toSymbol())
                 }
             }
             else -> emptySection
@@ -71,24 +70,21 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
 /**
  * Render the Python shared library module export.
  */
-class PythonExportModuleDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class PythonExportModuleDecorator : ServerCodegenDecorator {
     override val name: String = "PythonExportModuleDecorator"
     override val order: Byte = 0
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         val service = codegenContext.settings.getService(codegenContext.model)
-        val serviceShapes = Walker(codegenContext.model).walkShapes(service)
+        val serviceShapes = DirectedWalker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
  * Decorator applying the customization from [PubUsePythonTypes] class.
  */
-class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class PubUsePythonTypesDecorator : ServerCodegenDecorator {
     override val name: String = "PubUsePythonTypesDecorator"
     override val order: Byte = 0
 
@@ -98,12 +94,133 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
-val DECORATORS = listOf(
+/**
+ * Generates `pyproject.toml` for the crate.
+ *  - Configures Maturin as the build system
+ *  - Configures Python source directory
+ */
+class PyProjectTomlDecorator : ServerCodegenDecorator {
+    override val name: String = "PyProjectTomlDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        rustCrate.withFile("pyproject.toml") {
+            val config = mapOf(
+                "build-system" to listOfNotNull(
+                    "requires" to listOfNotNull("maturin>=0.14,<0.15"),
+                    "build-backend" to "maturin",
+                ).toMap(),
+                "tool" to listOfNotNull(
+                    "maturin" to listOfNotNull(
+                        "python-source" to "python",
+                    ).toMap(),
+                ).toMap(),
+            )
+            writeWithNoFormatting(TomlWriter().write(config))
+        }
+    }
+}
+
+/**
+ * Adds `pyo3/extension-module` feature to default features.
+ *
+ * To be able to run `cargo test` with PyO3 we need two things:
+ *  - Make `pyo3/extension-module` optional and default
+ *  - Run tests with `cargo test --no-default-features`
+ * See: https://pyo3.rs/main/faq#i-cant-run-cargo-test-or-i-cant-build-in-a-cargo-workspace-im-having-linker-issues-like-symbol-not-found-or-undefined-reference-to-_pyexc_systemerror
+ */
+class PyO3ExtensionModuleDecorator : ServerCodegenDecorator {
+    override val name: String = "PyO3ExtensionModuleDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        // Add `pyo3/extension-module` to default features.
+        rustCrate.mergeFeature(Feature("extension-module", true, listOf("pyo3/extension-module")))
+    }
+}
+
+/**
+ * Generates `__init__.py` for the Python source.
+ *
+ * This file allows Python module to be imported like:
+ * ```
+ * import pokemon_service_server_sdk
+ * pokemon_service_server_sdk.App()
+ * ```
+ * instead of:
+ * ```
+ * from pokemon_service_server_sdk import pokemon_service_server_sdk
+ * ```
+ */
+class InitPyDecorator : ServerCodegenDecorator {
+    override val name: String = "InitPyDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val libName = codegenContext.settings.moduleName.toSnakeCase()
+
+        rustCrate.withFile("python/$libName/__init__.py") {
+            writeWithNoFormatting(
+                """
+                from .$libName import *
+
+                __doc__ = $libName.__doc__
+                if hasattr($libName, "__all__"):
+                    __all__ = $libName.__all__
+                """.trimIndent(),
+            )
+        }
+    }
+}
+
+/**
+ * Generates `py.typed` for the Python source.
+ *
+ * This marker file is required to be PEP 561 compliant stub package.
+ * Type definitions will be ignored by `mypy` if the package is not PEP 561 compliant:
+ * https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-library-stubs-or-py-typed-marker
+ */
+class PyTypedMarkerDecorator : ServerCodegenDecorator {
+    override val name: String = "PyTypedMarkerDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val libName = codegenContext.settings.moduleName.toSnakeCase()
+
+        rustCrate.withFile("python/$libName/py.typed") {
+            writeWithNoFormatting("")
+        }
+    }
+}
+
+/**
+ * Copies the stubgen scripts to the generated crate root.
+ *
+ * The shell script `stubgen.sh` runs a quick build and uses `stubgen.py` to generate mypy compatibile
+ * types stubs for the project.
+ */
+class AddStubgenScriptDecorator : ServerCodegenDecorator {
+    override val name: String = "AddStubgenScriptDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val runtimeCratesPath = codegenContext.runtimeConfig.runtimeCratesPath()
+        val stubgenPythonLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.py"
+        val stubgenPythonContent = File(stubgenPythonLocation).readText(Charsets.UTF_8)
+        rustCrate.withFile("stubgen.py") {
+            writeWithNoFormatting("$stubgenPythonContent")
+        }
+        val stubgenShellLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.sh"
+        val stubgenShellContent = File(stubgenShellLocation).readText(Charsets.UTF_8)
+        rustCrate.withFile("stubgen.sh") {
+            writeWithNoFormatting("$stubgenShellContent")
+        }
+    }
+}
+
+val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
      * This is done because the Python interpreter can raise exceptions during execution.
@@ -115,4 +232,14 @@ val DECORATORS = listOf(
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
     PythonExportModuleDecorator(),
+    // Generate `pyproject.toml` for the crate.
+    PyProjectTomlDecorator(),
+    // Add PyO3 extension module feature.
+    PyO3ExtensionModuleDecorator(),
+    // Generate `__init__.py` for the Python source.
+    InitPyDecorator(),
+    // Generate `py.typed` for the Python source.
+    PyTypedMarkerDecorator(),
+    // Generate scripts for stub generation.
+    AddStubgenScriptDecorator(),
 )

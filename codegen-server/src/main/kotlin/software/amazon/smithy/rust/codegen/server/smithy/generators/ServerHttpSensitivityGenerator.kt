@@ -34,7 +34,7 @@ import java.util.Optional
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
 
     /** Returns the type of the `MakeFmt`. */
@@ -65,7 +65,7 @@ data class GreedyLabel(
 /** Models the ways labels can be bound and sensitive. */
 class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedyLabel: GreedyLabel?, runtimeConfig: RuntimeConfig) {
     private val codegenScope =
-        arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType())
+        arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** Returns the closure used during construction. */
     fun closure(): Writable = writable {
@@ -85,10 +85,14 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
     private fun hasRedactions(): Boolean = labelIndexes.isNotEmpty() || greedyLabel != null
 
     /** Returns the type of the `MakeFmt`. */
-    fun type(): Writable = if (hasRedactions()) writable {
-        rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::uri::MakeLabel<fn(usize) -> bool>", *codegenScope)
-    } else writable {
-        rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
+    fun type(): Writable = if (hasRedactions()) {
+        writable {
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::uri::MakeLabel<fn(usize) -> bool>", *codegenScope)
+        }
+    } else {
+        writable {
+            rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
+        }
     }
 
     /** Returns the value of the `GreedyLabel`. */
@@ -105,9 +109,13 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
     }
 
     /** Returns the setter enclosing the closure or suffix position. */
-    fun setter(): Writable = if (hasRedactions()) writable {
-        rustTemplate(".label(#{Closure:W}, #{GreedyLabel:W})", "Closure" to closure(), "GreedyLabel" to greedyLabelStruct())
-    } else writable { }
+    fun setter(): Writable = if (hasRedactions()) {
+        writable {
+            rustTemplate(".label(#{Closure:W}, #{GreedyLabel:W})", "Closure" to closure(), "GreedyLabel" to greedyLabelStruct())
+        }
+    } else {
+        writable { }
+    }
 }
 
 /** Models the ways headers can be bound and sensitive */
@@ -117,7 +125,7 @@ sealed class HeaderSensitivity(
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "Http" to CargoDependency.Http.toType(),
     )
 
@@ -156,11 +164,15 @@ sealed class HeaderSensitivity(
 
     /** Returns the closure used during construction. */
     internal fun closure(): Writable {
-        val nameMatch = if (headerKeys.isEmpty()) writable {
-            rust("false")
-        } else writable {
-            val matches = headerKeys.joinToString("|") { it.dq() }
-            rust("matches!(name.as_str(), $matches)")
+        val nameMatch = if (headerKeys.isEmpty()) {
+            writable {
+                rust("false")
+            }
+        } else {
+            writable {
+                val matches = headerKeys.joinToString("|") { it.dq() }
+                rust("matches!(name.as_str(), $matches)")
+            }
         }
 
         val suffixAndValue = when (this) {
@@ -219,7 +231,7 @@ sealed class QuerySensitivity(
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope =
-        arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType())
+        arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** The case where the `httpQueryParams` value is not sensitive. */
     class NotSensitiveMapValue(
@@ -252,11 +264,15 @@ sealed class QuerySensitivity(
             is SensitiveMapValue -> writable {
                 rust("true")
             }
-            is NotSensitiveMapValue -> if (queryKeys.isEmpty()) writable {
-                rust("false;")
-            } else writable {
-                val matches = queryKeys.joinToString("|") { it.dq() }
-                rust("matches!(name, $matches);")
+            is NotSensitiveMapValue -> if (queryKeys.isEmpty()) {
+                writable {
+                    rust("false;")
+                }
+            } else {
+                writable {
+                    val matches = queryKeys.joinToString("|") { it.dq() }
+                    rust("matches!(name, $matches);")
+                }
             }
         }
 
@@ -307,7 +323,7 @@ class ServerHttpSensitivityGenerator(
     private val runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "Http" to CargoDependency.Http.toType(),
     )
 
@@ -498,7 +514,9 @@ class ServerHttpSensitivityGenerator(
             )
         }
 
-        val value = writable { rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::RequestFmt::new()", *codegenScope) } + headerSensitivity.setter() + labelSensitivity.setter() + querySensitivity.setters()
+        val value = writable {
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::RequestFmt::new()", *codegenScope)
+        } + headerSensitivity.setter() + labelSensitivity.setter() + querySensitivity.setters()
 
         return MakeFmt(type, value)
     }

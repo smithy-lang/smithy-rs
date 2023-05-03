@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_glacier::types::ByteStream;
-use aws_sdk_glacier::{Credentials, Region};
+use aws_sdk_glacier::config::{Credentials, Region};
+use aws_sdk_glacier::primitives::ByteStream;
 use aws_smithy_client::test_connection::capture_request;
 use aws_smithy_protocol_test::{assert_ok, validate_headers};
 
@@ -13,7 +13,7 @@ async fn set_correct_headers() {
     let (conn, handler) = capture_request(None);
     let conf = aws_sdk_glacier::Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::new("key", "secret", None, None, "test"))
+        .credentials_provider(Credentials::for_tests())
         .http_connector(conn)
         .build();
 
@@ -26,7 +26,7 @@ async fn set_correct_headers() {
         .await;
     let req = handler.expect_request();
     assert_ok(validate_headers(
-        &req.headers(),
+        req.headers(),
         [
             (
                 "x-amz-sha256-tree-hash",

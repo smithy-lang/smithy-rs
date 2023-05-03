@@ -4,15 +4,19 @@ name = "glacier-tests"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-glacier = { path = "../../build/aws-sdk/sdk/glacier" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test"}
 bytes = "1.0.0"
 http = "0.2.0"
-tokio = { version = "1.8.4", features = ["full", "test-util"]}
+tokio = { version = "1.23.1", features = ["full", "test-util"]}
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

@@ -123,7 +123,6 @@
 
 use crate::body::SdkBody;
 use crate::byte_stream::error::Error;
-use crate::callback::BodyCallback;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
@@ -263,12 +262,14 @@ pin_project! {
 }
 
 impl ByteStream {
+    /// Create a new `ByteStream` from an [`SdkBody`].
     pub fn new(body: SdkBody) -> Self {
         Self {
             inner: Inner::new(body),
         }
     }
 
+    /// Create a new `ByteStream` from a static byte slice.
     pub fn from_static(bytes: &'static [u8]) -> Self {
         Self {
             inner: Inner::new(SdkBody::from(Bytes::from_static(bytes))),
@@ -374,14 +375,6 @@ impl ByteStream {
         FsBuilder::new().file(file).build().await
     }
 
-    /// Set a callback on this `ByteStream`. The callback's methods will be called at various points
-    /// throughout this `ByteStream`'s life cycle. See the [`BodyCallback`](BodyCallback) trait for
-    /// more information.
-    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
-        self.inner.with_body_callback(body_callback);
-        self
-    }
-
     #[cfg(feature = "rt-tokio")]
     /// Convert this `ByteStream` into a struct that implements [`AsyncRead`](tokio::io::AsyncRead).
     ///
@@ -403,6 +396,8 @@ impl ByteStream {
         tokio_util::io::StreamReader::new(self)
     }
 
+    /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.
+    /// returning a new `Bytestream`.
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
         ByteStream::new(self.into_inner().map(f))
     }
@@ -482,6 +477,11 @@ impl AggregatedBytes {
         self.0.copy_to_bytes(self.0.remaining())
     }
 
+    /// Convert this buffer into an [`Iterator`] of underlying non-contiguous segments of [`Bytes`]
+    pub fn into_segments(self) -> impl Iterator<Item = Bytes> {
+        self.0.into_inner().into_iter()
+    }
+
     /// Convert this buffer into a `Vec<u8>`
     pub fn to_vec(self) -> Vec<u8> {
         self.0
@@ -539,13 +539,6 @@ impl<B> Inner<B> {
             output.push(buf?);
         }
         Ok(AggregatedBytes(output))
-    }
-}
-
-impl Inner<SdkBody> {
-    fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
-        self.body.with_callback(body_callback);
-        self
     }
 }
 

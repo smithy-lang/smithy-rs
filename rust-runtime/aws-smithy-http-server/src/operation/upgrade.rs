@@ -32,39 +32,36 @@ use super::{Operation, OperationError, OperationShape};
 ///
 /// See [`Upgrade`].
 #[derive(Debug, Clone)]
-pub struct UpgradeLayer<Protocol, Operation, Exts, B> {
+pub struct UpgradeLayer<Protocol, Operation, Exts> {
     _protocol: PhantomData<Protocol>,
     _operation: PhantomData<Operation>,
     _exts: PhantomData<Exts>,
-    _body: PhantomData<B>,
 }
 
-impl<P, Op, E, B> Default for UpgradeLayer<P, Op, E, B> {
+impl<P, Op, E> Default for UpgradeLayer<P, Op, E> {
     fn default() -> Self {
         Self {
             _protocol: PhantomData,
             _operation: PhantomData,
             _exts: PhantomData,
-            _body: PhantomData,
         }
     }
 }
 
-impl<Protocol, Operation, Exts, B> UpgradeLayer<Protocol, Operation, Exts, B> {
+impl<Protocol, Operation, Exts> UpgradeLayer<Protocol, Operation, Exts> {
     /// Creates a new [`UpgradeLayer`].
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<S, P, Op, E, B> Layer<S> for UpgradeLayer<P, Op, E, B> {
-    type Service = Upgrade<P, Op, E, B, S>;
+impl<S, P, Op, E> Layer<S> for UpgradeLayer<P, Op, E> {
+    type Service = Upgrade<P, Op, E, S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         Upgrade {
             _protocol: PhantomData,
             _operation: PhantomData,
-            _body: PhantomData,
             _exts: PhantomData,
             inner,
         }
@@ -73,15 +70,14 @@ impl<S, P, Op, E, B> Layer<S> for UpgradeLayer<P, Op, E, B> {
 
 /// A [`Service`] responsible for wrapping an operation [`Service`] accepting and returning Smithy
 /// types, and converting it into a [`Service`] accepting and returning [`http`] types.
-pub struct Upgrade<Protocol, Operation, Exts, B, S> {
+pub struct Upgrade<Protocol, Operation, Exts, S> {
     _protocol: PhantomData<Protocol>,
     _operation: PhantomData<Operation>,
     _exts: PhantomData<Exts>,
-    _body: PhantomData<B>,
     inner: S,
 }
 
-impl<P, Op, E, B, S> Clone for Upgrade<P, Op, E, B, S>
+impl<P, Op, E, S> Clone for Upgrade<P, Op, E, S>
 where
     S: Clone,
 {
@@ -89,7 +85,6 @@ where
         Self {
             _protocol: PhantomData,
             _operation: PhantomData,
-            _body: PhantomData,
             _exts: PhantomData,
             inner: self.inner.clone(),
         }
@@ -177,7 +172,7 @@ where
     }
 }
 
-impl<P, Op, Exts, B, S, PollError, OpError> Service<http::Request<B>> for Upgrade<P, Op, Exts, B, S>
+impl<P, Op, Exts, B, S, PollError, OpError> Service<http::Request<B>> for Upgrade<P, Op, Exts, S>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -218,14 +213,15 @@ where
 }
 
 /// An interface to convert a representation of a Smithy operation into a [`Route`].
+///
+/// See the [module](crate::operation) documentation for more information.
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     /// Upgrade the representation of a Smithy operation to a [`Route`].
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
 
-type UpgradedService<Pl, P, Op, Exts, B, S, L> = <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<
-    Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>,
->>::Service;
+type UpgradedService<Pl, P, Op, Exts, S, L> =
+    <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service;
 
 impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
 where
@@ -243,22 +239,19 @@ where
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+    Pl::Service:
+        Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
     // The plugin takes this operation as input
     Pl: Plugin<P, Op, S, L>,
 
-    // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    Pl::Layer: Layer<Upgrade<P, Op, Exts, B, Pl::Service>>,
-
-    // The signature of the output is correct
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
-        Service<http::Request<B>, Response = http::Response<BoxBody>>,
+    // The modified Layer applies correctly to `Upgrade<P, Op, Exts, S>`
+    Pl::Layer: Layer<Upgrade<P, Op, Exts, Pl::Service>>,
 
     // For `Route::new` for the resulting service
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service: Service<http::Request<B>, Error = Infallible>,
-    UpgradedService<Pl, P, Op, Exts, B, S, L>: Clone + Send + 'static,
-    <UpgradedService<Pl, P, Op, Exts, B, S, L> as Service<http::Request<B>>>::Future: Send + 'static,
+    UpgradedService<Pl, P, Op, Exts, S, L>:
+        Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
+    <UpgradedService<Pl, P, Op, Exts, S, L> as Service<http::Request<B>>>::Future: Send + 'static,
 {
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
@@ -270,11 +263,6 @@ where
         Route::new(layer.layer(mapped.inner))
     }
 }
-
-/// A marker struct indicating an [`Operation`] has not been set in a builder.
-///
-/// This does _not_ implement [`Upgradable`] purposely.
-pub struct MissingOperation;
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 ///

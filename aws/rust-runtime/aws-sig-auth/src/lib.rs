@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(clippy::derive_partial_eq_without_eq)]
+
 //! AWS Signature Authentication Package
 //!
 //! This crate may be used to generate presigned URLs for unmodeled behavior such as `rds-iam-token`
@@ -12,9 +14,10 @@
 //!
 //! ## Generate RDS IAM Token
 //! ```rust
+//! use aws_credential_types::Credentials;
 //! use aws_smithy_http::body::SdkBody;
+//! use aws_types::SigningService;
 //! use aws_types::region::{Region, SigningRegion};
-//! use aws_types::{Credentials, SigningService};
 //! use std::time::{Duration, SystemTime, UNIX_EPOCH};
 //! use aws_sig_auth::signer::{self, SigningError, OperationSigningConfig, HttpSignatureType, RequestConfig};
 //!
@@ -76,9 +79,9 @@
 //! ## Sign a request for APIGateway execute-api
 //!
 //! ```no_run
+//! use aws_credential_types::provider::ProvideCredentials;
 //! use aws_sig_auth::signer::{OperationSigningConfig, RequestConfig, SigV4Signer};
 //! use aws_smithy_http::body::SdkBody;
-//! use aws_types::credentials::ProvideCredentials;
 //! use aws_types::region::{Region, SigningRegion};
 //! use aws_types::SigningService;
 //! use std::error::Error;

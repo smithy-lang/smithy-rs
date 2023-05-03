@@ -28,6 +28,7 @@ private fun runCli(
                 }
             }
             .copyTo(action)
+        action.environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         action.execute()
     }
 }
@@ -101,6 +102,7 @@ abstract class RequireRustBuildTool : DefaultTask() {
         if (System.getenv()["SMITHY_RS_DOCKER_BUILD_IMAGE"] != "1") {
             val command = mutableListOf("cargo")
             command.add("install")
+            command.add("--locked")
             command.add("--path")
             command.add(toolPath!!.absolutePath)
             runCli(

@@ -38,6 +38,7 @@ dependencies {
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
+        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
         CodegenTest(
             "naming_obs_structs#NamingObstacleCourseStructs",
             "naming_test_structs",
@@ -45,53 +46,52 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
         CodegenTest(
-            "com.amazonaws.constraints#ConstraintsService", "constraints_without_public_constrained_types",
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_without_public_constrained_types",
             imports = listOf("$commonModels/constraints.smithy"),
             extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#UniqueItemsService",
+            "unique_items",
+            imports = listOf("$commonModels/unique-items.smithy"),
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
             "constraints",
             imports = listOf("$commonModels/constraints.smithy"),
         ),
-        CodegenTest(
-            "aws.protocoltests.restjson#RestJson",
-            "rest_json",
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
-            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
-        ),
+        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
         CodegenTest(
             "aws.protocoltests.restjson#RestJsonExtras",
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
         CodegenTest(
-            "aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
+            "aws.protocoltests.restjson.validation#RestJsonValidation",
+            "rest_json_validation",
+            // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
+            // See https://github.com/awslabs/smithy-rs/issues/1401.
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-        CodegenTest(
-            "aws.protocoltests.json#JsonProtocol",
-            "json_rpc11",
-            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
-        ),
+        CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
         CodegenTest(
             "aws.protocoltests.misc#MiscService",
             "misc",
             imports = listOf("$commonModels/misc.smithy"),
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
-            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
-        CodegenTest(
-            "com.amazonaws.ebs#Ebs", "ebs",
-            imports = listOf("$commonModels/ebs.json"),
-            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
-        ),
+        CodegenTest("com.amazonaws.ebs#Ebs", "ebs", imports = listOf("$commonModels/ebs.json")),
         CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
         CodegenTest(
             "com.aws.example.rust#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+        ),
+        CodegenTest(
+            "com.aws.example.rust#PokemonService",
+            "pokemon-service-awsjson-server-sdk",
+            imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
     )
 }

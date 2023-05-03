@@ -13,7 +13,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
@@ -23,21 +27,47 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  */
 private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writable {
     rust(
-        """#T::try_from($data).expect("This is used in tests ONLY")""",
+        """#T::try_from($data).expect("this is only used in tests")""",
         enumSymbol,
     )
+}
+
+class ServerAfterInstantiatingValueConstrainItIfNecessary(val codegenContext: CodegenContext) :
+    InstantiatorCustomization() {
+
+    override fun section(section: InstantiatorSection): Writable = when (section) {
+        is InstantiatorSection.AfterInstantiatingValue -> writable {
+            if (section.shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+                rust(""".try_into().expect("this is only used in tests")""")
+            }
+        }
+    }
 }
 
 class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
         // Only operation input builders take in unconstrained types.
         val takesInUnconstrainedTypes = shape.isReachableFromOperationInput()
-        return ServerBuilderGenerator.hasFallibleBuilder(
-            shape,
-            codegenContext.model,
-            codegenContext.symbolProvider,
-            takesInUnconstrainedTypes,
-        )
+
+        val publicConstrainedTypes = if (codegenContext is ServerCodegenContext) {
+            codegenContext.settings.codegenConfig.publicConstrainedTypes
+        } else {
+            true
+        }
+
+        return if (publicConstrainedTypes) {
+            ServerBuilderGenerator.hasFallibleBuilder(
+                shape,
+                codegenContext.model,
+                codegenContext.symbolProvider,
+                takesInUnconstrainedTypes,
+            )
+        } else {
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes.hasFallibleBuilder(
+                shape,
+                codegenContext.symbolProvider,
+            )
+        }
     }
 
     override fun setterName(memberShape: MemberShape): String = codegenContext.symbolProvider.toMemberName(memberShape)
@@ -54,4 +84,5 @@ fun serverInstantiator(codegenContext: CodegenContext) =
         ServerBuilderKindBehavior(codegenContext),
         ::enumFromStringFn,
         defaultsForRequiredFields = true,
+        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
     )

@@ -5,19 +5,29 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -31,7 +41,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * Usage:
  * ```kotlin
- * class AddRegion : NamedSectionGenerator<ServiceConfig>() {
+ * class AddRegion : NamedCustomization<ServiceConfig>() {
  *  override fun section(section: ServiceConfig): Writable {
  *    return when (section) {
  *      is ServiceConfig.ConfigStruct -> writeable {
@@ -81,15 +91,74 @@ sealed class ServiceConfig(name: String) : Section(name) {
      * A section for extra functionality that needs to be defined with the config module
      */
     object Extras : ServiceConfig("Extras")
+
+    /**
+     * The set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
+     */
+    data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
+}
+
+data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writable?, val getterDocs: Writable? = null)
+
+/**
+ * Config customization for a config param with no special behavior:
+ * 1. `pub(crate)` field
+ * 2. convenience setter (non-optional)
+ * 3. standard setter (&mut self)
+ */
+fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
+    override fun section(section: ServiceConfig): Writable {
+        return when (section) {
+            is ServiceConfig.ConfigStruct -> writable {
+                docsOrFallback(param.getterDocs)
+                rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
+            }
+
+            ServiceConfig.ConfigImpl -> emptySection
+            ServiceConfig.BuilderStruct -> writable {
+                rust("${param.name}: #T,", param.type.makeOptional())
+            }
+
+            ServiceConfig.BuilderImpl -> writable {
+                docsOrFallback(param.setterDocs)
+                rust(
+                    """
+                    pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
+                        self.${param.name} = Some(${param.name}.into());
+                        self
+                        }""",
+                    param.type,
+                )
+
+                docsOrFallback(param.setterDocs)
+                rust(
+                    """
+                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
+                        self.${param.name} = ${param.name};
+                        self
+                    }
+                    """,
+                    param.type,
+                )
+            }
+
+            ServiceConfig.BuilderBuild -> writable {
+                rust("${param.name}: self.${param.name},")
+            }
+
+            else -> emptySection
+        }
+    }
 }
 
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
     val topDownIndex = TopDownIndex.of(model)
-    return topDownIndex.getContainedOperations(this.id).flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait<IdempotencyTokenTrait>() }
+    return topDownIndex.getContainedOperations(this.id).flatMap { operationIndex.getInputMembers(it).values }
+        .any { it.hasTrait<IdempotencyTokenTrait>() }
 }
 
-typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
+typealias ConfigCustomization = NamedCustomization<ServiceConfig>
 
 /**
  * Generate a `Config` struct, implementation & builder for a given service, approximately:
@@ -111,7 +180,10 @@ typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
 class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
 
     companion object {
-        fun withBaseBehavior(codegenContext: CodegenContext, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
+        fun withBaseBehavior(
+            codegenContext: CodegenContext,
+            extraCustomizations: List<ConfigCustomization>,
+        ): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
             if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
                 baseFeatures.add(IdempotencyTokenProviderCustomization())
@@ -156,18 +228,50 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Default)]")
+        writer.raw("#[derive(Clone, Default)]")
         writer.rustBlock("pub struct Builder") {
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
+
+        // Custom implementation for Debug so we don't need to enforce Debug down the chain
+        writer.rustBlock("impl std::fmt::Debug for Builder") {
+            writer.rustTemplate(
+                """
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let mut config = f.debug_struct("Builder");
+                    config.finish()
+                }
+                """,
+            )
+        }
+
         writer.rustBlock("impl Builder") {
             writer.docs("Constructs a config builder.")
             writer.rustTemplate("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
+
+            val testUtilOnly =
+                Attribute(Attribute.cfg(Attribute.any(Attribute.feature(TestUtilFeature.name), writable("test"))))
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn set_test_defaults(&mut self) -> &mut Self") {
+                customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
+                rust("self")
+            }
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn with_test_defaults(mut self) -> Self") {
+                rust("self.set_test_defaults(); self")
+            }
+
             docs("Builds a [`Config`].")
             rustBlock("pub fn build(self) -> Config") {
                 rustBlock("Config") {
@@ -179,6 +283,27 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
         customizations.forEach {
             it.section(ServiceConfig.Extras)(writer)
+        }
+    }
+
+    fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        writer.rustBlockTemplate(
+            "impl #{RuntimePlugin} for Builder",
+            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+        ) {
+            rustTemplate(
+                """
+                fn configure(&self, _cfg: &mut #{ConfigBag}, _inter: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
+                    // TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`.
+
+                    Ok(())
+                }
+                """,
+                "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+                "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
+            )
         }
     }
 }

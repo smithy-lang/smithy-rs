@@ -3,34 +3,37 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::paginator_canary;
-use crate::{s3_canary, transcribe_canary};
-use aws_sdk_ec2 as ec2;
-use aws_sdk_s3 as s3;
-use aws_sdk_transcribestreaming as transcribe;
 use std::env;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
+
+use aws_config::SdkConfig;
 use tracing::{info_span, Instrument};
+
+use crate::current_canary::paginator_canary;
+use crate::current_canary::{s3_canary, transcribe_canary};
 
 #[macro_export]
 macro_rules! mk_canary {
     ($name: expr, $run_canary: expr) => {
         pub(crate) fn mk_canary(
-            clients: &Clients,
+            sdk_config: &aws_config::SdkConfig,
             env: &CanaryEnv,
         ) -> Option<(&'static str, $crate::canary::CanaryFuture)> {
-            Some(($name, Box::pin($run_canary(clients, env))))
+            Some(($name, Box::pin($run_canary(sdk_config, env))))
         }
     };
 }
 
-pub fn get_canaries_to_run(clients: Clients, env: CanaryEnv) -> Vec<(&'static str, CanaryFuture)> {
+pub fn get_canaries_to_run(
+    sdk_config: SdkConfig,
+    env: CanaryEnv,
+) -> Vec<(&'static str, CanaryFuture)> {
     let canaries = vec![
-        paginator_canary::mk_canary(&clients, &env),
-        s3_canary::mk_canary(&clients, &env),
-        transcribe_canary::mk_canary(&clients, &env),
+        paginator_canary::mk_canary(&sdk_config, &env),
+        s3_canary::mk_canary(&sdk_config, &env),
+        transcribe_canary::mk_canary(&sdk_config, &env),
     ];
 
     canaries
@@ -43,24 +46,6 @@ pub fn get_canaries_to_run(clients: Clients, env: CanaryEnv) -> Vec<(&'static st
             )
         })
         .collect()
-}
-
-#[derive(Clone)]
-pub struct Clients {
-    pub s3: s3::Client,
-    pub ec2: ec2::Client,
-    pub transcribe: transcribe::Client,
-}
-
-impl Clients {
-    pub async fn initialize() -> Self {
-        let config = aws_config::load_from_env().await;
-        Self {
-            ec2: ec2::Client::new(&config),
-            s3: s3::Client::new(&config),
-            transcribe: transcribe::Client::new(&config),
-        }
-    }
 }
 
 pub struct CanaryEnv {

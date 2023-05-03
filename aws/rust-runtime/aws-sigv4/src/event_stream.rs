@@ -74,7 +74,7 @@ fn calculate_string_to_sign(
     let mut date_buffer = Vec::new();
     write_headers_to(&[date_header], &mut date_buffer).unwrap();
     writeln!(sts, "{}", sha256_hex_string(&date_buffer)).unwrap();
-    write!(sts, "{}", sha256_hex_string(&message_payload)).unwrap();
+    write!(sts, "{}", sha256_hex_string(message_payload)).unwrap();
     sts
 }
 
@@ -126,6 +126,7 @@ fn sign_payload<'a>(
         params,
     );
     let signature = calculate_signature(signing_key, &string_to_sign);
+    tracing::trace!(canonical_request = ?message_payload, string_to_sign = ?string_to_sign, "calculated signing parameters");
 
     // Generate the signed wrapper event frame
     SigningOutput::new(

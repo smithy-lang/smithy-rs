@@ -12,8 +12,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
+// TODO(enableNewSmithyRuntime): Delete this client generics on/off switch headache
 interface FluentClientGenerics {
     /** Declaration with defaults set */
     val decl: Writable
@@ -28,10 +30,41 @@ interface FluentClientGenerics {
     val bounds: Writable
 
     /** Bounds for generated `send()` functions */
-    fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable
+    fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: Symbol, retryClassifier: RuntimeType): Writable
 
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics
+}
+
+class NoClientGenerics(private val runtimeConfig: RuntimeConfig) : FluentClientGenerics {
+    /** Declaration with defaults set */
+    override val decl = writable { }
+
+    /** Instantiation of the Smithy client generics */
+    override val smithyInst = writable {
+        rustTemplate(
+            "<#{DynConnector}, #{DynMiddleware}<#{DynConnector}>>",
+            "DynConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("erase::DynConnector"),
+            "DynMiddleware" to RuntimeType.smithyClient(runtimeConfig).resolve("erase::DynMiddleware"),
+        )
+    }
+
+    /** Instantiation */
+    override val inst = ""
+
+    /** Trait bounds */
+    override val bounds = writable { }
+
+    /** Bounds for generated `send()` functions */
+    override fun sendBounds(
+        operation: Symbol,
+        operationOutput: Symbol,
+        operationError: Symbol,
+        retryClassifier: RuntimeType,
+    ): Writable =
+        writable { }
+
+    override fun toRustGenerics() = RustGenerics()
 }
 
 data class FlexibleClientGenerics(
@@ -70,7 +103,7 @@ data class FlexibleClientGenerics(
     }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable = writable {
+    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: Symbol, retryClassifier: RuntimeType): Writable = writable {
         rustTemplate(
             """
             where
@@ -90,9 +123,9 @@ data class FlexibleClientGenerics(
     }
 
     override fun toRustGenerics(): RustGenerics = RustGenerics(
-        GenericTypeArg("C", client.member("bounds::SmithyConnector")),
-        GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
-        GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
+        GenericTypeArg("C", client.resolve("bounds::SmithyConnector")),
+        GenericTypeArg("M", client.resolve("bounds::SmithyMiddleware<C>")),
+        GenericTypeArg("R", client.resolve("retry::NewRequestPolicy")),
     )
 
     private fun defaultType(default: RuntimeType?) = writable {

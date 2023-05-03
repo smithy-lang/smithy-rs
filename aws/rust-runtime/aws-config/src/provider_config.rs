@@ -5,18 +5,26 @@
 
 //! Configuration Options for Credential Providers
 
+use aws_credential_types::time_source::TimeSource;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_client::erase::DynConnector;
-use aws_types::os_shim_internal::{Env, Fs, TimeSource};
+use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::{
     http_connector::{ConnectorSettings, HttpConnector},
     region::Region,
 };
+use std::borrow::Cow;
 
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 use crate::connector::default_connector;
+use crate::profile;
+
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::{ProfileFileLoadError, ProfileSet};
 
 /// Configuration options for Credential Providers
 ///
@@ -34,6 +42,12 @@ pub struct ProviderConfig {
     connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
+    /// An AWS profile created from `ProfileFiles` and a `profile_name`
+    parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
+    /// A list of [std::path::Path]s to profile files
+    profile_files: ProfileFiles,
+    /// An override to use when constructing a `ProfileSet`
+    profile_name_override: Option<Cow<'static, str>>,
 }
 
 impl Debug for ProviderConfig {
@@ -62,6 +76,9 @@ impl Default for ProviderConfig {
             connector,
             sleep: default_async_sleep(),
             region: None,
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            profile_name_override: None,
         }
     }
 }
@@ -73,16 +90,21 @@ impl ProviderConfig {
     /// Unlike [`ProviderConfig::empty`] where `env` and `fs` will use their non-mocked implementations,
     /// this method will use an empty mock environment and an empty mock file system.
     pub fn no_configuration() -> Self {
-        use aws_types::os_shim_internal::ManualTimeSource;
+        use aws_credential_types::time_source::TestingTimeSource;
         use std::collections::HashMap;
         use std::time::UNIX_EPOCH;
+        let fs = Fs::from_raw_map(HashMap::new());
+        let env = Env::from_slice(&[]);
         Self {
-            env: Env::from_slice(&[]),
-            fs: Fs::from_raw_map(HashMap::new()),
-            time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            env,
+            fs,
+            time_source: TimeSource::testing(&TestingTimeSource::new(UNIX_EPOCH)),
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
+            profile_name_override: None,
         }
     }
 }
@@ -102,7 +124,7 @@ impl ProviderConfig {
     /// # #[cfg(any(feature = "rustls", feature = "native-tls"))]
     /// # fn example() {
     /// use aws_config::provider_config::ProviderConfig;
-    /// use aws_sdk_sts::Region;
+    /// use aws_sdk_sts::config::Region;
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// let conf = ProviderConfig::without_region().with_region(Some(Region::new("us-east-1")));
     ///
@@ -122,6 +144,9 @@ impl ProviderConfig {
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            profile_name_override: None,
         }
     }
 
@@ -131,7 +156,7 @@ impl ProviderConfig {
     /// ```no_run
     /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
-    /// use aws_sdk_sts::Region;
+    /// use aws_sdk_sts::config::Region;
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// let conf = ProviderConfig::with_default_region().await;
     /// let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
@@ -179,10 +204,60 @@ impl ProviderConfig {
         self.region.clone()
     }
 
+    pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
+        let parsed_profile = self
+            .parsed_profile
+            .get_or_init(|| async {
+                let profile = profile::load(
+                    &self.fs,
+                    &self.env,
+                    &self.profile_files,
+                    self.profile_name_override.clone(),
+                )
+                .await;
+                if let Err(err) = profile.as_ref() {
+                    tracing::warn!(err = %DisplayErrorContext(&err), "failed to parse profile")
+                }
+                profile
+            })
+            .await;
+        parsed_profile.as_ref()
+    }
+
+    pub(crate) async fn profile(&self) -> Option<&ProfileSet> {
+        self.try_profile().await.ok()
+    }
+
     /// Override the region for the configuration
     pub fn with_region(mut self, region: Option<Region>) -> Self {
         self.region = region;
         self
+    }
+
+    pub(crate) fn with_profile_name(self, profile_name: String) -> Self {
+        let profile_files = self.profile_files.clone();
+        self.with_profile_config(Some(profile_files), Some(profile_name))
+    }
+
+    /// Override the profile file paths (`~/.aws/config` by default) and name (`default` by default)
+    pub(crate) fn with_profile_config(
+        self,
+        profile_files: Option<ProfileFiles>,
+        profile_name_override: Option<String>,
+    ) -> Self {
+        // if there is no override, then don't clear out `parsed_profile`.
+        if profile_files.is_none() && profile_name_override.is_none() {
+            return self;
+        }
+        ProviderConfig {
+            // clear out the profile since we need to reparse it
+            parsed_profile: Default::default(),
+            profile_files: profile_files.unwrap_or(self.profile_files),
+            profile_name_override: profile_name_override
+                .map(Cow::Owned)
+                .or(self.profile_name_override),
+            ..self
+        }
     }
 
     /// Use the [default region chain](crate::default_provider::region) to set the
@@ -199,12 +274,20 @@ impl ProviderConfig {
 
     #[doc(hidden)]
     pub fn with_fs(self, fs: Fs) -> Self {
-        ProviderConfig { fs, ..self }
+        ProviderConfig {
+            parsed_profile: Default::default(),
+            fs,
+            ..self
+        }
     }
 
     #[doc(hidden)]
     pub fn with_env(self, env: Env) -> Self {
-        ProviderConfig { env, ..self }
+        ProviderConfig {
+            parsed_profile: Default::default(),
+            env,
+            ..self
+        }
     }
 
     #[doc(hidden)]

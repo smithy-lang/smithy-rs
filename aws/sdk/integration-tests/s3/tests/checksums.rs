@@ -4,16 +4,21 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_s3::{model::ChecksumAlgorithm, output::GetObjectOutput, Client, Credentials, Region};
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::types::ChecksumMode;
+use aws_sdk_s3::Client;
+use aws_sdk_s3::{operation::get_object::GetObjectOutput, types::ChecksumAlgorithm};
 use aws_smithy_client::test_connection::{capture_request, TestConnection};
 use aws_smithy_http::body::SdkBody;
-use aws_types::credentials::SharedCredentialsProvider;
+use http::header::AUTHORIZATION;
 use http::{HeaderValue, Uri};
 use std::{
     convert::Infallible,
     time::{Duration, UNIX_EPOCH},
 };
+use tracing_test::traced_test;
 
 /// Test connection for the movies IT
 /// headers are signed with actual creds, at some point we could replace them with verifiable test
@@ -30,7 +35,7 @@ fn new_checksum_validated_response_test_connection(
              .header("x-amz-content-sha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
              .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
              .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-checksum-mode;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=eb9e58fa4fb04c8e6f160705017fdbb497ccff0efee4227b3a56f900006c3882")
-             .uri(Uri::from_static("https://s3.us-east-1.amazonaws.com/some-test-bucket/test.txt?x-id=GetObject")).body(SdkBody::empty()).unwrap(),
+             .uri(Uri::from_static("https://some-test-bucket.s3.us-east-1.amazonaws.com/test.txt?x-id=GetObject")).body(SdkBody::empty()).unwrap(),
          http::Response::builder()
              .header("x-amz-request-id", "4B4NGF0EAWN0GE63")
              .header("content-length", "11")
@@ -57,13 +62,7 @@ async fn test_checksum_on_streaming_response(
         checksum_header_value,
     );
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();
@@ -74,7 +73,7 @@ async fn test_checksum_on_streaming_response(
         .get_object()
         .bucket("some-test-bucket")
         .key("test.txt")
-        .checksum_mode(aws_sdk_s3::model::ChecksumMode::Enabled)
+        .checksum_mode(aws_sdk_s3::types::ChecksumMode::Enabled)
         .customize()
         .await
         .unwrap()
@@ -90,7 +89,10 @@ async fn test_checksum_on_streaming_response(
         .await
         .unwrap();
 
-    conn.assert_requests_match(&[http::header::HeaderName::from_static("x-amz-checksum-mode")]);
+    conn.assert_requests_match(&[
+        http::header::HeaderName::from_static("x-amz-checksum-mode"),
+        AUTHORIZATION,
+    ]);
 
     res
 }
@@ -159,13 +161,7 @@ async fn test_checksum_on_streaming_request<'a>(
 ) {
     let (conn, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();
@@ -177,7 +173,7 @@ async fn test_checksum_on_streaming_request<'a>(
     use std::io::Write;
     file.write_all(body).unwrap();
 
-    let body = aws_sdk_s3::types::ByteStream::read_from()
+    let body = aws_sdk_s3::primitives::ByteStream::read_from()
         .path(file.path())
         .buffer_size(1024)
         .build()
@@ -344,4 +340,96 @@ async fn collect_body_into_string(mut body: aws_smithy_http::body::SdkBody) -> S
         .expect("Doesn't cause IO errors");
 
     output_text
+}
+
+#[tokio::test]
+#[traced_test]
+async fn test_get_multipart_upload_part_checksum_validation() {
+    let expected_checksum = "cpjwid==-12";
+    let (conn, rcvr) = capture_request(Some(
+        http::Response::builder()
+            .header("etag", "\"3e25960a79dbc69b674cd4ec67a72c62\"")
+            .header("x-amz-checksum-crc32", expected_checksum)
+            .body(SdkBody::empty())
+            .unwrap(),
+    ));
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .region(Region::new("us-east-1"))
+        .http_connector(conn.clone())
+        .build();
+    let client = Client::new(&sdk_config);
+
+    // The response from the fake connection won't return the expected XML but we don't care about
+    // that error in this test
+    let res = client
+        .get_object()
+        .bucket("test-bucket")
+        .key("test.txt")
+        .checksum_mode(ChecksumMode::Enabled)
+        .send()
+        .await
+        .expect("request should succeed, despite the non-base64-decodable checksum");
+
+    let _req = rcvr.expect_request();
+
+    let actual_checksum = res.checksum_crc32().unwrap();
+    assert_eq!(expected_checksum, actual_checksum);
+
+    logs_assert(|lines: &[&str]| {
+        let checksum_warning = lines.iter().find(|&&line| {
+            line.contains("This checksum is a part-level checksum which can't be validated by the Rust SDK. Disable checksum validation for this request to fix this warning.")
+        });
+
+        match checksum_warning {
+            Some(_) => Ok(()),
+            None => Err("Checksum warning was not issued".to_string()),
+        }
+    });
+}
+
+#[tokio::test]
+#[traced_test]
+async fn test_response_checksum_ignores_invalid_base64() {
+    let expected_checksum = "{}{!!#{})!{)@$(}";
+    let (conn, rcvr) = capture_request(Some(
+        http::Response::builder()
+            .header("etag", "\"3e25960a79dbc69b674cd4ec67a72c62\"")
+            .header("x-amz-checksum-crc32", expected_checksum)
+            .body(SdkBody::empty())
+            .unwrap(),
+    ));
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .region(Region::new("us-east-1"))
+        .http_connector(conn.clone())
+        .build();
+    let client = Client::new(&sdk_config);
+
+    // The response from the fake connection won't return the expected XML but we don't care about
+    // that error in this test
+    let res = client
+        .get_object()
+        .bucket("test-bucket")
+        .key("test.txt")
+        .checksum_mode(ChecksumMode::Enabled)
+        .send()
+        .await
+        .expect("request should succeed, despite the non-base64-decodable checksum");
+
+    let _req = rcvr.expect_request();
+
+    let actual_checksum = res.checksum_crc32().unwrap();
+    assert_eq!(expected_checksum, actual_checksum);
+
+    logs_assert(|lines: &[&str]| {
+        let checksum_warning = lines.iter().find(|&&line| {
+            line.contains("Checksum received from server could not be base64 decoded. No checksum validation will be performed.")
+        });
+
+        match checksum_warning {
+            Some(_) => Ok(()),
+            None => Err("Checksum error was not issued".to_string()),
+        }
+    });
 }

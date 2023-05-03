@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -42,7 +43,9 @@ fun StructureShape.expectMember(member: String): MemberShape =
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
-fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
+fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or {
+    this.getMember("Message")
+}.orNull()
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
@@ -62,6 +65,12 @@ fun MemberShape.isInputEventStream(model: Model): Boolean {
 
 fun MemberShape.isOutputEventStream(model: Model): Boolean {
     return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticOutputTrait>()
+}
+
+private val unitShapeId = ShapeId.from("smithy.api#Unit")
+
+fun MemberShape.isTargetUnit(): Boolean {
+    return this.target == unitShapeId
 }
 
 fun Shape.hasEventStreamMember(model: Model): Boolean {
@@ -86,7 +95,7 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.an
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
-        is MemberShape -> model.expectShape(this.target).shouldRedact(model)
+        is MemberShape -> model.expectShape(this.target).shouldRedact(model) || model.expectShape(this.container).shouldRedact(model)
         else -> this.hasTrait<SensitiveTrait>()
     }
 
@@ -131,3 +140,9 @@ fun Shape.isPrimitive(): Boolean {
         else -> false
     }
 }
+
+/** Convert a string to a ShapeId */
+fun String.shapeId() = ShapeId.from(this)
+
+/** Returns the service name, or a default value if the service doesn't have a title trait */
+fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default

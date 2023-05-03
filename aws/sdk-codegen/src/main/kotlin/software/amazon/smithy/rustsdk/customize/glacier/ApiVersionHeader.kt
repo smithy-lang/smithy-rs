@@ -29,7 +29,7 @@ class ApiVersionHeader(
                 .http_mut()
                 .headers_mut()
                 .insert("x-amz-glacier-version", #T::HeaderValue::from_static(${apiVersion.dq()}));""",
-                RuntimeType.http,
+                RuntimeType.Http,
             )
         }
         else -> emptySection

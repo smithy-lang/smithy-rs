@@ -11,6 +11,8 @@ use http::HeaderValue;
 use percent_encoding::{percent_encode, CONTROLS};
 use std::borrow::Cow;
 
+// TODO(enableNewSmithyRuntime): Delete this module
+
 /// Recursion Detection Middleware
 ///
 /// This middleware inspects the value of the `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` environment
@@ -32,6 +34,10 @@ impl RecursionDetectionStage {
 
 impl MapRequest for RecursionDetectionStage {
     type Error = std::convert::Infallible;
+
+    fn name(&self) -> &'static str {
+        "recursion_detection"
+    }
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut req, _conf| {

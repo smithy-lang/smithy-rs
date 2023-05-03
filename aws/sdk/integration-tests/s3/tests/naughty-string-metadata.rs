@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_s3::{types::ByteStream, Client, Credentials, Region};
+use aws_sdk_s3::{config::Credentials, config::Region, primitives::ByteStream, Client};
 use aws_smithy_client::test_connection::capture_request;
-use aws_types::{credentials::SharedCredentialsProvider, SdkConfig};
+use aws_types::SdkConfig;
 use http::HeaderValue;
 use std::{
     convert::Infallible,
@@ -53,18 +54,15 @@ const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 async fn test_s3_signer_with_naughty_string_metadata() {
     let (conn, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();
+    let config = aws_sdk_s3::config::Builder::from(&sdk_config)
+        .force_path_style(true)
+        .build();
 
-    let client = Client::new(&sdk_config);
+    let client = Client::from_conf(config);
     let mut builder = client
         .put_object()
         .bucket("test-bucket")
@@ -74,7 +72,7 @@ async fn test_s3_signer_with_naughty_string_metadata() {
     for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
         // add lines to metadata unless they're a comment or empty
         // Some naughty strings aren't valid HeaderValues so we skip those too
-        if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
+        if !line.starts_with('#') && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
             let key = format!("line-{}", idx);
 
             builder = builder.metadata(key, line);
