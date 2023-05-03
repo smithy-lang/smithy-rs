@@ -75,7 +75,7 @@ impl RuntimePlugins {
 #[cfg(test)]
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
-    use crate::client::interceptors::Interceptors;
+    use crate::client::interceptors::AddOnlyInterceptors;
     use crate::config_bag::ConfigBag;
 
     struct SomeStruct;
@@ -84,7 +84,7 @@ mod tests {
         fn configure(
             &self,
             _cfg: &mut ConfigBag,
-            _inters: &mut Interceptors,
+            _inters: &mut AddOnlyInterceptors,
         ) -> Result<(), BoxError> {
             todo!()
         }

@@ -569,20 +569,15 @@ impl Deref for SharedInterceptor {
 }
 
 /// Collection of [`SharedInterceptor`] that allows for only adding
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AddOnlyInterceptors(Vec<SharedInterceptor>);
 
 impl AddOnlyInterceptors {
-    pub fn register(self: &mut Self, interceptor: SharedInterceptor) {
+    pub fn register(&mut self, interceptor: SharedInterceptor) {
         self.0.push(interceptor);
     }
 }
 
-impl Default for AddOnlyInterceptors {
-    fn default() -> Self {
-        Self(vec![])
-    }
-}
 #[derive(Debug, Clone, Default)]
 pub struct Interceptors {
     client_interceptors: AddOnlyInterceptors,
