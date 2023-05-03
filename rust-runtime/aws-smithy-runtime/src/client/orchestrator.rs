@@ -177,8 +177,8 @@ mod tests {
     use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
     use crate::client::retries::strategy::NeverRetryStrategy;
     use crate::client::test_util::auth::{
-        http_auth_schemes_for_testing, identity_resolvers_for_testing, EmptyAuthOptionResolver,
-        EmptyAuthOptionResolverParams,
+        http_auth_schemes_for_testing, identity_resolvers_for_testing,
+        EmptyAuthOptionResolverParams, ANONYMOUS_AUTH_SCHEME_ID,
     };
     use crate::client::test_util::{
         connector::OkConnector, deserializer::CannedResponseDeserializer,
@@ -186,6 +186,7 @@ mod tests {
         trace_probe::NoOpTraceProbe,
     };
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::auth::option_resolver::StaticAuthOptionResolver;
     use aws_smithy_runtime_api::client::interceptors::{
         Interceptor, InterceptorContext, Interceptors,
     };
@@ -228,8 +229,10 @@ mod tests {
             cfg.set_retry_strategy(NeverRetryStrategy::new());
             cfg.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
             cfg.set_endpoint_resolver_params(EmptyEndpointResolverParams::new());
-            cfg.set_auth_option_resolver_params(EmptyAuthOptionResolverParams::new());
-            cfg.set_auth_option_resolver(EmptyAuthOptionResolver::new());
+            cfg.set_auth_option_resolver_params(EmptyAuthOptionResolverParams::new().into());
+            cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
+                ANONYMOUS_AUTH_SCHEME_ID,
+            ]));
             cfg.set_identity_resolvers(identity_resolvers_for_testing());
             cfg.set_http_auth_schemes(http_auth_schemes_for_testing());
             cfg.set_connection(OkConnector::new());

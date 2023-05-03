@@ -4,41 +4,28 @@
  */
 
 use aws_smithy_runtime_api::client::auth::{
-    AuthOptionResolver, AuthOptionResolverParams, AuthSchemeId, HttpAuthScheme, HttpAuthSchemes,
-    HttpRequestSigner,
+    AuthOptionResolverParams, AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
 };
 use aws_smithy_runtime_api::client::identity::{
     AnonymousIdentityResolver, Identity, IdentityResolver, IdentityResolvers,
 };
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, HttpRequest};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use std::borrow::Cow;
 
-const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
+pub const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 
+#[derive(Debug, Default)]
 pub struct EmptyAuthOptionResolverParams {}
 
 impl EmptyAuthOptionResolverParams {
-    pub fn new() -> AuthOptionResolverParams {
-        AuthOptionResolverParams::new(Self {})
-    }
-}
-
-#[derive(Debug)]
-pub struct EmptyAuthOptionResolver {}
-
-impl EmptyAuthOptionResolver {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 
-impl AuthOptionResolver for EmptyAuthOptionResolver {
-    fn resolve_auth_options(
-        &self,
-        _params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
-        Ok(Cow::Owned(vec![ANONYMOUS_AUTH_SCHEME_ID]))
+impl From<EmptyAuthOptionResolverParams> for AuthOptionResolverParams {
+    fn from(params: EmptyAuthOptionResolverParams) -> Self {
+        AuthOptionResolverParams::new(params)
     }
 }
 
@@ -48,25 +35,23 @@ pub fn identity_resolvers_for_testing() -> IdentityResolvers {
         .build()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AnonymousAuthScheme {
     signer: AnonymousSigner,
 }
 
 impl AnonymousAuthScheme {
     pub fn new() -> Self {
-        Self {
-            signer: AnonymousSigner::new(),
-        }
+        Self::default()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AnonymousSigner {}
 
 impl AnonymousSigner {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 
