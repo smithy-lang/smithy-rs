@@ -16,7 +16,6 @@
 
 - [Server](./server/overview.md)
   - [Generating Common Service Code](./server/code_generation.md)
-  - [Generating the Pokémon Service](./server/pokemon_service.md)
   - [Instrumentation](./server/instrumentation.md)
   <!-- - [The Anatomy of a Service](./server/anatomy.md) -->
 
