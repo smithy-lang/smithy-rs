@@ -4,12 +4,8 @@
  */
 
 use self::auth::orchestrate_auth;
-use self::auth::orchestrate_auth;
-use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
-use crate::client::orchestrator::http::read_body;
-use crate::client::orchestrator::phase::Phase;
 use crate::client::orchestrator::phase::Phase;
 use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_http::result::SdkError;
