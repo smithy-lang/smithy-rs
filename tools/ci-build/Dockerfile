@@ -15,9 +15,9 @@ RUN yum -y updateinfo
 FROM bare_base_image as musl_toolchain
 RUN yum -y install tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
-  && ls \
-  && tar xvzf musl-1.2.3.tar.gz \
-  && (cd musl-1.2.3 && ./configure && make install)
+    && ls \
+    && tar xvzf musl-1.2.3.tar.gz \
+    && (cd musl-1.2.3 && ./configure && make install)
 
 #
 # Rust & Tools Installation Stage
@@ -31,27 +31,27 @@ ENV RUSTUP_HOME=/opt/rustup \
     CARGO_INCREMENTAL=0
 WORKDIR /root
 RUN yum -y install \
-        autoconf \
-        automake \
-        binutils \
-        ca-certificates \
-        curl \
-        gcc \
-        gcc-c++ \
-        git \
-        make \
-        openssl-devel \
-        pkgconfig \
-        tar \
-        xz && \
+    autoconf \
+    automake \
+    binutils \
+    ca-certificates \
+    curl \
+    gcc \
+    gcc-c++ \
+    git \
+    make \
+    openssl-devel \
+    pkgconfig \
+    tar \
+    xz && \
     yum clean all
 RUN set -eux; \
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
-        curl https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
-        echo "32a1532f7cef072a667bac53f1a5542c99666c4071af0c9549795bbdb2069ec1 rustup-init" | sha256sum --check; \
+    curl https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
+    echo "32a1532f7cef072a667bac53f1a5542c99666c4071af0c9549795bbdb2069ec1 rustup-init" | sha256sum --check; \
     else \
-        curl https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
-        echo "3dc5ef50861ee18657f9db2eeb7392f9c2a6c95c90ab41e45ab4ca71476b4338 rustup-init" | sha256sum --check; \
+    curl https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
+    echo "3dc5ef50861ee18657f9db2eeb7392f9c2a6c95c90ab41e45ab4ca71476b4338 rustup-init" | sha256sum --check; \
     fi; \
     chmod +x rustup-init; \
     ./rustup-init -y --no-modify-path --profile minimal --default-toolchain ${rust_stable_version}; \
@@ -76,9 +76,9 @@ ARG smithy_rs_commit_hash=main
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
-        git clone https://github.com/awslabs/smithy-rs.git; \
-        cd smithy-rs; \
-        git checkout ${smithy_rs_commit_hash}; \
+    git clone https://github.com/awslabs/smithy-rs.git; \
+    cd smithy-rs; \
+    git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/publisher; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/changelogger; \
@@ -127,14 +127,9 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v8.0.0/wasmtime-v8.0.0-x86_64-linux.tar.xz
-ARG wasmtime_precompiled_sha256=0ba34842bbac8896dbdd860173b2c554d93d63ecc490f725fe3331db913714ad
+ARG cargo_wasmtime_version=9.0.1
 ARG rust_nightly_version
-RUN set -eux; \
-    curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
-    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
-    tar xf wasmtime.xz; \
-    mv wasmtime-v*/wasmtime /opt;
+RUN cargo +${rust_nightly_version} -Z sparse-registry install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_wasi
 ARG cargo_wasi_version=0.1.27
@@ -153,18 +148,18 @@ ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
     yum -y install \
-        bc \
-        ca-certificates \
-        gcc \
-        git \
-        java-11-amazon-corretto-headless \
-        make \
-        openssl-devel \
-        pkgconfig \
-        python3 \
-        python3-devel \
-        python3-pip \
-        shadow-utils; \
+    bc \
+    ca-certificates \
+    gcc \
+    git \
+    java-11-amazon-corretto-headless \
+    make \
+    openssl-devel \
+    pkgconfig \
+    python3 \
+    python3-devel \
+    python3-pip \
+    shadow-utils; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \
@@ -178,7 +173,7 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
 COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
