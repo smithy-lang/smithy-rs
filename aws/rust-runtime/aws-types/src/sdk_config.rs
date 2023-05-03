@@ -15,6 +15,7 @@ use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -57,6 +58,7 @@ pub struct SdkConfig {
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    interceptors: Vec<SharedInterceptor>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -77,6 +79,7 @@ pub struct Builder {
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    interceptors: Vec<SharedInterceptor>,
 }
 
 impl Builder {
@@ -442,7 +445,7 @@ impl Builder {
     /// use std::time::Duration;
     /// use aws_smithy_client::hyper_ext;
     /// use aws_smithy_client::http_connector::ConnectorSettings;
-    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    /// use aws_types::sdk_config::{Builder, SdkConfig};
     ///
     /// fn override_http_connector(builder: &mut Builder) {
     ///     let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
@@ -499,6 +502,105 @@ impl Builder {
         self
     }
 
+    #[doc(hidden)]
+    /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
+    ///
+    /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
+    /// SDK provides the default set of interceptors. An interceptor configured by this method
+    /// will run after those default interceptors.
+    ///
+    /// ## Examples
+    /// ```no_run
+    /// # #[cfg(feature = "examples")]
+    /// # fn example() {
+    /// use aws_http::user_agent::AwsUserAgent;
+    /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_types::sdk_config::{Builder, SdkConfig};
+    /// use http::header::USER_AGENT;
+    /// use http::{HeaderName, HeaderValue};
+    ///
+    /// #[derive(Debug)]
+    /// struct TestUserAgentInterceptor;
+    /// impl Interceptor for TestUserAgentInterceptor {
+    ///     fn modify_before_signing(
+    ///         &self,
+    ///         context: &mut InterceptorContext,
+    ///         _cfg: &mut ConfigBag,
+    ///     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
+    ///         let headers = context.request_mut()?.headers_mut();
+    ///         let user_agent = AwsUserAgent::for_tests();
+    ///         headers.insert(USER_AGENT, HeaderValue::try_from(user_agent.ua_header())?);
+    ///         headers.insert(
+    ///             HeaderName::from_static("x-amz-user-agent"),
+    ///             HeaderValue::try_from(user_agent.aws_ua_header())?,
+    ///         );
+    ///
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let sdk_config = SdkConfig::builder()
+    ///     .interceptor(TestUserAgentInterceptor)
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn interceptor(mut self, interceptor: impl Interceptor + Send + Sync + 'static) -> Self {
+        self.set_interceptor(SharedInterceptor::new(interceptor));
+        self
+    }
+
+    #[doc(hidden)]
+    /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
+    ///
+    /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
+    /// SDK provides the default set of interceptors. An interceptor configured by this method
+    /// will run after those default interceptors.
+    ///
+    /// ## Examples
+    /// ```no_run
+    /// # #[cfg(feature = "examples")]
+    /// # fn example() {
+    /// use aws_http::user_agent::AwsUserAgent;
+    /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, SharedInterceptor};
+    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_types::sdk_config::{Builder, SdkConfig};
+    /// use http::header::USER_AGENT;
+    /// use http::{HeaderName, HeaderValue};
+    ///
+    /// fn override_user_agent(builder: &mut Builder) {
+    ///     #[derive(Debug)]
+    ///     pub struct TestUserAgentInterceptor;
+    ///     impl Interceptor for TestUserAgentInterceptor {
+    ///         fn modify_before_signing(
+    ///             &self,
+    ///             context: &mut InterceptorContext,
+    ///             _cfg: &mut ConfigBag,
+    ///         ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
+    ///             let headers = context.request_mut()?.headers_mut();
+    ///             let user_agent = AwsUserAgent::for_tests();
+    ///             headers.insert(USER_AGENT, HeaderValue::try_from(user_agent.ua_header())?);
+    ///             headers.insert(
+    ///                 HeaderName::from_static("x-amz-user-agent"),
+    ///                 HeaderValue::try_from(user_agent.aws_ua_header())?,
+    ///             );
+    ///
+    ///             Ok(())
+    ///         }
+    ///     }
+    ///     builder.set_interceptor(SharedInterceptor::new(TestUserAgentInterceptor));
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// override_user_agent(&mut builder);
+    /// let sdk_config = builder.build();
+    /// # }
+    /// ```
+    pub fn set_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
+        self.interceptors.push(interceptor);
+        self
+    }
+
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -513,6 +615,7 @@ impl Builder {
             http_connector: self.http_connector,
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
+            interceptors: self.interceptors,
         }
     }
 }
@@ -572,6 +675,11 @@ impl SdkConfig {
     /// Use dual-stack endpoint
     pub fn use_dual_stack(&self) -> Option<bool> {
         self.use_dual_stack
+    }
+
+    /// Interceptors currently registered by the user
+    pub fn interceptors(&self) -> impl Iterator<Item = &SharedInterceptor> + '_ {
+        self.interceptors.iter()
     }
 
     /// Config builder
