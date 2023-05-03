@@ -5,7 +5,6 @@
 
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use http::header::HeaderName;
 use md5::{Digest, Md5};
@@ -22,10 +21,10 @@ impl HttpChecksumRequiredInterceptor {
     }
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for HttpChecksumRequiredInterceptor {
+impl Interceptor for HttpChecksumRequiredInterceptor {
     fn modify_before_signing(
         &self,
-        ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        ctx: &mut InterceptorContext,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let req = ctx.request_mut()?;
