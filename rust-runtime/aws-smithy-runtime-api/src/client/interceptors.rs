@@ -10,6 +10,7 @@ use crate::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 pub use context::InterceptorContext;
 pub use error::{BoxError, InterceptorError};
+use std::ops::Deref;
 use std::sync::Arc;
 
 macro_rules! interceptor_trait_fn {
@@ -537,12 +538,55 @@ pub trait Interceptor: std::fmt::Debug {
     );
 }
 
-pub type SharedInterceptor = Arc<dyn Interceptor + Send + Sync>;
+/// Interceptor wrapper that may be shared
+#[derive(Debug, Clone)]
+pub struct SharedInterceptor(Arc<dyn Interceptor + Send + Sync>);
 
+impl SharedInterceptor {
+    /// Create a new `SharedInterceptor` from `Interceptor`
+    pub fn new(interceptor: impl Interceptor + Send + Sync + 'static) -> Self {
+        Self(Arc::new(interceptor))
+    }
+}
+
+impl AsRef<dyn Interceptor> for SharedInterceptor {
+    fn as_ref(&self) -> &(dyn Interceptor + 'static) {
+        self.0.as_ref()
+    }
+}
+
+impl From<Arc<dyn Interceptor + Send + Sync + 'static>> for SharedInterceptor {
+    fn from(interceptor: Arc<dyn Interceptor + Send + Sync + 'static>) -> Self {
+        SharedInterceptor(interceptor)
+    }
+}
+
+impl Deref for SharedInterceptor {
+    type Target = Arc<dyn Interceptor + Send + Sync>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Collection of [`SharedInterceptor`] that allows for only adding
+#[derive(Debug, Clone)]
+pub struct AddOnlyInterceptors(Vec<SharedInterceptor>);
+
+impl AddOnlyInterceptors {
+    pub fn register(self: &mut Self, interceptor: SharedInterceptor) {
+        self.0.push(interceptor);
+    }
+}
+
+impl Default for AddOnlyInterceptors {
+    fn default() -> Self {
+        Self(vec![])
+    }
+}
 #[derive(Debug, Clone, Default)]
 pub struct Interceptors {
-    client_interceptors: Vec<SharedInterceptor>,
-    operation_interceptors: Vec<SharedInterceptor>,
+    client_interceptors: AddOnlyInterceptors,
+    operation_interceptors: AddOnlyInterceptors,
 }
 
 macro_rules! interceptor_impl_fn {
@@ -587,18 +631,17 @@ impl Interceptors {
         // Since interceptors can modify the interceptor list (since its in the config bag), copy the list ahead of time.
         // This should be cheap since the interceptors inside the list are Arcs.
         self.client_interceptors
+            .0
             .iter()
-            .chain(self.operation_interceptors.iter())
+            .chain(self.operation_interceptors.0.iter())
     }
 
-    pub fn register_client_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
-        self.client_interceptors.push(interceptor);
-        self
+    pub fn client_interceptors_mut(&mut self) -> &mut AddOnlyInterceptors {
+        &mut self.client_interceptors
     }
 
-    pub fn register_operation_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
-        self.operation_interceptors.push(interceptor);
-        self
+    pub fn operation_interceptors_mut(&mut self) -> &mut AddOnlyInterceptors {
+        &mut self.operation_interceptors
     }
 
     interceptor_impl_fn!(context, client_read_before_execution, read_before_execution);

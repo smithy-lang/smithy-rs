@@ -43,10 +43,15 @@ async fn invoke_pre_config(
 
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration
-        .include(|_| runtime_plugins.apply_client_configuration(cfg, &mut interceptors))?
+        .include(|_| {
+            runtime_plugins.apply_client_configuration(cfg, interceptors.client_interceptors_mut())
+        })?
         .include(|ctx| interceptors.client_read_before_execution(ctx, cfg))?
         // Operation configuration
-        .include(|_| runtime_plugins.apply_operation_configuration(cfg, &mut interceptors))?
+        .include(|_| {
+            runtime_plugins
+                .apply_operation_configuration(cfg, interceptors.operation_interceptors_mut())
+        })?
         .include(|ctx| interceptors.operation_read_before_execution(ctx, cfg))?
         .finish();
 
