@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Endpoint
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
@@ -52,7 +53,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations + ResiliencyConfigCustomization(codegenContext)
+        baseCustomizations + ResiliencyConfigCustomization(codegenContext) + InterceptorConfigCustomization(
+            codegenContext,
+        )
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,

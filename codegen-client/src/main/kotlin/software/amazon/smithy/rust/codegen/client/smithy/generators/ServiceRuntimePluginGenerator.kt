@@ -43,12 +43,10 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                $interceptorName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
-                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
                 "interceptor" to interceptor,
+                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
@@ -67,6 +65,7 @@ class ServiceRuntimePluginGenerator(
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
+            "AddOnlyInterceptors" to runtimeApi.resolve("client::interceptors::AddOnlyInterceptors"),
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
@@ -81,7 +80,6 @@ class ServiceRuntimePluginGenerator(
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
@@ -102,7 +100,7 @@ class ServiceRuntimePluginGenerator(
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{AddOnlyInterceptors}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
                     // HACK: Put the handle into the config bag to work around config not being fully implemented yet
@@ -144,6 +142,12 @@ class ServiceRuntimePluginGenerator(
                     });
 
                     #{additional_config}
+
+                    // Client-level Interceptors are registered after default Interceptors.
+                    self.handle.conf.interceptors.iter().for_each(|interceptor| {
+                        _interceptors.register(interceptor.clone());
+                    });
+
                     Ok(())
                 }
             }
