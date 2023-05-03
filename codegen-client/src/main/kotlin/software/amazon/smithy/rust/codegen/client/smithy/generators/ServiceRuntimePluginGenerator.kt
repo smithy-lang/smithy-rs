@@ -32,7 +32,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$configBagName.put(#T);", value)
@@ -43,9 +43,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $configBagName.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
-                    .expect("interceptors set")
-                    .register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                $interceptorName.register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
                 """,
                 "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
                 "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
@@ -83,6 +81,7 @@ class ServiceRuntimePluginGenerator(
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
@@ -103,7 +102,7 @@ class ServiceRuntimePluginGenerator(
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
                     // HACK: Put the handle into the config bag to work around config not being fully implemented yet
@@ -154,7 +153,7 @@ class ServiceRuntimePluginGenerator(
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
             },
             "additional_config" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))
+                writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_interceptors"))
             },
         )
     }

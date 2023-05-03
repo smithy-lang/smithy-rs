@@ -294,7 +294,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         ) {
             rustTemplate(
                 """
-                fn configure(&self, _cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
+                fn configure(&self, _cfg: &mut #{ConfigBag}, _inter: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
                     // TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`.
 
                     Ok(())
@@ -302,6 +302,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 """,
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
                 "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+                "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             )
         }
     }

@@ -7,12 +7,11 @@ use self::auth::orchestrate_auth;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
 use crate::client::orchestrator::phase::Phase;
+use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
-use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, HttpRequest, HttpResponse,
-};
+use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpResponse};
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -28,19 +27,41 @@ pub async fn invoke(
     input: Input,
     runtime_plugins: &RuntimePlugins,
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
+    invoke_pre_config(input, runtime_plugins)
+        .instrument(debug_span!("invoke"))
+        .await
+}
+
+async fn invoke_pre_config(
+    input: Input,
+    runtime_plugins: &RuntimePlugins,
+) -> Result<Output, SdkError<Error, HttpResponse>> {
     let mut cfg = ConfigBag::base();
     let cfg = &mut cfg;
 
-    let interceptors = Interceptors::new();
-    cfg.put(interceptors.clone());
+    let mut interceptors = Interceptors::new();
 
     let context = Phase::construction(InterceptorContext::new(input))
         // Client configuration
-        .include(|_| runtime_plugins.apply_client_configuration(cfg))?
+        .include(|_| runtime_plugins.apply_client_configuration(cfg, &mut interceptors))?
         .include(|ctx| interceptors.client_read_before_execution(ctx, cfg))?
         // Operation configuration
-        .include(|_| runtime_plugins.apply_operation_configuration(cfg))?
+        .include(|_| runtime_plugins.apply_operation_configuration(cfg, &mut interceptors))?
         .include(|ctx| interceptors.operation_read_before_execution(ctx, cfg))?
+        .finish();
+
+    let operation_timeout_config = cfg.maybe_timeout_config(TimeoutKind::Operation);
+    invoke_post_config(cfg, context, interceptors)
+        .maybe_timeout_with_config(operation_timeout_config)
+        .await
+}
+
+async fn invoke_post_config(
+    cfg: &mut ConfigBag,
+    context: InterceptorContext,
+    interceptors: Interceptors,
+) -> Result<Output, SdkError<Error, HttpResponse>> {
+    let context = Phase::construction(context)
         // Before serialization
         .include(|ctx| interceptors.read_before_serialization(ctx, cfg))?
         .include_mut(|ctx| interceptors.modify_before_serialization(ctx, cfg))?
@@ -79,8 +100,11 @@ pub async fn invoke(
 
     let mut context = context;
     let handling_phase = loop {
+        let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
         let dispatch_phase = Phase::dispatch(context);
         context = make_an_attempt(dispatch_phase, cfg, &interceptors)
+            .instrument(debug_span!("make_an_attempt"))
+            .maybe_timeout_with_config(attempt_timeout_config)
             .await?
             .include(|ctx| interceptors.read_after_attempt(ctx, cfg))?
             .include_mut(|ctx| interceptors.modify_before_attempt_completion(ctx, cfg))?
@@ -117,7 +141,7 @@ pub async fn invoke(
 async fn make_an_attempt(
     dispatch_phase: Phase,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors<HttpRequest, HttpResponse>,
+    interceptors: &Interceptors,
 ) -> Result<Phase, SdkError<Error, HttpResponse>> {
     let dispatch_phase = dispatch_phase
         .include(|ctx| interceptors.read_before_attempt(ctx, cfg))?
