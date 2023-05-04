@@ -54,6 +54,10 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
         /** Name of the response headers map (for referring to it in Rust code) */
         val responseHeadersName: String,
+
+        // TODO(enableNewSmithyRuntime): Remove this flag when switching to the orchestrator
+        /** Whether the property bag exists in this context */
+        val propertyBagAvailable: Boolean,
     ) : OperationSection("MutateOutput")
 
     /**
