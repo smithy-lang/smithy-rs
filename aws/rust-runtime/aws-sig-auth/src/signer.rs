@@ -14,6 +14,7 @@ use aws_types::SigningService;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
+use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
 pub type SigningError = aws_sigv4::http_request::SigningError;
 
@@ -190,7 +191,7 @@ impl SigV4Signer {
         request_config: &RequestConfig<'_>,
         credentials: &Credentials,
         request: &mut http::Request<SdkBody>,
-    ) -> Result<String, SigningError> {
+    ) -> Result<Signature, SigningError> {
         let settings = Self::settings(operation_config);
         let signing_params = Self::signing_params(settings, credentials, request_config);
 
@@ -222,7 +223,7 @@ impl SigV4Signer {
 
         signing_instructions.apply_to_request(request);
 
-        Ok(signature)
+        Ok(Signature::new(signature))
     }
 }
 
