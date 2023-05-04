@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -51,19 +52,25 @@ class HttpBoundProtocolGenerator(
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
+// TODO(enableNewSmithyRuntime): Completely delete `AdditionalPayloadContext` when switching to the orchestrator
+data class ClientAdditionalPayloadContext(
+    val propertyBagAvailable: Boolean,
+) : AdditionalPayloadContext
+
 class ClientHttpBoundProtocolPayloadGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
 ) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
     codegenContext, protocol, HttpMessageType.REQUEST,
     renderEventStreamBody = { writer, params ->
+        val propertyBagAvailable = (params.additionalPayloadContext as ClientAdditionalPayloadContext).propertyBagAvailable
         writer.rustTemplate(
             """
             {
                 let error_marshaller = #{errorMarshallerConstructorFn}();
                 let marshaller = #{marshallerConstructorFn}();
                 let (signer, signer_sender) = #{DeferredSigner}::new();
-                properties.acquire_mut().insert(signer_sender);
+                #{insert_into_config}
                 let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
                     ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
                 let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
@@ -76,6 +83,13 @@ class ClientHttpBoundProtocolPayloadGenerator(
             "DeferredSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::DeferredSigner"),
             "marshallerConstructorFn" to params.marshallerConstructorFn,
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+            "insert_into_config" to writable {
+                if (propertyBagAvailable) {
+                    rust("properties.acquire_mut().insert(signer_sender);")
+                } else {
+                    rust("_cfg.put(signer_sender);")
+                }
+            },
         )
     },
 )

@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -108,7 +109,12 @@ open class MakeOperationGenerator(
             // Clippy warning to make the codegen a little simpler in that case.
             Attribute.AllowClippyUselessConversion.render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
-                bodyGenerator.generatePayload(this, "self", shape)
+                bodyGenerator.generatePayload(
+                    this,
+                    "self",
+                    shape,
+                    ClientAdditionalPayloadContext(propertyBagAvailable = true),
+                )
                 val streamingMember = shape.inputShape(model).findStreamingMember(model)
                 val isBlobStreaming = streamingMember != null && model.expectShape(streamingMember.target) is BlobShape
                 if (isBlobStreaming) {
