@@ -5,4 +5,5 @@
 #
 
 set -eux
+cargo install mdbook
 mdbook test design -L target/debug/deps
