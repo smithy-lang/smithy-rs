@@ -222,7 +222,7 @@ been read.
   be visible when printing with the `Debug` impl. Case in point was an error I was getting because of the
   `is_end_stream` issue. When `Debug` printed, the error looked like this:
 
-  ```markdown
+  ```rust,ignore
   DispatchFailure(ConnectorError { err: hyper::Error(User(Body), hyper::Error(BodyWriteAborted)), kind: User })
   ```
 
