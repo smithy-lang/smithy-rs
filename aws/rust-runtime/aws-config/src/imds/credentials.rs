@@ -390,7 +390,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
@@ -409,7 +409,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
         let client = crate::imds::Client::builder()
@@ -430,7 +430,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         use aws_sdk_sso::config::AsyncSleep;
         let client = crate::imds::Client::builder()

@@ -19,14 +19,14 @@
 //!
 #![cfg_attr(
     not(all(
-        any(feature = "rustls", feature = "native-tls"),
+        feature = "rustls",
         feature = "client-hyper"
     )),
     doc = "```no_run,ignore"
 )]
 #![cfg_attr(
     all(
-        any(feature = "rustls", feature = "native-tls"),
+        feature = "rustls",
         feature = "client-hyper"
     ),
     doc = "```no_run"
@@ -204,8 +204,8 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// Builder for [`hyper_ext::Adapter`](Adapter)
 ///
 /// Unlike a Smithy client, the [`tower::Service`] inside a [`hyper_ext::Adapter`](Adapter) is actually a service that
-/// accepts a `Uri` and returns a TCP stream. Two default implementations of this are provided, one
-/// that encrypts the stream with `rustls`, the other that encrypts the stream with `native-tls`.
+/// accepts a `Uri` and returns a TCP stream. One default implementation of this is provided,
+/// that encrypts the stream with `rustls`.
 ///
 /// # Examples
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector

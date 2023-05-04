@@ -97,7 +97,7 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 ///         future::ProvideCredentials::new(self.load_credentials())
 ///     }
 /// }
-/// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
+/// # if cfg!(feature = "rustls") {
 /// let provider = ProfileFileCredentialsProvider::builder()
 ///     .with_custom_provider("Custom", MyCustomProvider)
 ///     .build();
@@ -362,7 +362,7 @@ impl Builder {
     ///     }
     /// }
     ///
-    /// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
+    /// # if cfg!(feature = "rustls") {
     /// let provider = ProfileFileCredentialsProvider::builder()
     ///     .with_custom_provider("Custom", MyCustomProvider)
     ///     .build();

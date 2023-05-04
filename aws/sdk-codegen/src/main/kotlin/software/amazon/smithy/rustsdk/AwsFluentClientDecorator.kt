@@ -112,7 +112,6 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         }
         val awsSmithyClient = "aws-smithy-client"
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsSmithyClient/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -197,14 +196,14 @@ private class AwsFluentClientExtensions(types: Types) {
                         // Use provided connector
                         Some(c) => builder.connector(c),
                         None =>{
-                            ##[cfg(any(feature = "rustls", feature = "native-tls"))]
+                            ##[cfg(feature = "rustls")]
                             {
                                 // Use default connector based on enabled features
                                 builder.dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
                             }
-                            ##[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+                            ##[cfg(not(feature = "rustls"))]
                             {
-                                panic!("No HTTP connector was available. Enable the `rustls` or `native-tls` crate feature or set a connector to fix this.");
+                                panic!("No HTTP connector was available. Enable the `rustls` crate feature or set a connector to fix this.");
                             }
                         }
                     };
