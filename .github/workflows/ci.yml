@@ -123,6 +123,10 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+    - name: Install mdbook
+      shell: bash
+      run: |
+        cargo install mdbook
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
