@@ -1,1 +1,0 @@
-# Generating the Pokémon Service
