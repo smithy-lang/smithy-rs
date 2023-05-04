@@ -185,7 +185,7 @@ impl TryFrom<Number> for f32 {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::Number;
     use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 
     macro_rules! to_unsigned_converter_tests {

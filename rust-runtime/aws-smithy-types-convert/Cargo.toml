@@ -13,7 +13,7 @@ convert-time = ["aws-smithy-types", "time"]
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", optional = true }
-chrono = { version = "0.4.19", optional = true, default-features = false, features = ["std"] }
+chrono = { version = "0.4.23", optional = true, default-features = false, features = ["std"] }
 time = { version = "0.3.4", optional = true }
 
 [package.metadata.docs.rs]
