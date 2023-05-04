@@ -8,4 +8,3 @@ pub mod connector;
 pub mod deserializer;
 pub mod endpoints;
 pub mod serializer;
-pub mod trace_probe;
