@@ -18,19 +18,10 @@
 //! [`Client`](crate::Client), directly, use the `dyn_https_https()` method to match that default behavior:
 //!
 #![cfg_attr(
-not(all(
-feature = "rustls",
-feature = "client-hyper"
-)),
-doc = "```no_run,ignore"
+    not(all(feature = "rustls", feature = "client-hyper")),
+    doc = "```no_run,ignore"
 )]
-#![cfg_attr(
-all(
-feature = "rustls",
-feature = "client-hyper"
-),
-doc = "```no_run"
-)]
+#![cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 //! use aws_smithy_client::Client;
 //!
 //! let client = Client::builder()
@@ -48,16 +39,16 @@ doc = "```no_run"
 //! that aren't otherwise exposed by the `Client` builder interface.
 //!
 #![cfg_attr(
-not(all(feature = "rustls", feature = "client-hyper")),
-doc = "```no_run,ignore"
+    not(all(feature = "rustls", feature = "client-hyper")),
+    doc = "```no_run,ignore"
 )]
 #![cfg_attr(
-all(
-feature = "rustls",
-feature = "client-hyper",
-feature = "hyper-webpki-doctest-only"
-),
-doc = "```no_run"
+    all(
+        feature = "rustls",
+        feature = "client-hyper",
+        feature = "hyper-webpki-doctest-only"
+    ),
+    doc = "```no_run"
 )]
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
@@ -245,8 +236,8 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// between multiple Smithy clients.
 ///
 #[cfg_attr(
-not(all(feature = "rustls", feature = "client-hyper")),
-doc = "```no_run,ignore"
+    not(all(feature = "rustls", feature = "client-hyper")),
+    doc = "```no_run,ignore"
 )]
 #[cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 /// use tower::layer::util::Identity;
@@ -482,9 +473,9 @@ mod timeout_middleware {
     }
 
     impl<F, T, E> Future for MaybeTimeoutFuture<F>
-        where
-            F: Future<Output = Result<T, E>>,
-            E: Into<BoxError>,
+    where
+        F: Future<Output = Result<T, E>>,
+        E: Into<BoxError>,
     {
         type Output = Result<T, BoxError>;
 
@@ -510,9 +501,9 @@ mod timeout_middleware {
     }
 
     impl<I> tower::Service<Uri> for ConnectTimeout<I>
-        where
-            I: tower::Service<Uri>,
-            I::Error: Into<BoxError>,
+    where
+        I: tower::Service<Uri>,
+        I::Error: Into<BoxError>,
     {
         type Response = I::Response;
         type Error = BoxError;
@@ -540,8 +531,8 @@ mod timeout_middleware {
     }
 
     impl<I, B> tower::Service<http::Request<B>> for HttpReadTimeout<I>
-        where
-            I: tower::Service<http::Request<B>, Error = hyper::Error>,
+    where
+        I: tower::Service<http::Request<B>, Error = hyper::Error>,
     {
         type Response = I::Response;
         type Error = BoxError;

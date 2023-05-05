@@ -104,8 +104,8 @@ mod tests {
 
 #[cfg(test)]
 mod custom_tls_tests {
-    use crate::hyper_ext::Adapter;
     use crate::erase::DynConnector;
+    use crate::hyper_ext::Adapter;
     use aws_smithy_http::body::SdkBody;
     use http::{Method, Request, Uri};
     use tower::{Service, ServiceBuilder};

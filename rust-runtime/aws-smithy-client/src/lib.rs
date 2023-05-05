@@ -109,8 +109,8 @@ impl Client<(), (), ()> {
 
 // Quick-create for people who just want "the default".
 impl<C, M> Client<C, M>
-    where
-        M: Default,
+where
+    M: Default,
 {
     /// Create a Smithy client from the given `connector`, a middleware default, the
     /// [standard retry policy](retry::Standard), and the
@@ -128,10 +128,10 @@ fn check_send_sync<T: Send + Sync>(t: T) -> T {
 }
 
 impl<C, M, R> Client<C, M, R>
-    where
-        C: bounds::SmithyConnector,
-        M: bounds::SmithyMiddleware<C>,
-        R: retry::NewRequestPolicy,
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<C>,
+    R: retry::NewRequestPolicy,
 {
     /// Dispatch this request to the network
     ///
@@ -170,7 +170,7 @@ impl<C, M, R> Client<C, M, R>
         // and will produce (as expected) Response = SdkSuccess<T>, Error = SdkError<E>. But Rust
         // doesn't know that -- there _could_ theoretically be other implementations of Service for
         // Parsed that don't return those same types. So, we must give the bound.
-            bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
@@ -249,8 +249,8 @@ impl<C, M, R> Client<C, M, R>
     /// ensure (statically) that all the various constructors actually produce "useful" types.
     #[doc(hidden)]
     pub fn check(&self)
-        where
-            R::Policy: tower::retry::Policy<
+    where
+        R::Policy: tower::retry::Policy<
                 static_tests::ValidTestOperation,
                 SdkSuccess<()>,
                 SdkError<static_tests::TestOperationError>,
