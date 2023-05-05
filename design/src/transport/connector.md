@@ -11,9 +11,6 @@ Create your connector:
 pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
 pub fn native_tls() -> NativeTls {
-    use hyper_rustls::HttpsConnector;
-    use tokio_rustls::TlsConnector;
-    // `TlsConnector` actually comes for here: https://docs.rs/native-tls/latest/native_tls/
     let mut tls = hyper_tls::native_tls::TlsConnector::builder();
     let tls = tls
         .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))

@@ -77,45 +77,6 @@ mod tests {
         assert!(res.status().is_success());
     }
 
-    #[cfg(not(feature = "rustls"))]
-    mod custom_tls_tests {
-        use super::native_tls;
-        use super::*;
-
-        type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
-
-        fn native_tls() -> NativeTls {
-            use hyper_rustls::HttpsConnector;
-            use tokio_rustls::TlsConnector;
-            let mut tls = hyper_tls::native_tls::TlsConnector::builder();
-            let tls = tls
-                .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
-                .build()
-                .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
-            let mut http = hyper::client::HttpConnector::new();
-            http.enforce_http(false);
-            hyper_tls::HttpsConnector::from((http, tls.into()))
-        }
-
-        #[tokio::test]
-        async fn test_native_tls_connector_can_make_http_requests() {
-            let conn = Adapter::builder().build(native_tls());
-            let conn = DynConnector::new(conn);
-            let http_uri: Uri = "http://example.com/".parse().unwrap();
-
-            send_request_and_assert_success(conn, &http_uri).await;
-        }
-
-        #[tokio::test]
-        async fn test_native_tls_connector_can_make_https_requests() {
-            let conn = Adapter::builder().build(native_tls());
-            let conn = DynConnector::new(conn);
-            let https_uri: Uri = "https://example.com/".parse().unwrap();
-
-            send_request_and_assert_success(conn, &https_uri).await;
-        }
-    }
-
     #[cfg(feature = "rustls")]
     mod rustls_tests {
         use super::super::https;
@@ -138,5 +99,56 @@ mod tests {
 
             send_request_and_assert_success(conn, &https_uri).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod custom_tls_tests {
+    use crate::hyper_ext::Adapter;
+    use crate::erase::DynConnector;
+    use aws_smithy_http::body::SdkBody;
+    use http::{Method, Request, Uri};
+    use tower::{Service, ServiceBuilder};
+
+    type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
+
+    fn native_tls() -> NativeTls {
+        let mut tls = hyper_tls::native_tls::TlsConnector::builder();
+        let tls = tls
+            .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
+            .build()
+            .unwrap_or_else(|e| panic!("Error while creating TLS connector: {}", e));
+        let mut http = hyper::client::HttpConnector::new();
+        http.enforce_http(false);
+        hyper_tls::HttpsConnector::from((http, tls.into()))
+    }
+
+    #[tokio::test]
+    async fn test_native_tls_connector_can_make_http_requests() {
+        let conn = Adapter::builder().build(native_tls());
+        let conn = DynConnector::new(conn);
+        let http_uri: Uri = "http://example.com/".parse().unwrap();
+
+        send_request_and_assert_success(conn, &http_uri).await;
+    }
+
+    #[tokio::test]
+    async fn test_native_tls_connector_can_make_https_requests() {
+        let conn = Adapter::builder().build(native_tls());
+        let conn = DynConnector::new(conn);
+        let https_uri: Uri = "https://example.com/".parse().unwrap();
+
+        send_request_and_assert_success(conn, &https_uri).await;
+    }
+
+    async fn send_request_and_assert_success(conn: DynConnector, uri: &Uri) {
+        let mut svc = ServiceBuilder::new().service(conn);
+        let req = Request::builder()
+            .uri(uri)
+            .method(Method::GET)
+            .body(SdkBody::empty())
+            .unwrap();
+        let res = svc.call(req).await.unwrap();
+        assert!(res.status().is_success());
     }
 }
