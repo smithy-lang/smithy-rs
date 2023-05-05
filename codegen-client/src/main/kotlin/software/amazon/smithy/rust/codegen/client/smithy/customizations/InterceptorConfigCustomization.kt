@@ -109,6 +109,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                             self
                         }
 
+                        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
                         ##[doc(hidden)]
                         /// Sets an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
