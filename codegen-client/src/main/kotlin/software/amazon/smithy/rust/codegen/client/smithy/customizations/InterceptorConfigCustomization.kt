@@ -45,6 +45,8 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                 is ServiceConfig.ConfigImpl -> writable {
                     rustTemplate(
                         """
+                        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
+                        ##[doc(hidden)]
                         /// Returns interceptors currently registered by the user
                         pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
                             self.interceptors.iter()
