@@ -472,8 +472,8 @@ mod loader {
 
         // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
         #[doc(hidden)]
-        /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
-        /// 
+        /// Add an [`Interceptor`] that runs at specific stages of the request execution pipeline.
+        ///
         /// This takes effect for **all** AWS clients derived from this config.
         ///
         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
@@ -654,14 +654,12 @@ mod loader {
                 .credentials_provider(credentials_provider)
                 .http_connector(http_connector);
 
-            self.interceptors.into_iter().for_each(|interceptor| {
-                builder.set_interceptor(interceptor);
-            });
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_interceptors(self.interceptors);
             builder.build()
         }
     }

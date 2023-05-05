@@ -25,7 +25,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                is ServiceConfig.ConfigStruct -> rustTemplate(
+                ServiceConfig.ConfigStruct -> rustTemplate(
                     """
                     // TODO(enableNewSmithyRuntime): Unused until we completely switch to the orchestrator
                     ##[allow(dead_code)]
@@ -34,7 +34,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                     *codegenScope,
                 )
 
-                is ServiceConfig.BuilderStruct ->
+                ServiceConfig.BuilderStruct ->
                     rustTemplate(
                         """
                         interceptors: Vec<#{SharedInterceptor}>,
@@ -42,29 +42,27 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         *codegenScope,
                     )
 
-                is ServiceConfig.ConfigImpl -> writable {
-                    rustTemplate(
-                        """
-                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
-                        ##[doc(hidden)]
-                        /// Returns interceptors currently registered by the user
-                        pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
-                            self.interceptors.iter()
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                ServiceConfig.ConfigImpl -> rustTemplate(
+                    """
+                    // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                    ##[doc(hidden)]
+                    /// Returns interceptors currently registered by the user.
+                    pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
+                        self.interceptors.iter()
+                    }
+                    """,
+                    *codegenScope,
+                )
 
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
                         // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
                         ##[doc(hidden)]
-                        /// Sets an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                        /// Add an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-                        /// SDK provides the default set of interceptors. An interceptor configured by this method
+                        /// The SDK provides a default set of interceptors. An interceptor configured by this method
                         /// will run after those default interceptors.
                         ///
                         /// ## Examples
@@ -107,16 +105,16 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         /// ## }
                         /// ```
                         pub fn interceptor(mut self, interceptor: impl #{Interceptor} + Send + Sync + 'static) -> Self {
-                            self.set_interceptor(#{SharedInterceptor}::new(interceptor));
+                            self.add_interceptor(#{SharedInterceptor}::new(interceptor));
                             self
                         }
 
                         // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
                         ##[doc(hidden)]
-                        /// Sets an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                        /// Add a [`SharedInterceptor`](#{SharedInterceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-                        /// SDK provides the default set of interceptors. An interceptor configured by this method
+                        /// The SDK provides a default set of interceptors. An interceptor configured by this method
                         /// will run after those default interceptors.
                         ///
                         /// ## Examples
@@ -161,8 +159,16 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         /// ## }
                         /// ## }
                         /// ```
-                        pub fn set_interceptor(&mut self, interceptor: #{SharedInterceptor}) -> &mut Self {
+                        pub fn add_interceptor(&mut self, interceptor: #{SharedInterceptor}) -> &mut Self {
                             self.interceptors.push(interceptor);
+                            self
+                        }
+
+                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                        ##[doc(hidden)]
+                        /// Set [`SharedInterceptor`](#{SharedInterceptor})s for the builder.
+                        pub fn set_interceptors(&mut self, interceptors: impl IntoIterator<Item = #{SharedInterceptor}>) -> &mut Self {
+                            self.interceptors = interceptors.into_iter().collect();
                             self
                         }
                         """,

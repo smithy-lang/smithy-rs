@@ -502,11 +502,12 @@ impl Builder {
         self
     }
 
+    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
     #[doc(hidden)]
-    /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
+    /// Add an [`Interceptor`] that runs at specific stages of the request execution pipeline.
     ///
     /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-    /// SDK provides the default set of interceptors. An interceptor configured by this method
+    /// The SDK provides a default set of interceptors. An interceptor configured by this method
     /// will run after those default interceptors.
     ///
     /// ## Examples
@@ -546,15 +547,16 @@ impl Builder {
     /// # }
     /// ```
     pub fn interceptor(mut self, interceptor: impl Interceptor + Send + Sync + 'static) -> Self {
-        self.set_interceptor(SharedInterceptor::new(interceptor));
+        self.add_interceptor(SharedInterceptor::new(interceptor));
         self
     }
 
+    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
     #[doc(hidden)]
-    /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
+    /// Add a [`SharedInterceptor`] that runs at specific stages of the request execution pipeline.
     ///
     /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-    /// SDK provides the default set of interceptors. An interceptor configured by this method
+    /// The SDK provides a default set of interceptors. An interceptor configured by this method
     /// will run after those default interceptors.
     ///
     /// ## Examples
@@ -596,8 +598,19 @@ impl Builder {
     /// let sdk_config = builder.build();
     /// # }
     /// ```
-    pub fn set_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
+    pub fn add_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
         self.interceptors.push(interceptor);
+        self
+    }
+
+    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
+    #[doc(hidden)]
+    /// Set [`SharedInterceptor`]s for the builder.
+    pub fn set_interceptors(
+        &mut self,
+        interceptors: impl IntoIterator<Item = SharedInterceptor>,
+    ) -> &mut Self {
+        self.interceptors = interceptors.into_iter().collect();
         self
     }
 
