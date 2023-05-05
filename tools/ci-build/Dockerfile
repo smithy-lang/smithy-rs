@@ -5,7 +5,7 @@
 
 # This is the base Docker build image used by CI
 
-ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
+ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.67.1
 ARG rust_nightly_version=nightly-2022-11-16
 
@@ -13,7 +13,7 @@ FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
 
 FROM bare_base_image as musl_toolchain
-RUN yum -y install tar gzip gcc make
+RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
   && ls \
   && tar xvzf musl-1.2.3.tar.gz \
@@ -30,7 +30,7 @@ ENV RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y install \
+RUN yum -y install --allowerasing \
         autoconf \
         automake \
         binutils \
@@ -41,6 +41,7 @@ RUN yum -y install \
         git \
         make \
         openssl-devel \
+        perl \
         pkgconfig \
         tar \
         xz && \
@@ -149,11 +150,12 @@ FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
-    yum -y install \
+    yum -y install --allowerasing \
         bc \
         ca-certificates \
         gcc \
         git \
+        glibc-langpack-en \
         java-11-amazon-corretto-headless \
         make \
         openssl-devel \
