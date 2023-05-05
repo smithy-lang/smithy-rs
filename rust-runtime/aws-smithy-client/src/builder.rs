@@ -125,7 +125,7 @@ impl<M, R> Builder<(), M, R> {
     /// For convenience, this constructor type-erases the concrete TLS connector backend used using
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
-    /// [`Builder::rustls_connector`] or [`Builder::native_tls_connector`] instead.
+    /// [`Builder::rustls_connector`] instead.
     #[cfg(feature = "rustls")]
     pub fn dyn_https_connector(
         self,
