@@ -473,7 +473,8 @@ mod loader {
         // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
         #[doc(hidden)]
         /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
-        /// This takes effect for **all** AWS services.
+        /// 
+        /// This takes effect for **all** AWS clients derived from this config.
         ///
         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
         /// SDK provides the default set of interceptors. An interceptor configured by this method
