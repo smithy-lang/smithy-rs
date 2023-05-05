@@ -307,7 +307,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
                 "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             ) {
-                rust("// TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`")
+                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
 
                 customizations.forEach {
                     it.section(ServiceConfig.ToRuntimePlugin)(writer)
