@@ -45,7 +45,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                 is ServiceConfig.ConfigImpl -> writable {
                     rustTemplate(
                         """
-                        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
+                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Returns interceptors currently registered by the user
                         pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
@@ -59,7 +59,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
-                        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
+                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Sets an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
@@ -111,7 +111,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                             self
                         }
 
-                        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
+                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Sets an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
