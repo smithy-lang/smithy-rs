@@ -82,7 +82,6 @@ class ServiceRuntimePluginGenerator(
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
-            "TraceProbe" to runtimeApi.resolve("client::orchestrator::TraceProbe"),
         )
     }
 
@@ -128,18 +127,6 @@ class ServiceRuntimePluginGenerator(
                             .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
                             .expect("connection set");
                     cfg.set_connection(connection);
-
-                    // TODO(RuntimePlugins): Add the TraceProbe to the config bag
-                    cfg.set_trace_probe({
-                        ##[derive(Debug)]
-                        struct StubTraceProbe;
-                        impl #{TraceProbe} for StubTraceProbe {
-                            fn dispatch_events(&self) {
-                                // no-op
-                            }
-                        }
-                        StubTraceProbe
-                    });
 
                     #{additional_config}
 
