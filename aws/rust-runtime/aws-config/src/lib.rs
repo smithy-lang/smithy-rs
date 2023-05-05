@@ -470,6 +470,7 @@ mod loader {
             self
         }
 
+        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
         #[doc(hidden)]
         /// Sets an [`Interceptor`] that runs at specific stages of the request execution pipeline.
         /// This takes effect for **all** AWS services.
