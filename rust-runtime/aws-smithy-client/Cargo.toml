@@ -10,7 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 test-util = ["dep:aws-smithy-protocol-test", "dep:hyper", "hyper?/server", "hyper?/h2", "dep:serde", "dep:serde_json", "serde?/derive", "rustls", "tokio/full"]
-native-tls = ["dep:hyper-tls", "client-hyper", "rt-tokio"]
+native-tls = ["dep:hyper-tls", "dep:openssl", "client-hyper", "rt-tokio"]
 rustls = ["dep:hyper-rustls", "dep:lazy_static", "dep:rustls", "client-hyper", "rt-tokio"]
 client-hyper = ["dep:hyper"]
 hyper-webpki-doctest-only = ["dep:hyper-rustls", "hyper-rustls?/webpki-roots"]
@@ -34,6 +34,10 @@ hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native
 hyper-tls = { version = "0.5.0", optional = true }
 rustls = { version = "0.20", optional = true }
 lazy_static = { version = "1", optional = true }
+# This forces a more recent version of `openssl-sys` to be brought in.
+# Without this `cargo minimal-versions check` would fail in a container whose base image is `amazonlinux:2023`
+# with the failure symptom: https://github.com/sfackler/rust-openssl/issues/1724
+openssl = { version = "0.10.52", optional = true }
 pin-project-lite = "0.2.7"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
