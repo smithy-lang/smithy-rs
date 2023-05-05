@@ -384,7 +384,9 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     binaryName = "publisher"
     arguments = mutableListOf(
         "generate-version-manifest",
-        "--location",
+        "--input-location",
+        sdkOutputDir.absolutePath,
+        "--output-location",
         outputDir.absolutePath,
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,

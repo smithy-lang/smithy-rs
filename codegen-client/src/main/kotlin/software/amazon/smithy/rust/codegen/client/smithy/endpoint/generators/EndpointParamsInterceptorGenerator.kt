@@ -49,6 +49,7 @@ class EndpointParamsInterceptorGenerator(
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Interceptor" to interceptors.resolve("Interceptor"),
             "InterceptorContext" to interceptors.resolve("InterceptorContext"),
+            "BeforeSerializationPhase" to interceptors.resolve("context::phase::BeforeSerialization"),
             "InterceptorError" to interceptors.resolve("error::InterceptorError"),
             "Params" to endpointTypesGenerator.paramsStruct(),
         )
@@ -63,14 +64,13 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor}<#{HttpRequest}, #{HttpResponse}> for $interceptorName {
+            impl #{Interceptor} for $interceptorName {
                 fn read_before_execution(
                     &self,
-                    context: &#{InterceptorContext}<#{HttpRequest}, #{HttpResponse}>,
+                    context: &#{InterceptorContext}<#{BeforeSerializationPhase}>,
                     cfg: &mut #{ConfigBag},
                 ) -> Result<(), #{BoxError}> {
-                    let _input = context.input()?;
-                    let _input = _input
+                    let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
                         .ok_or("failed to downcast to ${operationInput.name}")?;
 

@@ -4,9 +4,9 @@
  */
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
+use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
@@ -70,10 +70,10 @@ fn header_values(
     ))
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for UserAgentInterceptor {
+impl Interceptor for UserAgentInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        context: &mut InterceptorContext<BeforeTransmit>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let api_metadata = cfg
@@ -96,7 +96,7 @@ impl Interceptor<HttpRequest, HttpResponse> for UserAgentInterceptor {
                 Cow::Owned(ua)
             });
 
-        let headers = context.request_mut()?.headers_mut();
+        let headers = context.request_mut().headers_mut();
         let (user_agent, x_amz_user_agent) = header_values(&ua)?;
         headers.append(USER_AGENT, user_agent);
         headers.append(X_AMZ_USER_AGENT, x_amz_user_agent);
@@ -114,12 +114,11 @@ mod tests {
     use aws_smithy_types::error::display::DisplayErrorContext;
 
     fn expect_header<'a>(
-        context: &'a InterceptorContext<HttpRequest, HttpResponse>,
+        context: &'a InterceptorContext<BeforeTransmit>,
         header_name: &str,
     ) -> &'a str {
         context
             .request()
-            .unwrap()
             .headers()
             .get(header_name)
             .unwrap()
@@ -127,10 +126,17 @@ mod tests {
             .unwrap()
     }
 
+    fn context() -> InterceptorContext<BeforeTransmit> {
+        let mut context = InterceptorContext::<()>::new(TypedBox::new("doesntmatter").erase())
+            .into_serialization_phase();
+        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let _ = context.take_input();
+        context.into_before_transmit_phase()
+    }
+
     #[test]
     fn test_overridden_ua() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let mut config = ConfigBag::base();
         config.put(AwsUserAgent::for_tests());
@@ -153,8 +159,7 @@ mod tests {
 
     #[test]
     fn test_default_ua() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
         let mut config = ConfigBag::base();
@@ -182,12 +187,11 @@ mod tests {
 
     #[test]
     fn test_app_name() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
         let mut config = ConfigBag::base();
-        config.put(api_metadata.clone());
+        config.put(api_metadata);
         config.put(AppName::new("my_awesome_app").unwrap());
 
         let interceptor = UserAgentInterceptor::new();
@@ -211,9 +215,7 @@ mod tests {
 
     #[test]
     fn test_api_metadata_missing() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
-
+        let mut context = context();
         let mut config = ConfigBag::base();
 
         let interceptor = UserAgentInterceptor::new();
