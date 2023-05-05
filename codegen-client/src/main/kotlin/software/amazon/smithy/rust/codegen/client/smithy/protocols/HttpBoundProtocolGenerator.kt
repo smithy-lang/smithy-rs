@@ -101,7 +101,7 @@ open class HttpBoundProtocolTraitImplGenerator(
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
+            "parse_response" to parserGenerator.parseResponseFn(operationShape, true, customizations),
             "BeforeParseResponse" to writable {
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
