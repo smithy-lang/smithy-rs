@@ -594,11 +594,11 @@ impl Deref for SharedInterceptor {
     }
 }
 
-/// Collection of [`SharedInterceptor`] that allows for only adding
+/// Collection of [`SharedInterceptor`] that allows for only registration
 #[derive(Debug, Clone, Default)]
-pub struct AddOnlyInterceptors(Vec<SharedInterceptor>);
+pub struct InterceptorRegistrar(Vec<SharedInterceptor>);
 
-impl AddOnlyInterceptors {
+impl InterceptorRegistrar {
     pub fn register(&mut self, interceptor: SharedInterceptor) {
         self.0.push(interceptor);
     }
@@ -606,8 +606,8 @@ impl AddOnlyInterceptors {
 
 #[derive(Debug, Clone, Default)]
 pub struct Interceptors {
-    client_interceptors: AddOnlyInterceptors,
-    operation_interceptors: AddOnlyInterceptors,
+    client_interceptors: InterceptorRegistrar,
+    operation_interceptors: InterceptorRegistrar,
 }
 
 macro_rules! interceptor_impl_fn {
@@ -663,11 +663,11 @@ impl Interceptors {
             .chain(self.operation_interceptors.0.iter())
     }
 
-    pub fn client_interceptors_mut(&mut self) -> &mut AddOnlyInterceptors {
+    pub fn client_interceptors_mut(&mut self) -> &mut InterceptorRegistrar {
         &mut self.client_interceptors
     }
 
-    pub fn operation_interceptors_mut(&mut self) -> &mut AddOnlyInterceptors {
+    pub fn operation_interceptors_mut(&mut self) -> &mut InterceptorRegistrar {
         &mut self.operation_interceptors
     }
 

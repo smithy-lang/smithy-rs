@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::interceptors::AddOnlyInterceptors;
+use crate::client::interceptors::InterceptorRegistrar;
 use crate::config_bag::ConfigBag;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -12,7 +12,7 @@ pub trait RuntimePlugin {
     fn configure(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut AddOnlyInterceptors,
+        interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError>;
 }
 
@@ -20,7 +20,7 @@ impl RuntimePlugin for Box<dyn RuntimePlugin> {
     fn configure(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut AddOnlyInterceptors,
+        interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         self.as_ref().configure(cfg, interceptors)
     }
@@ -50,7 +50,7 @@ impl RuntimePlugins {
     pub fn apply_client_configuration(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut AddOnlyInterceptors,
+        interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.client_plugins.iter() {
             plugin.configure(cfg, interceptors)?;
@@ -62,7 +62,7 @@ impl RuntimePlugins {
     pub fn apply_operation_configuration(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut AddOnlyInterceptors,
+        interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.operation_plugins.iter() {
             plugin.configure(cfg, interceptors)?;
@@ -75,7 +75,7 @@ impl RuntimePlugins {
 #[cfg(test)]
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
-    use crate::client::interceptors::AddOnlyInterceptors;
+    use crate::client::interceptors::InterceptorRegistrar;
     use crate::config_bag::ConfigBag;
 
     struct SomeStruct;
@@ -84,7 +84,7 @@ mod tests {
         fn configure(
             &self,
             _cfg: &mut ConfigBag,
-            _inters: &mut AddOnlyInterceptors,
+            _inters: &mut InterceptorRegistrar,
         ) -> Result<(), BoxError> {
             todo!()
         }

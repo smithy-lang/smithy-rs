@@ -301,11 +301,11 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         ) {
             rustBlockTemplate(
                 """
-                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{AddOnlyInterceptors}) -> Result<(), #{BoxError}>
+                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
                 """,
-                "AddOnlyInterceptors" to runtimeApi.resolve("client::interceptors::AddOnlyInterceptors"),
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
                 "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             ) {
                 rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
 

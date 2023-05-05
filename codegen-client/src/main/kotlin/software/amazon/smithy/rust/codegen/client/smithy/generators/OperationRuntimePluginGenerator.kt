@@ -73,11 +73,11 @@ class OperationRuntimePluginGenerator(
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
-            "AddOnlyInterceptors" to runtimeApi.resolve("client::interceptors::AddOnlyInterceptors"),
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
@@ -93,7 +93,7 @@ class OperationRuntimePluginGenerator(
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{AddOnlyInterceptors}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors} as _;
                     cfg.set_request_serializer(${operationStructName}RequestSerializer);
                     cfg.set_response_deserializer(${operationStructName}ResponseDeserializer);
