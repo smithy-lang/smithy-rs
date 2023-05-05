@@ -512,37 +512,35 @@ impl Builder {
     ///
     /// ## Examples
     /// ```no_run
-    /// # #[cfg(feature = "examples")]
     /// # fn example() {
-    /// use aws_http::user_agent::AwsUserAgent;
+    /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
     /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
     /// use aws_smithy_runtime_api::config_bag::ConfigBag;
     /// use aws_types::sdk_config::{Builder, SdkConfig};
-    /// use http::header::USER_AGENT;
-    /// use http::{HeaderName, HeaderValue};
+    ///
+    /// fn base_url() -> String {
+    ///     // ...
+    ///     # String::new()
+    /// }
     ///
     /// #[derive(Debug)]
-    /// struct TestUserAgentInterceptor;
-    /// impl Interceptor for TestUserAgentInterceptor {
+    /// pub struct UriModifierInterceptor;
+    /// impl Interceptor for UriModifierInterceptor {
     ///     fn modify_before_signing(
     ///         &self,
-    ///         context: &mut InterceptorContext,
+    ///         context: &mut InterceptorContext<BeforeTransmit>,
     ///         _cfg: &mut ConfigBag,
     ///     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-    ///         let headers = context.request_mut()?.headers_mut();
-    ///         let user_agent = AwsUserAgent::for_tests();
-    ///         headers.insert(USER_AGENT, HeaderValue::try_from(user_agent.ua_header())?);
-    ///         headers.insert(
-    ///             HeaderName::from_static("x-amz-user-agent"),
-    ///             HeaderValue::try_from(user_agent.aws_ua_header())?,
-    ///         );
+    ///         let request = context.request_mut();
+    ///         let uri = format!("{}{}", base_url(), request.uri().path());
+    ///         *request.uri_mut() = uri.parse()?;
     ///
     ///         Ok(())
     ///     }
     /// }
     ///
     /// let sdk_config = SdkConfig::builder()
-    ///     .interceptor(TestUserAgentInterceptor)
+    ///     .interceptor(UriModifierInterceptor)
     ///     .build();
     /// # }
     /// ```
@@ -561,40 +559,38 @@ impl Builder {
     ///
     /// ## Examples
     /// ```no_run
-    /// # #[cfg(feature = "examples")]
     /// # fn example() {
-    /// use aws_http::user_agent::AwsUserAgent;
+    /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
     /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, SharedInterceptor};
     /// use aws_smithy_runtime_api::config_bag::ConfigBag;
     /// use aws_types::sdk_config::{Builder, SdkConfig};
-    /// use http::header::USER_AGENT;
-    /// use http::{HeaderName, HeaderValue};
     ///
-    /// fn override_user_agent(builder: &mut Builder) {
+    /// fn base_url() -> String {
+    ///     // ...
+    ///     # String::new()
+    /// }
+    ///
+    /// fn modify_request_uri(builder: &mut Builder) {
     ///     #[derive(Debug)]
-    ///     pub struct TestUserAgentInterceptor;
-    ///     impl Interceptor for TestUserAgentInterceptor {
+    ///     pub struct UriModifierInterceptor;
+    ///     impl Interceptor for UriModifierInterceptor {
     ///         fn modify_before_signing(
     ///             &self,
-    ///             context: &mut InterceptorContext,
+    ///             context: &mut InterceptorContext<BeforeTransmit>,
     ///             _cfg: &mut ConfigBag,
     ///         ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-    ///             let headers = context.request_mut()?.headers_mut();
-    ///             let user_agent = AwsUserAgent::for_tests();
-    ///             headers.insert(USER_AGENT, HeaderValue::try_from(user_agent.ua_header())?);
-    ///             headers.insert(
-    ///                 HeaderName::from_static("x-amz-user-agent"),
-    ///                 HeaderValue::try_from(user_agent.aws_ua_header())?,
-    ///             );
+    ///             let request = context.request_mut();
+    ///             let uri = format!("{}{}", base_url(), request.uri().path());
+    ///             *request.uri_mut() = uri.parse()?;
     ///
     ///             Ok(())
     ///         }
     ///     }
-    ///     builder.set_interceptor(SharedInterceptor::new(TestUserAgentInterceptor));
+    ///     builder.add_interceptor(SharedInterceptor::new(UriModifierInterceptor));
     /// }
     ///
     /// let mut builder = SdkConfig::builder();
-    /// override_user_agent(&mut builder);
+    /// modify_request_uri(&mut builder);
     /// let sdk_config = builder.build();
     /// # }
     /// ```
