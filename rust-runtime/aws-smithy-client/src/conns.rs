@@ -58,7 +58,7 @@ mod tests {
 
     #[cfg(not(feature = "rustls"))]
     mod custom_tls_tests {
-        use super::super::native_tls;
+        use super::native_tls;
         use super::*;
 
         type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
