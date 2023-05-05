@@ -59,7 +59,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructu
  * whose associated types are `pub(crate)` and thus not exposed to the end
  * user.
  */
-class ConstrainedShapeSymbolProvider(
+open class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val serviceShape: ServiceShape,
     private val publicConstrainedTypes: Boolean,
@@ -182,6 +182,7 @@ class ConstrainedShapeSymbolProvider(
                 visibility = Visibility.publicIf(!pubCrateServerBuilder, Visibility.PUBCRATE),
                 parent = defaultModule,
                 inline = true,
+                documentationOverride = "",
             )
             val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), innerModule)

@@ -142,12 +142,12 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
 }
 
 impl<C> Service<http::Request<SdkBody>> for Adapter<C>
-    where
-        C: Clone + Send + Sync + 'static,
-        C: Service<Uri>,
-        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
-        C::Future: Unpin + Send + 'static,
-        C::Error: Into<BoxError>,
+where
+    C: Clone + Send + Sync + 'static,
+    C: Service<Uri>,
+    C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    C::Future: Unpin + Send + 'static,
+    C::Error: Into<BoxError>,
 {
     type Response = http::Response<SdkBody>;
     type Error = ConnectorError;
@@ -268,12 +268,12 @@ pub struct Builder {
 impl Builder {
     /// Create a HyperAdapter from this builder and a given connector
     pub fn build<C>(self, connector: C) -> Adapter<C>
-        where
-            C: Clone + Send + Sync + 'static,
-            C: Service<Uri>,
-            C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
-            C::Future: Unpin + Send + 'static,
-            C::Error: Into<BoxError>,
+    where
+        C: Clone + Send + Sync + 'static,
+        C: Service<Uri>,
+        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C::Future: Unpin + Send + 'static,
+        C::Error: Into<BoxError>,
     {
         let client_builder = self.client_builder.unwrap_or_default();
         let sleep_impl = self.sleep_impl.or_else(default_async_sleep);
@@ -753,8 +753,8 @@ mod test {
     }
 
     impl<T> tower::Service<Uri> for TestConnection<T>
-        where
-            T: Clone + Connection,
+    where
+        T: Clone + Connection,
     {
         type Response = T;
         type Error = BoxError;

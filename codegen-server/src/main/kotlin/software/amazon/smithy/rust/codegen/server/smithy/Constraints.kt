@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -182,7 +183,7 @@ fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
 /**
  * Returns the parent and the inline module that this particular shape should go in.
  */
-fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: SymbolProvider, publicConstrainedTypes: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
+fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: RustSymbolProvider, publicConstrainedTypes: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
     val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
     return if (overriddenTrait.container is StructureShape) {
         val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()

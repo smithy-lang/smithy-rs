@@ -11,8 +11,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPaginatorModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -36,7 +36,7 @@ fun OperationShape.isPaginated(model: Model) =
         .findMemberWithTrait<IdempotencyTokenTrait>(model) == null
 
 class PaginatorGenerator private constructor(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
     retryClassifier: RuntimeType,
@@ -68,7 +68,11 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo = idx.getPaginationInfo(codegenContext.serviceShape, operation).orNull()
         ?: PANIC("failed to load pagination info")
-    private val module = codegenContext.featureGatedPaginatorModule(symbolProvider, operation)
+    private val module = RustModule.public(
+        "paginator",
+        parent = symbolProvider.moduleForShape(operation),
+        documentationOverride = "Paginator for this operation",
+    )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
@@ -111,7 +115,7 @@ class PaginatorGenerator private constructor(
 
     /** Generate the paginator struct & impl **/
     private fun generate() = writable {
-        val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
+        val outputTokenLens = NestedAccessorGenerator(codegenContext).generateBorrowingAccessor(
             outputShape,
             paginationInfo.outputTokenMemberPath,
         )
@@ -266,7 +270,7 @@ class PaginatorGenerator private constructor(
                 }
 
                 """,
-                "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
+                "extract_items" to NestedAccessorGenerator(codegenContext).generateOwnedAccessor(
                     outputShape,
                     paginationInfo.itemsMemberPath,
                 ),

@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * Collection of methods that will be invoked by the respective generators to generate code to convert constraint
@@ -26,7 +27,7 @@ interface ValidationExceptionConversionGenerator {
      * Convert from a top-level operation input's constraint violation into
      * `aws_smithy_http_server::rejection::RequestRejection`.
      */
-    fun renderImplFromConstraintViolationForRequestRejection(): Writable
+    fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable
 
     // Simple shapes.
     fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable

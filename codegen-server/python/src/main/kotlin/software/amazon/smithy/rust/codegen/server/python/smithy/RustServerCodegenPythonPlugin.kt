@@ -12,18 +12,17 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.DeriveEqAndHashSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerReservedWords
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -40,7 +39,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-server-codegen-python"
 
     /**
-     * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+     * See [software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin].
      */
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
@@ -66,7 +65,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
 
     companion object {
         /**
-         * See [software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin].
+         * See [software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin].
          */
         fun baseSymbolProvider(
             settings: ServerRustSettings,
@@ -74,6 +73,8 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             constrainedTypes: Boolean = true,
+            includeConstrainedShapeProvider: Boolean = true,
+            codegenDecorator: ServerCodegenDecorator,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
@@ -82,10 +83,10 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
                 // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
                 .let {
-                    if (constrainedTypes) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+                    if (includeConstrainedShapeProvider) PythonConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
                 }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
+                .let { PythonEventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
@@ -96,6 +97,8 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                 .let { DeriveEqAndHashSymbolMetadataProvider(it) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
+                // Allows decorators to inject a custom symbol provider
+                .let { codegenDecorator.symbolProvider(it) }
     }
 }

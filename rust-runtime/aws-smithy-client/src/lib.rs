@@ -15,10 +15,10 @@
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
-missing_docs,
-rustdoc::missing_crate_level_docs,
-unreachable_pub,
-rust_2018_idioms
+    missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
 )]
 
 pub mod bounds;
@@ -138,13 +138,13 @@ impl<C, M, R> Client<C, M, R>
     /// For ergonomics, this does not include the raw response for successful responses. To
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, op: Operation<O, Retry>) -> Result<T, SdkError<E>>
-        where
-            O: Send + Sync,
-            E: std::error::Error + Send + Sync + 'static,
-            Retry: Send + Sync,
-            R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
-            Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
-            bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+    where
+        O: Send + Sync,
+        E: std::error::Error + Send + Sync + 'static,
+        Retry: Send + Sync,
+        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         self.call_raw(op).await.map(|res| res.parsed)
@@ -158,12 +158,12 @@ impl<C, M, R> Client<C, M, R>
         &self,
         op: Operation<O, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
-        where
-            O: Send + Sync,
-            E: std::error::Error + Send + Sync + 'static,
-            Retry: Send + Sync,
-            R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
-            Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
+    where
+        O: Send + Sync,
+        E: std::error::Error + Send + Sync + 'static,
+        Retry: Send + Sync,
+        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
         // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
@@ -236,7 +236,7 @@ impl<C, M, R> Client<C, M, R>
                         _ => "error",
                     },
                 )
-                    .record("message", &field::display(DisplayErrorContext(err)));
+                .record("message", &field::display(DisplayErrorContext(err)));
             }
         }
         result

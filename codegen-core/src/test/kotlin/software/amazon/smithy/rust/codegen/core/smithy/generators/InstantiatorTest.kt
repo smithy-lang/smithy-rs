@@ -8,16 +8,20 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -288,6 +292,47 @@ class InstantiatorTest {
                     )
                 }
                 rust("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
+            }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `integer and fractional timestamps`() {
+        // "Parameter values that contain binary data MUST be defined using values
+        // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
+        val sut = Instantiator(
+            symbolProvider,
+            model,
+            runtimeConfig,
+            BuilderKindBehavior(codegenContext),
+            ::enumFromStringFn,
+        )
+        val project = TestWorkspace.testProject(model)
+        project.testModule {
+            unitTest("timestamps") {
+                withBlock("let ts_frac = ", ";") {
+                    sut.render(
+                        this,
+                        TimestampShape.builder().id(ShapeId.from("com.example#Timestamp")).build(),
+                        NumberNode.from(946845296.123),
+                    )
+                }
+                withBlock("let ts_int = ", ";") {
+                    sut.render(
+                        this,
+                        TimestampShape.builder().id(ShapeId.from("com.example#Timestamp")).build(),
+                        NumberNode.from(123),
+                    )
+                }
+                rustTemplate(
+                    "assert_eq!(ts_frac, #{Timestamp}::from_millis(946845296*1000 + 123));",
+                    "Timestamp" to RuntimeType.dateTime(runtimeConfig),
+                )
+                rustTemplate(
+                    "assert_eq!(ts_int, #{Timestamp}::from_secs(123));",
+                    "Timestamp" to RuntimeType.dateTime(runtimeConfig),
+                )
             }
         }
         project.compileAndTest()

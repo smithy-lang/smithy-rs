@@ -7,8 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -34,8 +37,10 @@ internal class EndpointTraitBindingsTest {
         epTrait.prefixFormatString() shouldBe ("\"{foo}.data\"")
     }
 
-    @Test
-    fun `generate endpoint prefixes`() {
+    @ParameterizedTest
+    @ValueSource(strings = ["middleware", "orchestrator"])
+    fun `generate endpoint prefixes`(smithyRuntimeModeStr: String) {
+        val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         val model = """
             namespace test
             @readonly
@@ -73,7 +78,7 @@ internal class EndpointTraitBindingsTest {
                     RuntimeType.smithyHttp(TestRuntimeConfig),
                     TestRuntimeConfig.operationBuildError(),
                 ) {
-                    endpointBindingGenerator.render(this, "self")
+                    endpointBindingGenerator.render(this, "self", smithyRuntimeMode)
                 }
             }
             unitTest(
@@ -145,10 +150,10 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         let conf = $moduleName::Config::builder().build();
-                        $moduleName::input::SayHelloInput::builder()
+                        $moduleName::operation::say_hello::SayHelloInput::builder()
                             .greeting("hey there!").build().expect("input is valid")
                             .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
-                        let op = $moduleName::input::SayHelloInput::builder()
+                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
                             .greeting("hello")
                             .build().expect("valid operation")
                             .make_operation(&conf).await.expect("hello is a valid prefix");

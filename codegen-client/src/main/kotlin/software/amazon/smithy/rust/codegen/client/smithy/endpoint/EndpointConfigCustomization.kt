@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -69,6 +69,7 @@ internal class EndpointConfigCustomization(
                         /// use aws_smithy_http::endpoint;
                         /// use $moduleUseName::endpoint::{Params as EndpointParams, DefaultResolver};
                         /// /// Endpoint resolver which adds a prefix to the generated endpoint
+                        /// ##[derive(Debug)]
                         /// struct PrefixResolver {
                         ///     base_resolver: DefaultResolver,
                         ///     prefix: String
@@ -128,21 +129,23 @@ internal class EndpointConfigCustomization(
                             "DefaultResolver" to defaultResolver,
                         )
                     } else {
-                        val alwaysFailsResolver = RuntimeType.forInlineFun("MissingResolver", EndpointsModule) {
-                            rustTemplate(
-                                """
-                                pub(crate) struct MissingResolver;
-                                impl<T> #{ResolveEndpoint}<T> for MissingResolver {
-                                    fn resolve_endpoint(&self, _params: &T) -> #{Result} {
-                                        Err(#{ResolveEndpointError}::message("an endpoint resolver must be provided."))
+                        val alwaysFailsResolver =
+                            RuntimeType.forInlineFun("MissingResolver", ClientRustModule.Endpoint) {
+                                rustTemplate(
+                                    """
+                                    ##[derive(Debug)]
+                                    pub(crate) struct MissingResolver;
+                                    impl<T> #{ResolveEndpoint}<T> for MissingResolver {
+                                        fn resolve_endpoint(&self, _params: &T) -> #{Result} {
+                                            Err(#{ResolveEndpointError}::message("an endpoint resolver must be provided."))
+                                        }
                                     }
-                                }
-                                """,
-                                "ResolveEndpoint" to types.resolveEndpoint,
-                                "ResolveEndpointError" to types.resolveEndpointError,
-                                "Result" to types.smithyHttpEndpointModule.resolve("Result"),
-                            )
-                        }
+                                    """,
+                                    "ResolveEndpoint" to types.resolveEndpoint,
+                                    "ResolveEndpointError" to types.resolveEndpointError,
+                                    "Result" to types.smithyHttpEndpointModule.resolve("Result"),
+                                )
+                            }
                         // To keep this diff under control, rather than `.expect` here, insert a resolver that will
                         // always fail. In the future, this will be changed to an `expect()`
                         rustTemplate(

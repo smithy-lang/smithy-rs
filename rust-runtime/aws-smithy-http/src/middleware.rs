@@ -21,6 +21,8 @@ use tracing::{debug_span, trace, Instrument};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
+const LOG_SENSITIVE_BODIES: &str = "LOG_SENSITIVE_BODIES";
+
 /// [`AsyncMapRequest`] defines an asynchronous middleware that transforms an [`operation::Request`].
 ///
 /// Typically, these middleware will read configuration from the `PropertyBag` and use it to
@@ -30,12 +32,15 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// including signing & endpoint resolution. `AsyncMapRequest` is used for async credential
 /// retrieval (e.g., from AWS STS's AssumeRole operation).
 pub trait AsyncMapRequest {
+    /// The type returned when this [`AsyncMapRequest`] encounters an error.
     type Error: Into<BoxError> + 'static;
+    /// The type returned when [`AsyncMapRequest::apply`] is called.
     type Future: Future<Output = Result<operation::Request, Self::Error>> + Send + 'static;
 
     /// Returns the name of this map request operation for inclusion in a tracing span.
     fn name(&self) -> &'static str;
 
+    /// Call this middleware, returning a future that resolves to a request or an error.
     fn apply(&self, request: operation::Request) -> Self::Future;
 }
 
@@ -129,7 +134,15 @@ where
     };
 
     let http_response = http::Response::from_parts(parts, Bytes::from(body));
-    trace!(http_response = ?http_response, "read HTTP response body");
+    if !handler.sensitive()
+        || std::env::var(LOG_SENSITIVE_BODIES)
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or_default()
+    {
+        trace!(http_response = ?http_response, "read HTTP response body");
+    } else {
+        trace!(http_response = "** REDACTED **. To print, set LOG_SENSITIVE_BODIES=true")
+    }
     debug_span!("parse_loaded").in_scope(move || {
         let parsed = handler.parse_loaded(&http_response);
         sdk_result(

@@ -3,22 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![warn(
-    missing_debug_implementations,
-    missing_docs,
-    rustdoc::all,
-    unreachable_pub
-)]
-
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
-use crate::operation;
-use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
-use aws_smithy_types::error::ErrorMetadata;
-use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+
+use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::ErrorMetadata;
+use aws_smithy_types::retry::ErrorKind;
+
+use crate::connection::ConnectionMetadata;
+use crate::operation;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -32,16 +28,181 @@ pub struct SdkSuccess<O> {
     pub parsed: O,
 }
 
+/// Builders for `SdkError` variant context.
+pub mod builders {
+    use super::*;
+
+    macro_rules! source_only_error_builder {
+        ($errorName:ident, $builderName:ident, $sourceType:ident) => {
+            #[doc = concat!("Builder for [`", stringify!($errorName), "`](super::", stringify!($errorName), ").")]
+            #[derive(Debug, Default)]
+            pub struct $builderName {
+                source: Option<$sourceType>,
+            }
+
+            impl $builderName {
+                #[doc = "Creates a new builder."]
+                pub fn new() -> Self { Default::default() }
+
+                #[doc = "Sets the error source."]
+                pub fn source(mut self, source: impl Into<$sourceType>) -> Self {
+                    self.source = Some(source.into());
+                    self
+                }
+
+                #[doc = "Sets the error source."]
+                pub fn set_source(&mut self, source: Option<$sourceType>) -> &mut Self {
+                    self.source = source;
+                    self
+                }
+
+                #[doc = "Builds the error context."]
+                pub fn build(self) -> $errorName {
+                    $errorName { source: self.source.expect("source is required") }
+                }
+            }
+        };
+    }
+
+    source_only_error_builder!(ConstructionFailure, ConstructionFailureBuilder, BoxError);
+    source_only_error_builder!(TimeoutError, TimeoutErrorBuilder, BoxError);
+    source_only_error_builder!(DispatchFailure, DispatchFailureBuilder, ConnectorError);
+
+    /// Builder for [`ResponseError`](super::ResponseError).
+    #[derive(Debug)]
+    pub struct ResponseErrorBuilder<R> {
+        source: Option<BoxError>,
+        raw: Option<R>,
+    }
+
+    impl<R> Default for ResponseErrorBuilder<R> {
+        fn default() -> Self {
+            Self {
+                source: None,
+                raw: None,
+            }
+        }
+    }
+
+    impl<R> ResponseErrorBuilder<R> {
+        /// Creates a new builder.
+        pub fn new() -> Self {
+            Default::default()
+        }
+
+        /// Sets the error source.
+        pub fn source(mut self, source: impl Into<BoxError>) -> Self {
+            self.source = Some(source.into());
+            self
+        }
+
+        /// Sets the error source.
+        pub fn set_source(&mut self, source: Option<BoxError>) -> &mut Self {
+            self.source = source;
+            self
+        }
+
+        /// Sets the raw response.
+        pub fn raw(mut self, raw: R) -> Self {
+            self.raw = Some(raw);
+            self
+        }
+
+        /// Sets the raw response.
+        pub fn set_raw(&mut self, raw: Option<R>) -> &mut Self {
+            self.raw = raw;
+            self
+        }
+
+        /// Builds the error context.
+        pub fn build(self) -> ResponseError<R> {
+            ResponseError {
+                source: self.source.expect("source is required"),
+                raw: self.raw.expect("a raw response is required"),
+            }
+        }
+    }
+
+    /// Builder for [`ServiceError`](super::ServiceError).
+    #[derive(Debug)]
+    pub struct ServiceErrorBuilder<E, R> {
+        source: Option<E>,
+        raw: Option<R>,
+    }
+
+    impl<E, R> Default for ServiceErrorBuilder<E, R> {
+        fn default() -> Self {
+            Self {
+                source: None,
+                raw: None,
+            }
+        }
+    }
+
+    impl<E, R> ServiceErrorBuilder<E, R> {
+        /// Creates a new builder.
+        pub fn new() -> Self {
+            Default::default()
+        }
+
+        /// Sets the error source.
+        pub fn source(mut self, source: impl Into<E>) -> Self {
+            self.source = Some(source.into());
+            self
+        }
+
+        /// Sets the error source.
+        pub fn set_source(&mut self, source: Option<E>) -> &mut Self {
+            self.source = source;
+            self
+        }
+
+        /// Sets the raw response.
+        pub fn raw(mut self, raw: R) -> Self {
+            self.raw = Some(raw);
+            self
+        }
+
+        /// Sets the raw response.
+        pub fn set_raw(&mut self, raw: Option<R>) -> &mut Self {
+            self.raw = raw;
+            self
+        }
+
+        /// Builds the error context.
+        pub fn build(self) -> ServiceError<E, R> {
+            ServiceError {
+                source: self.source.expect("source is required"),
+                raw: self.raw.expect("a raw response is required"),
+            }
+        }
+    }
+}
+
 /// Error context for [`SdkError::ConstructionFailure`]
 #[derive(Debug)]
 pub struct ConstructionFailure {
     source: BoxError,
 }
 
+impl ConstructionFailure {
+    /// Creates a builder for this error context type.
+    pub fn builder() -> builders::ConstructionFailureBuilder {
+        builders::ConstructionFailureBuilder::new()
+    }
+}
+
 /// Error context for [`SdkError::TimeoutError`]
 #[derive(Debug)]
 pub struct TimeoutError {
     source: BoxError,
+}
+
+impl TimeoutError {
+    /// Creates a builder for this error context type.
+    pub fn builder() -> builders::TimeoutErrorBuilder {
+        builders::TimeoutErrorBuilder::new()
+    }
 }
 
 /// Error context for [`SdkError::DispatchFailure`]
@@ -51,6 +212,11 @@ pub struct DispatchFailure {
 }
 
 impl DispatchFailure {
+    /// Creates a builder for this error context type.
+    pub fn builder() -> builders::DispatchFailureBuilder {
+        builders::DispatchFailureBuilder::new()
+    }
+
     /// Returns true if the error is an IO error
     pub fn is_io(&self) -> bool {
         self.source.is_io()
@@ -70,6 +236,11 @@ impl DispatchFailure {
     pub fn is_other(&self) -> Option<ErrorKind> {
         self.source.is_other()
     }
+
+    /// Returns the inner error if it is a connector error
+    pub fn as_connector_error(&self) -> Option<&ConnectorError> {
+        Some(&self.source)
+    }
 }
 
 /// Error context for [`SdkError::ResponseError`]
@@ -82,6 +253,11 @@ pub struct ResponseError<R> {
 }
 
 impl<R> ResponseError<R> {
+    /// Creates a builder for this error context type.
+    pub fn builder() -> builders::ResponseErrorBuilder<R> {
+        builders::ResponseErrorBuilder::new()
+    }
+
     /// Returns a reference to the raw response
     pub fn raw(&self) -> &R {
         &self.raw
@@ -103,6 +279,11 @@ pub struct ServiceError<E, R> {
 }
 
 impl<E, R> ServiceError<E, R> {
+    /// Creates a builder for this error context type.
+    pub fn builder() -> builders::ServiceErrorBuilder<E, R> {
+        builders::ServiceErrorBuilder::new()
+    }
+
     /// Returns the underlying error of type `E`
     pub fn err(&self) -> &E {
         &self.source
@@ -155,7 +336,7 @@ pub enum SdkError<E, R = operation::Response> {
     DispatchFailure(DispatchFailure),
 
     /// A response was received but it was not parseable according the the protocol (for example
-    /// the server hung up while the body was being read)
+    /// the server hung up without sending a complete response)
     ResponseError(ResponseError<R>),
 
     /// An error response was received from the service
@@ -254,6 +435,30 @@ impl<E, R> SdkError<E, R> {
             ServiceError(context) => Ok(context.source.into()),
         }
     }
+
+    /// Return a reference to this error's raw response, if it contains one. Otherwise, return `None`.
+    pub fn raw_response(&self) -> Option<&R> {
+        match self {
+            Self::ServiceError(inner) => Some(inner.raw()),
+            Self::ResponseError(inner) => Some(inner.raw()),
+            _ => None,
+        }
+    }
+
+    /// Maps the service error type in `SdkError::ServiceError`
+    #[doc(hidden)]
+    pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
+        match self {
+            Self::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
+                source: map(context.source),
+                raw: context.raw,
+            }),
+            Self::ConstructionFailure(context) => SdkError::<E2, R>::ConstructionFailure(context),
+            Self::DispatchFailure(context) => SdkError::<E2, R>::DispatchFailure(context),
+            Self::ResponseError(context) => SdkError::<E2, R>::ResponseError(context),
+            Self::TimeoutError(context) => SdkError::<E2, R>::TimeoutError(context),
+        }
+    }
 }
 
 impl<E, R> Display for SdkError<E, R> {
@@ -325,6 +530,22 @@ enum ConnectorErrorKind {
 pub struct ConnectorError {
     kind: ConnectorErrorKind,
     source: BoxError,
+    connection: ConnectionStatus,
+}
+
+#[non_exhaustive]
+#[derive(Debug)]
+pub(crate) enum ConnectionStatus {
+    /// This request was never connected to the remote
+    ///
+    /// This indicates the failure was during connection establishment
+    NeverConnected,
+
+    /// It is unknown whether a connection was established
+    Unknown,
+
+    /// The request connected to the remote prior to failure
+    Connected(ConnectionMetadata),
 }
 
 impl Display for ConnectorError {
@@ -352,7 +573,20 @@ impl ConnectorError {
         Self {
             kind: ConnectorErrorKind::Timeout,
             source,
+            connection: ConnectionStatus::Unknown,
         }
+    }
+
+    /// Include connection information along with this error
+    pub fn with_connection(mut self, info: ConnectionMetadata) -> Self {
+        self.connection = ConnectionStatus::Connected(info);
+        self
+    }
+
+    /// Set the connection status on this error to report that a connection was never established
+    pub fn never_connected(mut self) -> Self {
+        self.connection = ConnectionStatus::NeverConnected;
+        self
     }
 
     /// Construct a [`ConnectorError`] from an error caused by the user (e.g. invalid HTTP request)
@@ -360,6 +594,7 @@ impl ConnectorError {
         Self {
             kind: ConnectorErrorKind::User,
             source,
+            connection: ConnectionStatus::Unknown,
         }
     }
 
@@ -368,6 +603,7 @@ impl ConnectorError {
         Self {
             kind: ConnectorErrorKind::Io,
             source,
+            connection: ConnectionStatus::Unknown,
         }
     }
 
@@ -378,6 +614,7 @@ impl ConnectorError {
         Self {
             source,
             kind: ConnectorErrorKind::Other(kind),
+            connection: ConnectionStatus::Unknown,
         }
     }
 
@@ -401,6 +638,18 @@ impl ConnectorError {
         match &self.kind {
             ConnectorErrorKind::Other(ek) => *ek,
             _ => None,
+        }
+    }
+
+    /// Returns metadata about the connection
+    ///
+    /// If a connection was established and provided by the internal connector, a connection will
+    /// be returned.
+    pub fn connection_metadata(&self) -> Option<&ConnectionMetadata> {
+        match &self.connection {
+            ConnectionStatus::NeverConnected => None,
+            ConnectionStatus::Unknown => None,
+            ConnectionStatus::Connected(conn) => Some(conn),
         }
     }
 }

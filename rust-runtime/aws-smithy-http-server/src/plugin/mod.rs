@@ -118,7 +118,9 @@
 //! ```
 //!
 
+pub mod alb_health_check;
 mod closure;
+mod either;
 mod filter;
 mod identity;
 mod layer;
@@ -128,6 +130,7 @@ mod stack;
 use crate::operation::Operation;
 
 pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
+pub use either::Either;
 pub use filter::{filter_by_operation_name, FilterByOperationName};
 pub use identity::IdentityPlugin;
 pub use layer::HttpLayer;
@@ -148,4 +151,16 @@ pub trait Plugin<Protocol, Op, S, L> {
 
     /// Maps an [`Operation`] to another.
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+}
+
+impl<'a, P, Op, S, L, Pl> Plugin<P, Op, S, L> for &'a Pl
+where
+    Pl: Plugin<P, Op, S, L>,
+{
+    type Service = Pl::Service;
+    type Layer = Pl::Layer;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        <Pl as Plugin<P, Op, S, L>>::map(*self, input)
+    }
 }

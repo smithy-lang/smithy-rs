@@ -32,6 +32,11 @@ open class CodegenContext(
     open val symbolProvider: RustSymbolProvider,
 
     /**
+     * Provider of documentation for generated Rust modules.
+     */
+    open val moduleDocProvider: ModuleDocProvider?,
+
+    /**
      * Entrypoint service shape for code generation.
      */
     open val serviceShape: ServiceShape,
@@ -79,4 +84,9 @@ open class CodegenContext(
      * it must be in snake-case. Call this method to get this crate's name in snake-case.
      */
     fun moduleUseName() = moduleName.replace("-", "_")
+
+    /** Return a ModuleDocProvider or panic if one wasn't configured */
+    fun expectModuleDocProvider(): ModuleDocProvider = checkNotNull(moduleDocProvider) {
+        "A ModuleDocProvider must be set on the CodegenContext"
+    }
 }

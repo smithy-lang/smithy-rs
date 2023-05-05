@@ -9,7 +9,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -50,13 +49,12 @@ class AwsQueryCompatible(
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+        "HeaderMap" to RuntimeType.HttpHeaderMap,
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
         "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
+        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
-    private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsQueryCompatibleHttpBindingResolver(
@@ -66,21 +64,21 @@ class AwsQueryCompatible(
 
     override val defaultTimestampFormat = awsJson.defaultTimestampFormat
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        awsJson.structuredDataParser(operationShape)
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        awsJson.structuredDataParser()
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        awsJson.structuredDataSerializer(operationShape)
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        awsJson.structuredDataSerializer()
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_error_metadata", jsonDeserModule) {
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     let mut builder =
-                        #{json_errors}::parse_error_metadata(response.body(), response.headers())?;
+                        #{json_errors}::parse_error_metadata(response_body, response_headers)?;
                     if let Some((error_code, error_type)) =
-                        #{aws_query_compatible_errors}::parse_aws_query_compatible_error(response.headers())
+                        #{aws_query_compatible_errors}::parse_aws_query_compatible_error(response_headers)
                     {
                         builder = builder.code(error_code);
                         builder = builder.custom("type", error_type);

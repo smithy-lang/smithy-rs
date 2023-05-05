@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Model
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -56,7 +57,13 @@ class UnconstrainedMapGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
 
         project.withModule(Model) {
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(project, model, symbolProvider, this)
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(
+                project,
+                model,
+                symbolProvider,
+                this,
+                ServerRestJsonProtocol(codegenContext),
+            )
         }
 
         project.withModule(ServerRustModule.ConstrainedModule) {

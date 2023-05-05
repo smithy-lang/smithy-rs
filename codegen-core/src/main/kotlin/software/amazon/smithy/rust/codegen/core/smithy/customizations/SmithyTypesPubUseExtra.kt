@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 private data class PubUseType(
     val type: RuntimeType,
     val shouldExport: (Model) -> Boolean,
+    val alias: String? = null,
 )
 
 /** Returns true if the model has normal streaming operations (excluding event streams) */
@@ -48,26 +49,39 @@ private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(m
 private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Returns a list of types that should be re-exported for the given model */
-internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<RuntimeType> {
+internal fun pubUseTypes(codegenContext: CodegenContext, model: Model): List<RuntimeType> =
+    pubUseTypesThatShouldBeExported(codegenContext, model).map { it.type }
+
+private fun pubUseTypesThatShouldBeExported(codegenContext: CodegenContext, model: Model): List<PubUseType> {
     val runtimeConfig = codegenContext.runtimeConfig
     return (
         listOf(
             PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
+            PubUseType(RuntimeType.format(runtimeConfig), ::hasDateTimes, "DateTimeFormat"),
         ) + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
                 PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
                 PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
+                PubUseType(http.resolve("byte_stream::error::Error"), ::hasStreamingOperations, "ByteStreamError"),
+                PubUseType(http.resolve("body::SdkBody"), ::hasStreamingOperations),
             )
         }
-        ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }
+        ).filter { pubUseType -> pubUseType.shouldExport(model) }
 }
 
 /** Adds re-export statements for Smithy primitives */
 fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writable = writable {
-    val types = pubUseTypes(codegenContext, model)
+    val types = pubUseTypesThatShouldBeExported(codegenContext, model)
     if (types.isNotEmpty()) {
-        types.forEach { type -> rust("pub use #T;", type) }
+        types.forEach {
+            val useStatement = if (it.alias == null) {
+                "pub use #T;"
+            } else {
+                "pub use #T as ${it.alias};"
+            }
+            rust(useStatement, it.type)
+        }
     }
 }
 
@@ -77,14 +91,15 @@ fun pubUseSmithyErrorTypes(codegenContext: CodegenContext): Writable = writable 
     val reexports = listOf(
         listOf(
             RuntimeType.smithyHttp(runtimeConfig).let { http ->
-                PubUseType(http.resolve("result::SdkError")) { true }
+                PubUseType(http.resolve("result::SdkError"), { _ -> true })
             },
         ),
         RuntimeType.smithyTypes(runtimeConfig).let { types ->
-            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
+            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext"), { _ -> true }))
                 // Only re-export `ProvideErrorMetadata` for clients
                 .letIf(codegenContext.target == CodegenTarget.CLIENT) { list ->
-                    list + listOf(PubUseType(types.resolve("error::metadata::ProvideErrorMetadata")) { true })
+                    list +
+                        listOf(PubUseType(types.resolve("error::metadata::ProvideErrorMetadata"), { _ -> true }))
                 }
         },
     ).flatten()

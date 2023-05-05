@@ -175,7 +175,7 @@ class ConstrainedStringGenerator(
 
         if (testCases.isNotEmpty()) {
             val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
-            writer.withInlineModule(testModule) {
+            writer.withInlineModule(testModule, null) {
                 rustTemplate(
                     """
                     #{TestCases:W}
@@ -244,7 +244,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 Attribute.AllowUnusedVariables.render(this)
                 rustTemplate(
                     """
-                    Self::Pattern(string) => crate::model::ValidationExceptionField {
+                    Self::Pattern(_) => crate::model::ValidationExceptionField {
                         message: #{ErrorMessage:W},
                         path
                     },
@@ -269,22 +269,12 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     fun errorMessage(): Writable {
         val pattern = patternTrait.pattern
 
-        return if (isSensitive) {
-            writable {
-                rust(
-                    """
-                    format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
-                    """,
-                )
-            }
-        } else {
-            writable {
-                rust(
-                    """
-                    format!("Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &string, &path, r##"$pattern"##)
-                    """,
-                )
-            }
+        return writable {
+            rust(
+                """
+                format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
+                """,
+            )
         }
     }
 

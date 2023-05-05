@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
+// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
@@ -88,6 +89,7 @@ open class MakeOperationGenerator(
         Attribute.AllowClippyLetAndReturn.render(implBlockWriter)
         // Allows builders that don’t consume the input borrow
         Attribute.AllowClippyNeedlessBorrow.render(implBlockWriter)
+
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,

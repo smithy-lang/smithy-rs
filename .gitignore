@@ -50,3 +50,12 @@ target/
 
 # IDEs
 .idea/
+.project
+.settings
+.classpath
+
+# tools
+.tool-versions
+
+# python
+__pycache__

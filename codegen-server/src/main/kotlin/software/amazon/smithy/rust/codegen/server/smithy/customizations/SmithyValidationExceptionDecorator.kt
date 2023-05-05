@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -34,6 +33,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.TraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -66,11 +66,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
     }
     override val shapeId: ShapeId = SHAPE_ID
 
-    override fun renderImplFromConstraintViolationForRequestRejection(): Writable = writable {
-        val codegenScope = arrayOf(
-            "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
-            "From" to RuntimeType.From,
-        )
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable = writable {
         rustTemplate(
             """
             impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -81,13 +77,14 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                         field_list: Some(vec![first_validation_exception_field]),
                     };
                     Self::ConstraintViolation(
-                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
+                        crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                             .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
                     )
                 }
             }
             """,
-            *codegenScope,
+            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "From" to RuntimeType.From,
         )
     }
 
@@ -160,12 +157,12 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) = writable {
         val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-        val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+        val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
         rustTemplate(
             """
             pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                 crate::model::ValidationExceptionField {
-                    message: format!(r##"$message"##, &self.0, &path),
+                    message: format!(r##"$message"##, &path),
                     path,
                 }
             }
@@ -197,7 +194,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     rust(
                         """
                         ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                            message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                            message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
                             path: path + "/${it.forMember.memberName}",
                         },
                         """,

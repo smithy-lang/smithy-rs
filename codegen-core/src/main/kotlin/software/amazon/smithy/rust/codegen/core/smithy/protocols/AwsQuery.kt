@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -47,32 +46,31 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
     )
-    private val xmlDeserModule = RustModule.private("xml_deser")
 
     override val httpBindingResolver: HttpBindingResolver = AwsQueryBindingResolver(codegenContext.model)
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
+    override fun structuredDataParser(): StructuredDataParserGenerator =
         AwsQueryParserGenerator(codegenContext, awsQueryErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsQuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_error_metadata", xmlDeserModule) {
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_error_metadata(response.body().as_ref())", awsQueryErrors)
+                rust("#T::parse_error_metadata(response_body)", awsQueryErrors)
             }
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_error_metadata", xmlDeserModule) {
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(payload.as_ref())", awsQueryErrors)
