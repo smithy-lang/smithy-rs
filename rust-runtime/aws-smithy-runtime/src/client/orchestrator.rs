@@ -73,10 +73,10 @@ pub async fn invoke(
     let context = InterceptorContext::<()>::new(input);
 
     // Client configuration
-    handle_err!(context => runtime_plugins.apply_client_configuration(cfg, &mut interceptors.client_interceptors_mut()));
+    handle_err!(context => runtime_plugins.apply_client_configuration(cfg, interceptors.client_interceptors_mut()));
     handle_err!(context => interceptors.client_read_before_execution(&context, cfg));
     // Operation configuration
-    handle_err!(context => runtime_plugins.apply_operation_configuration(cfg, &mut interceptors.operation_interceptors_mut()));
+    handle_err!(context => runtime_plugins.apply_operation_configuration(cfg, interceptors.operation_interceptors_mut()));
     handle_err!(context => interceptors.operation_read_before_execution(&context, cfg));
 
     let operation_timeout_config = cfg.maybe_timeout_config(TimeoutKind::Operation);
