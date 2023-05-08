@@ -219,18 +219,15 @@ async fn make_an_attempt(
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::invoke;
-    use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
-    use crate::client::retries::strategy::NeverRetryStrategy;
-    use crate::client::test_util::auth::{
-        http_auth_schemes_for_testing, identity_resolvers_for_testing,
-        EmptyAuthOptionResolverParams, ANONYMOUS_AUTH_SCHEME_ID,
+    use crate::client::orchestrator::endpoints::{
+        StaticUriEndpointResolver, StaticUriEndpointResolverParams,
     };
+    use crate::client::retries::strategy::NeverRetryStrategy;
     use crate::client::test_util::{
         connector::OkConnector, deserializer::CannedResponseDeserializer,
-        endpoints::EmptyEndpointResolverParams, serializer::CannedRequestSerializer,
+        serializer::CannedRequestSerializer,
     };
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::auth::option_resolver::StaticAuthOptionResolver;
     use aws_smithy_runtime_api::client::interceptors::context::phase::{
         AfterDeserialization, BeforeDeserialization, BeforeSerialization, BeforeTransmit,
     };
@@ -239,6 +236,7 @@ mod tests {
         Interceptor, InterceptorContext, Interceptors,
     };
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
+    use aws_smithy_runtime_api::client::runtime_plugin::anonymous_auth::AnonymousAuthRuntimePlugin;
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
@@ -276,13 +274,7 @@ mod tests {
             cfg.set_response_deserializer(new_response_deserializer());
             cfg.set_retry_strategy(NeverRetryStrategy::new());
             cfg.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
-            cfg.set_endpoint_resolver_params(EmptyEndpointResolverParams::new().into());
-            cfg.set_auth_option_resolver_params(EmptyAuthOptionResolverParams::new().into());
-            cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
-                ANONYMOUS_AUTH_SCHEME_ID,
-            ]));
-            cfg.set_identity_resolvers(identity_resolvers_for_testing());
-            cfg.set_http_auth_schemes(http_auth_schemes_for_testing());
+            cfg.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
             cfg.set_connection(OkConnector::new());
 
             Ok(())
@@ -337,6 +329,7 @@ mod tests {
             let input = TypeErasedBox::new(Box::new(()));
             let runtime_plugins = RuntimePlugins::new()
                 .with_operation_plugin(TestOperationRuntimePlugin)
+                .with_operation_plugin(AnonymousAuthRuntimePlugin)
                 .with_operation_plugin(FailingInterceptorsOperationRuntimePlugin);
             let actual = invoke(input, &runtime_plugins)
                 .await
