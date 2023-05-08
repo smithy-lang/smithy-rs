@@ -223,6 +223,7 @@ mod tests {
         StaticUriEndpointResolver, StaticUriEndpointResolverParams,
     };
     use crate::client::retries::strategy::NeverRetryStrategy;
+    use crate::client::runtime_plugin::anonymous_auth::AnonymousAuthRuntimePlugin;
     use crate::client::test_util::{
         connector::OkConnector, deserializer::CannedResponseDeserializer,
         serializer::CannedRequestSerializer,
@@ -236,7 +237,6 @@ mod tests {
         Interceptor, InterceptorContext, Interceptors,
     };
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-    use aws_smithy_runtime_api::client::runtime_plugin::anonymous_auth::AnonymousAuthRuntimePlugin;
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_smithy_runtime_api::type_erasure::TypeErasedBox;

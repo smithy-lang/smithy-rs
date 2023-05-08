@@ -5,17 +5,18 @@
 
 //! The [AnonymousAuthRuntimePlugin] and supporting code.
 
-use super::RuntimePlugin;
-use crate::client::auth::option_resolver::{
+use aws_smithy_runtime_api::client::auth::option_resolver::{
     StaticAuthOptionResolver, StaticAuthOptionResolverParams,
 };
-use crate::client::auth::{AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner};
-use crate::client::identity::anonymous::AnonymousIdentityResolver;
-use crate::client::identity::{Identity, IdentityResolver, IdentityResolvers};
-use crate::client::interceptors::Interceptors;
-use crate::client::orchestrator::{ConfigBagAccessors, HttpRequest};
-use crate::client::runtime_plugin::BoxError;
-use crate::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::auth::{
+    AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
+};
+use aws_smithy_runtime_api::client::identity::anonymous::AnonymousIdentityResolver;
+use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
+use aws_smithy_runtime_api::client::interceptors::Interceptors;
+use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::config_bag::ConfigBag;
 
 const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 

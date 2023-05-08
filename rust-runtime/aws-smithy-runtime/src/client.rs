@@ -23,3 +23,6 @@ pub mod retries;
 pub mod test_util;
 
 mod timeout;
+
+/// Runtime plugins for Smithy clients.
+pub mod runtime_plugin;

@@ -6,9 +6,6 @@
 use crate::client::interceptors::Interceptors;
 use crate::config_bag::ConfigBag;
 
-#[cfg(feature = "anonymous-auth")]
-pub mod anonymous_auth;
-
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub trait RuntimePlugin {
