@@ -21,7 +21,7 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.2"
 futures = "0.3"
 http = "0.2"
-hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "stream"] }
+hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
 tokio-rustls = "0.24.0"
