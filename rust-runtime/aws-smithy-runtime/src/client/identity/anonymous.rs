@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::identity::{Identity, IdentityResolver};
-use crate::client::orchestrator::Future;
-use crate::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
+use aws_smithy_runtime_api::client::orchestrator::Future;
+use aws_smithy_runtime_api::config_bag::ConfigBag;
 
 #[derive(Debug)]
 pub struct AnonymousIdentity;

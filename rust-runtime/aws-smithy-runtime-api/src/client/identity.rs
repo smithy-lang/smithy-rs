@@ -14,9 +14,6 @@ use std::time::SystemTime;
 #[cfg(feature = "http-auth")]
 pub mod http;
 
-#[cfg(feature = "anonymous-auth")]
-pub mod anonymous;
-
 pub trait IdentityResolver: Send + Sync + Debug {
     fn resolve_identity(&self, config_bag: &ConfigBag) -> Future<Identity>;
 }

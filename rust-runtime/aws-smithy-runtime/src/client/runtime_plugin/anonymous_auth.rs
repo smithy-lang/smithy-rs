@@ -5,13 +5,13 @@
 
 //! The [AnonymousAuthRuntimePlugin] and supporting code.
 
+use crate::client::identity::anonymous::AnonymousIdentityResolver;
 use aws_smithy_runtime_api::client::auth::option_resolver::{
     StaticAuthOptionResolver, StaticAuthOptionResolverParams,
 };
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
 };
-use aws_smithy_runtime_api::client::identity::anonymous::AnonymousIdentityResolver;
 use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
 use aws_smithy_runtime_api::client::interceptors::Interceptors;
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};

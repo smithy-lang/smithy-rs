@@ -26,3 +26,6 @@ mod timeout;
 
 /// Runtime plugins for Smithy clients.
 pub mod runtime_plugin;
+
+/// Smithy identity used by auth and signing.
+pub mod identity;
