@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{bail, handle_err};
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{AttemptCheckpoint, Error};
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpResponse};
@@ -40,16 +39,17 @@ pub(super) async fn orchestrate_auth(
                     .await
                     .map_err(construction_failure)?;
                 let request = checkpoint.before_transmit().request_mut();
-                handle_err!([checkpoint] => request_signer.sign_request(request, &identity, cfg));
-                return Ok(checkpoint);
+                return match request_signer.sign_request(request, &identity, cfg) {
+                    Ok(_) => Ok(checkpoint),
+                    Err(err) => Err(checkpoint.into_error(err.into())),
+                };
             }
         }
     }
 
-    bail!(
-        [checkpoint],
-        "no auth scheme matched auth options. This is a bug. Please file an issue."
-    );
+    Err(checkpoint.into_error(
+        "no auth scheme matched auth options. This is a bug. Please file an issue.".into(),
+    ))
 }
 
 #[cfg(test)]
