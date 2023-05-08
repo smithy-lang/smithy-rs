@@ -11,6 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
+anonymous-auth = []
 test-util = ["dep:aws-smithy-protocol-test"]
 
 [dependencies]
@@ -31,6 +32,8 @@ tracing = "0.1"
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
 tokio = { version = "1.25", features = ["macros", "rt", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
 all-features = true
