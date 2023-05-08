@@ -21,8 +21,8 @@ use aws_smithy_runtime_api::config_bag::ConfigBag;
 const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 
 /// A [RuntimePlugin] to provide anonymous authentication. This runtime plugin sets its own:
-/// - [AuthOptionResolver](crate::client::auth::AuthOptionResolver)
-/// - [AuthOptionResolverParams](crate::client::auth::AuthOptionResolverParams)
+/// - [AuthOptionResolver](aws_smithy_runtime_api::client::auth::AuthOptionResolver)
+/// - [AuthOptionResolverParams](aws_smithy_runtime_api::client::auth::AuthOptionResolverParams)
 /// - [IdentityResolvers]
 /// - [HttpAuthSchemes]
 ///
