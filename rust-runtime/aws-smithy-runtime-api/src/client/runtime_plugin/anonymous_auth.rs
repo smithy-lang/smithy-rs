@@ -20,8 +20,8 @@ use crate::config_bag::ConfigBag;
 const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 
 /// A [RuntimePlugin] to provide anonymous authentication. This runtime plugin sets its own:
-/// - [AuthOptionResolver]
-/// - [AuthOptionResolverParams]
+/// - [AuthOptionResolver](crate::client::auth::AuthOptionResolver)
+/// - [AuthOptionResolverParams](crate::client::auth::AuthOptionResolverParams)
 /// - [IdentityResolvers]
 /// - [HttpAuthSchemes]
 ///
