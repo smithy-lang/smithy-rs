@@ -12,7 +12,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 default = []
 http-auth = ["dep:zeroize"]
-anonymous-auth = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
