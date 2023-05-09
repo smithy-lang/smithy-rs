@@ -12,7 +12,7 @@ use super::{InstrumentOperation, MakeIdentity};
 /// A [`Layer`] used to apply [`InstrumentOperation`].
 #[derive(Debug)]
 pub struct InstrumentLayer<RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
-    operation_id: ShapepId,
+    operation_id: ShapeId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
@@ -34,7 +34,7 @@ impl<RequestMakeFmt, ResponseMakeFmt> InstrumentLayer<RequestMakeFmt, ResponseMa
     /// The argument is typically [`RequestFmt`](super::sensitivity::RequestFmt).
     pub fn request_fmt<R>(self, make_request: R) -> InstrumentLayer<R, ResponseMakeFmt> {
         InstrumentLayer {
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request,
             make_response: self.make_response,
         }
@@ -45,7 +45,7 @@ impl<RequestMakeFmt, ResponseMakeFmt> InstrumentLayer<RequestMakeFmt, ResponseMa
     /// The argument is typically [`ResponseFmt`](super::sensitivity::ResponseFmt).
     pub fn response_fmt<R>(self, make_response: R) -> InstrumentLayer<RequestMakeFmt, R> {
         InstrumentLayer {
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request: self.make_request,
             make_response,
         }
@@ -60,7 +60,7 @@ where
     type Service = InstrumentOperation<S, RequestMakeFmt, ResponseMakeFmt>;
 
     fn layer(&self, service: S) -> Self::Service {
-        InstrumentOperation::new(service, self.operation_name.clone())
+        InstrumentOperation::new(service, self.operation_id.clone())
             .request_fmt(self.make_request.clone())
             .response_fmt(self.make_response.clone())
     }

@@ -27,6 +27,7 @@ use futures_util::ready;
 use futures_util::TryFuture;
 use thiserror::Error;
 use tower::{layer::util::Stack, Layer, Service};
+use crate::extension;
 
 use crate::operation::{Operation, OperationShape};
 use crate::plugin::{plugin_from_operation_name_fn, OperationNameFn, Plugin, PluginPipeline, PluginStack};
@@ -146,7 +147,7 @@ impl<S> Layer<S> for OperationExtensionLayer {
 }
 
 /// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
-pub struct OperationExtensionPlugin(OperationNameFn<fn(OperationExtension) -> OperationExtensionLayer>);
+pub struct OperationExtensionPlugin(OperationNameFn<fn(ShapeId) -> OperationExtensionLayer>);
 
 impl fmt::Debug for OperationExtensionPlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -162,7 +163,7 @@ where
     type Layer = Stack<L, OperationExtensionLayer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <OperationNameFn<fn(OperationExtension) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+        <OperationNameFn<fn(ShapeId) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
     }
 }
 
@@ -177,7 +178,7 @@ pub trait OperationExtensionExt<P> {
 impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
     fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
         let plugin = OperationExtensionPlugin(plugin_from_operation_name_fn(|shape_id| {
-            OperationExtensionLayer(shape_id.clone())
+            OperationExtensionLayer(extension::OperationExtension(shape_id.clone()))
         }));
         self.push(plugin)
     }

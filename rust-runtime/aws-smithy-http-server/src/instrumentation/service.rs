@@ -105,14 +105,14 @@ where
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
-    operation_id: ShapepId,
+    operation_id: ShapeId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: S, operation_id: OperationExtension) -> Self {
+    pub fn new(inner: S, operation_id: ShapeId) -> Self {
         Self {
             inner,
             operation_id,
@@ -129,7 +129,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<S, R, ResponseMakeFmt> {
         InstrumentOperation {
             inner: self.inner,
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request,
             make_response: self.make_response,
         }
@@ -141,7 +141,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<S, RequestMakeFmt, R> {
         InstrumentOperation {
             inner: self.inner,
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request: self.make_request,
             make_response,
         }
@@ -172,7 +172,7 @@ where
         let span = {
             let headers = self.make_request.make_debug(request.headers());
             let uri = self.make_request.make_display(request.uri());
-            debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers)
+            debug_span!("request", operation = %self.operation_id.absolute(), method = %request.method(), %uri, ?headers)
         };
 
         InstrumentedFuture {
