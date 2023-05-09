@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon-service`.
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{extension::OperationIdExt, plugin::PluginPipeline, AddExtensionLayer};
+use aws_smithy_http_server::{extension::OperationExtensionExt, plugin::PluginPipeline, AddExtensionLayer};
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
@@ -32,8 +32,8 @@ pub async fn main() {
     let plugins = PluginPipeline::new()
         // Apply the `PrintPlugin` defined in `plugin.rs`
         .print()
-        // Apply the `OperationIdPlugin` defined in `aws_smithy_http_server::extension`. This allows other
-        // plugins or tests to access a `aws_smithy_http_server::extension::OperationId` from
+        // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
+        // plugins or tests to access a `aws_smithy_http_server::extension::OperationExtension` from
         // `Response::extensions`, or infer routing failure when it's missing.
         .insert_operation_extension();
     let app = PokemonService::builder_with_plugins(plugins)

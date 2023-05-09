@@ -19,9 +19,9 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use std::{fmt, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
+use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 use futures_util::ready;
 use futures_util::TryFuture;
@@ -35,11 +35,11 @@ use crate::shape_id::ShapeId;
 pub use crate::request::extension::{Extension, MissingExtension};
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
-/// This extension type is inserted, via the [`OperationIdPlugin`], whenever it has been correctly determined
+/// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
 /// that the request should be routed to a particular operation. The operation handler might not even get invoked
 /// because the request fails to deserialize into the modeled operation input.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OperationId(pub ShapeId);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OperationExtension(pub ShapeId);
 
 /// An error occurred when parsing an absolute operation shape ID.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub enum ParseError {
 }
 
 #[allow(deprecated)]
-impl OperationId {
+impl OperationExtension {
     /// Returns the Smithy model namespace.
     pub fn namespace(&self) -> &'static str {
         self.0.namespace()
@@ -67,29 +67,23 @@ impl OperationId {
     }
 }
 
-impl Display for OperationId {
+impl Display for OperationExtension {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.absolute())
-    }
-}
-
-impl Hash for OperationId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.absolute().hash(state)
+        self.0.fmt(f)
     }
 }
 
 pin_project_lite::pin_project! {
-    /// The [`Service::Future`] of [`OperationIdService`] - inserts an [`OperationId`] into the
+    /// The [`Service::Future`] of [`OperationExtensionService`] - inserts an [`OperationExtension`] into the
     /// [`http::Response]`.
-    pub struct OperationIdFuture<Fut> {
+    pub struct OperationExtensionFuture<Fut> {
         #[pin]
         inner: Fut,
-        operation_extension: Option<OperationId>
+        operation_extension: Option<OperationExtension>
     }
 }
 
-impl<Fut, RespB> Future for OperationIdFuture<Fut>
+impl<Fut, RespB> Future for OperationExtensionFuture<Fut>
 where
     Fut: TryFuture<Ok = http::Response<RespB>>,
 {
@@ -109,81 +103,81 @@ where
     }
 }
 
-/// Inserts a [`OperationId`] into the extensions of the [`http::Response`].
+/// Inserts a [`OperationExtension`] into the extensions of the [`http::Response`].
 #[derive(Debug, Clone)]
-pub struct OperationIdService<S> {
+pub struct OperationExtensionService<S> {
     inner: S,
-    operation_extension: OperationId,
+    operation_extension: OperationExtension,
 }
 
-impl<S, B, RespBody> Service<http::Request<B>> for OperationIdService<S>
+impl<S, B, RespBody> Service<http::Request<B>> for OperationExtensionService<S>
 where
     S: Service<http::Request<B>, Response = http::Response<RespBody>>,
 {
     type Response = http::Response<RespBody>;
     type Error = S::Error;
-    type Future = OperationIdFuture<S::Future>;
+    type Future = OperationExtensionFuture<S::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        OperationIdFuture {
+        OperationExtensionFuture {
             inner: self.inner.call(req),
             operation_extension: Some(self.operation_extension.clone()),
         }
     }
 }
 
-/// A [`Layer`] applying the [`OperationIdService`] to an inner [`Service`].
+/// A [`Layer`] applying the [`OperationExtensionService`] to an inner [`Service`].
 #[derive(Debug, Clone)]
-pub struct OperationIdLayer(OperationId);
+pub struct OperationExtensionLayer(OperationExtension);
 
-impl<S> Layer<S> for OperationIdLayer {
-    type Service = OperationIdService<S>;
+impl<S> Layer<S> for OperationExtensionLayer {
+    type Service = OperationExtensionService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        OperationIdService {
+        OperationExtensionService {
             inner,
             operation_extension: self.0.clone(),
         }
     }
 }
 
-/// A [`Plugin`] which applies [`OperationIdLayer`] to every operation.
-pub struct OperationIdPlugin(OperationNameFn<fn(OperationId) -> OperationIdLayer>);
+/// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
+pub struct OperationExtensionPlugin(OperationNameFn<fn(OperationExtension) -> OperationExtensionLayer>);
 
-impl fmt::Debug for OperationIdPlugin {
+impl fmt::Debug for OperationExtensionPlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("OperationIdPlugin").field(&"...").finish()
+        f.debug_tuple("OperationExtensionPlugin").field(&"...").finish()
     }
 }
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for OperationIdPlugin
+impl<P, Op, S, L> Plugin<P, Op, S, L> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {
     type Service = S;
-    type Layer = Stack<L, OperationIdLayer>;
+    type Layer = Stack<L, OperationExtensionLayer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <OperationNameFn<fn(OperationId) -> OperationIdLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+        <OperationNameFn<fn(OperationExtension) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
     }
 }
 
-/// An extension trait on [`PluginPipeline`] allowing the application of [`OperationIdPlugin`].
+/// An extension trait on [`PluginPipeline`] allowing the application of [`OperationExtensionPlugin`].
 ///
 /// See [`module`](crate::extension) documentation for more info.
-pub trait OperationIdExt<P> {
-    /// Apply the [`OperationIdPlugin`], which inserts the [`OperationId`] into every [`http::Response`].
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationIdPlugin, P>>;
+pub trait OperationExtensionExt<P> {
+    /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`http::Response`].
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>>;
 }
 
-impl<P> OperationIdExt<P> for PluginPipeline<P> {
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationIdPlugin, P>> {
-        let plugin = OperationIdPlugin(plugin_from_operation_name_fn(|shape_id| {
-            OperationIdLayer(shape_id.clone())
+impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
+        let plugin = OperationExtensionPlugin(plugin_from_operation_name_fn(|shape_id| {
+            OperationExtensionLayer(shape_id.clone())
         }));
         self.push(plugin)
     }
@@ -240,7 +234,7 @@ mod tests {
     #[test]
     fn ext_accept() {
         let value = "com.amazonaws.ebs#CompleteSnapshot";
-        let ext = OperationId::new(value).unwrap();
+        let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
         assert_eq!(ext.namespace(), "com.amazonaws.ebs");
@@ -251,7 +245,7 @@ mod tests {
     fn ext_reject() {
         let value = "CompleteSnapshot";
         assert_eq!(
-            OperationId::new(value).unwrap_err(),
+            OperationExtension::new(value).unwrap_err(),
             ParseError::MissingNamespace
         )
     }
@@ -280,8 +274,8 @@ mod tests {
 
         // Check for `OperationId`.
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
-        let expected = OperationId::new(DummyOp::NAME).unwrap();
-        let actual = response.extensions().get::<OperationId>().unwrap();
+        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
+        let actual = response.extensions().get::<OperationExtension>().unwrap();
         assert_eq!(*actual, expected);
     }
 }

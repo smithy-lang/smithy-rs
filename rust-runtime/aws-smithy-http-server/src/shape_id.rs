@@ -11,7 +11,7 @@
 pub use crate::request::extension::{Extension, MissingExtension};
 
 /// Shape ID for a modelled Smithy shape.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShapeId {
     absolute: &'static str,
 
@@ -20,6 +20,7 @@ pub struct ShapeId {
 }
 
 impl ShapeId {
+    #[doc(hidden)]
     pub const fn new(absolute: &'static str, namespace: &'static str, name: &'static str) -> Self {
         Self {
             absolute,
