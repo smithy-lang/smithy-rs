@@ -16,7 +16,7 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-use crate::extension::OperationExtension;
+use crate::shape_id::ShapeId;
 
 use super::{MakeDebug, MakeDisplay, MakeIdentity};
 
@@ -105,17 +105,17 @@ where
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
-    operation_name: OperationExtension,
+    operation_id: ShapepId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: S, operation_name: OperationExtension) -> Self {
+    pub fn new(inner: S, operation_id: OperationExtension) -> Self {
         Self {
             inner,
-            operation_name,
+            operation_id,
             make_request: MakeIdentity,
             make_response: MakeIdentity,
         }

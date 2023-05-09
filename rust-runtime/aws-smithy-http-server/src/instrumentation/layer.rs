@@ -5,23 +5,23 @@
 
 use tower::Layer;
 
-use crate::extension::OperationExtension;
+use crate::shape_id::ShapeId;
 
 use super::{InstrumentOperation, MakeIdentity};
 
 /// A [`Layer`] used to apply [`InstrumentOperation`].
 #[derive(Debug)]
 pub struct InstrumentLayer<RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
-    operation_name: OperationExtension,
+    operation_id: ShapepId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl InstrumentLayer {
     /// Constructs a new [`InstrumentLayer`] with no data redacted.
-    pub fn new(operation_name: OperationExtension) -> Self {
+    pub fn new(operation_id: ShapeId) -> Self {
         Self {
-            operation_name,
+            operation_id,
             make_request: MakeIdentity,
             make_response: MakeIdentity,
         }

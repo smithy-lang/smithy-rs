@@ -79,7 +79,7 @@
 //!     }
 //!
 //!     fn call(&mut self, req: R) -> Self::Future {
-//!         println!("Hi {}", self.name);
+//!         println!("Hi {}", self.id.absolute());
 //!         self.inner.call(req)
 //!     }
 //! }
