@@ -47,10 +47,14 @@ where
 }
 
 /// Converts a `lambda_http::Request` into a `http::Request<hyper::Body>`
-/// Issue: <https://github.com/awslabs/smithy-rs/issues/1125>
+/// The body conversion would not be required if we were to tackle this issue:
+/// <https://github.com/awslabs/smithy-rs/issues/1125>
 ///
 /// While converting the event the [API Gateway Stage] portion of the URI
-/// is removed from the uri that gets returned as a new `http::Request`.
+/// is removed from the URI that gets returned as the new `http::Request`.
+///
+/// So, for example, if the `https://redacted.execute-api.us-east-1.amazonaws.com/prod/operation`
+/// was hit, then the raw HTTP path is just `/operation`, since `prod` is the API Gateway stage.
 ///
 /// [API Gateway Stage]: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-stages.html
 fn convert_event(request: Request) -> HyperRequest {
@@ -59,12 +63,14 @@ fn convert_event(request: Request) -> HyperRequest {
     let mut path = String::from(parts.uri.path());
 
     if !raw_path.is_empty() && raw_path != path {
+        tracing::trace!(raw_path, path, "rewriting request URI to use raw HTTP path");
         path = raw_path;
 
         let uri_parts: uri::Parts = parts.uri.into();
         let path_and_query = uri_parts
             .path_and_query
-            .expect("request URI does not have `PathAndQuery`");
+            .expect("request URI does not have `PathAndQuery`; please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+        tracing::trace!(?path_and_query);
 
         if let Some(query) = path_and_query.query() {
             path.push('?');
@@ -72,11 +78,13 @@ fn convert_event(request: Request) -> HyperRequest {
         }
 
         parts.uri = uri::Uri::builder()
-            .authority(uri_parts.authority.expect("request URI does not have authority set"))
-            .scheme(uri_parts.scheme.expect("request URI does not have scheme set"))
+            .authority(uri_parts.authority.expect("request URI does not have authority set; please file a bug report under https://github.com/awslabs/smithy-rs/issues"))
+            .scheme(uri_parts.scheme.expect("request URI does not have scheme set; please file a bug report under https://github.com/awslabs/smithy-rs/issues"))
             .path_and_query(path)
             .build()
-            .expect("unable to construct new URI");
+            .expect("unable to construct new URI; please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+    } else {
+        tracing::trace!(raw_path, path, "not rewriting request URI");
     }
 
     let body = match body {
