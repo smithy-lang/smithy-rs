@@ -16,6 +16,10 @@ type HyperRequest = http::Request<hyper::Body>;
 /// A [`Service`] that takes a `lambda_http::Request` and converts
 /// it to `http::Request<hyper::Body>`.
 ///
+/// **This version is only guaranteed to be compatible with
+/// [`lambda_http`](https://docs.rs/lambda_http) ^0.7.0.** Please ensure that your service crate's
+/// `Cargo.toml` depends on a compatible version.
+///
 /// [`Service`]: tower::Service
 #[derive(Debug, Clone)]
 pub struct LambdaHandler<S> {
