@@ -7,13 +7,14 @@ use super::repr::{self, BaseProvider};
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
+#[cfg(feature = "credentials-sso")]
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
-use aws_sdk_sts::input::AssumeRoleInput;
 use aws_sdk_sts::middleware::DefaultMiddleware;
-use aws_sdk_sts::{Config, Credentials};
+use aws_sdk_sts::operation::assume_role::AssumeRoleInput;
+use aws_sdk_sts::{config::Credentials, Config};
 use aws_smithy_client::erase::DynConnector;
 use aws_types::region::Region;
 use std::fmt::Debug;
@@ -117,19 +118,29 @@ impl ProviderChain {
                     .build();
                 Arc::new(provider)
             }
+            #[allow(unused_variables)]
             BaseProvider::Sso {
                 sso_account_id,
                 sso_region,
                 sso_role_name,
                 sso_start_url,
             } => {
-                let sso_config = SsoConfig {
-                    account_id: sso_account_id.to_string(),
-                    role_name: sso_role_name.to_string(),
-                    start_url: sso_start_url.to_string(),
-                    region: Region::new(sso_region.to_string()),
-                };
-                Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                #[cfg(feature = "credentials-sso")]
+                {
+                    let sso_config = SsoConfig {
+                        account_id: sso_account_id.to_string(),
+                        role_name: sso_role_name.to_string(),
+                        start_url: sso_start_url.to_string(),
+                        region: Region::new(sso_region.to_string()),
+                    };
+                    Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                }
+                #[cfg(not(feature = "credentials-sso"))]
+                {
+                    Err(ProfileFileError::UnknownProvider {
+                        name: "sso".to_string(),
+                    })?
+                }
             }
         };
         tracing::info!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());

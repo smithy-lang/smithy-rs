@@ -19,10 +19,11 @@ import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExtendedRequestIdDecorator
 import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
+import software.amazon.smithy.rustsdk.customize.sso.SSODecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
-import software.amazon.smithy.rustsdk.endpoints.AwsEndpointDecorator
 import software.amazon.smithy.rustsdk.endpoints.AwsEndpointsStdLib
 import software.amazon.smithy.rustsdk.endpoints.OperationInputTestDecorator
+import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
 
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
@@ -30,8 +31,9 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         CredentialsCacheDecorator(),
         CredentialsProviderDecorator(),
         RegionDecorator(),
-        AwsEndpointDecorator(),
+        RequireEndpointRules(),
         UserAgentDecorator(),
+        SigV4AuthDecorator(),
         SigV4SigningDecorator(),
         HttpRequestChecksumDecorator(),
         HttpResponseChecksumDecorator(),
@@ -42,7 +44,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         SdkConfigDecorator(),
         ServiceConfigDecorator(),
         AwsPresigningDecorator(),
-        AwsReadmeDecorator(),
+        AwsCrateDocsDecorator(),
         HttpConnectorDecorator(),
         AwsEndpointsStdLib(),
         *PromotedBuiltInsDecorators,
@@ -50,6 +52,8 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         OperationInputTestDecorator(),
         AwsRequestIdDecorator(),
         DisabledAuthDecorator(),
+        RecursionDetectionDecorator(),
+        InvocationIdDecorator(),
     ),
 
     // Service specific decorators
@@ -63,6 +67,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
     ),
     S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
     STSDecorator().onlyApplyTo("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
+    SSODecorator().onlyApplyTo("com.amazonaws.sso#SWBPortalService"),
 
     // Only build docs-rs for linux to reduce load on docs.rs
     listOf(

@@ -125,11 +125,11 @@ class RequestBindingGenerator(
             "${label.content} = ${local(member)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
-        writer.addImport(RuntimeType.stdFmt.resolve("Write").toSymbol(), null)
         writer.rustBlockTemplate(
-            "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
+            "fn uri_base(_input: &#{Input}, output: &mut String) -> std::result::Result<(), #{BuildError}>",
             *codegenScope,
         ) {
+            rust("use #T as _;", RuntimeType.stdFmt.resolve("Write"))
             httpTrait.uri.labels.map { label ->
                 val member = inputShape.expectMember(label.content)
                 serializeLabel(member, label, local(member))
@@ -168,7 +168,7 @@ class RequestBindingGenerator(
             "fn uri_query(_input: &#{Input}, mut output: &mut String) -> Result<(), #{BuildError}>",
             *codegenScope,
         ) {
-            write("let mut query = #T::new(&mut output);", RuntimeType.queryFormat(runtimeConfig, "Writer"))
+            write("let mut query = #T::new(output);", RuntimeType.queryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
                 // this generates a query string like `?k=v&xyz`
@@ -273,7 +273,7 @@ class RequestBindingGenerator(
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_timestamp"))
                 "&$func($targetName, ${writer.format(timestampFormatType)})?"
             }
@@ -314,7 +314,7 @@ class RequestBindingGenerator(
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
                 val func = format(RuntimeType.labelFormat(runtimeConfig, "fmt_timestamp"))
                 rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
             }

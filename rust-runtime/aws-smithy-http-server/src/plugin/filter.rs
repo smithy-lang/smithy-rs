@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::util::Either;
+use super::{either::Either, IdentityPlugin};
 
 use crate::operation::{Operation, OperationShape};
 use crate::shape_id::ShapeId;
@@ -61,17 +61,11 @@ where
     type Layer = Either<Inner::Layer, L>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        if (self.predicate)(Op::NAME) {
-            let Operation { inner, layer } = self.inner.map(input);
-            Operation {
-                inner: Either::A(inner),
-                layer: Either::A(layer),
-            }
+        let either_plugin = if (self.predicate)(Op::NAME) {
+            Either::Left { value: &self.inner }
         } else {
-            Operation {
-                inner: Either::B(input.inner),
-                layer: Either::B(input.layer),
-            }
-        }
+            Either::Right { value: IdentityPlugin }
+        };
+        either_plugin.map(input)
     }
 }

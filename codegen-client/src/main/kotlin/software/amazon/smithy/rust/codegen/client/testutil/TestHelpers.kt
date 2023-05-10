@@ -12,14 +12,15 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
-import software.amazon.smithy.rust.codegen.client.smithy.OldModuleSchemeClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
 
@@ -53,8 +54,13 @@ val TestClientRustSymbolProviderConfig = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-    moduleProvider = OldModuleSchemeClientModuleProvider,
+    moduleProvider = ClientModuleProvider,
 )
+
+private class ClientTestCodegenDecorator : ClientCodegenDecorator {
+    override val name = "test"
+    override val order: Byte = 0
+}
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
@@ -62,6 +68,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         TestClientRustSymbolProviderConfig,
+        ClientTestCodegenDecorator(),
     )
 
 fun testClientCodegenContext(
@@ -73,6 +80,7 @@ fun testClientCodegenContext(
 ): ClientCodegenContext = ClientCodegenContext(
     model,
     symbolProvider ?: testSymbolProvider(model),
+    TestModuleDocProvider,
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),

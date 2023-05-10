@@ -5,15 +5,17 @@
 
 use aws_config::retry::RetryConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::model::{
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::types::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
 };
-use aws_sdk_s3::{Client, Config, Credentials, Region};
+use aws_sdk_s3::{Client, Config};
 use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_http::result::SdkError;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -116,7 +118,12 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .await
         .unwrap_err();
 
-    assert_eq!("TimeoutError(TimeoutError { source: RequestTimeoutError { kind: \"operation timeout (all attempts including retries)\", duration: 500ms } })", format!("{:?}", err));
+    let expected = "operation timeout (all attempts including retries) occurred after 500ms";
+    let message = format!("{}", DisplayErrorContext(err));
+    assert!(
+        message.contains(expected),
+        "expected '{message}' to contain '{expected}'"
+    );
     // Assert 500ms have passed with a 150ms margin of error
     assert_elapsed!(now, Duration::from_millis(500), Duration::from_millis(150));
 

@@ -24,6 +24,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -86,7 +87,9 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     block: T.() -> Unit,
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
-        conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
+        withTemplate(textAfterNewLine, ctx) { tail ->
+            conditionalBlock(header, tail, conditional = true, block = block)
+        }
     }
 }
 
@@ -300,12 +303,22 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
     return this
 }
 
-/** Document the containing entity (e.g. module, crate, etc.)
+/**
+ * Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
-fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
-    return docs(text, newlinePrefix = "//! ", args = args)
+fun RustWriter.containerDocs(text: String, vararg args: Any, trimStart: Boolean = true): RustWriter {
+    return docs(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 }
+
+/**
+ * Equivalent of [rustTemplate] for container docs.
+ */
+fun RustWriter.containerDocsTemplate(
+    text: String,
+    vararg args: Pair<String, Any>,
+    trimStart: Boolean = false,
+): RustWriter = docsTemplate(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 
 /**
  * Write RustDoc-style docs into the writer
@@ -315,7 +328,12 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Tabs are replaced with spaces
  *    - Empty newlines are removed
  */
-fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+fun <T : AbstractCodeWriter<T>> T.docs(
+    text: String,
+    vararg args: Any,
+    newlinePrefix: String = "/// ",
+    trimStart: Boolean = true,
+): T {
     // Because writing docs relies on the newline prefix, ensure that there was a new line written
     // before we write the docs
     this.ensureNewline()
@@ -323,12 +341,26 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
         .joinToString("\n") {
-            // Rustdoc warns on tabs in documentation
-            it.trimStart().replace("\t", "  ")
+            when (trimStart) {
+                true -> it.trimStart()
+                else -> it
+            }.replace("\t", "  ") // Rustdoc warns on tabs in documentation
         }
     write(cleaned, *args)
     popState()
     return this
+}
+
+/**
+ * [rustTemplate] equivalent for doc comments.
+ */
+fun <T : AbstractCodeWriter<T>> T.docsTemplate(
+    text: String,
+    vararg args: Pair<String, Any>,
+    newlinePrefix: String = "/// ",
+    trimStart: Boolean = false,
+): T = withTemplate(text, args, trim = false) { template ->
+    docs(template, newlinePrefix = newlinePrefix, trimStart = trimStart)
 }
 
 /**
@@ -394,6 +426,14 @@ fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
 fun RustWriter.raw(text: String) = writeInline(escape(text))
 
 /**
+ * [rustTemplate] equivalent for `raw()`. Note: This function won't automatically escape formatter symbols.
+ */
+fun RustWriter.rawTemplate(text: String, vararg args: Pair<String, Any>) =
+    withTemplate(text, args, trim = false) { templated ->
+        writeInline(templated)
+    }
+
+/**
  * Rustdoc doesn't support `r#` for raw identifiers.
  * This function adjusts doc links to refer to raw identifiers directly.
  */
@@ -430,7 +470,8 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
-
+                fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
@@ -476,7 +517,7 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate") || filename.startsWith("tests/")) {
+            require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
                 "We can only write into files in the crate (got $namespace)"
             }
         }
@@ -533,11 +574,13 @@ class RustWriter private constructor(
      */
     fun withInlineModule(
         module: RustModule.LeafModule,
+        moduleDocProvider: ModuleDocProvider?,
         moduleWriter: Writable,
     ): RustWriter {
         check(module.isInline()) {
             "Only inline modules may be used with `withInlineModule`: $module"
         }
+
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
@@ -548,7 +591,7 @@ class RustWriter private constructor(
             devDependenciesOnly = devDependenciesOnly || module.tests,
         )
         moduleWriter(innerWriter)
-        module.documentation?.let { docs -> docs(docs) }
+        ModuleDocProvider.writeDocs(moduleDocProvider, module, this)
         module.rustMetadata.render(this)
         rustBlock("mod ${module.name}") {
             writeWithNoFormatting(innerWriter.toString())

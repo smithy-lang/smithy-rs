@@ -5,9 +5,11 @@
 
 //! DateTime type for representing Smithy timestamps.
 
+use crate::date_time::format::rfc3339::AllowOffsets;
 use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
@@ -155,7 +157,8 @@ impl DateTime {
     /// Parses a `DateTime` from a string using the given `format`.
     pub fn from_str(s: &str, format: Format) -> Result<Self, DateTimeParseError> {
         match format {
-            Format::DateTime => format::rfc3339::parse(s),
+            Format::DateTime => format::rfc3339::parse(s, AllowOffsets::OffsetsForbidden),
+            Format::DateTimeWithOffset => format::rfc3339::parse(s, AllowOffsets::OffsetsAllowed),
             Format::HttpDate => format::http_date::parse(s),
             Format::EpochSeconds => format::epoch_seconds::parse(s),
         }
@@ -207,7 +210,8 @@ impl DateTime {
     /// Enable parsing multiple dates from the same string
     pub fn read(s: &str, format: Format, delim: char) -> Result<(Self, &str), DateTimeParseError> {
         let (inst, next) = match format {
-            Format::DateTime => format::rfc3339::read(s)?,
+            Format::DateTime => format::rfc3339::read(s, AllowOffsets::OffsetsForbidden)?,
+            Format::DateTimeWithOffset => format::rfc3339::read(s, AllowOffsets::OffsetsAllowed)?,
             Format::HttpDate => format::http_date::read(s)?,
             Format::EpochSeconds => {
                 let split_point = s.find(delim).unwrap_or(s.len());
@@ -229,7 +233,7 @@ impl DateTime {
     /// Returns an error if the given `DateTime` cannot be represented by the desired format.
     pub fn fmt(&self, format: Format) -> Result<String, DateTimeFormatError> {
         match format {
-            Format::DateTime => format::rfc3339::format(self),
+            Format::DateTime | Format::DateTimeWithOffset => format::rfc3339::format(self),
             Format::EpochSeconds => Ok(format::epoch_seconds::format(self)),
             Format::HttpDate => format::http_date::format(self),
         }
@@ -298,6 +302,18 @@ impl From<SystemTime> for DateTime {
     }
 }
 
+impl PartialOrd for DateTime {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DateTime {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_nanos().cmp(&other.as_nanos())
+    }
+}
+
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -314,10 +330,15 @@ impl fmt::Display for ConversionError {
 /// Formats for representing a `DateTime` in the Smithy protocols.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Format {
-    /// RFC-3339 Date Time.
+    /// RFC-3339 Date Time. If the date time has an offset, an error will be returned
     DateTime,
+
+    /// RFC-3339 Date Time. Offsets are supported
+    DateTimeWithOffset,
+
     /// Date format used by the HTTP `Date` header, specified in RFC-7231.
     HttpDate,
+
     /// Number of seconds since the Unix epoch formatted as a floating point.
     EpochSeconds,
 }
@@ -326,6 +347,7 @@ pub enum Format {
 mod test {
     use crate::date_time::Format;
     use crate::DateTime;
+    use proptest::proptest;
     use std::convert::TryFrom;
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
@@ -543,5 +565,64 @@ mod test {
             SystemTime::from(off_date_time),
             SystemTime::try_from(date_time).unwrap()
         );
+    }
+
+    #[test]
+    fn ord() {
+        let first = DateTime::from_secs_and_nanos(-1, 0);
+        let second = DateTime::from_secs_and_nanos(-1, 1);
+        let third = DateTime::from_secs_and_nanos(0, 0);
+        let fourth = DateTime::from_secs_and_nanos(0, 1);
+        let fifth = DateTime::from_secs_and_nanos(1, 0);
+
+        assert!(first == first);
+        assert!(first < second);
+        assert!(first < third);
+        assert!(first < fourth);
+        assert!(first < fifth);
+
+        assert!(second > first);
+        assert!(second == second);
+        assert!(second < third);
+        assert!(second < fourth);
+        assert!(second < fifth);
+
+        assert!(third > first);
+        assert!(third > second);
+        assert!(third == third);
+        assert!(third < fourth);
+        assert!(third < fifth);
+
+        assert!(fourth > first);
+        assert!(fourth > second);
+        assert!(fourth > third);
+        assert!(fourth == fourth);
+        assert!(fourth < fifth);
+
+        assert!(fifth > first);
+        assert!(fifth > second);
+        assert!(fifth > third);
+        assert!(fifth > fourth);
+        assert!(fifth == fifth);
+    }
+
+    const MIN_RFC_3339_MILLIS: i64 = -62135596800000;
+    const MAX_RFC_3339_MILLIS: i64 = 253402300799999;
+
+    // This test uses milliseconds, because `Format::DateTime` does not support nanoseconds.
+    proptest! {
+        #[test]
+        fn ord_proptest(
+            left_millis in MIN_RFC_3339_MILLIS..MAX_RFC_3339_MILLIS,
+            right_millis in MIN_RFC_3339_MILLIS..MAX_RFC_3339_MILLIS,
+        ) {
+            let left = DateTime::from_millis(left_millis);
+            let right = DateTime::from_millis(right_millis);
+
+            let left_str = left.fmt(Format::DateTime).unwrap();
+            let right_str = right.fmt(Format::DateTime).unwrap();
+
+            assert_eq!(left.cmp(&right), left_str.cmp(&right_str));
+        }
     }
 }

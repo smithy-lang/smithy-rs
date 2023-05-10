@@ -432,7 +432,7 @@ mod test {
     #[tokio::test]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
-        use aws_sdk_sso::config::AsyncSleep;
+        use aws_smithy_async::rt::sleep::AsyncSleep;
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint(http::Uri::from_static("http://240.0.0.0"))
@@ -452,11 +452,10 @@ mod test {
             sleeper.sleep(std::time::Duration::from_millis(100)),
         );
         match timeout.await {
-            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
+            Ok(_) => panic!("provide_credentials completed before timeout future"),
             Err(_err) => match provider.fallback_on_interrupt() {
                 Some(actual) => assert_eq!(actual, expected),
-                None => assert!(
-                    false,
+                None => panic!(
                     "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
                 ),
             },

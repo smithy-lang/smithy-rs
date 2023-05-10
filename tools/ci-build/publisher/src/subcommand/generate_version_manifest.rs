@@ -28,7 +28,10 @@ pub struct GenerateVersionManifestArgs {
     examples_revision: String,
     /// Path containing the generated SDK to generate a version manifest for
     #[clap(long)]
-    location: PathBuf,
+    input_location: PathBuf,
+    /// Path to a directory in which a version manifest is generated
+    #[clap(long)]
+    output_location: PathBuf,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
     #[clap(long)]
     previous_release_versions: Option<PathBuf>,
@@ -38,21 +41,22 @@ pub async fn subcommand_generate_version_manifest(
     GenerateVersionManifestArgs {
         smithy_build,
         examples_revision,
-        location,
+        input_location,
+        output_location,
         previous_release_versions,
         ..
     }: &GenerateVersionManifestArgs,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
 
-    let repo_root = find_git_repository_root("smithy-rs", &std::env::current_dir()?)?;
+    let repo_root = find_git_repository_root("smithy-rs", std::env::current_dir()?)?;
     let smithy_rs_revision = GitCLI::new(&repo_root)?
         .get_head_revision()
         .context("get smithy-rs revision")?;
     info!("Resolved smithy-rs revision to {}", smithy_rs_revision);
 
     let smithy_build_root = SmithyBuildRoot::from_file(smithy_build)?;
-    let manifests = discover_package_manifests(location.into())
+    let manifests = discover_package_manifests(input_location.into())
         .await
         .context("discover package manifests")?;
     let packages = read_packages(Fs::Real, manifests)
@@ -99,7 +103,7 @@ pub async fn subcommand_generate_version_manifest(
     };
     versions_manifest.release =
         generate_release_metadata(&versions_manifest, previous_release_versions)?;
-    let manifest_file_name = location.join("versions.toml");
+    let manifest_file_name = output_location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
     Ok(())

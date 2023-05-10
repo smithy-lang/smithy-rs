@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -13,7 +12,6 @@ import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -25,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 class ServerResponseBindingGenerator(
@@ -33,8 +30,6 @@ class ServerResponseBindingGenerator(
     private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
-    private fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
-
     private val httpBindingGenerator =
         HttpBindingGenerator(
             protocol,
@@ -76,6 +71,7 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
 
         is HttpBindingSection.BeforeRenderingHeaderValue,
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
         -> emptySection
     }
 }
@@ -105,6 +101,7 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
 
         is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
         -> emptySection
     }
 }

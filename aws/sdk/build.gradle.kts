@@ -5,7 +5,6 @@
 
 import aws.sdk.AwsServices
 import aws.sdk.Membership
-import aws.sdk.RootTest
 import aws.sdk.discoverServices
 import aws.sdk.docsLandingPage
 import aws.sdk.parseMembership
@@ -21,6 +20,7 @@ plugins {
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+    allowUnknownTraits = true
 }
 
 val smithyVersion: String by project
@@ -77,6 +77,7 @@ fun eventStreamAllowList(): Set<String> {
 fun generateSmithyBuild(services: AwsServices): String {
     val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
         ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
+    val debugMode = properties.get("debugMode").toBoolean()
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
@@ -99,8 +100,9 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "codegen": {
                             "includeFluentClient": false,
                             "renameErrors": false,
+                            "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": false
+                            "enableNewSmithyRuntime": "middleware"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -232,6 +234,7 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     binaryName = "sdk-versioner"
     arguments = listOf(
         "use-path-and-version-dependencies",
+        "--isolate-crates",
         "--sdk-path", "../../sdk",
         "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
         outputDir.resolve("examples").absolutePath,
@@ -298,9 +301,9 @@ tasks.register<Copy>("relocateChangelog") {
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
-    |exclude = [${"\n"}${services.rootTests.map(RootTest::manifestName).joinToString(",\n") { "|    \"$it\"" }}
+    |exclude = [${"\n"}${services.excludedFromWorkspace().joinToString(",\n") { "|    \"$it\"" }}
     |]
-    |members = [${"\n"}${services.allModules.joinToString(",\n") { "|    \"$it\"" }}
+    |members = [${"\n"}${services.includedInWorkspace().joinToString(",\n") { "|    \"$it\"" }}
     |]
     """.trimMargin()
 }
@@ -381,7 +384,9 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     binaryName = "publisher"
     arguments = mutableListOf(
         "generate-version-manifest",
-        "--location",
+        "--input-location",
+        sdkOutputDir.absolutePath,
+        "--output-location",
         outputDir.absolutePath,
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,

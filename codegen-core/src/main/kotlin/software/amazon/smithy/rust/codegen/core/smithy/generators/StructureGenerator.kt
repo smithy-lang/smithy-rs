@@ -60,6 +60,15 @@ open class StructureGenerator(
     private val shape: StructureShape,
     private val customizations: List<StructureCustomization>,
 ) {
+    companion object {
+        /** Reserved struct member names */
+        val structureMemberNameMap: Map<String, String> = mapOf(
+            "build" to "build_value",
+            "builder" to "builder_value",
+            "default" to "default_value",
+        )
+    }
+
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
     private val accessorMembers: List<MemberShape> = when (errorTrait) {
@@ -122,7 +131,7 @@ open class StructureGenerator(
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
+                writer.renderMemberDoc(member, memberSymbol)
                 writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
                 val returnType = when {
@@ -131,7 +140,7 @@ open class StructureGenerator(
                     memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
-                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
                     when {
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")

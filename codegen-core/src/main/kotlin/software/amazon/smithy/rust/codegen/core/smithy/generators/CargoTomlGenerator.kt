@@ -72,6 +72,8 @@ class CargoTomlGenerator(
             ).toMap(),
             "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
                 .associate { it.name to it.toMap() },
+            "build-dependencies" to dependencies.filter { it.scope == DependencyScope.Build }
+                .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap(),

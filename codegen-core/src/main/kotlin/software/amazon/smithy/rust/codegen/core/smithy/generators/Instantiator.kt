@@ -29,6 +29,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.HttpHeaderTrait
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -52,9 +54,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import java.math.BigDecimal
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -108,12 +112,14 @@ open class Instantiator(
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
 
-    fun generate(shape: Shape, data: Node, ctx: Ctx = Ctx()) = writable { render(this, shape, data, ctx) }
+    fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable {
+        render(this, shape, data, headers, ctx)
+    }
 
-    fun render(writer: RustWriter, shape: Shape, data: Node, ctx: Ctx = Ctx()) {
+    fun render(writer: RustWriter, shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) {
         when (shape) {
             // Compound Shapes
-            is StructureShape -> renderStructure(writer, shape, data as ObjectNode, ctx)
+            is StructureShape -> renderStructure(writer, shape, data as ObjectNode, headers, ctx)
             is UnionShape -> renderUnion(writer, shape, data as ObjectNode, ctx)
 
             // Collections
@@ -125,10 +131,16 @@ open class Instantiator(
             is MemberShape -> renderMember(writer, shape, data, ctx)
 
             // Wrapped Shapes
-            is TimestampShape -> writer.rust(
-                "#T::from_secs(${(data as NumberNode).value})",
-                RuntimeType.dateTime(runtimeConfig),
-            )
+            is TimestampShape -> {
+                val node = (data as NumberNode)
+                val num = BigDecimal(node.toString())
+                val wholePart = num.toInt()
+                val fractionalPart = num.remainder(BigDecimal.ONE)
+                writer.rust(
+                    "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
+                    RuntimeType.dateTime(runtimeConfig),
+                )
+            }
 
             /**
              * ```rust
@@ -212,6 +224,7 @@ open class Instantiator(
                         this,
                         targetShape,
                         data,
+                        mapOf(),
                         ctx.copy()
                             .letIf(memberShape.hasTrait<HttpPrefixHeadersTrait>()) {
                                 it.copy(lowercaseMapKeys = true)
@@ -316,7 +329,7 @@ open class Instantiator(
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
-    private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
+    private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, headers: Map<String, String>, ctx: Ctx) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
             val setterName = builderKindBehavior.setterName(memberShape)
             writer.withBlock(".$setterName(", ")") {
@@ -335,10 +348,29 @@ open class Instantiator(
                 }
         }
 
+        if (data.isEmpty) {
+            shape.allMembers.entries
+                .filter { it.value.hasTrait<HttpHeaderTrait>() }
+                .forEach { (_, value) ->
+                    val trait = value.expectTrait<HttpHeaderTrait>().value
+                    headers.get(trait)?.let { renderMemberHelper(value, Node.from(it)) }
+                }
+        }
+
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
             renderMemberHelper(memberShape, value)
         }
+
+        shape.allMembers.entries
+            .firstOrNull {
+                it.value.hasTrait<HttpPayloadTrait>() &&
+                    !data.members.containsKey(Node.from(it.key)) &&
+                    model.expectShape(it.value.target) is StructureShape
+            }
+            ?.let {
+                renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
+            }
 
         writer.rust(".build()")
         if (builderKindBehavior.hasFallibleBuilder(shape)) {

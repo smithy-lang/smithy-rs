@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -101,13 +100,13 @@ class AwsJsonSerializerGenerator(
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
         var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
-            val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
-            serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
+            serializer = protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
                 rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
@@ -131,10 +130,8 @@ open class AwsJson(
         "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
-    private val jsonDeserModule = RustModule.private("json_deser")
 
     val version: AwsJsonVersion get() = awsJsonVersion
 
@@ -146,23 +143,22 @@ open class AwsJson(
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_error_metadata", jsonDeserModule) {
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
                 *errorScope,
@@ -170,10 +166,10 @@ open class AwsJson(
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_error_metadata", jsonDeserModule) {
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
                 }

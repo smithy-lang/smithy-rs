@@ -262,12 +262,14 @@ pin_project! {
 }
 
 impl ByteStream {
+    /// Create a new `ByteStream` from an [`SdkBody`].
     pub fn new(body: SdkBody) -> Self {
         Self {
             inner: Inner::new(body),
         }
     }
 
+    /// Create a new `ByteStream` from a static byte slice.
     pub fn from_static(bytes: &'static [u8]) -> Self {
         Self {
             inner: Inner::new(SdkBody::from(Bytes::from_static(bytes))),
@@ -394,6 +396,8 @@ impl ByteStream {
         tokio_util::io::StreamReader::new(self)
     }
 
+    /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.
+    /// returning a new `Bytestream`.
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
         ByteStream::new(self.into_inner().map(f))
     }
@@ -471,6 +475,11 @@ impl AggregatedBytes {
     /// directly on `AggregatedBytes`.
     pub fn into_bytes(mut self) -> Bytes {
         self.0.copy_to_bytes(self.0.remaining())
+    }
+
+    /// Convert this buffer into an [`Iterator`] of underlying non-contiguous segments of [`Bytes`]
+    pub fn into_segments(self) -> impl Iterator<Item = Bytes> {
+        self.0.into_inner().into_iter()
     }
 
     /// Convert this buffer into a `Vec<u8>`

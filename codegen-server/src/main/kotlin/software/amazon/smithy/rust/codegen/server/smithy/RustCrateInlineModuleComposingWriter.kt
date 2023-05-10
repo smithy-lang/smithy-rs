@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import java.util.concurrent.ConcurrentHashMap
@@ -22,13 +23,13 @@ typealias InlineModuleCreator = (Symbol, Writable) -> Unit
  */
 fun RustCrate.initializeInlineModuleWriter(debugMode: Boolean): InnerModule =
     crateToInlineModule
-        .getOrPut(this) { InnerModule(debugMode) }
+        .getOrPut(this) { InnerModule(moduleDocProvider, debugMode) }
 
 /**
  * Returns the InnerModule for the given RustCrate
  */
 fun RustCrate.getInlineModuleWriter(): InnerModule {
-    return crateToInlineModule.getOrPut(this) { InnerModule(false) }
+    return crateToInlineModule.getOrPut(this) { InnerModule(moduleDocProvider, false) }
 }
 
 /**
@@ -126,7 +127,7 @@ fun RustCrate.withInMemoryInlineModule(
 
 fun RustWriter.createTestInlineModuleCreator(): InlineModuleCreator {
     return { symbol: Symbol, writable: Writable ->
-        this.withInlineModule(symbol.module()) {
+        this.withInlineModule(symbol.module(), null) {
             writable()
         }
     }
@@ -143,7 +144,7 @@ private data class InlineModuleWithWriter(val inlineModule: RustModule.LeafModul
 private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
     ConcurrentHashMap()
 
-class InnerModule(debugMode: Boolean) {
+class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: Boolean) {
     // Holds the root modules to start rendering the descendents from.
     private val topLevelModuleWriters: ConcurrentHashMap<RustWriter, Unit> = ConcurrentHashMap()
     private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
@@ -272,7 +273,7 @@ class InnerModule(debugMode: Boolean) {
             inlineModuleWriters[inMemoryWriter]!!.forEach {
                 writeDocs(it.inlineModule)
 
-                topLevelWriter.withInlineModule(it.inlineModule) {
+                topLevelWriter.withInlineModule(it.inlineModule, moduleDocProvider) {
                     writeInlineCode(this, it.writer.toString())
                     renderDescendents(this, it.writer)
                 }
@@ -334,7 +335,9 @@ class InnerModule(debugMode: Boolean) {
             inlineWriter
         } else {
             check(inlineModuleAndWriter.inlineModule == lookForModule) {
-                "The two inline modules have the same name but different attributes on them."
+                """The two inline modules have the same name but different attributes on them:
+                1) ${inlineModuleAndWriter.inlineModule}
+                2) $lookForModule"""
             }
 
             inlineModuleAndWriter.writer

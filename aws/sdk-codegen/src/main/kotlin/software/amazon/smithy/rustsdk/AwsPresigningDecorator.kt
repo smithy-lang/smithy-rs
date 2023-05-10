@@ -42,6 +42,11 @@ import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
+private val presigningTypes: List<Pair<String, Any>> = listOf(
+    "PresignedRequest" to AwsRuntimeType.presigning().resolve("PresignedRequest"),
+    "PresigningConfig" to AwsRuntimeType.presigning().resolve("PresigningConfig"),
+)
+
 internal enum class PayloadSigningType {
     EMPTY,
     UNSIGNED_PAYLOAD,
@@ -62,6 +67,7 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
     mapOf(
         // S3
         // TODO(https://github.com/awslabs/aws-sdk-rust/issues/488) Technically, all S3 operations support presigning
+        ShapeId.from("com.amazonaws.s3#HeadObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#UploadPart") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
@@ -134,8 +140,8 @@ class AwsInputPresignedMethod(
     private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = (
-        presigningTypes(codegenContext) + listOf(
-            "PresignedRequestService" to AwsRuntimeType.presigning(codegenContext)
+        presigningTypes + listOf(
+            "PresignedRequestService" to AwsRuntimeType.presigning()
                 .resolve("service::PresignedRequestService"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
@@ -240,12 +246,11 @@ class AwsInputPresignedMethod(
 }
 
 class AwsPresignedFluentBuilderMethod(
-    codegenContext: ClientCodegenContext,
     runtimeConfig: RuntimeConfig,
 ) : FluentClientCustomization() {
     private val codegenScope = (
-        presigningTypes(codegenContext) + arrayOf(
-            "Error" to AwsRuntimeType.presigning(codegenContext).resolve("config::Error"),
+        presigningTypes + arrayOf(
+            "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
         ).toTypedArray()
@@ -364,15 +369,3 @@ private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
         """,
     )
 }
-
-private fun presigningTypes(codegenContext: ClientCodegenContext): List<Pair<String, Any>> =
-    when (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-        true -> listOf(
-            "PresignedRequest" to AwsRuntimeType.presigning(codegenContext).resolve("PresignedRequest"),
-            "PresigningConfig" to AwsRuntimeType.presigning(codegenContext).resolve("PresigningConfig"),
-        )
-        else -> listOf(
-            "PresignedRequest" to AwsRuntimeType.presigning(codegenContext).resolve("request::PresignedRequest"),
-            "PresigningConfig" to AwsRuntimeType.presigning(codegenContext).resolve("config::PresigningConfig"),
-        )
-    }
