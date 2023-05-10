@@ -153,7 +153,7 @@ pub trait OperationExtensionExt<P> {
 impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
     fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
         let plugin = OperationExtensionPlugin(plugin_from_operation_id_fn(|shape_id| {
-            OperationExtensionLayer(extension::OperationExtension(shape_id.clone()))
+            OperationExtensionLayer(extension::OperationExtension(shape_id))
         }));
         self.push(plugin)
     }
