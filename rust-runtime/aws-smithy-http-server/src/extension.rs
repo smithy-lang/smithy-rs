@@ -243,6 +243,6 @@ mod tests {
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         let expected = DummyOp::NAME;
         let actual = response.extensions().get::<OperationExtension>().unwrap();
-        assert_eq!(*actual, expected);
+        assert_eq!(actual.0, expected);
     }
 }
