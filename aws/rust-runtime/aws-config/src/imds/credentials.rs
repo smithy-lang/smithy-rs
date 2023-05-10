@@ -384,11 +384,12 @@ mod test {
             .imds_client(client)
             .build();
         let creds = provider.provide_credentials().await.expect("valid creds");
-        assert!(creds.expiry().unwrap() > time_of_request_to_fetch_credentials);
+        // The expiry should be equal to what is originally set (==2021-09-21T04:16:53Z).
+        assert!(creds.expiry() == UNIX_EPOCH.checked_add(Duration::from_secs(1632197813)));
         connection.assert_requests_match(&[]);
 
         // There should not be logs indicating credentials are extended for stability.
-        assert!(!logs_contain("Attempting credential expiration extension"));
+        assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
     #[tokio::test]
     #[traced_test]
