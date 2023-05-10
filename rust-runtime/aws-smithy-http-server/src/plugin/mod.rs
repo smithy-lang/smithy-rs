@@ -19,7 +19,7 @@
 //! let plugin = HttpLayer(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_name(plugin, |name| name == GetPokemonSpecies::NAME);
+//! let plugin = filter_by_operation_id(plugin, |name| name == GetPokemonSpecies::NAME);
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
@@ -129,9 +129,9 @@ mod stack;
 
 use crate::operation::Operation;
 
-pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
+pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
 pub use either::Either;
-pub use filter::{filter_by_operation_name, FilterByOperationName};
+pub use filter::{filter_by_operation_id, FilterByOperationId};
 pub use identity::IdentityPlugin;
 pub use layer::HttpLayer;
 pub use pipeline::PluginPipeline;

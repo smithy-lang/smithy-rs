@@ -35,11 +35,11 @@ use super::HttpLayer;
 ///
 /// `PluginPipeline` is itself a [`Plugin`]: you can apply any transformation that expects a
 /// [`Plugin`] to an entire pipeline. In this case, we want to use
-/// [`filter_by_operation_name`](crate::plugin::filter_by_operation_name) to limit the scope of
+/// [`filter_by_operation_name`](crate::plugin::filter_by_operation_id) to limit the scope of
 /// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{filter_by_operation_name, PluginPipeline};
+/// use aws_smithy_http_server::plugin::{filter_by_operation_id, PluginPipeline};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
@@ -47,7 +47,7 @@ use super::HttpLayer;
 /// # impl CheckHealth { const NAME: &'static str = "MyName"; }
 ///
 /// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
-/// let operation_specific_pipeline = filter_by_operation_name(
+/// let operation_specific_pipeline = filter_by_operation_id(
 ///     PluginPipeline::new()
 ///         .push(LoggingPlugin)
 ///         .push(MetricsPlugin),

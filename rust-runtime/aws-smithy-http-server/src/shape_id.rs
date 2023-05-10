@@ -20,6 +20,7 @@ pub struct ShapeId {
 }
 
 impl ShapeId {
+    /// Constructs a new [`ShapeId`]. This is used by the code-generator which preserves the invariants of the Shape ID format.
     #[doc(hidden)]
     pub const fn new(absolute: &'static str, namespace: &'static str, name: &'static str) -> Self {
         Self {

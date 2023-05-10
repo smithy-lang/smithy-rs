@@ -20,7 +20,6 @@
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
 use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
-use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
 use futures_util::ready;
@@ -30,7 +29,7 @@ use tower::{layer::util::Stack, Layer, Service};
 use crate::extension;
 
 use crate::operation::{Operation, OperationShape};
-use crate::plugin::{plugin_from_operation_name_fn, OperationNameFn, Plugin, PluginPipeline, PluginStack};
+use crate::plugin::{plugin_from_operation_name_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
 use crate::shape_id::ShapeId;
 
 pub use crate::request::extension::{Extension, MissingExtension};
@@ -48,30 +47,6 @@ pub struct OperationExtension(pub ShapeId);
 pub enum ParseError {
     #[error("# was not found - missing namespace")]
     MissingNamespace,
-}
-
-#[allow(deprecated)]
-impl OperationExtension {
-    /// Returns the Smithy model namespace.
-    pub fn namespace(&self) -> &'static str {
-        self.0.namespace()
-    }
-
-    /// Returns the Smithy operation name.
-    pub fn name(&self) -> &'static str {
-        self.0.name()
-    }
-
-    /// Returns the absolute operation shape ID.
-    pub fn absolute(&self) -> &'static str {
-        self.0.absolute()
-    }
-}
-
-impl Display for OperationExtension {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
 }
 
 pin_project_lite::pin_project! {
@@ -147,7 +122,7 @@ impl<S> Layer<S> for OperationExtensionLayer {
 }
 
 /// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
-pub struct OperationExtensionPlugin(OperationNameFn<fn(ShapeId) -> OperationExtensionLayer>);
+pub struct OperationExtensionPlugin(OperationIdFn<fn(ShapeId) -> OperationExtensionLayer>);
 
 impl fmt::Debug for OperationExtensionPlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -163,7 +138,7 @@ where
     type Layer = Stack<L, OperationExtensionLayer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <OperationNameFn<fn(ShapeId) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+        <OperationIdFn<fn(ShapeId) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
     }
 }
 

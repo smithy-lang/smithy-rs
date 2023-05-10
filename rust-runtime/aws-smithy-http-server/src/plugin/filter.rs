@@ -13,8 +13,8 @@ use super::Plugin;
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`OperationShape::NAME`](crate::operation::OperationShape).
 ///
-/// See [`filter_by_operation_name`] for more details.
-pub struct FilterByOperationName<Inner, F> {
+/// See [`filter_by_operation_id`] for more details.
+pub struct FilterByOperationId<Inner, F> {
     inner: Inner,
     predicate: F,
 }
@@ -25,7 +25,7 @@ pub struct FilterByOperationName<Inner, F> {
 /// # Example
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::filter_by_operation_name;
+/// use aws_smithy_http_server::plugin::filter_by_operation_id;
 /// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
 /// # struct Pl;
 /// # struct CheckHealth;
@@ -34,24 +34,24 @@ pub struct FilterByOperationName<Inner, F> {
 /// # let plugin = Pl;
 /// # let operation = Operation { inner: (), layer: () };
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_by_operation_name(plugin, |name| name != CheckHealth::NAME);
+/// let filtered_plugin = filter_by_operation_id(plugin, |name| name != CheckHealth::NAME);
 /// let new_operation = filtered_plugin.map(operation);
 /// ```
-pub fn filter_by_operation_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
+pub fn filter_by_operation_id<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationId<Inner, F>
 where
     F: Fn(ShapeId) -> bool,
 {
-    FilterByOperationName::new(plugins, predicate)
+    FilterByOperationId::new(plugins, predicate)
 }
 
-impl<Inner, F> FilterByOperationName<Inner, F> {
-    /// Creates a new [`FilterByOperationName`].
+impl<Inner, F> FilterByOperationId<Inner, F> {
+    /// Creates a new [`FilterByOperationId`].
     fn new(inner: Inner, predicate: F) -> Self {
         Self { inner, predicate }
     }
 }
 
-impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationName<Inner, F>
+impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationId<Inner, F>
 where
     F: Fn(ShapeId) -> bool,
     Inner: Plugin<P, Op, S, L>,

@@ -11,11 +11,11 @@ use crate::shape_id::ShapeId;
 use super::Plugin;
 
 /// An adapter to convert a `Fn(&'static str) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_name_fn`] for more details.
-pub struct OperationNameFn<F> {
+pub struct OperationIdFn<F> {
     f: F,
 }
 
-impl<P, Op, S, ExistingLayer, NewLayer, F> Plugin<P, Op, S, ExistingLayer> for OperationNameFn<F>
+impl<P, Op, S, ExistingLayer, NewLayer, F> Plugin<P, Op, S, ExistingLayer> for OperationIdFn<F>
 where
     F: Fn(ShapeId) -> NewLayer,
     Op: OperationShape,
@@ -53,11 +53,11 @@ where
 /// let f = |operation_name| PrintLayer { operation_name };
 ///
 /// // This plugin applies the `PrintService` middleware around every operation.
-/// let plugin = plugin_from_operation_name_fn(f);
+/// let plugin = plugin_from_operation_id_fn(f);
 /// ```
-pub fn plugin_from_operation_name_fn<L, F>(f: F) -> OperationNameFn<F>
+pub fn plugin_from_operation_id_fn<L, F>(f: F) -> OperationIdFn<F>
 where
     F: Fn(ShapeId) -> L,
 {
-    OperationNameFn { f }
+    OperationIdFn { f }
 }
