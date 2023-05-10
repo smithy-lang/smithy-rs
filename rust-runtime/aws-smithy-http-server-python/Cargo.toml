@@ -25,7 +25,12 @@ hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "s
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
 tokio-rustls = "0.24.0"
-lambda_http = { version = "0.8.0" }
+lambda_http = { version = "0.7.1" }
+# There is a breaking change in `lambda_runtime` between `0.7.0` and `0.7.1`,
+# and `lambda_http` depends on `0.7` which by default resolves to `0.7.1` but in our CI
+# we are running `minimal-versions` which downgrades `lambda_runtime` to `0.7.0` and fails to compile
+# because of the breaking change. Here we are forcing it to use `lambda_runtime = 0.7.1`.
+lambda_runtime = { version = "0.7.1" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"
