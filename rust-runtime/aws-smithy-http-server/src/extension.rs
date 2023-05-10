@@ -210,20 +210,11 @@ mod tests {
     #[test]
     fn ext_accept() {
         let value = "com.amazonaws.ebs#CompleteSnapshot";
-        let ext = OperationExtension::new(value).unwrap();
+        let ext = ShapeId::new("com.amazonaws.ebs#CompleteSnapshot", "com.amazonaws.ebs", "CompleteSnapshot");
 
         assert_eq!(ext.absolute(), value);
         assert_eq!(ext.namespace(), "com.amazonaws.ebs");
         assert_eq!(ext.name(), "CompleteSnapshot");
-    }
-
-    #[test]
-    fn ext_reject() {
-        let value = "CompleteSnapshot";
-        assert_eq!(
-            OperationExtension::new(value).unwrap_err(),
-            ParseError::MissingNamespace
-        )
     }
 
     #[tokio::test]
@@ -231,7 +222,7 @@ mod tests {
         struct DummyOp;
 
         impl OperationShape for DummyOp {
-            const NAME: &'static str = "com.amazonaws.ebs#CompleteSnapshot";
+            const NAME: ShapeId = ShapeId::new("com.amazonaws.ebs#CompleteSnapshot", "com.amazonaws.ebs", "CompleteSnapshot");
 
             type Input = ();
             type Output = ();
@@ -250,7 +241,7 @@ mod tests {
 
         // Check for `OperationExtension`.
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
-        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
+        let expected = DummyOp::NAME;
         let actual = response.extensions().get::<OperationExtension>().unwrap();
         assert_eq!(*actual, expected);
     }
