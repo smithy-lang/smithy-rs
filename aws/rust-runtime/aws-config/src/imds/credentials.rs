@@ -306,6 +306,8 @@ mod test {
     use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
+    const WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY: &str =
+        "Attempting credential expiration extension";
 
     #[tokio::test]
     async fn profile_is_not_cached() {
@@ -432,7 +434,7 @@ mod test {
         connection.assert_requests_match(&[]);
 
         // We should inform customers that expired credentials are being used for stability.
-        assert!(logs_contain("Attempting credential expiration extension"));
+        assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
     #[tokio::test]
