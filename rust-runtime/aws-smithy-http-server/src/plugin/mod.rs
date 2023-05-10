@@ -32,7 +32,7 @@
 //! }
 //!
 //! // Create a `Plugin` using `PrintLayer`
-//! let plugin = plugin_from_operation_name_fn(|name| PrintLayer { name });
+//! let plugin = plugin_from_operation_id_fn(|name| PrintLayer { name });
 //! ```
 //!
 //! # Combine [`Plugin`]s

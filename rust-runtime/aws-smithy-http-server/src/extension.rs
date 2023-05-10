@@ -29,7 +29,7 @@ use tower::{layer::util::Stack, Layer, Service};
 use crate::extension;
 
 use crate::operation::{Operation, OperationShape};
-use crate::plugin::{plugin_from_operation_name_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
+use crate::plugin::{plugin_from_operation_id_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
 use crate::shape_id::ShapeId;
 
 pub use crate::request::extension::{Extension, MissingExtension};
@@ -152,7 +152,7 @@ pub trait OperationExtensionExt<P> {
 
 impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
     fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
-        let plugin = OperationExtensionPlugin(plugin_from_operation_name_fn(|shape_id| {
+        let plugin = OperationExtensionPlugin(plugin_from_operation_id_fn(|shape_id| {
             OperationExtensionLayer(extension::OperationExtension(shape_id.clone()))
         }));
         self.push(plugin)
