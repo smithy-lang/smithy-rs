@@ -224,6 +224,25 @@ impl TypeErasedError {
     }
 }
 
+impl From<Box<dyn StdError + Send + Sync>> for TypeErasedError {
+    fn from(value: Box<dyn StdError + Send + Sync>) -> Self {
+        TypeErasedError {
+            // This is safe because we’re just casting from `Box<dyn StdError + Send + Sync>` to
+            // `Box<dyn Any + Send + Sync>`, and `StdError` implements `Any`.
+            field: unsafe { std::mem::transmute(value) },
+            debug: Box::new(
+                |value: &Box<dyn Any + Send + Sync>, f: &mut fmt::Formatter<'_>| {
+                    fmt::Debug::fmt(value, f)
+                },
+            ),
+            // This is safe because `Box<dyn StdError + Send + Sync>` implements StdError + Send + Sync.
+            as_error: Box::new(|value: &TypeErasedError| unsafe {
+                std::mem::transmute::<_, &dyn (StdError)>(value.field.as_ref())
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

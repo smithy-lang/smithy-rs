@@ -7,7 +7,7 @@ pub mod context;
 pub mod error;
 
 use crate::client::interceptors::context::phase::{
-    AfterDeserialization, BeforeDeserialization, BeforeSerialization, BeforeTransmit,
+    AfterDeserialization, BeforeDeserialization, BeforeSerialization, BeforeTransmit, Failure,
 };
 use crate::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
