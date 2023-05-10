@@ -23,7 +23,7 @@ use std::fmt;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
+const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -192,21 +192,20 @@ impl ImdsCredentialsProvider {
     //
     // This allows continued use of the credentials even when IMDS returns expired ones.
     fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
+        let now = self.time_source.now();
+        // If credentials from IMDS are not stale, use them as they are.
+        if now < expiration {
+            return expiration;
+        }
+
         let rng = fastrand::Rng::with_seed(
-            self.time_source
-                .now()
-                .duration_since(SystemTime::UNIX_EPOCH)
+            now.duration_since(SystemTime::UNIX_EPOCH)
                 .expect("now should be after UNIX EPOCH")
                 .as_secs(),
         );
         // calculate credentials' refresh offset with jitter
-        let refresh_offset =
-            CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(120..=600));
-        let new_expiry = self.time_source.now() + refresh_offset;
-
-        if new_expiry < expiration {
-            return expiration;
-        }
+        let refresh_offset = CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(0..=300));
+        let new_expiry = now + refresh_offset;
 
         tracing::warn!(
             "Attempting credential expiration extension due to a credential service availability issue. \
@@ -342,6 +341,53 @@ mod test {
         connection.assert_requests_match(&[]);
     }
 
+    #[tokio::test]
+    #[traced_test]
+    async fn credentials_not_stale_should_be_used_as_they_are() {
+        let connection = TestConnection::new(vec![
+            (
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_A),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"profile-name"#),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+        ]);
+
+        // set to 2021-09-21T04:16:50Z that makes returned credentials' expiry (2021-09-21T04:16:53Z)
+        // not stale
+        let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632197810);
+        let time_source = TimeSource::testing(&TestingTimeSource::new(
+            time_of_request_to_fetch_credentials,
+        ));
+
+        tokio::time::pause();
+
+        let provider_config = ProviderConfig::no_configuration()
+            .with_http_connector(DynConnector::new(connection.clone()))
+            .with_time_source(time_source)
+            .with_sleep(TokioSleep::new());
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        let creds = provider.provide_credentials().await.expect("valid creds");
+        assert!(creds.expiry().unwrap() > time_of_request_to_fetch_credentials);
+        connection.assert_requests_match(&[]);
+
+        // There should not be logs indicating credentials are extended for stability.
+        assert!(!logs_contain("Attempting credential expiration extension"));
+    }
     #[tokio::test]
     #[traced_test]
     async fn expired_credentials_should_be_extended() {
