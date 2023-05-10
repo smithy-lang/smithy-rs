@@ -203,7 +203,10 @@ impl ImdsCredentialsProvider {
                 .expect("now should be after UNIX EPOCH")
                 .as_secs(),
         );
-        // calculate credentials' refresh offset with jitter
+        // Calculate credentials' refresh offset with jitter, which should be less than 15 minutes
+        // the smallest amount of time credentials are valid for.
+        // Setting it to something longer than that may have the risk of the credentials expiring
+        // before the next refresh.
         let refresh_offset = CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(0..=300));
         let new_expiry = now + refresh_offset;
 
