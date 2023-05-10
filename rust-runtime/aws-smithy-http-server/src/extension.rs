@@ -273,7 +273,7 @@ mod tests {
         let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
         let svc = layer.layer(svc);
 
-        // Check for `OperationId`.
+        // Check for `OperationExtension`.
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         let expected = OperationExtension::new(DummyOp::NAME).unwrap();
         let actual = response.extensions().get::<OperationExtension>().unwrap();
