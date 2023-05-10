@@ -24,6 +24,9 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(10 * 60);
+const WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY: &str =
+    "Attempting credential expiration extension due to a credential service availability issue. \
+    A refresh of these credentials will be attempted again within the next";
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -211,8 +214,7 @@ impl ImdsCredentialsProvider {
         let new_expiry = now + refresh_offset;
 
         tracing::warn!(
-            "Attempting credential expiration extension due to a credential service availability issue. \
-            A refresh of these credentials will be attempted again within the next {:.2} minutes.",
+            "{WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY} {:.2} minutes.",
             refresh_offset.as_secs_f64() / 60.0,
         );
 
@@ -299,7 +301,9 @@ mod test {
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
     };
-    use crate::imds::credentials::ImdsCredentialsProvider;
+    use crate::imds::credentials::{
+        ImdsCredentialsProvider, WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY,
+    };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
@@ -309,8 +313,6 @@ mod test {
     use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
-    const WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY: &str =
-        "Attempting credential expiration extension";
 
     #[tokio::test]
     async fn profile_is_not_cached() {
