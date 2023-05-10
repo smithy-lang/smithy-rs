@@ -64,6 +64,7 @@ class ServiceRuntimePluginGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val http = RuntimeType.smithyHttp(rc)
+        val client = RuntimeType.smithyClient(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
@@ -76,14 +77,17 @@ class ServiceRuntimePluginGenerator(
             "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
+            "HttpConnector" to client.resolve("http_connector::HttpConnector"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
+            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
+            "default_connector" to client.resolve("conns::default_connector"),
+            "require_connector" to client.resolve("conns::require_connector"),
         )
     }
 
@@ -119,15 +123,20 @@ class ServiceRuntimePluginGenerator(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
-                    // TODO(RuntimePlugins): Wire up standard retry
+                    // TODO(enableNewSmithyRuntime): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
 
-                    // TODO(RuntimePlugins): Replace this with the correct long-term solution
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
-                            .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
-                            .expect("connection set");
+                    let timeout_config = self.handle.conf.timeout_config();
+                    let connector_settings = timeout_config.map(|c| #{ConnectorSettings}::from_timeout_config(c)).unwrap_or_default();
+                    let connection: Box<dyn #{Connection}> = Box::new(#{DynConnectorAdapter}::new(
+                        // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                        #{require_connector}(
+                            self.handle.conf.http_connector()
+                                .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                                .or_else(|| #{default_connector}(&connector_settings, sleep_impl))
+                        )?
+                    )) as _;
                     cfg.set_connection(connection);
 
                     #{additional_config}
