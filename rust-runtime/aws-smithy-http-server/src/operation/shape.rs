@@ -4,13 +4,14 @@
  */
 
 use super::{Handler, IntoService, Normalize, Operation, OperationService};
+use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Operation shape].
 ///
 /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
 pub trait OperationShape {
     /// The name of the operation.
-    const NAME: &'static str;
+    const NAME: ShapeId;
 
     /// The operation input.
     type Input;

@@ -458,23 +458,20 @@ class FluentClientGenerator(
                 )
             }
 
-            // TODO(enableNewSmithyRuntime): Port paginators to the orchestrator
-            if (smithyRuntimeMode.generateMiddleware) {
-                PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
-                    ?.also { paginatorType ->
-                        rustTemplate(
-                            """
-                            /// Create a paginator for this request
-                            ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
-                                #{Paginator}::new(self.handle, self.inner)
-                            }
-                            """,
-                            "Paginator" to paginatorType,
-                        )
-                    }
-            }
+            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+                ?.also { paginatorType ->
+                    rustTemplate(
+                        """
+                        /// Create a paginator for this request
+                        ///
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                            #{Paginator}::new(self.handle, self.inner)
+                        }
+                        """,
+                        "Paginator" to paginatorType,
+                    )
+                }
             writeCustomizations(
                 customizations,
                 FluentClientSection.FluentBuilderImpl(
