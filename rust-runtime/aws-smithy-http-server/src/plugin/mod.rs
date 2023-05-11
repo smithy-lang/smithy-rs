@@ -12,9 +12,10 @@
 //!
 //! ```
 //! # use aws_smithy_http_server::plugin::*;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # let layer = ();
 //! # struct GetPokemonSpecies;
-//! # impl GetPokemonSpecies { const NAME: &'static str = ""; };
+//! # impl GetPokemonSpecies { const NAME: ShapeId = ShapeId::new("namespace#name", "namespace", "name"); };
 //! // Create a `Plugin` from a HTTP `Layer`
 //! let plugin = HttpLayer(layer);
 //!
@@ -26,9 +27,10 @@
 //!
 //! ```
 //! # use aws_smithy_http_server::plugin::*;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! // A `tower::Layer` which requires the operation name
 //! struct PrintLayer {
-//!     name: &'static str
+//!     name: ShapeId,
 //! }
 //!
 //! // Create a `Plugin` using `PrintLayer`
@@ -88,7 +90,7 @@
 //! /// A [`Layer`] which constructs the [`PrintService`].
 //! #[derive(Debug)]
 //! pub struct PrintLayer {
-//!     name: &'static str,
+//!     id: ShapeId,
 //! }
 //! impl<S> Layer<S> for PrintLayer {
 //!     type Service = PrintService<S>;
@@ -96,7 +98,7 @@
 //!     fn layer(&self, service: S) -> Self::Service {
 //!         PrintService {
 //!             inner: service,
-//!             name: self.name,
+//!             id: self.id.clone(),
 //!         }
 //!     }
 //! }
@@ -113,7 +115,7 @@
 //!     type Layer = Stack<L, PrintLayer>;
 //!
 //!     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-//!         input.layer(PrintLayer { name: Op::NAME })
+//!         input.layer(PrintLayer { id: Op::NAME })
 //!     }
 //! }
 //! ```

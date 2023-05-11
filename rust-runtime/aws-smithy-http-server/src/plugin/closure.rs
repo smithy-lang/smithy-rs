@@ -10,7 +10,7 @@ use crate::shape_id::ShapeId;
 
 use super::Plugin;
 
-/// An adapter to convert a `Fn(&'static str) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_id_fn`] for more details.
+/// An adapter to convert a `Fn(ShapeId) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_id_fn`] for more details.
 pub struct OperationIdFn<F> {
     f: F,
 }
@@ -29,24 +29,25 @@ where
     }
 }
 
-/// Constructs a [`Plugin`] using a closure over the operation name `F: Fn(&'static str) -> L` where `L` is a HTTP
+/// Constructs a [`Plugin`] using a closure over the operation name `F: Fn(ShapeId) -> L` where `L` is a HTTP
 /// [`Layer`](tower::Layer).
 ///
 /// # Example
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::plugin_from_operation_id_fn;
+/// use aws_smithy_http_server::shape_id::ShapeId;
 /// use tower::layer::layer_fn;
 ///
 /// // A `Service` which prints the operation name before calling `S`.
 /// struct PrintService<S> {
-///     operation_name: &'static str,
+///     operation_name: ShapeId,
 ///     inner: S
 /// }
 ///
 /// // A `Layer` applying `PrintService`.
 /// struct PrintLayer {
-///     operation_name: &'static str
+///     operation_name: ShapeId
 /// }
 ///
 /// // Defines a closure taking the operation name to `PrintLayer`.

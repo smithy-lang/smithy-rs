@@ -26,10 +26,11 @@ pub struct FilterByOperationId<Inner, F> {
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::filter_by_operation_id;
+/// use aws_smithy_http_server::shape_id::ShapeId;
 /// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
 /// # struct Pl;
 /// # struct CheckHealth;
-/// # impl OperationShape for CheckHealth { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
+/// # impl OperationShape for CheckHealth { const NAME: ShapeId = ShapeId::new("ns#CheckHealth", "ns", "CheckHealth"); type Input = (); type Output = (); type Error = (); }
 /// # impl Plugin<(), CheckHealth, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
 /// # let plugin = Pl;
 /// # let operation = Operation { inner: (), layer: () };

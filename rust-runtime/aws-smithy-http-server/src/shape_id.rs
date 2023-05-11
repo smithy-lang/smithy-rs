@@ -30,7 +30,7 @@ impl ShapeId {
         }
     }
 
-    /// Returns the Smithy model namespace.
+    /// Returns the Smithy operation namespace.
     pub fn namespace(&self) -> &'static str {
         self.namespace
     }
