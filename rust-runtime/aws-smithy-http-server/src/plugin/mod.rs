@@ -55,6 +55,7 @@
 //! use aws_smithy_http_server::{
 //!     operation::{Operation, OperationShape},
 //!     plugin::{Plugin, PluginPipeline, PluginStack},
+//!     shape_id::ShapeId,
 //! };
 //! # use tower::{layer::util::Stack, Layer, Service};
 //! # use std::task::{Context, Poll};
@@ -63,7 +64,7 @@
 //! #[derive(Clone, Debug)]
 //! pub struct PrintService<S> {
 //!     inner: S,
-//!     name: &'static str,
+//!     id: ShapeId,
 //! }
 //!
 //! impl<R, S> Service<R> for PrintService<S>

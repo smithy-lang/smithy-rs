@@ -19,14 +19,14 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 use std::hash::Hash;
+use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 
+use crate::extension;
 use futures_util::ready;
 use futures_util::TryFuture;
 use thiserror::Error;
 use tower::{layer::util::Stack, Layer, Service};
-use crate::extension;
 
 use crate::operation::{Operation, OperationShape};
 use crate::plugin::{plugin_from_operation_id_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
@@ -210,7 +210,11 @@ mod tests {
     #[test]
     fn ext_accept() {
         let value = "com.amazonaws.ebs#CompleteSnapshot";
-        let ext = ShapeId::new("com.amazonaws.ebs#CompleteSnapshot", "com.amazonaws.ebs", "CompleteSnapshot");
+        let ext = ShapeId::new(
+            "com.amazonaws.ebs#CompleteSnapshot",
+            "com.amazonaws.ebs",
+            "CompleteSnapshot",
+        );
 
         assert_eq!(ext.absolute(), value);
         assert_eq!(ext.namespace(), "com.amazonaws.ebs");
@@ -222,7 +226,11 @@ mod tests {
         struct DummyOp;
 
         impl OperationShape for DummyOp {
-            const NAME: ShapeId = ShapeId::new("com.amazonaws.ebs#CompleteSnapshot", "com.amazonaws.ebs", "CompleteSnapshot");
+            const NAME: ShapeId = ShapeId::new(
+                "com.amazonaws.ebs#CompleteSnapshot",
+                "com.amazonaws.ebs",
+                "CompleteSnapshot",
+            );
 
             type Input = ();
             type Output = ();

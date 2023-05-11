@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::shape_id::ShapeId;
 use super::{Handler, IntoService, Normalize, Operation, OperationService};
+use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Operation shape].
 ///

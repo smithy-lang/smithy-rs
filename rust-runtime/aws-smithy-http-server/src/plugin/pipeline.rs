@@ -43,8 +43,9 @@ use super::HttpLayer;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
+/// use aws_smithy_http_server::shape_id::ShapeId;
 /// # struct CheckHealth;
-/// # impl CheckHealth { const NAME: &'static str = "MyName"; }
+/// # impl CheckHealth { const NAME: ShapeId = ShapeId::new("namespace#MyName", "namespace", "MyName"); }
 ///
 /// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
 /// let operation_specific_pipeline = filter_by_operation_id(
@@ -156,7 +157,7 @@ impl<P> PluginPipeline<P> {
     /// {
     ///     // [...]
     ///     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-    ///         input.layer(PrintLayer { name: Op::NAME })
+    ///         input.layer(PrintLayer { id: Op::NAME })
     ///     }
     /// }
     /// ```

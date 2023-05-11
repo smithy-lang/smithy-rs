@@ -24,14 +24,14 @@
 //! is identified with the implementation
 //!
 //! ```rust,no_run
-//! # use aws_smithy_http_server::operation::OperationShape;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # pub struct CartIdentifier;
 //! # pub struct ShoppingCart;
 //! # pub enum GetShoppingError {}
 //! pub struct GetShopping;
 //!
 //! impl OperationShape for GetShopping {
-//!     const NAME: &'static str = "GetShopping";
+//!     const NAME: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
 //!
 //!     type Input = CartIdentifier;
 //!     type Output = ShoppingCart;
@@ -105,12 +105,13 @@
 //! # use std::task::{Poll, Context};
 //! # use aws_smithy_http_server::operation::*;
 //! # use tower::Service;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # pub struct CartIdentifier;
 //! # pub struct ShoppingCart;
 //! # pub enum GetShoppingError {}
 //! # pub struct GetShopping;
 //! # impl OperationShape for GetShopping {
-//! #    const NAME: &'static str = "GetShopping";
+//! #    const NAME: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
 //! #
 //! #    type Input = CartIdentifier;
 //! #    type Output = ShoppingCart;
