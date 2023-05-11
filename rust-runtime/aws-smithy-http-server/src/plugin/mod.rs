@@ -12,27 +12,29 @@
 //!
 //! ```
 //! # use aws_smithy_http_server::plugin::*;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # let layer = ();
 //! # struct GetPokemonSpecies;
-//! # impl GetPokemonSpecies { const NAME: &'static str = ""; };
+//! # impl GetPokemonSpecies { const NAME: ShapeId = ShapeId::new("namespace#name", "namespace", "name"); };
 //! // Create a `Plugin` from a HTTP `Layer`
 //! let plugin = HttpLayer(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_name(plugin, |name| name == GetPokemonSpecies::NAME);
+//! let plugin = filter_by_operation_id(plugin, |name| name == GetPokemonSpecies::NAME);
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
 //!
 //! ```
 //! # use aws_smithy_http_server::plugin::*;
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! // A `tower::Layer` which requires the operation name
 //! struct PrintLayer {
-//!     name: &'static str
+//!     name: ShapeId,
 //! }
 //!
 //! // Create a `Plugin` using `PrintLayer`
-//! let plugin = plugin_from_operation_name_fn(|name| PrintLayer { name });
+//! let plugin = plugin_from_operation_id_fn(|name| PrintLayer { name });
 //! ```
 //!
 //! # Combine [`Plugin`]s
@@ -55,6 +57,7 @@
 //! use aws_smithy_http_server::{
 //!     operation::{Operation, OperationShape},
 //!     plugin::{Plugin, PluginPipeline, PluginStack},
+//!     shape_id::ShapeId,
 //! };
 //! # use tower::{layer::util::Stack, Layer, Service};
 //! # use std::task::{Context, Poll};
@@ -63,7 +66,7 @@
 //! #[derive(Clone, Debug)]
 //! pub struct PrintService<S> {
 //!     inner: S,
-//!     name: &'static str,
+//!     id: ShapeId,
 //! }
 //!
 //! impl<R, S> Service<R> for PrintService<S>
@@ -79,7 +82,7 @@
 //!     }
 //!
 //!     fn call(&mut self, req: R) -> Self::Future {
-//!         println!("Hi {}", self.name);
+//!         println!("Hi {}", self.id.absolute());
 //!         self.inner.call(req)
 //!     }
 //! }
@@ -87,7 +90,7 @@
 //! /// A [`Layer`] which constructs the [`PrintService`].
 //! #[derive(Debug)]
 //! pub struct PrintLayer {
-//!     name: &'static str,
+//!     id: ShapeId,
 //! }
 //! impl<S> Layer<S> for PrintLayer {
 //!     type Service = PrintService<S>;
@@ -95,7 +98,7 @@
 //!     fn layer(&self, service: S) -> Self::Service {
 //!         PrintService {
 //!             inner: service,
-//!             name: self.name,
+//!             id: self.id.clone(),
 //!         }
 //!     }
 //! }
@@ -112,7 +115,7 @@
 //!     type Layer = Stack<L, PrintLayer>;
 //!
 //!     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-//!         input.layer(PrintLayer { name: Op::NAME })
+//!         input.layer(PrintLayer { id: Op::NAME })
 //!     }
 //! }
 //! ```
@@ -129,9 +132,9 @@ mod stack;
 
 use crate::operation::Operation;
 
-pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
+pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
 pub use either::Either;
-pub use filter::{filter_by_operation_name, FilterByOperationName};
+pub use filter::{filter_by_operation_id, FilterByOperationId};
 pub use identity::IdentityPlugin;
 pub use layer::HttpLayer;
 pub use pipeline::PluginPipeline;
