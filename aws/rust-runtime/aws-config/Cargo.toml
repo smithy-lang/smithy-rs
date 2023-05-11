@@ -10,7 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 client-hyper = ["aws-smithy-client/client-hyper"]
-rustls = ["aws-smithy-client/rustls"]
+rustls = ["aws-smithy-client/rustls", "aws-smithy-client/client-hyper"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
