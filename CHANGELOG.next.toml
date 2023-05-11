@@ -23,3 +23,9 @@ message = "Implement `Ord` and `PartialOrd` for `DateTime`."
 author = "henriiik"
 references = ["smithy-rs#2653", "smithy-rs#2656"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
+message = "Avoid extending IMDS credentials' expiry unconditionally, which may incorrectly extend it beyond what is originally defined; If returned credentials are not stale, use them as they are."
+references = ["smithy-rs#2687", "smithy-rs#2694"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
