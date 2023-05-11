@@ -25,6 +25,7 @@
 //!
 //! ```rust,no_run
 //! # use aws_smithy_http_server::shape_id::ShapeId;
+//! # use aws_smithy_http_server::operation::OperationShape;
 //! # pub struct CartIdentifier;
 //! # pub struct ShoppingCart;
 //! # pub enum GetShoppingError {}
