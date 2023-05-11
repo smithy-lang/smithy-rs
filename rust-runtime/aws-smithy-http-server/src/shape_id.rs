@@ -7,6 +7,18 @@
 //!
 //! Shape ID is a type that describes a Smithy shape.
 //!
+//! # Example
+//!
+//! In the following model:
+//! ```smithy
+//! namespace smithy.example
+//!
+//! operation CheckHealth {}
+//! ```
+//!
+//! - `absolute` is `"smithy.example#CheckHealth"`
+//! - `namespace` is `"smithy.example"`
+//! - `name` is `"CheckHealth"`
 
 pub use crate::request::extension::{Extension, MissingExtension};
 
