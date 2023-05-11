@@ -50,6 +50,7 @@ async fn sra_test() {
     conn.full_validate(MediaType::Xml).await.expect("failed")
 }
 
+#[derive(Debug)]
 struct FixupPlugin {
     timestamp: SystemTime,
 }
