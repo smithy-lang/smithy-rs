@@ -193,9 +193,14 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * The companion object contains commonly used RuntimeTypes
      */
     companion object {
-        /** Scope that contains all Rust prelude types, but not macros or functions */
+        /**
+         * Scope that contains all Rust prelude types, but not macros or functions.
+         *
+         * Prelude docs: https://doc.rust-lang.org/std/prelude/index.html#prelude-contents
+         */
         val preludeScope by lazy {
             arrayOf(
+                // Rust 1.0
                 "Copy" to std.resolve("marker::Copy"),
                 "Send" to Send,
                 "Sized" to std.resolve("marker::Sized"),
@@ -231,6 +236,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
                 "String" to String,
                 "ToString" to std.resolve("string::ToString"),
                 "Vec" to Vec,
+
+                // 2021 Edition
+                "TryFrom" to std.resolve("convert::TryFrom"),
+                "TryInto" to std.resolve("convert::TryInto"),
+                "FromIterator" to std.resolve("iter::FromIterator"),
             )
         }
 

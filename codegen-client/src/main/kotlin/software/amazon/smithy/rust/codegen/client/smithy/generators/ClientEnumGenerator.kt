@@ -66,7 +66,7 @@ data class InfallibleEnumType(
             impl ::std::str::FromStr for ${context.enumName} {
                 type Err = ::std::convert::Infallible;
 
-                fn from_str(s: &str) -> #{Result}<Self, Self::Err> {
+                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
                     #{Ok}(${context.enumName}::from(s))
                 }
             }
