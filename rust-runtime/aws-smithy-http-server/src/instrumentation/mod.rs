@@ -13,7 +13,6 @@
 //! ```
 //! # use std::convert::Infallible;
 //! # use aws_smithy_http_server::instrumentation::{*, sensitivity::{*, headers::*, uri::*}};
-//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # use http::{Request, Response};
 //! # use tower::{util::service_fn, Service};
 //! # async fn service(request: Request<()>) -> Result<Response<()>, Infallible> {
@@ -21,7 +20,6 @@
 //! # }
 //! # async fn example() {
 //! # let service = service_fn(service);
-//! # const NAME: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
 //! let request = Request::get("http://localhost/a/b/c/d?bar=hidden")
 //!     .header("header-name-a", "hidden")
 //!     .body(())
@@ -49,7 +47,7 @@
 //!         }
 //!     })
 //!     .status_code();
-//! let mut service = InstrumentOperation::new(service, NAME)
+//! let mut service = InstrumentOperation::new(service, "foo-operation")
 //!     .request_fmt(request_fmt)
 //!     .response_fmt(response_fmt);
 //!
