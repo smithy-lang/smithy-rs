@@ -48,17 +48,17 @@ impl AuthOptionResolverParams {
 }
 
 pub trait AuthOptionResolver: Send + Sync + fmt::Debug {
-    fn resolve_auth_options<'a>(
-        &'a self,
+    fn resolve_auth_options(
+        &self,
         params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError>;
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError>;
 }
 
 impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
-    fn resolve_auth_options<'a>(
-        &'a self,
+    fn resolve_auth_options(
+        &self,
         params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError> {
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
         (**self).resolve_auth_options(params)
     }
 }
@@ -67,7 +67,7 @@ impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
 struct HttpAuthSchemesInner {
     schemes: Vec<(AuthSchemeId, Box<dyn HttpAuthScheme>)>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HttpAuthSchemes {
     inner: Arc<HttpAuthSchemesInner>,
 }

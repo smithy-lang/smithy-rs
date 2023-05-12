@@ -604,6 +604,14 @@ impl InterceptorRegistrar {
     }
 }
 
+impl Extend<SharedInterceptor> for InterceptorRegistrar {
+    fn extend<T: IntoIterator<Item = SharedInterceptor>>(&mut self, iter: T) {
+        for interceptor in iter {
+            self.register(interceptor);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Interceptors {
     client_interceptors: InterceptorRegistrar,
@@ -713,4 +721,29 @@ impl Interceptors {
     interceptor_impl_fn!(context, read_after_attempt, AfterDeserialization);
     interceptor_impl_fn!(mut context, modify_before_completion, AfterDeserialization);
     interceptor_impl_fn!(context, read_after_execution, AfterDeserialization);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::client::interceptors::{Interceptor, InterceptorRegistrar, SharedInterceptor};
+
+    #[derive(Debug)]
+    struct TestInterceptor;
+    impl Interceptor for TestInterceptor {}
+
+    #[test]
+    fn register_interceptor() {
+        let mut registrar = InterceptorRegistrar::default();
+        registrar.register(SharedInterceptor::new(TestInterceptor));
+        assert_eq!(1, registrar.0.len());
+    }
+
+    #[test]
+    fn bulk_register_interceptors() {
+        let mut registrar = InterceptorRegistrar::default();
+        let number_of_interceptors = 3;
+        let interceptors = vec![SharedInterceptor::new(TestInterceptor); number_of_interceptors];
+        registrar.extend(interceptors);
+        assert_eq!(number_of_interceptors, registrar.0.len());
+    }
 }

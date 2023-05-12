@@ -43,5 +43,5 @@ async fn sra_test() {
     // conn.dump_to_file("test-data/list-objects-v2.json").unwrap();
     let resp = resp.expect("valid e2e test");
     assert_eq!(resp.name(), Some("test-bucket"));
-    conn.full_validate(MediaType::Xml).await.expect("failed")
+    conn.full_validate(MediaType::Xml).await.expect("success")
 }

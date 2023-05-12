@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 pub const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
 
+#[derive(Debug)]
 pub struct FixupPlugin {
     pub timestamp: SystemTime,
 }

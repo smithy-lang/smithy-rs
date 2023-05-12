@@ -32,7 +32,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$configBagName.put(#T);", value)
@@ -43,7 +43,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
@@ -88,6 +88,7 @@ class ServiceRuntimePluginGenerator(
     fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
         writer.rustTemplate(
             """
+            ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 handle: std::sync::Arc<crate::client::Handle>,
             }
@@ -131,9 +132,7 @@ class ServiceRuntimePluginGenerator(
                     #{additional_config}
 
                     // Client-level Interceptors are registered after default Interceptors.
-                    self.handle.conf.interceptors.iter().for_each(|interceptor| {
-                        _interceptors.register(interceptor.clone());
-                    });
+                    _interceptors.extend(self.handle.conf.interceptors.iter().cloned());
 
                     Ok(())
                 }
