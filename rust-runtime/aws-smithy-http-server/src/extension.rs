@@ -19,18 +19,15 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use std::hash::Hash;
-use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
+use std::{fmt, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 
-use crate::extension;
 use futures_util::ready;
 use futures_util::TryFuture;
 use thiserror::Error;
 use tower::{layer::util::Stack, Layer, Service};
 
 use crate::operation::{Operation, OperationShape};
-use crate::plugin::{plugin_from_operation_id_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
-use crate::shape_id::ShapeId;
+use crate::plugin::{plugin_from_operation_name_fn, OperationNameFn, Plugin, PluginPipeline, PluginStack};
 
 pub use crate::request::extension::{Extension, MissingExtension};
 
@@ -38,8 +35,13 @@ pub use crate::request::extension::{Extension, MissingExtension};
 /// This extension type is inserted, via the [`OperationExtensionPlugin`], whenever it has been correctly determined
 /// that the request should be routed to a particular operation. The operation handler might not even get invoked
 /// because the request fails to deserialize into the modeled operation input.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OperationExtension(pub ShapeId);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperationExtension {
+    absolute: &'static str,
+
+    namespace: &'static str,
+    name: &'static str,
+}
 
 /// An error occurred when parsing an absolute operation shape ID.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -47,6 +49,36 @@ pub struct OperationExtension(pub ShapeId);
 pub enum ParseError {
     #[error("# was not found - missing namespace")]
     MissingNamespace,
+}
+
+#[allow(deprecated)]
+impl OperationExtension {
+    /// Creates a new [`OperationExtension`] from the absolute shape ID.
+    pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
+        let (namespace, name) = absolute_operation_id
+            .rsplit_once('#')
+            .ok_or(ParseError::MissingNamespace)?;
+        Ok(Self {
+            absolute: absolute_operation_id,
+            namespace,
+            name,
+        })
+    }
+
+    /// Returns the Smithy model namespace.
+    pub fn namespace(&self) -> &'static str {
+        self.namespace
+    }
+
+    /// Returns the Smithy operation name.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Returns the absolute operation shape ID.
+    pub fn absolute(&self) -> &'static str {
+        self.absolute
+    }
 }
 
 pin_project_lite::pin_project! {
@@ -122,7 +154,7 @@ impl<S> Layer<S> for OperationExtensionLayer {
 }
 
 /// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
-pub struct OperationExtensionPlugin(OperationIdFn<fn(ShapeId) -> OperationExtensionLayer>);
+pub struct OperationExtensionPlugin(OperationNameFn<fn(&'static str) -> OperationExtensionLayer>);
 
 impl fmt::Debug for OperationExtensionPlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -138,7 +170,7 @@ where
     type Layer = Stack<L, OperationExtensionLayer>;
 
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <OperationIdFn<fn(ShapeId) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+        <OperationNameFn<fn(&'static str) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
     }
 }
 
@@ -152,8 +184,9 @@ pub trait OperationExtensionExt<P> {
 
 impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
     fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
-        let plugin = OperationExtensionPlugin(plugin_from_operation_id_fn(|shape_id| {
-            OperationExtensionLayer(extension::OperationExtension(shape_id))
+        let plugin = OperationExtensionPlugin(plugin_from_operation_name_fn(|name| {
+            let operation_extension = OperationExtension::new(name).expect("Operation name is malformed, this should never happen. Please file an issue against https://github.com/awslabs/smithy-rs");
+            OperationExtensionLayer(operation_extension)
         }));
         self.push(plugin)
     }
@@ -210,15 +243,20 @@ mod tests {
     #[test]
     fn ext_accept() {
         let value = "com.amazonaws.ebs#CompleteSnapshot";
-        let ext = ShapeId::new(
-            "com.amazonaws.ebs#CompleteSnapshot",
-            "com.amazonaws.ebs",
-            "CompleteSnapshot",
-        );
+        let ext = OperationExtension::new(value).unwrap();
 
         assert_eq!(ext.absolute(), value);
         assert_eq!(ext.namespace(), "com.amazonaws.ebs");
         assert_eq!(ext.name(), "CompleteSnapshot");
+    }
+
+    #[test]
+    fn ext_reject() {
+        let value = "CompleteSnapshot";
+        assert_eq!(
+            OperationExtension::new(value).unwrap_err(),
+            ParseError::MissingNamespace
+        )
     }
 
     #[tokio::test]
@@ -226,11 +264,7 @@ mod tests {
         struct DummyOp;
 
         impl OperationShape for DummyOp {
-            const NAME: ShapeId = ShapeId::new(
-                "com.amazonaws.ebs#CompleteSnapshot",
-                "com.amazonaws.ebs",
-                "CompleteSnapshot",
-            );
+            const NAME: &'static str = "com.amazonaws.ebs#CompleteSnapshot";
 
             type Input = ();
             type Output = ();
@@ -249,8 +283,8 @@ mod tests {
 
         // Check for `OperationExtension`.
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
-        let expected = DummyOp::NAME;
+        let expected = OperationExtension::new(DummyOp::NAME).unwrap();
         let actual = response.extensions().get::<OperationExtension>().unwrap();
-        assert_eq!(actual.0, expected);
+        assert_eq!(*actual, expected);
     }
 }
