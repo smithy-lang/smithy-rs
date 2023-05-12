@@ -74,38 +74,38 @@ class SmithyTypesPubUseExtraTest {
 
     @Test
     fun `it re-exports Blob when a model uses blobs`() {
-        assertDoesntHaveType(typesWithEmptyModel(), "aws_smithy_types::Blob")
-        assertHasType(typesWithMember(inputMember = "foo: Blob"), "aws_smithy_types::Blob")
-        assertHasType(typesWithMember(outputMember = "foo: Blob"), "aws_smithy_types::Blob")
+        assertDoesntHaveType(typesWithEmptyModel(), "::aws_smithy_types::Blob")
+        assertHasType(typesWithMember(inputMember = "foo: Blob"), "::aws_smithy_types::Blob")
+        assertHasType(typesWithMember(outputMember = "foo: Blob"), "::aws_smithy_types::Blob")
         assertHasType(
             typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
-            "aws_smithy_types::Blob",
+            "::aws_smithy_types::Blob",
         )
         assertHasType(
             typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
-            "aws_smithy_types::Blob",
+            "::aws_smithy_types::Blob",
         )
     }
 
     @Test
     fun `it re-exports DateTime when a model uses timestamps`() {
         assertDoesntHaveType(typesWithEmptyModel(), "aws_smithy_types::DateTime")
-        assertHasType(typesWithMember(inputMember = "foo: Timestamp"), "aws_smithy_types::DateTime")
-        assertHasType(typesWithMember(outputMember = "foo: Timestamp"), "aws_smithy_types::DateTime")
+        assertHasType(typesWithMember(inputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
+        assertHasType(typesWithMember(outputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
         assertHasType(
             typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
-            "aws_smithy_types::DateTime",
+            "::aws_smithy_types::DateTime",
         )
         assertHasType(
             typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
-            "aws_smithy_types::DateTime",
+            "::aws_smithy_types::DateTime",
         )
     }
 
     @Test
     fun `it re-exports ByteStream and AggregatedBytes when a model has streaming`() {
         val streamingTypes =
-            listOf("aws_smithy_http::byte_stream::ByteStream", "aws_smithy_http::byte_stream::AggregatedBytes")
+            listOf("::aws_smithy_http::byte_stream::ByteStream", "::aws_smithy_http::byte_stream::AggregatedBytes")
         val streamingShape = "@streaming blob Streaming"
 
         assertDoesntHaveTypes(typesWithEmptyModel(), streamingTypes)

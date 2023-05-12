@@ -131,7 +131,7 @@ class ConstrainedStringGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
+    fun `type should not be constructable without using a constructor`() {
         val model = """
             namespace test
 
@@ -153,7 +153,7 @@ class ConstrainedStringGeneratorTest {
         ).render()
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
+        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) ::std::string::String);"
     }
 
     @Test
