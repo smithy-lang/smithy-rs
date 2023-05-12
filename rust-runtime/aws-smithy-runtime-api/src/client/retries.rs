@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::interceptors::context::phase::AfterDeserialization;
 use crate::client::interceptors::context::Error;
 use crate::client::interceptors::InterceptorContext;
 use crate::client::orchestrator::BoxError;
@@ -24,7 +23,7 @@ pub trait RetryStrategy: Send + Sync + Debug {
 
     fn should_attempt_retry(
         &self,
-        context: &InterceptorContext<AfterDeserialization>,
+        context: &InterceptorContext,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError>;
 }

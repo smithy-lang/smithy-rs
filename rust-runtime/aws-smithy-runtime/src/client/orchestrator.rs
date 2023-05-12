@@ -8,22 +8,38 @@ use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
 use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_http::result::SdkError;
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeSerialization;
-use aws_smithy_runtime_api::client::interceptors::context::{
-    AttemptCheckpoint, Error, Input, Output,
-};
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpResponse};
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_api::type_erasure::TypeErasedError;
 use tracing::{debug_span, Instrument};
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
+
+macro_rules! halt_on_err {
+    ($ctx:ident, $expr:expr) => {
+        match $expr {
+            Ok(ok) => ok,
+            Err(err) => {
+                $ctx.fail(err.into());
+                return;
+            }
+        }
+    };
+}
+
+macro_rules! continue_on_err {
+    ($ctx:ident, $expr:expr) => {
+        if let Err(err) = $expr {
+            $ctx.fail(err.into());
+        }
+    };
+}
 
 #[tracing::instrument(skip_all)]
 pub async fn invoke(
@@ -32,22 +48,16 @@ pub async fn invoke(
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
     let cfg = &mut ConfigBag::base();
     let interceptors = &mut Interceptors::new();
-    let mut ctx = InterceptorContext::<()>::new(input);
+    let mut ctx = InterceptorContext::new(input);
     if let Err(err) = apply_configuration(&mut ctx, cfg, interceptors, runtime_plugins) {
-        use aws_smithy_runtime_api::client::interceptors::context::phase::Phase;
-        let (_input, output_or_error, _request, response, phase) = ctx.into_parts();
-        return Err(phase.convert_error(err.into(), output_or_error, response));
-    };
-    let checkpoint = AttemptCheckpoint::new(ctx);
-    if checkpoint.is_err() {
-        return checkpoint.finalize();
+        return Err(SdkError::construction_failure(err));
     }
 
     let operation_timeout_config = cfg.maybe_timeout_config(TimeoutKind::Operation);
     async {
-        let checkpoint = try_op(checkpoint, cfg, interceptors).await;
-        let checkpoint = finally_op(checkpoint, cfg, interceptors).await;
-        checkpoint.finalize()
+        try_op(&mut ctx, cfg, interceptors).await;
+        finally_op(&mut ctx, cfg, interceptors).await;
+        ctx.finalize()
     }
     .maybe_timeout_with_config(operation_timeout_config)
     .await
@@ -57,68 +67,41 @@ pub async fn invoke(
 /// `read_before_execution` interceptors. If a failure occurs due to config construction, `invoke`
 /// will raise it to the user. If an interceptor fails, then `invoke`
 fn apply_configuration(
-    ctx: &mut InterceptorContext<BeforeSerialization>,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors,
     runtime_plugins: &RuntimePlugins,
 ) -> Result<(), BoxError> {
     runtime_plugins.apply_client_configuration(cfg, interceptors)?;
-    if let Err(err) = interceptors.client_read_before_execution(&ctx, cfg) {
-        ctx.set_error(err.into());
-    }
+    continue_on_err!(ctx, interceptors.client_read_before_execution(ctx, cfg));
     runtime_plugins.apply_operation_configuration(cfg, interceptors)?;
-    if let Err(err) = interceptors.operation_read_before_execution(&ctx, cfg) {
-        ctx.set_error(err.into());
-    }
+    continue_on_err!(ctx, interceptors.operation_read_before_execution(ctx, cfg));
 
     Ok(())
 }
 
 async fn try_op(
-    mut checkpoint: AttemptCheckpoint,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors,
-) -> AttemptCheckpoint {
-    macro_rules! return_checkpoint_on_error {
-        ($expr:expr) => {
-            match $expr {
-                Ok(ok) => ok,
-                Err(err) => {
-                    checkpoint.set_error(err.into());
-                    return checkpoint;
-                }
-            }
-        };
-    }
-
+) {
     // Before serialization
-    return_checkpoint_on_error!(
-        interceptors.read_before_serialization(checkpoint.before_serialization(), cfg)
-    );
-    return_checkpoint_on_error!(
-        interceptors.modify_before_serialization(checkpoint.before_serialization(), cfg)
-    );
+    halt_on_err!(ctx, interceptors.read_before_serialization(ctx, cfg));
+    halt_on_err!(ctx, interceptors.modify_before_serialization(ctx, cfg));
 
     // Serialization
-    checkpoint.transition_to_serialization();
+    ctx.enter_serialization_phase();
     {
         let request_serializer = cfg.request_serializer();
-        let input = checkpoint
-            .serialization()
-            .take_input()
-            .expect("input set at this point");
-        let request = return_checkpoint_on_error!(request_serializer.serialize_input(input));
-        checkpoint.set_request(request);
+        let input = ctx.take_input().expect("input set at this point");
+        let request = halt_on_err!(ctx, request_serializer.serialize_input(input));
+        ctx.set_request(request);
     }
 
     // Before transmit
-    checkpoint.transition_to_before_transmit();
-    return_checkpoint_on_error!(
-        interceptors.read_after_serialization(checkpoint.before_transmit(), cfg)
-    );
-    return_checkpoint_on_error!(
-        interceptors.modify_before_retry_loop(checkpoint.before_transmit(), cfg)
-    );
+    ctx.enter_before_transmit_phase();
+    halt_on_err!(ctx, interceptors.read_after_serialization(ctx, cfg));
+    halt_on_err!(ctx, interceptors.modify_before_retry_loop(ctx, cfg));
 
     let retry_strategy = cfg.retry_strategy();
     match retry_strategy.should_attempt_initial_request(cfg) {
@@ -127,11 +110,11 @@ async fn try_op(
         // No, this request shouldn't be sent
         Ok(ShouldAttempt::No) => {
             let err: Box<dyn std::error::Error + Send + Sync> = "The retry strategy indicates that an initial request shouldn't be made, but it did specify why.".into();
-            return_checkpoint_on_error!(Err(err))
+            halt_on_err!(ctx, Err(err))
         }
         // No, we shouldn't make a request because...
         Err(err) => {
-            return_checkpoint_on_error!(Err(err));
+            halt_on_err!(ctx, Err(err));
         }
         Ok(ShouldAttempt::YesAfterDelay(_)) => {
             unreachable!("Delaying the initial request is currently unsupported. If this feature is important to you, please file an issue in GitHub.")
@@ -140,18 +123,16 @@ async fn try_op(
 
     loop {
         let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
-        return_checkpoint_on_error!(async {
-            try_attempt(&mut checkpoint, cfg, interceptors).await;
-            finally_attempt(&mut checkpoint, cfg, interceptors).await;
+        async {
+            try_attempt(ctx, cfg, interceptors).await;
+            finally_attempt(ctx, cfg, interceptors).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
         .maybe_timeout_with_config(attempt_timeout_config)
         .await
-        .map_err(TypeErasedError::new));
+        .expect("These are infallible; The retry strategy will decide whether to stop or not.");
         let retry_strategy = cfg.retry_strategy();
-        let should_attempt = return_checkpoint_on_error!(
-            retry_strategy.should_attempt_retry(checkpoint.after_deser(), cfg)
-        );
+        let should_attempt = halt_on_err!(ctx, retry_strategy.should_attempt_retry(ctx, cfg));
         match should_attempt {
             // Yes, let's retry the request
             ShouldAttempt::Yes => continue,
@@ -165,62 +146,41 @@ async fn try_op(
             }
         }
     }
-
-    checkpoint
 }
 
 async fn try_attempt(
-    checkpoint: &mut AttemptCheckpoint,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors,
 ) {
-    macro_rules! unwrap_or_return {
-        ($expr:expr) => {
-            match $expr {
-                Ok(ok) => ok,
-                Err(err) => {
-                    checkpoint.fail(err.into());
-                    return;
-                }
-            }
-        };
-    }
+    halt_on_err!(ctx, interceptors.read_before_attempt(ctx, cfg));
+    halt_on_err!(ctx, orchestrate_endpoint(ctx, cfg));
+    halt_on_err!(ctx, interceptors.modify_before_signing(ctx, cfg));
+    halt_on_err!(ctx, interceptors.read_before_signing(ctx, cfg));
 
-    if !checkpoint.rewind(cfg) {
-        return;
-    }
+    halt_on_err!(ctx, orchestrate_auth(ctx, cfg).await);
 
-    unwrap_or_return!(interceptors.read_before_attempt(checkpoint.before_transmit(), cfg));
-    unwrap_or_return!(orchestrate_endpoint(checkpoint.before_transmit(), cfg));
-    unwrap_or_return!(interceptors.modify_before_signing(checkpoint.before_transmit(), cfg));
-    unwrap_or_return!(interceptors.read_before_signing(checkpoint.before_transmit(), cfg));
-
-    orchestrate_auth(checkpoint, cfg).await;
-    if checkpoint.is_failed() {
-        return;
-    }
-
-    unwrap_or_return!(interceptors.read_after_signing(checkpoint.before_transmit(), cfg));
-    unwrap_or_return!(interceptors.modify_before_transmit(checkpoint.before_transmit(), cfg));
-    unwrap_or_return!(interceptors.read_before_transmit(checkpoint.before_transmit(), cfg));
+    halt_on_err!(ctx, interceptors.read_after_signing(ctx, cfg));
+    halt_on_err!(ctx, interceptors.modify_before_transmit(ctx, cfg));
+    halt_on_err!(ctx, interceptors.read_before_transmit(ctx, cfg));
 
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
-    checkpoint.transition_to_transmit();
-    let call_result = unwrap_or_return!({
-        let request = checkpoint.transmit().take_request();
+    ctx.enter_transmit_phase();
+    let call_result = halt_on_err!(ctx, {
+        let request = ctx.take_request();
         cfg.connection().call(request).await
     });
-    checkpoint.transmit().set_response(call_result);
-    checkpoint.transition_to_before_deserialization();
+    ctx.set_response(call_result);
+    ctx.enter_before_deserialization_phase();
 
-    unwrap_or_return!(interceptors.read_after_transmit(checkpoint.before_deser(), cfg));
-    unwrap_or_return!(interceptors.modify_before_deserialization(checkpoint.before_deser(), cfg));
-    unwrap_or_return!(interceptors.read_before_deserialization(checkpoint.before_deser(), cfg));
+    halt_on_err!(ctx, interceptors.read_after_transmit(ctx, cfg));
+    halt_on_err!(ctx, interceptors.modify_before_deserialization(ctx, cfg));
+    halt_on_err!(ctx, interceptors.read_before_deserialization(ctx, cfg));
 
-    checkpoint.transition_to_deserialization();
-    let output_or_error = unwrap_or_return!({
-        let response = checkpoint.deser().response_mut();
+    ctx.enter_deserialization_phase();
+    let output_or_error = async {
+        let response = ctx.response_mut();
         let response_deserializer = cfg.response_deserializer();
         match response_deserializer.deserialize_streaming(response) {
             Some(output_or_error) => Ok(output_or_error),
@@ -229,60 +189,31 @@ async fn try_attempt(
                 .await
                 .map(|_| response_deserializer.deserialize_nonstreaming(response)),
         }
-    });
-    checkpoint.deser().set_output_or_error(output_or_error);
+    }
+    .await
+    .expect("how should I insert this into the context?");
+    ctx.set_output_or_error(output_or_error);
 
-    checkpoint.transition_to_after_deserialization();
-    unwrap_or_return!(interceptors.read_after_deserialization(checkpoint.after_deser(), cfg));
+    ctx.enter_after_deserialization_phase();
+    halt_on_err!(ctx, interceptors.read_after_deserialization(ctx, cfg));
 }
 
 async fn finally_attempt(
-    checkpoint: &mut AttemptCheckpoint,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors,
 ) {
-    if checkpoint.is_failed() {
-        // TODO write a macro to do this and make it so it'll log errors that get replaced.
-        if let Err(err) = interceptors.modify_before_attempt_completion(checkpoint.failure(), cfg) {
-            checkpoint.fail(err.into());
-        }
-        if let Err(err) = interceptors.read_after_attempt(checkpoint.failure(), cfg) {
-            checkpoint.fail(err.into());
-        }
-    } else {
-        // TODO write a macro to do this and make it so it'll log errors that get replaced.
-        if let Err(err) =
-            interceptors.modify_before_attempt_completion(checkpoint.after_deser(), cfg)
-        {
-            checkpoint.fail(err.into());
-        }
-        if let Err(err) = interceptors.read_after_attempt(checkpoint.after_deser(), cfg) {
-            checkpoint.fail(err.into());
-        }
-    }
+    continue_on_err!(ctx, interceptors.modify_before_attempt_completion(ctx, cfg));
+    continue_on_err!(ctx, interceptors.read_after_attempt(ctx, cfg));
 }
 
 async fn finally_op(
-    mut checkpoint: AttemptCheckpoint,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &mut Interceptors,
-) -> AttemptCheckpoint {
-    if checkpoint.is_failed() {
-        if let Err(err) = interceptors.modify_before_completion(checkpoint.failure(), cfg) {
-            checkpoint.fail(err.into());
-        }
-        if let Err(err) = interceptors.read_after_execution(checkpoint.failure(), cfg) {
-            checkpoint.fail(err.into());
-        }
-    } else {
-        if let Err(err) = interceptors.modify_before_completion(checkpoint.after_deser(), cfg) {
-            checkpoint.fail(err.into());
-        }
-        if let Err(err) = interceptors.read_after_execution(checkpoint.after_deser(), cfg) {
-            checkpoint.fail(err.into());
-        }
-    }
-    checkpoint
+) {
+    continue_on_err!(ctx, interceptors.modify_before_completion(ctx, cfg));
+    continue_on_err!(ctx, interceptors.read_after_execution(ctx, cfg));
 }
 
 #[cfg(all(test, feature = "test-util"))]
@@ -298,10 +229,12 @@ mod tests {
         serializer::CannedRequestSerializer,
     };
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::phase::{
-        AfterDeserialization, BeforeDeserialization, BeforeSerialization, BeforeTransmit,
+    use aws_smithy_runtime_api::client::interceptors::context::{
+        AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
+        BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
+        BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
+        BeforeTransmitInterceptorContextRef, Error, Input, Output,
     };
-    use aws_smithy_runtime_api::client::interceptors::context::{Error, Output};
     use aws_smithy_runtime_api::client::interceptors::{
         Interceptor, InterceptorContext, Interceptors,
     };
@@ -418,7 +351,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeExecution, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_execution,
-            &InterceptorContext<BeforeSerialization>,
+            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -429,7 +362,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_serialization,
-            &mut InterceptorContext<BeforeSerialization>,
+            &mut BeforeSerializationInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -440,7 +373,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_serialization,
-            &InterceptorContext<BeforeSerialization>,
+            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -451,7 +384,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSerialization, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_serialization,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -462,7 +395,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeRetryLoop, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_retry_loop,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -473,7 +406,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeAttempt, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_attempt,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -484,7 +417,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_signing,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -495,7 +428,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_signing,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -506,7 +439,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_signing,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -517,7 +450,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_transmit,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -528,7 +461,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_transmit,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -539,7 +472,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterTransmit, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_transmit,
-            &InterceptorContext<BeforeDeserialization>,
+            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -550,7 +483,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_deserialization,
-            &mut InterceptorContext<BeforeDeserialization>,
+            &mut BeforeDeserializationInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -561,7 +494,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_deserialization,
-            &InterceptorContext<BeforeDeserialization>,
+            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -572,7 +505,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_deserialization,
-            &InterceptorContext<AfterDeserialization>,
+            &AfterDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -583,7 +516,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -592,11 +525,7 @@ mod tests {
     #[traced_test]
     async fn test_read_after_attempt_error_handling() {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
-        interceptor_error_handling_test!(
-            read_after_attempt,
-            &InterceptorContext<AfterDeserialization>,
-            expected
-        );
+        interceptor_error_handling_test!(read_after_attempt, &InterceptorContext, expected);
     }
 
     #[tokio::test]
@@ -605,7 +534,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -614,11 +543,7 @@ mod tests {
     #[traced_test]
     async fn test_read_after_execution_error_handling() {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
-        interceptor_error_handling_test!(
-            read_after_execution,
-            &InterceptorContext<AfterDeserialization>,
-            expected
-        );
+        interceptor_error_handling_test!(read_after_execution, &InterceptorContext, expected);
     }
 
     macro_rules! interceptor_error_redirection_test {
@@ -686,9 +611,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_execution,
-            &InterceptorContext<BeforeSerialization>,
+            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -699,9 +624,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_serialization,
-            &mut InterceptorContext<BeforeSerialization>,
+            &mut BeforeSerializationInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -712,9 +637,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_serialization,
-            &InterceptorContext<BeforeSerialization>,
+            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -725,9 +650,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_after_serialization,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -738,9 +663,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_retry_loop,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -751,9 +676,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_attempt,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -764,9 +689,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_signing,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -777,9 +702,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_signing,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -790,9 +715,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_after_signing,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -803,9 +728,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_transmit,
-            &mut InterceptorContext<BeforeTransmit>,
+            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -816,9 +741,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_transmit,
-            &InterceptorContext<BeforeTransmit>,
+            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -829,9 +754,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_after_transmit,
-            &InterceptorContext<BeforeDeserialization>,
+            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -843,9 +768,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_deserialization,
-            &mut InterceptorContext<BeforeDeserialization>,
+            &mut BeforeDeserializationInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -857,9 +782,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_before_deserialization,
-            &InterceptorContext<BeforeDeserialization>,
+            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -871,9 +796,9 @@ mod tests {
         let expected = r#""#.to_string();
         interceptor_error_redirection_test!(
             read_after_deserialization,
-            &InterceptorContext<AfterDeserialization>,
+            &AfterDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             expected
         );
     }
@@ -884,9 +809,9 @@ mod tests {
         let expected = r#""ServiceError(ServiceError { source: TypeErasedError:InterceptorError { kind: ReadAfterAttempt, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_attempt_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             read_after_attempt,
-            &InterceptorContext<AfterDeserialization>,
+            &InterceptorContext,
             expected
         );
     }
@@ -903,9 +828,9 @@ mod tests {
         let expected = r#""ServiceError(ServiceError { source: TypeErasedError:InterceptorError { kind: ReadAfterExecution, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_completion,
-            &mut InterceptorContext<AfterDeserialization>,
+            &mut InterceptorContext,
             read_after_execution,
-            &InterceptorContext<AfterDeserialization>,
+            &InterceptorContext,
             expected
         );
     }
