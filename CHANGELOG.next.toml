@@ -37,3 +37,9 @@ message = """`ShapeId` is the new structure used to represent a shape, with its 
 author = "82marbag"
 references = ["smithy-rs#2678"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Fix compiler errors in generated code when naming shapes after types in the Rust standard library prelude."
+references = ["smithy-rs#2696"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"
