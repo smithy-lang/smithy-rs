@@ -16,8 +16,6 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-use crate::shape_id::ShapeId;
-
 use super::{MakeDebug, MakeDisplay, MakeIdentity};
 
 pin_project_lite::pin_project! {
@@ -89,17 +87,15 @@ where
 ///
 /// ```
 /// # use aws_smithy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
-/// # use aws_smithy_http_server::shape_id::ShapeId;
 /// # use tower::{Service, service_fn};
 /// # use http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
 /// # let mut svc = service_fn(f);
-/// # const NAME: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
 /// let request_fmt = RequestFmt::new()
 ///     .label(|index| index == 1, None)
 ///     .query(|_| QueryMarker { key: false, value: true });
 /// let response_fmt = ResponseFmt::new().status_code();
-/// let mut svc = InstrumentOperation::new(svc, NAME)
+/// let mut svc = InstrumentOperation::new(svc, "foo-operation")
 ///     .request_fmt(request_fmt)
 ///     .response_fmt(response_fmt);
 /// # svc.call(Request::new(()));
@@ -107,17 +103,17 @@ where
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
-    operation_id: ShapeId,
+    operation_name: &'static str,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: S, operation_id: ShapeId) -> Self {
+    pub fn new(inner: S, operation_name: &'static str) -> Self {
         Self {
             inner,
-            operation_id,
+            operation_name,
             make_request: MakeIdentity,
             make_response: MakeIdentity,
         }
@@ -131,7 +127,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<S, R, ResponseMakeFmt> {
         InstrumentOperation {
             inner: self.inner,
-            operation_id: self.operation_id,
+            operation_name: self.operation_name,
             make_request,
             make_response: self.make_response,
         }
@@ -143,7 +139,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<S, RequestMakeFmt, R> {
         InstrumentOperation {
             inner: self.inner,
-            operation_id: self.operation_id,
+            operation_name: self.operation_name,
             make_request: self.make_request,
             make_response,
         }
@@ -174,7 +170,7 @@ where
         let span = {
             let headers = self.make_request.make_debug(request.headers());
             let uri = self.make_request.make_display(request.uri());
-            debug_span!("request", operation = %self.operation_id.absolute(), method = %request.method(), %uri, ?headers)
+            debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers)
         };
 
         InstrumentedFuture {
