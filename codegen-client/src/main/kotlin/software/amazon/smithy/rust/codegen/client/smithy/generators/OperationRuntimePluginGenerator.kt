@@ -23,14 +23,14 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
      */
     data class AdditionalConfig(
         val configBagName: String,
-        val interceptorName: String,
+        val interceptorRegistrarName: String,
         val operationShape: OperationShape,
     ) : OperationRuntimePluginSection("AdditionalConfig") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),

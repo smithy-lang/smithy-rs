@@ -32,7 +32,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$configBagName.put(#T);", value)
@@ -43,7 +43,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
