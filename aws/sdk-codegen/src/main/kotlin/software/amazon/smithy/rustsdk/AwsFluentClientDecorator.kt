@@ -223,6 +223,7 @@ private fun renderCustomizableOperationSendMethod(
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(
+        *RuntimeType.preludeScope,
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
@@ -238,11 +239,11 @@ private fun renderCustomizableOperationSendMethod(
             #{handle_generics_bounds:W}
         {
             /// Sends this operation's request
-            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+            pub async fn send<T, E>(self) -> #{Result}<T, SdkError<E>>
             where
-                E: std::error::Error + Send + Sync + 'static,
-                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
+                E: std::error::Error + #{Send} + #{Sync} + 'static,
+                O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
             {
                 self.handle.client.call(self.operation).await
             }

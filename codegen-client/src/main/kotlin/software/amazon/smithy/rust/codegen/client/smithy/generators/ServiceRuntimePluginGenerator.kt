@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -67,6 +68,8 @@ class ServiceRuntimePluginGenerator(
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
+            *preludeScope,
+            "Arc" to RuntimeType.Arc,
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
@@ -92,17 +95,17 @@ class ServiceRuntimePluginGenerator(
             """
             ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
-                handle: std::sync::Arc<crate::client::Handle>,
+                handle: #{Arc}<crate::client::Handle>,
             }
 
             impl ServiceRuntimePlugin {
-                pub fn new(handle: std::sync::Arc<crate::client::Handle>) -> Self {
+                pub fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
                     Self { handle }
                 }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> #{Result}<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
                     // HACK: Put the handle into the config bag to work around config not being fully implemented yet
@@ -114,7 +117,7 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_http_auth_schemes(http_auth_schemes);
 
                     // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(Vec::new()));
+                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(#{Vec}::new()));
 
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
@@ -125,9 +128,9 @@ class ServiceRuntimePluginGenerator(
 
                     // TODO(RuntimePlugins): Replace this with the correct long-term solution
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
+                    let connection: #{Box}<dyn #{Connection}> = self.handle.conf.http_connector()
                             .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
+                            .map(|c| #{Box}::new(#{DynConnectorAdapter}::new(c)) as _)
                             .expect("connection set");
                     cfg.set_connection(connection);
 

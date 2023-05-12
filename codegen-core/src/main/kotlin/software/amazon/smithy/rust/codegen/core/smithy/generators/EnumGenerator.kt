@@ -295,7 +295,7 @@ open class EnumGenerator(
             """
             impl #{Debug} for ${context.enumName} {
                 fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
-                    write!(f, $REDACTION)
+                    ::std::write!(f, $REDACTION)
                 }
             }
             """,

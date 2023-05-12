@@ -92,6 +92,22 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             """.trimIndent(),
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
+        CodegenTest(
+            "crate#Config",
+            "naming_test_prelude_ops",
+            """
+            , "codegen": { "renameErrors": false }
+            """.trimIndent(),
+            imports = listOf("$commonModels/naming-obstacle-course-prelude-ops.smithy"),
+        ),
+        CodegenTest(
+            "crate#Config",
+            "naming_test_prelude_structs",
+            """
+            , "codegen": { "renameErrors": false }
+            """.trimIndent(),
+            imports = listOf("$commonModels/naming-obstacle-course-prelude-structs.smithy"),
+        ),
         CodegenTest("aws.protocoltests.json#TestService", "endpoint-rules"),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-awsjson-client", imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy")),
