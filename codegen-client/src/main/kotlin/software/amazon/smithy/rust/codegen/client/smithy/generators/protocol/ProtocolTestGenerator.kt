@@ -351,7 +351,7 @@ class ProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body
-                #{AssertEq}(std::str::from_utf8(body).unwrap(), "");
+                #{AssertEq}(::std::str::from_utf8(body).unwrap(), "");
                 """,
                 *codegenScope,
             )

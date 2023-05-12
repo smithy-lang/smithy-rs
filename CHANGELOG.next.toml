@@ -29,3 +29,9 @@ message = "Avoid extending IMDS credentials' expiry unconditionally, which may i
 references = ["smithy-rs#2687", "smithy-rs#2694"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix compiler errors in generated code when naming shapes after types in the Rust standard library prelude."
+references = ["smithy-rs#2696"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"
