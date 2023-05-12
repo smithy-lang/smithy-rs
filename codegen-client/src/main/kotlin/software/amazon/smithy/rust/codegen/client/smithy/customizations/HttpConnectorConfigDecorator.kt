@@ -111,7 +111,6 @@ private class HttpConnectorConfigCustomization(
                     /// use std::time::Duration;
                     /// use aws_smithy_client::hyper_ext;
                     /// use aws_smithy_client::http_connector::ConnectorSettings;
-                    /// use crate::sdk_config::{SdkConfig, Builder};
                     /// use $moduleUseName::config::{Builder, Config};
                     ///
                     /// fn override_http_connector(builder: &mut Builder) {
