@@ -27,8 +27,6 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
             when (section) {
                 ServiceConfig.ConfigStruct -> rustTemplate(
                     """
-                    // TODO(enableNewSmithyRuntime): Unused until we completely switch to the orchestrator
-                    ##[allow(dead_code)]
                     pub(crate) interceptors: Vec<#{SharedInterceptor}>,
                     """,
                     *codegenScope,
