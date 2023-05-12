@@ -33,7 +33,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$configBagName.put(#T);", value)
@@ -44,12 +44,10 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
-                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
                 "interceptor" to interceptor,
+                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
@@ -80,11 +78,11 @@ class ServiceRuntimePluginGenerator(
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
+            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
         )
@@ -105,7 +103,7 @@ class ServiceRuntimePluginGenerator(
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> #{Result}<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{InterceptorRegistrar}) -> #{Result}<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
                     // HACK: Put the handle into the config bag to work around config not being fully implemented yet
@@ -135,6 +133,10 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_connection(connection);
 
                     #{additional_config}
+
+                    // Client-level Interceptors are registered after default Interceptors.
+                    _interceptors.extend(self.handle.conf.interceptors.iter().cloned());
+
                     Ok(())
                 }
             }
