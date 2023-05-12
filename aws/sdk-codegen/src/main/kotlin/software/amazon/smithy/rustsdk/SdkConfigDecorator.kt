@@ -77,8 +77,6 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
 
                     ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
-
-                    ${section.serviceConfigBuilder}.set_interceptors(${section.sdkConfig}.interceptors().cloned());
                     """,
                 )
             },

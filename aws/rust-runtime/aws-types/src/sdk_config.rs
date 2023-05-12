@@ -15,7 +15,6 @@ use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -58,7 +57,6 @@ pub struct SdkConfig {
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
-    interceptors: Vec<SharedInterceptor>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -79,7 +77,6 @@ pub struct Builder {
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
-    interceptors: Vec<SharedInterceptor>,
 }
 
 impl Builder {
@@ -502,114 +499,6 @@ impl Builder {
         self
     }
 
-    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
-    #[doc(hidden)]
-    /// Add an [`Interceptor`] that runs at specific stages of the request execution pipeline.
-    ///
-    /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-    /// The SDK provides a default set of interceptors. An interceptor configured by this method
-    /// will run after those default interceptors.
-    ///
-    /// ## Examples
-    /// ```no_run
-    /// # fn example() {
-    /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-    /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
-    /// use aws_types::sdk_config::{Builder, SdkConfig};
-    ///
-    /// fn base_url() -> String {
-    ///     // ...
-    ///     # String::new()
-    /// }
-    ///
-    /// #[derive(Debug)]
-    /// pub struct UriModifierInterceptor;
-    /// impl Interceptor for UriModifierInterceptor {
-    ///     fn modify_before_signing(
-    ///         &self,
-    ///         context: &mut InterceptorContext<BeforeTransmit>,
-    ///         _cfg: &mut ConfigBag,
-    ///     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-    ///         let request = context.request_mut();
-    ///         let uri = format!("{}{}", base_url(), request.uri().path());
-    ///         *request.uri_mut() = uri.parse()?;
-    ///
-    ///         Ok(())
-    ///     }
-    /// }
-    ///
-    /// let sdk_config = SdkConfig::builder()
-    ///     .interceptor(UriModifierInterceptor)
-    ///     .build();
-    /// # }
-    /// ```
-    pub fn interceptor(mut self, interceptor: impl Interceptor + Send + Sync + 'static) -> Self {
-        self.add_interceptor(SharedInterceptor::new(interceptor));
-        self
-    }
-
-    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
-    #[doc(hidden)]
-    /// Add a [`SharedInterceptor`] that runs at specific stages of the request execution pipeline.
-    ///
-    /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-    /// The SDK provides a default set of interceptors. An interceptor configured by this method
-    /// will run after those default interceptors.
-    ///
-    /// ## Examples
-    /// ```no_run
-    /// # fn example() {
-    /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-    /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, SharedInterceptor};
-    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
-    /// use aws_types::sdk_config::{Builder, SdkConfig};
-    ///
-    /// fn base_url() -> String {
-    ///     // ...
-    ///     # String::new()
-    /// }
-    ///
-    /// fn modify_request_uri(builder: &mut Builder) {
-    ///     #[derive(Debug)]
-    ///     pub struct UriModifierInterceptor;
-    ///     impl Interceptor for UriModifierInterceptor {
-    ///         fn modify_before_signing(
-    ///             &self,
-    ///             context: &mut InterceptorContext<BeforeTransmit>,
-    ///             _cfg: &mut ConfigBag,
-    ///         ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-    ///             let request = context.request_mut();
-    ///             let uri = format!("{}{}", base_url(), request.uri().path());
-    ///             *request.uri_mut() = uri.parse()?;
-    ///
-    ///             Ok(())
-    ///         }
-    ///     }
-    ///     builder.add_interceptor(SharedInterceptor::new(UriModifierInterceptor));
-    /// }
-    ///
-    /// let mut builder = SdkConfig::builder();
-    /// modify_request_uri(&mut builder);
-    /// let sdk_config = builder.build();
-    /// # }
-    /// ```
-    pub fn add_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
-        self.interceptors.push(interceptor);
-        self
-    }
-
-    // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
-    #[doc(hidden)]
-    /// Set [`SharedInterceptor`]s for the builder.
-    pub fn set_interceptors(
-        &mut self,
-        interceptors: impl IntoIterator<Item = SharedInterceptor>,
-    ) -> &mut Self {
-        self.interceptors = interceptors.into_iter().collect();
-        self
-    }
-
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -624,7 +513,6 @@ impl Builder {
             http_connector: self.http_connector,
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
-            interceptors: self.interceptors,
         }
     }
 }
@@ -684,11 +572,6 @@ impl SdkConfig {
     /// Use dual-stack endpoint
     pub fn use_dual_stack(&self) -> Option<bool> {
         self.use_dual_stack
-    }
-
-    /// Interceptors currently registered by the user
-    pub fn interceptors(&self) -> impl Iterator<Item = &SharedInterceptor> + '_ {
-        self.interceptors.iter()
     }
 
     /// Config builder

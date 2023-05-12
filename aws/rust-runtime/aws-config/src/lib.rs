@@ -156,7 +156,6 @@ mod loader {
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::HttpConnector;
-    use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
@@ -193,7 +192,6 @@ mod loader {
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
-        interceptors: Vec<SharedInterceptor>,
     }
 
     impl ConfigLoader {
@@ -470,58 +468,6 @@ mod loader {
             self
         }
 
-        // TODO(enableNewSmithyRuntime): Remove this #[doc(hidden)] upon launch
-        #[doc(hidden)]
-        /// Add an [`Interceptor`] that runs at specific stages of the request execution pipeline.
-        ///
-        /// This takes effect for **all** AWS clients derived from this config.
-        ///
-        /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
-        /// The SDK provides a default set of interceptors. An interceptor configured by this method
-        /// will run after those default interceptors.
-        ///
-        /// ## Examples
-        /// ```no_run
-        /// # async fn example() {
-        /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-        /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-        /// use aws_smithy_runtime_api::config_bag::ConfigBag;
-        ///
-        /// fn base_url() -> String {
-        ///     // ...
-        ///     # String::new()
-        /// }
-        ///
-        /// #[derive(Debug)]
-        /// pub struct UriModifierInterceptor;
-        /// impl Interceptor for UriModifierInterceptor {
-        ///     fn modify_before_signing(
-        ///         &self,
-        ///         context: &mut InterceptorContext<BeforeTransmit>,
-        ///         _cfg: &mut ConfigBag,
-        ///     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-        ///         let request = context.request_mut();
-        ///         let uri = format!("{}{}", base_url(), request.uri().path());
-        ///         *request.uri_mut() = uri.parse()?;
-        ///
-        ///         Ok(())
-        ///     }
-        /// }
-        ///
-        /// let sdk_config = aws_config::from_env()
-        ///     .interceptor(UriModifierInterceptor)
-        ///     .load()
-        ///     .await;
-        /// # }
-        /// ```
-        pub fn interceptor(
-            mut self,
-            interceptor: impl Interceptor + Send + Sync + 'static,
-        ) -> Self {
-            self.interceptors.push(SharedInterceptor::new(interceptor));
-            self
-        }
-
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
@@ -655,7 +601,6 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
-            builder.set_interceptors(self.interceptors);
             builder.build()
         }
     }
