@@ -150,15 +150,9 @@ fun RustWriter.conditionalBlockTemplate(
     vararg args: Pair<String, Any>,
     block: RustWriter.() -> Unit,
 ): RustWriter {
-    if (conditional) {
-        withTemplate(textBeforeNewLine.trim(), args) { text ->
-            openBlock(text)
-        }
-    }
-    block(this)
-    if (conditional) {
-        withTemplate(textAfterNewLine.trim(), args) { text ->
-            closeBlock(text)
+    withTemplate(textBeforeNewLine.trim(), args) { beforeNewLine ->
+        withTemplate(textAfterNewLine.trim(), args) { afterNewLine ->
+            conditionalBlock(beforeNewLine, afterNewLine, conditional = conditional, block = block)
         }
     }
     return this

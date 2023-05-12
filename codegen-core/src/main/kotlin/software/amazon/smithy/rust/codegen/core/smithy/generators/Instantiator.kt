@@ -205,7 +205,7 @@ open class Instantiator(
             check(symbol.isOptional()) {
                 "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
             }
-            writer.rust("None")
+            writer.rustTemplate("#{None}", *preludeScope)
         } else {
             // Structure builder setters for structure shape members _always_ take in `Option<T>`.
             // Other aggregate shapes' members are optional only when their symbol is.
