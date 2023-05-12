@@ -8,13 +8,16 @@ use std::sync::Arc;
 use aws_smithy_http_server::{routing::LambdaHandler, AddExtensionLayer};
 
 use pokemon_service_common::{
-    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, State,
+    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics,
+    setup_tracing, State,
 };
 use pokemon_service_lambda::get_storage_lambda;
 use pokemon_service_server_sdk::PokemonService;
 
 #[tokio::main]
 pub async fn main() {
+    setup_tracing();
+
     let app = PokemonService::builder_without_plugins()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and

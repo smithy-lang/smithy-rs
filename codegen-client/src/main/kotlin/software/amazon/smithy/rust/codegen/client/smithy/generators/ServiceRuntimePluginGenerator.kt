@@ -88,6 +88,7 @@ class ServiceRuntimePluginGenerator(
     fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
         writer.rustTemplate(
             """
+            ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 handle: std::sync::Arc<crate::client::Handle>,
             }

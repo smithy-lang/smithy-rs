@@ -366,13 +366,13 @@ class FluentClientGenerator(
                     """
                     ##[doc(hidden)]
                     pub async fn send_orchestrator(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                        self.send_orchestrator_with_plugin(Option::<Box<dyn #{RuntimePlugin}>>::None).await
+                        self.send_orchestrator_with_plugin(Option::<Box<dyn #{RuntimePlugin} + Send + Sync>>::None).await
                     }
 
                     ##[doc(hidden)]
                     // TODO(enableNewSmithyRuntime): Delete when unused
                     /// Equivalent to [`Self::send_orchestrator`] but adds a final runtime plugin to shim missing behavior
-                    pub async fn send_orchestrator_with_plugin(self, final_plugin: Option<impl #{RuntimePlugin} + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    pub async fn send_orchestrator_with_plugin(self, final_plugin: Option<impl #{RuntimePlugin} + Send + Sync + 'static>) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let mut runtime_plugins = #{RuntimePlugins}::new()
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()));
                         if let Some(config_override) = self.config_override {
@@ -458,23 +458,20 @@ class FluentClientGenerator(
                 )
             }
 
-            // TODO(enableNewSmithyRuntime): Port paginators to the orchestrator
-            if (smithyRuntimeMode.generateMiddleware) {
-                PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
-                    ?.also { paginatorType ->
-                        rustTemplate(
-                            """
-                            /// Create a paginator for this request
-                            ///
-                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
-                                #{Paginator}::new(self.handle, self.inner)
-                            }
-                            """,
-                            "Paginator" to paginatorType,
-                        )
-                    }
-            }
+            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+                ?.also { paginatorType ->
+                    rustTemplate(
+                        """
+                        /// Create a paginator for this request
+                        ///
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                            #{Paginator}::new(self.handle, self.inner)
+                        }
+                        """,
+                        "Paginator" to paginatorType,
+                    )
+                }
             writeCustomizations(
                 customizations,
                 FluentClientSection.FluentBuilderImpl(
