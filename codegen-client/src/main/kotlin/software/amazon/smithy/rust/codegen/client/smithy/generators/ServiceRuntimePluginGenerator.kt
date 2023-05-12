@@ -132,9 +132,7 @@ class ServiceRuntimePluginGenerator(
                     #{additional_config}
 
                     // Client-level Interceptors are registered after default Interceptors.
-                    self.handle.conf.interceptors.iter().for_each(|interceptor| {
-                        _interceptors.register(interceptor.clone());
-                    });
+                    _interceptors.extend(self.handle.conf.interceptors.iter().cloned());
 
                     Ok(())
                 }

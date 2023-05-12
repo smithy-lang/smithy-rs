@@ -179,9 +179,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
 
                 ServiceConfig.ToRuntimePlugin -> rust(
                     """
-                    self.interceptors.iter().for_each(|interceptor| {
-                        interceptors.register(interceptor.clone());
-                    });
+                    interceptors.extend(self.interceptors.iter().cloned());
                     """,
                 )
 
