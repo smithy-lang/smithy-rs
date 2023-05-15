@@ -329,7 +329,7 @@ pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealt
     output::CheckHealthOutput {}
 }
 
-const RADIO_STREAMS: [&'static str; 2] = [
+const RADIO_STREAMS: [&str; 2] = [
     "https://ia800107.us.archive.org/33/items/299SoundEffectCollection/102%20Palette%20Town%20Theme.mp3",
     "https://ia600408.us.archive.org/29/items/PocketMonstersGreenBetaLavenderTownMusicwwwFlvtoCom/Pocket%20Monsters%20Green%20Beta-%20Lavender%20Town%20Music-%5Bwww_flvto_com%5D.mp3",
 ];
