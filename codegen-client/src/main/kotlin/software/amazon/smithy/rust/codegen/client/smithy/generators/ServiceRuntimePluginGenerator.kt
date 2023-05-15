@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -32,7 +33,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$configBagName.put(#T);", value)
@@ -43,12 +44,10 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorName.register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
-                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
                 "interceptor" to interceptor,
+                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
@@ -67,6 +66,8 @@ class ServiceRuntimePluginGenerator(
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
+            *preludeScope,
+            "Arc" to RuntimeType.Arc,
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
@@ -77,11 +78,11 @@ class ServiceRuntimePluginGenerator(
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
+            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
         )
@@ -90,18 +91,19 @@ class ServiceRuntimePluginGenerator(
     fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
         writer.rustTemplate(
             """
+            ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
-                handle: std::sync::Arc<crate::client::Handle>,
+                handle: #{Arc}<crate::client::Handle>,
             }
 
             impl ServiceRuntimePlugin {
-                pub fn new(handle: std::sync::Arc<crate::client::Handle>) -> Self {
+                pub fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
                     Self { handle }
                 }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{InterceptorRegistrar}) -> #{Result}<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
 
                     // HACK: Put the handle into the config bag to work around config not being fully implemented yet
@@ -113,7 +115,7 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_http_auth_schemes(http_auth_schemes);
 
                     // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(Vec::new()));
+                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(#{Vec}::new()));
 
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
@@ -124,13 +126,17 @@ class ServiceRuntimePluginGenerator(
 
                     // TODO(RuntimePlugins): Replace this with the correct long-term solution
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
+                    let connection: #{Box}<dyn #{Connection}> = self.handle.conf.http_connector()
                             .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
+                            .map(|c| #{Box}::new(#{DynConnectorAdapter}::new(c)) as _)
                             .expect("connection set");
                     cfg.set_connection(connection);
 
                     #{additional_config}
+
+                    // Client-level Interceptors are registered after default Interceptors.
+                    _interceptors.extend(self.handle.conf.interceptors.iter().cloned());
+
                     Ok(())
                 }
             }
