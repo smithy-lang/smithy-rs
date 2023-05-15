@@ -15,6 +15,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 aws-credential-types = { path = "../aws-credential-types" }
 aws-endpoint = { path = "../aws-endpoint" }
 aws-http = { path = "../aws-http" }
+aws-runtime = { path = "../aws-runtime" }
 aws-sig-auth = { path = "../aws-sig-auth" }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
@@ -39,6 +40,7 @@ tracing = "0.1"
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime" }
 tempfile = "3.2.0"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 

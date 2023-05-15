@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -52,7 +51,7 @@ class RequestSerializerGenerator(
         }
     }
 
-    fun render(writer: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun render(writer: RustWriter, operationShape: OperationShape) {
         val inputShape = operationShape.inputShape(codegenContext.model)
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputSymbol = symbolProvider.toSymbol(inputShape)
