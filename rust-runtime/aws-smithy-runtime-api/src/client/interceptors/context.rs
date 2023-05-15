@@ -29,7 +29,7 @@
 
 /// Operation phases.
 pub mod phase;
-mod wrappers;
+pub mod wrappers;
 
 use crate::client::interceptors::BoxError;
 use crate::client::orchestrator::{HttpRequest, HttpResponse};
@@ -39,13 +39,6 @@ use aws_smithy_http::result::SdkError;
 use phase::Phase;
 use std::mem;
 use tracing::{error, trace};
-
-pub use wrappers::{
-    AfterDeserializationInterceptorContextMut, AfterDeserializationInterceptorContextRef,
-    BeforeDeserializationInterceptorContextMut, BeforeDeserializationInterceptorContextRef,
-    BeforeSerializationInterceptorContextMut, BeforeSerializationInterceptorContextRef,
-    BeforeTransmitInterceptorContextMut, BeforeTransmitInterceptorContextRef,
-};
 
 pub type Input = TypeErasedBox;
 pub type Output = TypeErasedBox;
@@ -62,10 +55,10 @@ type Response = HttpResponse;
 /// serialized at that point. But once it gets into the [`Phase::BeforeTransmit`] phase, the `request` will be set.
 #[derive(Debug)]
 pub struct InterceptorContext<I = Input, O = Output, E = Error> {
-    input: Option<I>,
-    output_or_error: Option<Result<O, E>>,
-    request: Option<Request>,
-    response: Option<Response>,
+    pub(crate) input: Option<I>,
+    pub(crate) output_or_error: Option<Result<O, E>>,
+    pub(crate) request: Option<Request>,
+    pub(crate) response: Option<Response>,
     phase: Phase,
     tainted: bool,
     request_checkpoint: Option<HttpRequest>,

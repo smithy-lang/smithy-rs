@@ -6,15 +6,20 @@
 pub mod context;
 pub mod error;
 
-use crate::client::interceptors::context::{
-    AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
-    BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
-    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
-    BeforeTransmitInterceptorContextRef,
+use crate::client::interceptors::context::wrappers::{
+    FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
 };
 use crate::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
-pub use context::InterceptorContext;
+pub use context::{
+    wrappers::{
+        AfterDeserializationInterceptorContextMut, AfterDeserializationInterceptorContextRef,
+        BeforeDeserializationInterceptorContextMut, BeforeDeserializationInterceptorContextRef,
+        BeforeSerializationInterceptorContextMut, BeforeSerializationInterceptorContextRef,
+        BeforeTransmitInterceptorContextMut, BeforeTransmitInterceptorContextRef,
+    },
+    InterceptorContext,
+};
 use context::{Error, Input, Output};
 pub use error::{BoxError, InterceptorError};
 use std::ops::Deref;
@@ -481,7 +486,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// returned, replacing the response currently in the context.
     fn modify_before_attempt_completion(
         &self,
-        context: &mut InterceptorContext<Input, Output, Error>,
+        context: &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -513,7 +518,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// raised error as the [InterceptorContext::output_or_error()].
     fn read_after_attempt(
         &self,
-        context: &InterceptorContext<Input, Output, Error>,
+        context: &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -543,7 +548,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// returned , replacing the response currently in the context.
     fn modify_before_completion(
         &self,
-        context: &mut InterceptorContext<Input, Output, Error>,
+        context: &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -571,7 +576,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// used and earlier ones will be logged and dropped.
     fn read_after_execution(
         &self,
-        context: &InterceptorContext<Input, Output, Error>,
+        context: &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -754,8 +759,9 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
+        let mut ctx: FinalizerInterceptorContextMut<'_, _, _, _> = ctx.into();
         for interceptor in self.interceptors() {
-            if let Err(new_error) = interceptor.modify_before_attempt_completion(ctx, cfg) {
+            if let Err(new_error) = interceptor.modify_before_attempt_completion(&mut ctx, cfg) {
                 if let Err(last_error) = result {
                     tracing::debug!("{}", DisplayErrorContext(&*last_error));
                 }
@@ -771,8 +777,9 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
+        let ctx: FinalizerInterceptorContextRef<'_, _, _, _> = ctx.into();
         for interceptor in self.interceptors() {
-            if let Err(new_error) = interceptor.read_after_attempt(ctx, cfg) {
+            if let Err(new_error) = interceptor.read_after_attempt(&ctx, cfg) {
                 if let Err(last_error) = result {
                     tracing::debug!("{}", DisplayErrorContext(&*last_error));
                 }
@@ -788,8 +795,9 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
+        let mut ctx: FinalizerInterceptorContextMut<'_, _, _, _> = ctx.into();
         for interceptor in self.interceptors() {
-            if let Err(new_error) = interceptor.modify_before_completion(ctx, cfg) {
+            if let Err(new_error) = interceptor.modify_before_completion(&mut ctx, cfg) {
                 if let Err(last_error) = result {
                     tracing::debug!("{}", DisplayErrorContext(&*last_error));
                 }
@@ -805,8 +813,9 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
+        let ctx: FinalizerInterceptorContextRef<'_, _, _, _> = ctx.into();
         for interceptor in self.interceptors() {
-            if let Err(new_error) = interceptor.read_after_execution(ctx, cfg) {
+            if let Err(new_error) = interceptor.read_after_execution(&ctx, cfg) {
                 if let Err(last_error) = result {
                     tracing::debug!("{}", DisplayErrorContext(&*last_error));
                 }
