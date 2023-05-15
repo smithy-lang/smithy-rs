@@ -9,7 +9,6 @@ use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
 use com.aws.example#ResourceNotFoundException
-use com.aws.example#StreamPokemonRadio
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -148,3 +147,19 @@ structure MasterBallUnsuccessful {
 
 @error("client")
 structure ThrottlingError {}
+
+/// Fetch a radio song from the database and stream it back as a playable audio.
+@readonly
+@http(uri: "/radio", method: "GET")
+operation StreamPokemonRadio {
+    output: StreamPokemonRadioOutput
+}
+
+@output
+structure StreamPokemonRadioOutput {
+    @httpPayload
+    data: StreamingBlob
+}
+
+@streaming
+blob StreamingBlob

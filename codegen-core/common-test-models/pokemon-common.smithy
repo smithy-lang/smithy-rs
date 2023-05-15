@@ -124,19 +124,3 @@ structure ResourceNotFoundException {
     @required
     message: String,
 }
-
-/// Fetch a radio song from the database and stream it back as a playable audio.
-@readonly
-@http(uri: "/radio", method: "GET")
-operation StreamPokemonRadio {
-    output: StreamPokemonRadioOutput
-}
-
-@output
-structure StreamPokemonRadioOutput {
-    @httpPayload
-    data: StreamingBlob
-}
-
-@streaming
-blob StreamingBlob

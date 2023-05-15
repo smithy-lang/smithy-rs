@@ -12,7 +12,6 @@ use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
-use com.aws.example#StreamPokemonRadio
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -23,8 +22,7 @@ service PokemonService {
         GetServerStatistics,
         DoNothing,
         CapturePokemon,
-        CheckHealth,
-        StreamPokemonRadio
+        CheckHealth
     ],
 }
 
