@@ -4,7 +4,7 @@ $version: "1.0"
 // This is a temporary model to test AwsJson 1.0 with @streaming.
 // This model will be removed when protocol tests support @streaming.
 
-namespace com.aws.example.rust
+namespace com.aws.example
 
 use aws.protocols#awsJson1_0
 use smithy.framework#ValidationException
@@ -12,6 +12,7 @@ use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
+use com.aws.example#StreamPokemonRadio
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -22,7 +23,8 @@ service PokemonService {
         GetServerStatistics,
         DoNothing,
         CapturePokemon,
-        CheckHealth
+        CheckHealth,
+        StreamPokemonRadio
     ],
 }
 
