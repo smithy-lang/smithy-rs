@@ -31,8 +31,7 @@
 pub mod phase;
 pub mod wrappers;
 
-use crate::client::interceptors::BoxError;
-use crate::client::orchestrator::{HttpRequest, HttpResponse};
+use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypeErasedError};
 use aws_smithy_http::result::SdkError;
@@ -56,7 +55,7 @@ type Response = HttpResponse;
 #[derive(Debug)]
 pub struct InterceptorContext<I = Input, O = Output, E = Error> {
     pub(crate) input: Option<I>,
-    pub(crate) output_or_error: Option<Result<O, E>>,
+    pub(crate) output_or_error: Option<Result<O, OrchestratorError<E>>>,
     pub(crate) request: Option<Request>,
     pub(crate) response: Option<Response>,
     phase: Phase,
@@ -79,22 +78,6 @@ impl InterceptorContext<Input, Output, Error> {
             is_failed: false,
         }
     }
-
-    /// Mark this context as failed due to errors during the operation. Any errors already contained
-    /// by the context will be replaced by the given error.
-    pub fn fail(&mut self, error: TypeErasedError) {
-        if !self.is_failed {
-            trace!(
-                "orchestrator is transitioning to the 'failure' phase from the '{:?}' phase",
-                self.phase
-            );
-        }
-        if let Some(Err(existing_err)) = mem::replace(&mut self.output_or_error, Some(Err(error))) {
-            error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
-        }
-
-        self.is_failed = true;
-    }
 }
 
 impl<I, O, E> InterceptorContext<I, O, E> {
@@ -105,7 +88,7 @@ impl<I, O, E> InterceptorContext<I, O, E> {
         self,
     ) -> (
         Option<I>,
-        Option<Result<O, E>>,
+        Option<Result<O, OrchestratorError<E>>>,
         Option<Request>,
         Option<Response>,
     ) {
@@ -184,12 +167,12 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Set the output or error for the operation being invoked.
-    pub fn set_output_or_error(&mut self, output: Result<O, E>) {
+    pub fn set_output_or_error(&mut self, output: Result<O, OrchestratorError<E>>) {
         self.output_or_error = Some(output);
     }
 
     /// Returns the deserialized output or error.
-    pub fn output_or_error(&self) -> Result<&O, &E> {
+    pub fn output_or_error(&self) -> Result<&O, &OrchestratorError<E>> {
         self.output_or_error
             .as_ref()
             .expect("output set in Phase::AfterDeserialization")
@@ -197,7 +180,7 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Returns the mutable reference to the deserialized output or error.
-    pub fn output_or_error_mut(&mut self) -> &mut Result<O, E> {
+    pub fn output_or_error_mut(&mut self) -> &mut Result<O, OrchestratorError<E>> {
         self.output_or_error
             .as_mut()
             .expect("output set in 'after deserialization'")
@@ -302,26 +285,30 @@ impl<I, O, E> InterceptorContext<I, O, E> {
         true
     }
 
+    /// Mark this context as failed due to errors during the operation. Any errors already contained
+    /// by the context will be replaced by the given error.
+    pub fn fail(&mut self, error: OrchestratorError<E>) {
+        if !self.is_failed {
+            trace!(
+                "orchestrator is transitioning to the 'failure' phase from the '{:?}' phase",
+                self.phase
+            );
+        }
+        if let Some(Err(existing_err)) = mem::replace(&mut self.output_or_error, Some(Err(error))) {
+            error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
+        }
+
+        self.is_failed = true;
+    }
+
     #[doc(hidden)]
     pub fn is_failed(&self) -> bool {
         self.is_failed
     }
 }
 
-impl<I> InterceptorContext<I, Output, Error> {
-    #[doc(hidden)]
-    pub fn fail_with_err(self, err: BoxError) -> SdkError<Error, HttpResponse> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        phase.fail_with_box_error(err, output_or_error, response)
-    }
-
-    #[doc(hidden)]
-    pub fn finalize(self) -> Result<Output, SdkError<Error, HttpResponse>> {
+impl<I, O, E> InterceptorContext<I, O, E> {
+    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
         let Self {
             output_or_error,
             response,
@@ -330,7 +317,7 @@ impl<I> InterceptorContext<I, Output, Error> {
         } = self;
         output_or_error
             .expect("output_or_error must always beset before finalize is called.")
-            .map_err(|err| phase.fail_with_type_erased_error(err, response))
+            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
     }
 }
 
@@ -444,7 +431,7 @@ mod tests {
 
         context.enter_before_deserialization_phase();
         context.enter_deserialization_phase();
-        context.set_output_or_error(Err(error));
+        context.set_output_or_error(Err(OrchestratorError::operation(error)));
 
         assert!(context.rewind(&mut cfg));
 

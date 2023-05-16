@@ -5,6 +5,7 @@
 
 use super::InterceptorContext;
 use crate::client::interceptors::context::{Request, Response};
+use crate::client::orchestrator::OrchestratorError;
 
 macro_rules! output {
     (&Option<Result<$o_ty:ty, $e_ty:ty>>) => {
@@ -159,7 +160,7 @@ declare_wrapper!(
     (input: I)
     (request: Request)
     (response: Response)
-    (output_or_error: Result<O, E>)
+    (output_or_error: Result<O, OrchestratorError<E>>)
 );
 
 // Why are all the rest of these defined with a macro but these last two aren't? I simply ran out of
@@ -191,7 +192,7 @@ impl<'a, I, O, E> FinalizerInterceptorContextRef<'a, I, O, E> {
         self.inner.response.as_ref()
     }
 
-    pub fn output_or_error(&self) -> Option<Result<&O, &E>> {
+    pub fn output_or_error(&self) -> Option<Result<&O, &OrchestratorError<E>>> {
         self.inner.output_or_error.as_ref().map(|o| o.as_ref())
     }
 }
@@ -221,7 +222,7 @@ impl<'a, I, O, E> FinalizerInterceptorContextMut<'a, I, O, E> {
         self.inner.response.as_ref()
     }
 
-    pub fn output_or_error(&self) -> Option<Result<&O, &E>> {
+    pub fn output_or_error(&self) -> Option<Result<&O, &OrchestratorError<E>>> {
         self.inner.output_or_error.as_ref().map(|o| o.as_ref())
     }
 
@@ -237,7 +238,7 @@ impl<'a, I, O, E> FinalizerInterceptorContextMut<'a, I, O, E> {
         self.inner.response.as_mut()
     }
 
-    pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, E>> {
+    pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
         self.inner.output_or_error.as_mut()
     }
 }
