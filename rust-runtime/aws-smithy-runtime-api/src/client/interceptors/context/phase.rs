@@ -48,7 +48,7 @@ pub(crate) fn convert_response_handling_error(
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub(crate) enum Phase {
+pub enum Phase {
     /// Represents the phase of an operation prior to serialization.
     BeforeSerialization,
     /// Represents the phase of an operation where the request is serialized.
@@ -66,31 +66,31 @@ pub(crate) enum Phase {
 }
 
 impl Phase {
-    pub(crate) fn is_before_serialization(&self) -> bool {
+    pub fn is_before_serialization(&self) -> bool {
         matches!(self, Self::BeforeSerialization)
     }
 
-    pub(crate) fn is_serialization(&self) -> bool {
+    pub fn is_serialization(&self) -> bool {
         matches!(self, Self::Serialization)
     }
 
-    pub(crate) fn is_before_transmit(&self) -> bool {
+    pub fn is_before_transmit(&self) -> bool {
         matches!(self, Self::BeforeTransmit)
     }
 
-    pub(crate) fn is_transmit(&self) -> bool {
+    pub fn is_transmit(&self) -> bool {
         matches!(self, Self::Transmit)
     }
 
-    pub(crate) fn is_before_deserialization(&self) -> bool {
+    pub fn is_before_deserialization(&self) -> bool {
         matches!(self, Self::BeforeDeserialization)
     }
 
-    pub(crate) fn is_deserialization(&self) -> bool {
+    pub fn is_deserialization(&self) -> bool {
         matches!(self, Self::Deserialization)
     }
 
-    pub(crate) fn fail_with_box_error(
+    pub fn fail_with_box_error(
         &self,
         error: BoxError,
         output_or_error: Option<Result<Output, Error>>,
@@ -110,7 +110,7 @@ impl Phase {
 
     // TODO yes, this is completely awful. I want to get this working and then I'll think about how to do it better.
     //    - Zelda
-    pub(crate) fn fail_with_type_erased_error(
+    pub fn fail_with_type_erased_error(
         &self,
         error: Error,
         response: Option<HttpResponse>,
