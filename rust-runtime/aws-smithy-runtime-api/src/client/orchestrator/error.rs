@@ -103,7 +103,7 @@ fn convert_dispatch_error<O>(
     };
     match response {
         Some(response) => SdkError::response_error(err, response),
-        None => SdkError::dispatch_failure(ConnectorError::other(err.into(), None)),
+        None => SdkError::dispatch_failure(ConnectorError::other(err, None)),
     }
 }
 
