@@ -7,11 +7,13 @@ use super::BoxError;
 use crate::client::interceptors::context::phase::Phase;
 use crate::client::interceptors::InterceptorError;
 use crate::client::orchestrator::HttpResponse;
+use crate::type_erasure::TypeErasedError;
 use aws_smithy_http::result::{ConnectorError, SdkError};
-use std::fmt;
+use std::fmt::Debug;
 
+#[derive(Debug)]
 #[non_exhaustive]
-pub enum OrchestratorError<E> {
+pub enum OrchestratorError<E: Debug> {
     /// An error occurred within an interceptor.
     Interceptor { err: InterceptorError },
     /// An error returned by a service.
@@ -20,24 +22,7 @@ pub enum OrchestratorError<E> {
     Other { err: BoxError },
 }
 
-// TODO can I just assume that operation errors are all `Debug`?
-impl<E> fmt::Debug for OrchestratorError<E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OrchestratorError::Interceptor { err } => {
-                write!(f, "{:?}", err)
-            }
-            OrchestratorError::Operation { .. } => {
-                write!(f, "Operation Error")
-            }
-            OrchestratorError::Other { err } => {
-                write!(f, "{:?}", err)
-            }
-        }
-    }
-}
-
-impl<E> OrchestratorError<E> {
+impl<E: Debug> OrchestratorError<E> {
     /// Create a new `OrchestratorError` from a [`BoxError`].
     pub fn other(err: BoxError) -> Self {
         Self::Other { err }
@@ -107,14 +92,26 @@ fn convert_dispatch_error<O>(
     }
 }
 
-impl<O> From<InterceptorError> for OrchestratorError<O> {
+impl<E> From<InterceptorError> for OrchestratorError<E>
+where
+    E: Debug + std::error::Error + 'static,
+{
     fn from(err: InterceptorError) -> Self {
         Self::interceptor(err)
     }
 }
 
-impl<O> From<BoxError> for OrchestratorError<O> {
+impl<E> From<BoxError> for OrchestratorError<E>
+where
+    E: Debug + std::error::Error + 'static,
+{
     fn from(err: BoxError) -> Self {
         Self::other(err)
+    }
+}
+
+impl From<TypeErasedError> for OrchestratorError<TypeErasedError> {
+    fn from(err: TypeErasedError) -> Self {
+        Self::operation(err)
     }
 }

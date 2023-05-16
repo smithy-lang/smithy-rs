@@ -6,6 +6,7 @@
 use super::InterceptorContext;
 use crate::client::interceptors::context::{Request, Response};
 use crate::client::orchestrator::OrchestratorError;
+use std::fmt::Debug;
 
 macro_rules! output {
     (&Option<Result<$o_ty:ty, $e_ty:ty>>) => {
@@ -84,33 +85,33 @@ macro_rules! declare_known_method {
 
 macro_rules! declare_wrapper {
     (($ref_struct_name:ident $mut_struct_name:ident)$($tt:tt)+) => {
-        pub struct $ref_struct_name<'a, I, O, E> {
+        pub struct $ref_struct_name<'a, I, O, E: Debug> {
             inner: &'a InterceptorContext<I, O, E>,
         }
 
-        impl<'a, I, O, E> From<&'a InterceptorContext<I, O, E>> for $ref_struct_name<'a, I, O, E>
+        impl<'a, I, O, E: Debug> From<&'a InterceptorContext<I, O, E>> for $ref_struct_name<'a, I, O, E>
         {
             fn from(inner: &'a InterceptorContext<I, O, E>) -> Self {
                 Self { inner }
             }
         }
 
-        impl<'a, I, O, E> $ref_struct_name<'a, I, O, E> {
+        impl<'a, I, O, E: Debug> $ref_struct_name<'a, I, O, E> {
             declare_ref_wrapper_methods!($($tt)+);
         }
 
-        pub struct $mut_struct_name<'a, I, O, E> {
+        pub struct $mut_struct_name<'a, I, O, E: Debug> {
             inner: &'a mut InterceptorContext<I, O, E>,
         }
 
-        impl<'a, I, O, E> From<&'a mut InterceptorContext<I, O, E>> for $mut_struct_name<'a, I, O, E>
+        impl<'a, I, O, E: Debug> From<&'a mut InterceptorContext<I, O, E>> for $mut_struct_name<'a, I, O, E>
         {
             fn from(inner: &'a mut InterceptorContext<I, O, E>) -> Self {
                 Self { inner }
             }
         }
 
-        impl<'a, I, O, E> $mut_struct_name<'a, I, O, E> {
+        impl<'a, I, O, E: Debug> $mut_struct_name<'a, I, O, E> {
             declare_ref_wrapper_methods!($($tt)+);
             declare_mut_wrapper_methods!($($tt)+);
         }
@@ -167,11 +168,11 @@ declare_wrapper!(
 // time. Consider updating the macros to support these last two if you're looking for a challenge.
 // - Zelda
 
-pub struct FinalizerInterceptorContextRef<'a, I, O, E> {
+pub struct FinalizerInterceptorContextRef<'a, I, O, E: Debug> {
     inner: &'a InterceptorContext<I, O, E>,
 }
 
-impl<'a, I, O, E> From<&'a InterceptorContext<I, O, E>>
+impl<'a, I, O, E: Debug> From<&'a InterceptorContext<I, O, E>>
     for FinalizerInterceptorContextRef<'a, I, O, E>
 {
     fn from(inner: &'a InterceptorContext<I, O, E>) -> Self {
@@ -179,7 +180,7 @@ impl<'a, I, O, E> From<&'a InterceptorContext<I, O, E>>
     }
 }
 
-impl<'a, I, O, E> FinalizerInterceptorContextRef<'a, I, O, E> {
+impl<'a, I, O, E: Debug> FinalizerInterceptorContextRef<'a, I, O, E> {
     pub fn input(&self) -> Option<&I> {
         self.inner.input.as_ref()
     }
@@ -197,11 +198,11 @@ impl<'a, I, O, E> FinalizerInterceptorContextRef<'a, I, O, E> {
     }
 }
 
-pub struct FinalizerInterceptorContextMut<'a, I, O, E> {
+pub struct FinalizerInterceptorContextMut<'a, I, O, E: Debug> {
     inner: &'a mut InterceptorContext<I, O, E>,
 }
 
-impl<'a, I, O, E> From<&'a mut InterceptorContext<I, O, E>>
+impl<'a, I, O, E: Debug> From<&'a mut InterceptorContext<I, O, E>>
     for FinalizerInterceptorContextMut<'a, I, O, E>
 {
     fn from(inner: &'a mut InterceptorContext<I, O, E>) -> Self {
@@ -209,7 +210,7 @@ impl<'a, I, O, E> From<&'a mut InterceptorContext<I, O, E>>
     }
 }
 
-impl<'a, I, O, E> FinalizerInterceptorContextMut<'a, I, O, E> {
+impl<'a, I, O, E: Debug> FinalizerInterceptorContextMut<'a, I, O, E> {
     pub fn input(&self) -> Option<&I> {
         self.inner.input.as_ref()
     }

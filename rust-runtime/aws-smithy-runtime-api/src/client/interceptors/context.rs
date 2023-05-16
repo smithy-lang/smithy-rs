@@ -36,13 +36,14 @@ use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypeErasedError};
 use aws_smithy_http::result::SdkError;
 use phase::Phase;
+use std::fmt::Debug;
 use std::mem;
 use tracing::{error, trace};
 
 pub type Input = TypeErasedBox;
 pub type Output = TypeErasedBox;
 pub type Error = TypeErasedError;
-pub type OutputOrError = Result<Output, Error>;
+pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
 type Response = HttpResponse;
@@ -53,7 +54,10 @@ type Response = HttpResponse;
 /// context in the [`Phase::BeforeSerialization`] phase won't have a `request` yet since the input hasn't been
 /// serialized at that point. But once it gets into the [`Phase::BeforeTransmit`] phase, the `request` will be set.
 #[derive(Debug)]
-pub struct InterceptorContext<I = Input, O = Output, E = Error> {
+pub struct InterceptorContext<I = Input, O = Output, E = Error>
+where
+    E: Debug,
+{
     pub(crate) input: Option<I>,
     pub(crate) output_or_error: Option<Result<O, OrchestratorError<E>>>,
     pub(crate) request: Option<Request>,
@@ -80,7 +84,10 @@ impl InterceptorContext<Input, Output, Error> {
     }
 }
 
-impl<I, O, E> InterceptorContext<I, O, E> {
+impl<I, O, E> InterceptorContext<I, O, E>
+where
+    E: Debug,
+{
     /// Decomposes the context into its constituent parts.
     #[doc(hidden)]
     #[allow(clippy::type_complexity)]
@@ -98,6 +105,18 @@ impl<I, O, E> InterceptorContext<I, O, E> {
             self.request,
             self.response,
         )
+    }
+
+    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
+        let Self {
+            output_or_error,
+            response,
+            phase,
+            ..
+        } = self;
+        output_or_error
+            .expect("output_or_error must always beset before finalize is called.")
+            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
     }
 
     /// Retrieve the input for the operation being invoked.
@@ -304,20 +323,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     #[doc(hidden)]
     pub fn is_failed(&self) -> bool {
         self.is_failed
-    }
-}
-
-impl<I, O, E> InterceptorContext<I, O, E> {
-    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        output_or_error
-            .expect("output_or_error must always beset before finalize is called.")
-            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
     }
 }
 
