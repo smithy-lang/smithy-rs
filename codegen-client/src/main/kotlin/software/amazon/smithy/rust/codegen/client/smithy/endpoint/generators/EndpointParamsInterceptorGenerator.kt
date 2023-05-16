@@ -49,7 +49,7 @@ class EndpointParamsInterceptorGenerator(
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Interceptor" to interceptors.resolve("Interceptor"),
             "InterceptorContext" to interceptors.resolve("InterceptorContext"),
-            "BeforeSerializationPhase" to interceptors.resolve("context::phase::BeforeSerialization"),
+            "BeforeSerializationInterceptorContextRef" to interceptors.resolve("context::wrappers::BeforeSerializationInterceptorContextRef"),
             "InterceptorError" to interceptors.resolve("error::InterceptorError"),
             "Params" to endpointTypesGenerator.paramsStruct(),
         )
@@ -67,7 +67,7 @@ class EndpointParamsInterceptorGenerator(
             impl #{Interceptor} for $interceptorName {
                 fn read_before_execution(
                     &self,
-                    context: &#{InterceptorContext}<#{BeforeSerializationPhase}>,
+                    context: &#{BeforeSerializationInterceptorContextRef},
                     cfg: &mut #{ConfigBag},
                 ) -> Result<(), #{BoxError}> {
                     let _input = context.input()

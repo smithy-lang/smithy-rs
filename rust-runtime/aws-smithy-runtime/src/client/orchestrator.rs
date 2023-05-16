@@ -232,14 +232,18 @@ mod tests {
         serializer::CannedRequestSerializer,
     };
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::{
+    use aws_smithy_runtime_api::client::interceptors::context::wrappers::{
+        FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
+    };
+    use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+    use aws_smithy_runtime_api::client::interceptors::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
         BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
         BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
-        BeforeTransmitInterceptorContextRef, Error, Input, Output,
+        BeforeTransmitInterceptorContextRef,
     };
     use aws_smithy_runtime_api::client::interceptors::{
-        Interceptor, InterceptorContext, InterceptorRegistrar, SharedInterceptor,
+        Interceptor, InterceptorRegistrar, SharedInterceptor,
     };
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
@@ -535,7 +539,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -544,7 +548,11 @@ mod tests {
     #[traced_test]
     async fn test_read_after_attempt_error_handling() {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
-        interceptor_error_handling_test!(read_after_attempt, &InterceptorContext, expected);
+        interceptor_error_handling_test!(
+            read_after_attempt,
+            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            expected
+        );
     }
 
     #[tokio::test]
@@ -553,7 +561,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -562,7 +570,11 @@ mod tests {
     #[traced_test]
     async fn test_read_after_execution_error_handling() {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
-        interceptor_error_handling_test!(read_after_execution, &InterceptorContext, expected);
+        interceptor_error_handling_test!(
+            read_after_execution,
+            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            expected
+        );
     }
 
     macro_rules! interceptor_error_redirection_test {
@@ -633,7 +645,7 @@ mod tests {
             read_before_execution,
             &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -646,7 +658,7 @@ mod tests {
             modify_before_serialization,
             &mut BeforeSerializationInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -659,7 +671,7 @@ mod tests {
             read_before_serialization,
             &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -672,7 +684,7 @@ mod tests {
             read_after_serialization,
             &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -685,7 +697,7 @@ mod tests {
             modify_before_retry_loop,
             &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -698,7 +710,7 @@ mod tests {
             read_before_attempt,
             &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -711,7 +723,7 @@ mod tests {
             modify_before_signing,
             &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -724,7 +736,7 @@ mod tests {
             read_before_signing,
             &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -737,7 +749,7 @@ mod tests {
             read_after_signing,
             &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -750,7 +762,7 @@ mod tests {
             modify_before_transmit,
             &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -763,7 +775,7 @@ mod tests {
             read_before_transmit,
             &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -776,7 +788,7 @@ mod tests {
             read_after_transmit,
             &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -790,7 +802,7 @@ mod tests {
             modify_before_deserialization,
             &mut BeforeDeserializationInterceptorContextMut<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -804,7 +816,7 @@ mod tests {
             read_before_deserialization,
             &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -818,7 +830,7 @@ mod tests {
             read_after_deserialization,
             &AfterDeserializationInterceptorContextRef<'_, Input, Output, Error>,
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             expected
         );
     }
@@ -829,9 +841,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_attempt_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             read_after_attempt,
-            &InterceptorContext,
+            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
@@ -848,9 +860,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_completion,
-            &mut InterceptorContext,
+            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
             read_after_execution,
-            &InterceptorContext,
+            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
             expected
         );
     }
