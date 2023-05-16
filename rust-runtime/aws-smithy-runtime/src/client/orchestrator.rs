@@ -355,7 +355,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::{
         Interceptor, InterceptorRegistrar, SharedInterceptor,
     };
-    use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
+    use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
@@ -375,7 +375,7 @@ mod tests {
             http::Response::builder()
                 .status(StatusCode::OK)
                 .body(SdkBody::empty())
-                .map_err(|err| Error::new(Box::new(err)))
+                .map_err(|err| OrchestratorError::other(Box::new(err)))
                 .map(|res| Output::new(Box::new(res))),
         )
     }
