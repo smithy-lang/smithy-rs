@@ -138,6 +138,7 @@ class CustomizableOperationGenerator(
         val errorType = symbolProvider.symbolForOperationError(operation)
 
         val codegenScope = arrayOf(
+            *preludeScope,
             "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
             "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -161,7 +162,7 @@ class CustomizableOperationGenerator(
             /// operation invocation.
             pub struct CustomizableOperation {
                 pub(crate) fluent_builder: $builderName,
-                pub(crate) config_override: Option<crate::config::Builder>,
+                pub(crate) config_override: #{Option}<crate::config::Builder>,
                 pub(crate) interceptors: Vec<#{SharedInterceptor}>,
             }
 
@@ -172,7 +173,7 @@ class CustomizableOperationGenerator(
                 /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                 /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                 /// as it is an implementation detail.
-                pub fn interceptor(mut self, interceptor: impl #{Interceptor} + Send + Sync + 'static) -> Self {
+                pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
                     self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                     self
                 }
@@ -180,11 +181,11 @@ class CustomizableOperationGenerator(
                 /// Allows for customizing the operation's request.
                 pub fn map_request<F, E>(mut self, f: F) -> Self
                 where
-                    F: Fn(&mut http::Request<#{SdkBody}>) -> Result<(), E>
-                        + Send
-                        + Sync
+                    F: #{Fn}(&mut http::Request<#{SdkBody}>) -> #{Result}<(), E>
+                        + #{Send}
+                        + #{Sync}
                         + 'static,
-                    E: std::error::Error + std::marker::Send + std::marker::Sync + 'static,
+                    E: ::std::error::Error + #{Send} + #{Sync} + 'static,
                 {
                     self.interceptors.push(
                         #{SharedInterceptor}::new(
@@ -197,7 +198,7 @@ class CustomizableOperationGenerator(
                 /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
                 pub fn mutate_request<F>(mut self, f: F) -> Self
                 where
-                    F: Fn(&mut http::Request<#{SdkBody}>) + Send + Sync + 'static,
+                    F: #{Fn}(&mut http::Request<#{SdkBody}>) + #{Send} + #{Sync} + 'static,
                 {
                     self.interceptors.push(
                         #{SharedInterceptor}::new(
@@ -228,14 +229,14 @@ class CustomizableOperationGenerator(
                 /// Sends the request and returns the response.
                 pub async fn send(
                     self
-                ) -> std::result::Result<
+                ) -> #{Result}<
                     #{OperationOutput},
                     #{SdkError}<
                         #{OperationError},
                         #{HttpResponse}
                     >
                 > {
-                    self.send_orchestrator_with_plugin(Option::<Box<dyn #{RuntimePlugin} + Send + Sync>>::None)
+                    self.send_orchestrator_with_plugin(#{Option}::<#{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>>::None)
                         .await
                 }
 
@@ -244,8 +245,8 @@ class CustomizableOperationGenerator(
                 /// Equivalent to [`Self::send`] but adds a final runtime plugin to shim missing behavior
                 pub async fn send_orchestrator_with_plugin(
                     self,
-                    final_plugin: Option<impl #{RuntimePlugin} + Send + Sync + 'static>
-                ) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    final_plugin: #{Option}<impl #{RuntimePlugin} + #{Send} + #{Sync} + 'static>
+                ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                     let mut config_override = if let Some(config_override) = self.config_override {
                         config_override
                     } else {
