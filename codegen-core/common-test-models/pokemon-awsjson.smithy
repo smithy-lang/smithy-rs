@@ -4,7 +4,7 @@ $version: "1.0"
 // This is a temporary model to test AwsJson 1.0 with @streaming.
 // This model will be removed when protocol tests support @streaming.
 
-namespace com.aws.example.rust
+namespace com.aws.example
 
 use aws.protocols#awsJson1_0
 use smithy.framework#ValidationException
