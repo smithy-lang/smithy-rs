@@ -57,7 +57,7 @@ class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : Operati
 
 class OperationRetryClassifiersFeature(
     codegenContext: ClientCodegenContext,
-    operation: OperationShape,
+    operationShape: OperationShape,
 ) : OperationRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
@@ -72,7 +72,7 @@ class OperationRetryClassifiersFeature(
         "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
         "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
         "RetryClassifiers" to smithyRuntimeApi.resolve("client::retries::RetryClassifiers"),
-        "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operation),
+        "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
         "SdkError" to RuntimeType.smithyHttp(runtimeConfig).resolve("result::SdkError"),
         "ErasedError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypeErasedError"),
     )
