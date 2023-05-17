@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::InterceptorContext;
+use super::{Error, Input, InterceptorContext, Output};
 use crate::client::interceptors::context::{Request, Response};
 use crate::client::orchestrator::OrchestratorError;
 use std::fmt::Debug;
@@ -85,7 +85,8 @@ macro_rules! declare_known_method {
 
 macro_rules! declare_wrapper {
     (($ref_struct_name:ident $mut_struct_name:ident)$($tt:tt)+) => {
-        pub struct $ref_struct_name<'a, I, O, E: Debug> {
+        pub struct $ref_struct_name<'a, I = Input, O = Output, E = Error>
+        where E: Debug {
             inner: &'a InterceptorContext<I, O, E>,
         }
 
@@ -100,7 +101,8 @@ macro_rules! declare_wrapper {
             declare_ref_wrapper_methods!($($tt)+);
         }
 
-        pub struct $mut_struct_name<'a, I, O, E: Debug> {
+        pub struct $mut_struct_name<'a, I = Input, O = Output, E = Error>
+        where E: Debug {
             inner: &'a mut InterceptorContext<I, O, E>,
         }
 
@@ -168,7 +170,10 @@ declare_wrapper!(
 // time. Consider updating the macros to support these last two if you're looking for a challenge.
 // - Zelda
 
-pub struct FinalizerInterceptorContextRef<'a, I, O, E: Debug> {
+pub struct FinalizerInterceptorContextRef<'a, I = Input, O = Output, E = Error>
+where
+    E: Debug,
+{
     inner: &'a InterceptorContext<I, O, E>,
 }
 
@@ -198,7 +203,10 @@ impl<'a, I, O, E: Debug> FinalizerInterceptorContextRef<'a, I, O, E> {
     }
 }
 
-pub struct FinalizerInterceptorContextMut<'a, I, O, E: Debug> {
+pub struct FinalizerInterceptorContextMut<'a, I = Input, O = Output, E = Error>
+where
+    E: Debug,
+{
     inner: &'a mut InterceptorContext<I, O, E>,
 }
 

@@ -176,12 +176,6 @@ impl std::error::Error for InterceptorError {
     }
 }
 
-impl From<InterceptorError> for TypeErasedError {
-    fn from(value: InterceptorError) -> Self {
-        TypeErasedError::new(value)
-    }
-}
-
 /// A convenience error that allows for adding additional `context` to `source`
 #[derive(Debug)]
 pub struct ContextAttachedError {

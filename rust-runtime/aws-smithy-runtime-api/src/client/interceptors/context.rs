@@ -65,7 +65,6 @@ where
     phase: Phase,
     tainted: bool,
     request_checkpoint: Option<HttpRequest>,
-    is_failed: bool,
 }
 
 impl InterceptorContext<Input, Output, Error> {
@@ -79,7 +78,6 @@ impl InterceptorContext<Input, Output, Error> {
             phase: Phase::BeforeSerialization,
             tainted: false,
             request_checkpoint: None,
-            is_failed: false,
         }
     }
 }
@@ -299,15 +297,17 @@ where
         }
         // Otherwise, rewind back to the beginning of BeforeTransmit
         // TODO(enableNewSmithyRuntime): Also rewind the ConfigBag
-        self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
         self.phase = Phase::BeforeTransmit;
+        self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
+        self.response = None;
+        self.output_or_error = None;
         true
     }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
     /// by the context will be replaced by the given error.
     pub fn fail(&mut self, error: OrchestratorError<E>) {
-        if !self.is_failed {
+        if !self.is_failed() {
             trace!(
                 "orchestrator is transitioning to the 'failure' phase from the '{:?}' phase",
                 self.phase
@@ -316,13 +316,14 @@ where
         if let Some(Err(existing_err)) = mem::replace(&mut self.output_or_error, Some(Err(error))) {
             error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
         }
-
-        self.is_failed = true;
     }
 
-    #[doc(hidden)]
+    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
     pub fn is_failed(&self) -> bool {
-        self.is_failed
+        self.output_or_error
+            .as_ref()
+            .map(Result::is_err)
+            .unwrap_or_default()
     }
 }
 
