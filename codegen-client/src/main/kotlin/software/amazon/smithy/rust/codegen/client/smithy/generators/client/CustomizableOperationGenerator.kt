@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -56,33 +57,27 @@ class CustomizableOperationGenerator(
         val combinedGenerics = operationGenerics + handleGenerics
 
         val codegenScope = arrayOf(
+            *preludeScope,
+            "Arc" to RuntimeType.Arc,
+            "Infallible" to RuntimeType.stdConvert.resolve("Infallible"),
             // SDK Types
-            "http_result" to smithyHttp.resolve("result"),
-            "http_body" to smithyHttp.resolve("body"),
             "HttpRequest" to RuntimeType.HttpRequest,
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
             "combined_generics_decl" to combinedGenerics.declaration(),
             "customize_module" to ClientRustModule.Client.customize,
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
 
         writer.rustTemplate(
             """
-            use crate::client::Handle;
-
-            use #{http_body}::SdkBody;
-            use #{http_result}::SdkError;
-
-            use std::convert::Infallible;
-            use std::sync::Arc;
-
             /// A wrapper type for [`Operation`](aws_smithy_http::operation::Operation)s that allows for
             /// customization of the operation before it is sent. A `CustomizableOperation` may be sent
             /// by calling its [`.send()`][#{customize_module}::CustomizableOperation::send] method.
             ##[derive(Debug)]
             pub struct CustomizableOperation#{combined_generics_decl:W} {
-                pub(crate) handle: Arc<Handle#{handle_generics_decl:W}>,
+                pub(crate) handle: #{Arc}<crate::client::Handle#{handle_generics_decl:W}>,
                 pub(crate) operation: Operation#{operation_generics_decl:W},
             }
 
@@ -93,19 +88,19 @@ class CustomizableOperationGenerator(
                 /// Allows for customizing the operation's request
                 pub fn map_request<E>(
                     mut self,
-                    f: impl FnOnce(#{HttpRequest}<SdkBody>) -> Result<#{HttpRequest}<SdkBody>, E>,
-                ) -> Result<Self, E> {
+                    f: impl #{FnOnce}(#{HttpRequest}<#{SdkBody}>) -> #{Result}<#{HttpRequest}<#{SdkBody}>, E>,
+                ) -> #{Result}<Self, E> {
                     let (request, response) = self.operation.into_request_response();
                     let request = request.augment(|req, _props| f(req))?;
                     self.operation = Operation::from_parts(request, response);
-                    Ok(self)
+                    #{Ok}(self)
                 }
 
                 /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-                pub fn mutate_request(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
+                pub fn mutate_request(self, f: impl #{FnOnce}(&mut #{HttpRequest}<#{SdkBody}>)) -> Self {
                     self.map_request(|mut req| {
                         f(&mut req);
-                        Result::<_, Infallible>::Ok(req)
+                        #{Result}::<_, #{Infallible}>::Ok(req)
                     })
                     .expect("infallible")
                 }
@@ -113,19 +108,19 @@ class CustomizableOperationGenerator(
                 /// Allows for customizing the entire operation
                 pub fn map_operation<E>(
                     mut self,
-                    f: impl FnOnce(Operation#{operation_generics_decl:W}) -> Result<Operation#{operation_generics_decl:W}, E>,
-                ) -> Result<Self, E> {
+                    f: impl #{FnOnce}(Operation#{operation_generics_decl:W}) -> #{Result}<Operation#{operation_generics_decl:W}, E>,
+                ) -> #{Result}<Self, E> {
                     self.operation = f(self.operation)?;
-                    Ok(self)
+                    #{Ok}(self)
                 }
 
                 /// Direct access to read the HTTP request
-                pub fn request(&self) -> &#{HttpRequest}<SdkBody> {
+                pub fn request(&self) -> &#{HttpRequest}<#{SdkBody}> {
                     self.operation.request()
                 }
 
                 /// Direct access to mutate the HTTP request
-                pub fn request_mut(&mut self) -> &mut #{HttpRequest}<SdkBody> {
+                pub fn request_mut(&mut self) -> &mut #{HttpRequest}<#{SdkBody}> {
                     self.operation.request_mut()
                 }
             }
@@ -282,6 +277,7 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(
+        *preludeScope,
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
@@ -300,13 +296,13 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
                 #{handle_generics_bounds:W}
             {
                 /// Sends this operation's request
-                pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+                pub async fn send<T, E>(self) -> #{Result}<T, #{SdkError}<E>>
                 where
-                    E: std::error::Error + Send + Sync + 'static,
-                    O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                    Retry: Send + Sync + Clone,
-                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
-                    <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + Clone,
+                    E: std::error::Error + #{Send} + #{Sync} + 'static,
+                    O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
+                    Retry: #{Send} + #{Sync} + #{Clone},
+                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
+                    <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + #{Clone},
                 {
                     self.handle.client.call(self.operation).await
                 }
@@ -322,11 +318,11 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
                 #{handle_generics_bounds:W}
             {
                 /// Sends this operation's request
-                pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+                pub async fn send<T, E>(self) -> #{Result}<T, #{SdkError}<E>>
                 where
-                    E: std::error::Error + Send + Sync + 'static,
-                    O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
+                    E: std::error::Error + #{Send} + #{Sync} + 'static,
+                    O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
+                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
                 {
                     self.handle.client.call(self.operation).await
                 }
