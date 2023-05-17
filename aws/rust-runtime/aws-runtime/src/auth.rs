@@ -15,8 +15,14 @@ pub mod sigv4 {
     use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
     use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_types::region::SigningRegion;
+    use aws_smithy_types::endpoint::Endpoint as SmithyEndpoint;
+    use aws_smithy_types::Document;
+    use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+    use std::error::Error as StdError;
+    use std::fmt;
     use std::time::{Duration, SystemTime};
 
     const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
@@ -24,6 +30,99 @@ pub mod sigv4 {
 
     /// Auth scheme ID for SigV4.
     pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4");
+
+    struct EndpointAuthSchemeConfig {
+        signing_region_override: Option<SigningRegion>,
+        signing_service_override: Option<SigningService>,
+    }
+
+    #[derive(Debug)]
+    enum SigV4SigningError {
+        MissingOperationSigningConfig,
+        MissingSigningRegion,
+        MissingSigningService,
+        NoResolvedEndpoint,
+        WrongIdentityType(Identity),
+        BadEndpointAuthSchemeConfig(EndpointAuthSchemeConfigError),
+    }
+
+    impl fmt::Display for SigV4SigningError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            use SigV4SigningError::*;
+            let mut w = |s| f.write_str(s);
+            match self {
+                MissingOperationSigningConfig => w("missing operation signing config for SigV4"),
+                MissingSigningRegion => w("missing signing region for SigV4 signing"),
+                MissingSigningService => w("missing signing service for SigV4 signing"),
+                NoResolvedEndpoint => w("SigV4 signing requires a resolved endpoint"),
+                WrongIdentityType(identity) => {
+                    write!(f, "wrong identity type for SigV4: {identity:?}")
+                }
+                BadEndpointAuthSchemeConfig(_source) => {
+                    w("failed to extract SigV4 signing information from endpoint config")
+                }
+            }
+        }
+    }
+
+    impl StdError for SigV4SigningError {
+        fn source(&self) -> Option<&(dyn StdError + 'static)> {
+            match self {
+                Self::MissingOperationSigningConfig => None,
+                Self::MissingSigningRegion => None,
+                Self::MissingSigningService => None,
+                Self::NoResolvedEndpoint => None,
+                Self::WrongIdentityType(_) => None,
+                Self::BadEndpointAuthSchemeConfig(source) => Some(source),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    enum EndpointAuthSchemeConfigError {
+        ExpectedArrayForAuthSchemes,
+        AuthSchemeEndpointConfigMismatch(String),
+        UnexpectedType(&'static str),
+    }
+
+    impl EndpointAuthSchemeConfigError {
+        fn auth_scheme_endpoint_config_mismatch<'a>(
+            auth_schemes: impl Iterator<Item = (Option<&'a str>, &'a HashMap<String, Document>)>,
+        ) -> Self {
+            Self::AuthSchemeEndpointConfigMismatch(
+                auth_schemes
+                    .flat_map(|(name, _)| name)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        }
+    }
+
+    impl fmt::Display for EndpointAuthSchemeConfigError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::ExpectedArrayForAuthSchemes => {
+                    f.write_str("expected an array for `authSchemes` in endpoint config")
+                }
+                Self::AuthSchemeEndpointConfigMismatch(supported_schemes) => {
+                    write!(f,
+                        "selected auth scheme / endpoint config mismatch. Couldn't find `sigv4` endpoint config for this endpoint. \
+                        The authentication schemes supported by this endpoint are: {:?}",
+                        supported_schemes
+                    )
+                }
+                Self::UnexpectedType(field_name) => {
+                    write!(
+                        f,
+                        "unexpected type for `{}` in endpoint auth scheme config",
+                        field_name
+                    )
+                }
+            }
+        }
+    }
+
+    impl StdError for EndpointAuthSchemeConfigError {}
 
     /// SigV4 auth scheme.
     #[derive(Debug, Default)]
@@ -111,9 +210,9 @@ pub mod sigv4 {
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct SigV4OperationSigningConfig {
         /// AWS Region to sign for.
-        pub region: SigningRegion,
+        pub region: Option<SigningRegion>,
         /// AWS Service to sign for.
-        pub service: SigningService,
+        pub service: Option<SigningService>,
         /// Signing options.
         pub signing_options: SigningOptions,
     }
@@ -165,7 +264,7 @@ pub mod sigv4 {
             credentials: &'a Credentials,
             operation_config: &'a SigV4OperationSigningConfig,
             request_timestamp: SystemTime,
-        ) -> SigningParams<'a> {
+        ) -> Result<SigningParams<'a>, SigV4SigningError> {
             if let Some(expires_in) = settings.expires_in {
                 if let Some(creds_expires_time) = credentials.expiry() {
                     let presigned_expires_time = request_timestamp + expires_in;
@@ -178,12 +277,112 @@ pub mod sigv4 {
             let mut builder = SigningParams::builder()
                 .access_key(credentials.access_key_id())
                 .secret_key(credentials.secret_access_key())
-                .region(operation_config.region.as_ref())
-                .service_name(operation_config.service.as_ref())
+                .region(
+                    operation_config
+                        .region
+                        .as_ref()
+                        .ok_or(SigV4SigningError::MissingSigningRegion)?
+                        .as_ref(),
+                )
+                .service_name(
+                    operation_config
+                        .service
+                        .as_ref()
+                        .ok_or(SigV4SigningError::MissingSigningService)?
+                        .as_ref(),
+                )
                 .time(request_timestamp)
                 .settings(settings);
             builder.set_security_token(credentials.session_token());
-            builder.build().expect("all required fields set")
+            Ok(builder.build().expect("all required fields set"))
+        }
+
+        fn extract_operation_config(
+            config_bag: &ConfigBag,
+        ) -> Result<Cow<'_, SigV4OperationSigningConfig>, SigV4SigningError> {
+            let operation_config = config_bag
+                .get::<SigV4OperationSigningConfig>()
+                .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
+            let endpoint = config_bag
+                .get::<SmithyEndpoint>()
+                .ok_or(SigV4SigningError::NoResolvedEndpoint)?;
+
+            let EndpointAuthSchemeConfig {
+                signing_region_override,
+                signing_service_override,
+            } = Self::extract_endpoint_auth_scheme_config(endpoint)
+                .map_err(SigV4SigningError::BadEndpointAuthSchemeConfig)?;
+
+            match (signing_region_override, signing_service_override) {
+                (None, None) => Ok(Cow::Borrowed(operation_config)),
+                (region, service) => {
+                    let mut operation_config = operation_config.clone();
+                    if region.is_some() {
+                        operation_config.region = region;
+                    }
+                    if service.is_some() {
+                        operation_config.service = service;
+                    }
+                    Ok(Cow::Owned(operation_config))
+                }
+            }
+        }
+
+        fn extract_endpoint_auth_scheme_config(
+            value: &SmithyEndpoint,
+        ) -> Result<EndpointAuthSchemeConfig, EndpointAuthSchemeConfigError> {
+            // look for v4 as an auth scheme
+            let auth_schemes = match value.properties().get("authSchemes") {
+                Some(Document::Array(schemes)) => schemes,
+                // no auth schemes:
+                None => {
+                    return Ok(EndpointAuthSchemeConfig {
+                        signing_region_override: None,
+                        signing_service_override: None,
+                    })
+                }
+                _other => return Err(EndpointAuthSchemeConfigError::ExpectedArrayForAuthSchemes),
+            };
+            let auth_schemes = auth_schemes
+                .iter()
+                .flat_map(|doc| match doc {
+                    Document::Object(map) => Some(map),
+                    _ => None,
+                })
+                .map(|it| {
+                    let name = match it.get("name") {
+                        Some(Document::String(s)) => Some(s.as_str()),
+                        _ => None,
+                    };
+                    (name, it)
+                });
+            let (_, v4) = auth_schemes
+                .clone()
+                .find(|(name, _doc)| name.as_deref() == Some("sigv4"))
+                .ok_or_else(|| {
+                    EndpointAuthSchemeConfigError::auth_scheme_endpoint_config_mismatch(
+                        auth_schemes,
+                    )
+                })?;
+
+            let signing_region_override = match v4.get("signingRegion") {
+                Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
+                None => None,
+                _ => {
+                    return Err(EndpointAuthSchemeConfigError::UnexpectedType(
+                        "signingRegion",
+                    ))
+                }
+            };
+            let signing_service_override = match v4.get("signingName") {
+                Some(Document::String(s)) => Some(SigningService::from(s.to_string())),
+                None => None,
+                _ => return Err(EndpointAuthSchemeConfigError::UnexpectedType("signingName")),
+            };
+            Ok(EndpointAuthSchemeConfig {
+                signing_region_override,
+                signing_service_override,
+            })
         }
     }
 
@@ -194,9 +393,7 @@ pub mod sigv4 {
             identity: &Identity,
             config_bag: &ConfigBag,
         ) -> Result<(), BoxError> {
-            let operation_config = config_bag
-                .get::<SigV4OperationSigningConfig>()
-                .ok_or("missing operation signing config for SigV4")?;
+            let operation_config = Self::extract_operation_config(config_bag)?;
             let request_time = config_bag.request_time().unwrap_or_default().system_time();
 
             let credentials = if let Some(creds) = identity.data::<Credentials>() {
@@ -205,12 +402,12 @@ pub mod sigv4 {
                 tracing::debug!("skipped SigV4 signing since signing is optional for this operation and there are no credentials");
                 return Ok(());
             } else {
-                return Err(format!("wrong identity type for SigV4: {identity:?}").into());
+                return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
             };
 
-            let settings = Self::settings(operation_config);
+            let settings = Self::settings(&operation_config);
             let signing_params =
-                Self::signing_params(settings, credentials, operation_config, request_time);
+                Self::signing_params(settings, credentials, &operation_config, request_time)?;
 
             let (signing_instructions, _signature) = {
                 // A body that is already in memory can be signed directly. A body that is not in memory
@@ -250,6 +447,8 @@ pub mod sigv4 {
         use super::*;
         use aws_credential_types::Credentials;
         use aws_sigv4::http_request::SigningSettings;
+        use aws_types::region::SigningRegion;
+        use aws_types::SigningService;
         use std::time::{Duration, SystemTime};
         use tracing_test::traced_test;
 
@@ -270,8 +469,8 @@ pub mod sigv4 {
                 "test",
             );
             let operation_config = SigV4OperationSigningConfig {
-                region: SigningRegion::from_static("test"),
-                service: SigningService::from_static("test"),
+                region: Some(SigningRegion::from_static("test")),
+                service: Some(SigningService::from_static("test")),
                 signing_options: SigningOptions {
                     double_uri_encode: true,
                     content_sha256_header: true,
@@ -283,14 +482,79 @@ pub mod sigv4 {
                     payload_override: None,
                 },
             };
-            SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now);
+            SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now)
+                .unwrap();
             assert!(!logs_contain(EXPIRATION_WARNING));
 
             let mut settings = SigningSettings::default();
             settings.expires_in = Some(creds_expire_in + Duration::from_secs(10));
 
-            SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now);
+            SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now)
+                .unwrap();
             assert!(logs_contain(EXPIRATION_WARNING));
         }
+    }
+
+    #[test]
+    fn endpoint_config_overrides_region_and_service() {
+        let mut cfg = ConfigBag::base();
+        cfg.put(
+            SmithyEndpoint::builder()
+                .url("kinesis.us-east-override.amazon.com")
+                .property(
+                    "authSchemes",
+                    vec![Document::Object({
+                        let mut out = HashMap::new();
+                        out.insert("name".to_string(), "sigv4".to_string().into());
+                        out.insert(
+                            "signingName".to_string(),
+                            "qldb-override".to_string().into(),
+                        );
+                        out.insert(
+                            "signingRegion".to_string(),
+                            "us-east-override".to_string().into(),
+                        );
+                        out
+                    })],
+                )
+                .build(),
+        );
+        cfg.put(SigV4OperationSigningConfig {
+            region: Some(SigningRegion::from(Region::new("override-this-region"))),
+            service: Some(SigningService::from_static("override-this-service")),
+            signing_options: Default::default(),
+        });
+
+        let result = SigV4HttpRequestSigner::extract_operation_config(&cfg).expect("success");
+
+        assert_eq!(
+            result.region,
+            Some(SigningRegion::from(Region::new("us-east-override")))
+        );
+        assert_eq!(
+            result.service,
+            Some(SigningService::from_static("qldb-override"))
+        );
+        assert!(matches!(result, Cow::Owned(_)));
+    }
+
+    #[test]
+    fn endpoint_config_supports_fallback_when_region_or_service_are_unset() {
+        let mut cfg = ConfigBag::base();
+        cfg.put(SmithyEndpoint::builder().url("www.service.com").build());
+        cfg.put(SigV4OperationSigningConfig {
+            region: Some(SigningRegion::from(Region::new("us-east-1"))),
+            service: Some(SigningService::from_static("qldb")),
+            signing_options: Default::default(),
+        });
+
+        let result = SigV4HttpRequestSigner::extract_operation_config(&cfg).expect("success");
+
+        assert_eq!(
+            result.region,
+            Some(SigningRegion::from(Region::new("us-east-1")))
+        );
+        assert_eq!(result.service, Some(SigningService::from_static("qldb")));
+        assert!(matches!(result, Cow::Borrowed(_)));
     }
 }
