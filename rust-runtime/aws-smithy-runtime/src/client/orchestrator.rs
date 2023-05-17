@@ -234,7 +234,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::context::wrappers::{
         FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
     };
-    use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+    use aws_smithy_runtime_api::client::interceptors::context::Output;
     use aws_smithy_runtime_api::client::interceptors::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
         BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
