@@ -20,6 +20,7 @@ mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
+pub mod interceptors;
 
 macro_rules! halt_on_err {
     ([$ctx:ident] => $expr:expr) => {
