@@ -141,7 +141,6 @@ impl TryFrom<RequestPairs> for HeaderValue {
                 pairs.push_str("; ");
             }
 
-            // TODO Do I need to escape/encode these?
             pairs.push_str(&key);
             pairs.push('=');
             pairs.push_str(&value);
@@ -154,6 +153,7 @@ impl TryFrom<RequestPairs> for HeaderValue {
 #[cfg(test)]
 mod tests {
     use super::RequestInfoInterceptor;
+    use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
@@ -162,6 +162,7 @@ mod tests {
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use http::HeaderValue;
     use std::time::Duration;
 
     fn expect_header<'a>(
@@ -201,5 +202,21 @@ mod tests {
             expect_header(&context, "amz-sdk-request"),
             "attempt=0; max=3"
         );
+    }
+
+    #[test]
+    fn test_header_value_from_request_pairs_supports_all_valid_characters() {
+        // The list of valid characters is defined by an internal-only spec.
+        let rp = RequestPairs::new()
+            .with_pair(("allowed-symbols", "!#$&'*+-.^_`|~"))
+            .with_pair(("allowed-digits", "01234567890"))
+            .with_pair((
+                "allowed-characters",
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            ))
+            .with_pair(("allowed-whitespace", " \t"));
+        let _header_value: HeaderValue = rp
+            .try_into()
+            .expect("request pairs can be converted into valid header value.");
     }
 }
