@@ -443,9 +443,12 @@ class FluentClientGenerator(
 
                         /// Consumes this builder, creating a customizable operation that can be modified before being
                         /// sent.
-                        // TODO(enableNewSmithyRuntime): Remove `async` once we switch to orchestrator
-                        pub async fn customize(self) -> #{CustomizableOperation} {
-                            self.customize_orchestrator().await
+                        // TODO(enableNewSmithyRuntime): Remove `async` and `Result` once we switch to orchestrator
+                        pub async fn customize(self) -> #{Result}<
+                            #{CustomizableOperation},
+                            #{SdkError}<#{OperationError}>
+                        > {
+                            #{Ok}(self.customize_orchestrator().await)
                         }
                         """,
                         *orchestratorScope,

@@ -44,6 +44,7 @@ async fn operation_interceptor_test() {
             .prefix("prefix~")
             .customize()
             .await
+            .unwrap()
             .interceptor(util::TestUserAgentInterceptor)
             .send_orchestrator_with_plugin(Some(fixup))
             .await
@@ -110,6 +111,7 @@ async fn interceptor_priority() {
             .prefix("prefix~")
             .customize()
             .await
+            .unwrap()
             .interceptor(RequestTimeAdvanceInterceptor(Duration::from_secs(
                 1624036048
             )))
@@ -142,6 +144,7 @@ async fn set_test_user_agent_through_request_mutation() {
             .prefix("prefix~")
             .customize()
             .await
+            .unwrap()
             .mutate_request(|request| {
                 request.headers_mut()
                     .insert(
