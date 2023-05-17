@@ -60,7 +60,7 @@ struct RequestTimeResetInterceptor;
 impl Interceptor for RequestTimeResetInterceptor {
     fn modify_before_signing(
         &self,
-        _context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         cfg.set_request_time(RequestTime::new(UNIX_EPOCH));
@@ -74,7 +74,7 @@ struct RequestTimeAdvanceInterceptor(Duration);
 impl Interceptor for RequestTimeAdvanceInterceptor {
     fn modify_before_signing(
         &self,
-        _context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         let request_time = cfg.request_time().unwrap();

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
@@ -42,7 +41,7 @@ impl RecursionDetectionInterceptor {
 impl Interceptor for RecursionDetectionInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let request = context.request_mut();

@@ -39,7 +39,7 @@ pub struct TestUserAgentInterceptor;
 impl Interceptor for TestUserAgentInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         let headers = context.request_mut().headers_mut();

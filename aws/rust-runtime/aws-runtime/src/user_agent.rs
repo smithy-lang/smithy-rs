@@ -4,7 +4,6 @@
  */
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
@@ -75,7 +74,7 @@ fn header_values(
 impl Interceptor for UserAgentInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let api_metadata = cfg
@@ -115,10 +114,7 @@ mod tests {
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use aws_smithy_types::error::display::DisplayErrorContext;
 
-    fn expect_header<'a>(
-        context: &'a InterceptorContext<Input, Output, Error>,
-        header_name: &str,
-    ) -> &'a str {
+    fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
             .headers()
@@ -128,7 +124,7 @@ mod tests {
             .unwrap()
     }
 
-    fn context() -> InterceptorContext<Input, Output, Error> {
+    fn context() -> InterceptorContext {
         let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());

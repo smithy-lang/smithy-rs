@@ -373,7 +373,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeExecution, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_execution,
-            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeSerializationInterceptorContextRef<'_>,
             expected
         );
     }
@@ -384,7 +384,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_serialization,
-            &mut BeforeSerializationInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeSerializationInterceptorContextMut<'_>,
             expected
         );
     }
@@ -395,7 +395,7 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_serialization,
-            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeSerializationInterceptorContextRef<'_>,
             expected
         );
     }
@@ -406,7 +406,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSerialization, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_serialization,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             expected
         );
     }
@@ -417,7 +417,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeRetryLoop, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_retry_loop,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             expected
         );
     }
@@ -428,7 +428,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeAttempt, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_attempt,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             expected
         );
     }
@@ -439,7 +439,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_signing,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             expected
         );
     }
@@ -450,7 +450,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_signing,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             expected
         );
     }
@@ -461,7 +461,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_signing,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             expected
         );
     }
@@ -472,7 +472,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_transmit,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             expected
         );
     }
@@ -483,7 +483,7 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_transmit,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             expected
         );
     }
@@ -494,7 +494,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterTransmit, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_transmit,
-            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeDeserializationInterceptorContextRef<'_>,
             expected
         );
     }
@@ -505,7 +505,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_deserialization,
-            &mut BeforeDeserializationInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeDeserializationInterceptorContextMut<'_>,
             expected
         );
     }
@@ -516,7 +516,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_deserialization,
-            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeDeserializationInterceptorContextRef<'_>,
             expected
         );
     }
@@ -527,7 +527,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_deserialization,
-            &AfterDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &AfterDeserializationInterceptorContextRef<'_>,
             expected
         );
     }
@@ -538,7 +538,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -549,7 +549,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_attempt,
-            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            &FinalizerInterceptorContextRef<'_>,
             expected
         );
     }
@@ -560,7 +560,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -571,7 +571,7 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_execution,
-            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            &FinalizerInterceptorContextRef<'_>,
             expected
         );
     }
@@ -642,9 +642,9 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_execution,
-            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeSerializationInterceptorContextRef<'_>,
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -655,9 +655,9 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_serialization,
-            &mut BeforeSerializationInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeSerializationInterceptorContextMut<'_>,
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -668,9 +668,9 @@ mod tests {
         let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_serialization,
-            &BeforeSerializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeSerializationInterceptorContextRef<'_>,
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -681,9 +681,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_serialization,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -694,9 +694,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_retry_loop,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -707,9 +707,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_attempt,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -720,9 +720,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_signing,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -733,9 +733,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_signing,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -746,9 +746,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_signing,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -759,9 +759,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_transmit,
-            &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeTransmitInterceptorContextMut<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -772,9 +772,9 @@ mod tests {
         let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_transmit,
-            &BeforeTransmitInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeTransmitInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -785,9 +785,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_transmit,
-            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeDeserializationInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -799,9 +799,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_deserialization,
-            &mut BeforeDeserializationInterceptorContextMut<'_, Input, Output, Error>,
+            &mut BeforeDeserializationInterceptorContextMut<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -813,9 +813,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_deserialization,
-            &BeforeDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &BeforeDeserializationInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -827,9 +827,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_deserialization,
-            &AfterDeserializationInterceptorContextRef<'_, Input, Output, Error>,
+            &AfterDeserializationInterceptorContextRef<'_>,
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             expected
         );
     }
@@ -840,9 +840,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_attempt_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             read_after_attempt,
-            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            &FinalizerInterceptorContextRef<'_>,
             expected
         );
     }
@@ -859,9 +859,9 @@ mod tests {
         let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_completion,
-            &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+            &mut FinalizerInterceptorContextMut<'_>,
             read_after_execution,
-            &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+            &FinalizerInterceptorContextRef<'_>,
             expected
         );
     }

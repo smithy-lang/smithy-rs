@@ -28,11 +28,7 @@ use std::sync::Arc;
 macro_rules! interceptor_trait_fn {
     ($name:ident, $phase:ident, $docs:tt) => {
         #[doc = $docs]
-        fn $name(
-            &self,
-            context: &$phase<'_, Input, Output, Error>,
-            cfg: &mut ConfigBag,
-        ) -> Result<(), BoxError> {
+        fn $name(&self, context: &$phase<'_>, cfg: &mut ConfigBag) -> Result<(), BoxError> {
             let _ctx = context;
             let _cfg = cfg;
             Ok(())
@@ -40,11 +36,7 @@ macro_rules! interceptor_trait_fn {
     };
     (mut $name:ident, $phase:ident, $docs:tt) => {
         #[doc = $docs]
-        fn $name(
-            &self,
-            context: &mut $phase<'_, Input, Output, Error>,
-            cfg: &mut ConfigBag,
-        ) -> Result<(), BoxError> {
+        fn $name(&self, context: &mut $phase<'_>, cfg: &mut ConfigBag) -> Result<(), BoxError> {
             let _ctx = context;
             let _cfg = cfg;
             Ok(())
@@ -486,7 +478,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// returned, replacing the response currently in the context.
     fn modify_before_attempt_completion(
         &self,
-        context: &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut FinalizerInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -518,7 +510,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// raised error as the [InterceptorContext::output_or_error()].
     fn read_after_attempt(
         &self,
-        context: &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+        context: &FinalizerInterceptorContextRef<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -548,7 +540,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// returned , replacing the response currently in the context.
     fn modify_before_completion(
         &self,
-        context: &mut FinalizerInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut FinalizerInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -576,7 +568,7 @@ pub trait Interceptor: std::fmt::Debug {
     /// used and earlier ones will be logged and dropped.
     fn read_after_execution(
         &self,
-        context: &FinalizerInterceptorContextRef<'_, Input, Output, Error>,
+        context: &FinalizerInterceptorContextRef<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let _ctx = context;
@@ -643,7 +635,7 @@ macro_rules! interceptor_impl_fn {
     (mut $interceptor:ident) => {
         pub fn $interceptor(
             &self,
-            ctx: &mut InterceptorContext<Input, Output, Error>,
+            ctx: &mut InterceptorContext,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
             let mut result: Result<(), BoxError> = Ok(());
@@ -662,7 +654,7 @@ macro_rules! interceptor_impl_fn {
     (ref $interceptor:ident) => {
         pub fn $interceptor(
             &self,
-            ctx: &InterceptorContext<Input, Output, Error>,
+            ctx: &InterceptorContext,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
             let mut result: Result<(), BoxError> = Ok(());
@@ -708,7 +700,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let ctx: BeforeSerializationInterceptorContextRef<'_, _, _, _> = ctx.into();
+        let ctx: BeforeSerializationInterceptorContextRef<'_> = ctx.into();
         for interceptor in self.client_interceptors.0.iter() {
             if let Err(new_error) = interceptor.read_before_execution(&ctx, cfg) {
                 if let Err(last_error) = result {
@@ -726,7 +718,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let ctx: BeforeSerializationInterceptorContextRef<'_, _, _, _> = ctx.into();
+        let ctx: BeforeSerializationInterceptorContextRef<'_> = ctx.into();
         for interceptor in self.operation_interceptors.0.iter() {
             if let Err(new_error) = interceptor.read_before_execution(&ctx, cfg) {
                 if let Err(last_error) = result {
@@ -759,7 +751,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let mut ctx: FinalizerInterceptorContextMut<'_, _, _, _> = ctx.into();
+        let mut ctx: FinalizerInterceptorContextMut<'_> = ctx.into();
         for interceptor in self.interceptors() {
             if let Err(new_error) = interceptor.modify_before_attempt_completion(&mut ctx, cfg) {
                 if let Err(last_error) = result {
@@ -777,7 +769,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let ctx: FinalizerInterceptorContextRef<'_, _, _, _> = ctx.into();
+        let ctx: FinalizerInterceptorContextRef<'_> = ctx.into();
         for interceptor in self.interceptors() {
             if let Err(new_error) = interceptor.read_after_attempt(&ctx, cfg) {
                 if let Err(last_error) = result {
@@ -795,7 +787,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let mut ctx: FinalizerInterceptorContextMut<'_, _, _, _> = ctx.into();
+        let mut ctx: FinalizerInterceptorContextMut<'_> = ctx.into();
         for interceptor in self.interceptors() {
             if let Err(new_error) = interceptor.modify_before_completion(&mut ctx, cfg) {
                 if let Err(last_error) = result {
@@ -813,7 +805,7 @@ impl Interceptors {
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
         let mut result: Result<(), BoxError> = Ok(());
-        let ctx: FinalizerInterceptorContextRef<'_, _, _, _> = ctx.into();
+        let ctx: FinalizerInterceptorContextRef<'_> = ctx.into();
         for interceptor in self.interceptors() {
             if let Err(new_error) = interceptor.read_after_execution(&ctx, cfg) {
                 if let Err(last_error) = result {

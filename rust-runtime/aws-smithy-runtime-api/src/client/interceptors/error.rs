@@ -5,7 +5,6 @@
 
 //! Errors related to Smithy interceptors
 
-use crate::type_erasure::TypeErasedError;
 use std::fmt;
 
 macro_rules! interceptor_error_fn {

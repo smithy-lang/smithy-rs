@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
@@ -40,7 +39,7 @@ impl Default for InvocationIdInterceptor {
 impl Interceptor for InvocationIdInterceptor {
     fn modify_before_retry_loop(
         &self,
-        context: &mut BeforeTransmitInterceptorContextMut<'_, Input, Output, Error>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let headers = context.request_mut().headers_mut();
