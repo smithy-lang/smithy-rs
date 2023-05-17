@@ -102,8 +102,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true,
-                            "enableNewSmithyRuntime": false
+                            "enableNewSmithyRuntime": "middleware"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -385,7 +384,9 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     binaryName = "publisher"
     arguments = mutableListOf(
         "generate-version-manifest",
-        "--location",
+        "--input-location",
+        sdkOutputDir.absolutePath,
+        "--output-location",
         outputDir.absolutePath,
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,

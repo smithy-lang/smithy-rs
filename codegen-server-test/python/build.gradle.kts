@@ -41,7 +41,11 @@ dependencies {
 val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        CodegenTest("com.aws.example.python#PokemonService", "pokemon-service-server-sdk"),
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+        ),
         CodegenTest(
             "com.amazonaws.ebs#Ebs", "ebs",
             imports = listOf("$commonModels/ebs.json"),

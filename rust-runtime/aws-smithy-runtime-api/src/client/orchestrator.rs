@@ -5,44 +5,41 @@
 
 use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, HttpAuthSchemes};
 use crate::client::identity::IdentityResolvers;
-use crate::client::interceptors::context::{Input, OutputOrError};
+use crate::client::interceptors::context::{Error, Input, Output};
 use crate::client::retries::RetryClassifiers;
 use crate::client::retries::RetryStrategy;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::EndpointPrefix;
-use std::any::Any;
-use std::fmt::Debug;
+use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 pub type HttpRequest = http::Request<SdkBody>;
 pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
+pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
-pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self);
-}
-
-pub trait RequestSerializer: Send + Sync + Debug {
+pub trait RequestSerializer: Send + Sync + fmt::Debug {
     fn serialize_input(&self, input: Input) -> Result<HttpRequest, BoxError>;
 }
 
-pub trait ResponseDeserializer: Send + Sync + Debug {
-    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
+pub trait ResponseDeserializer: Send + Sync + fmt::Debug {
+    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<Result<Output, Error>> {
         let _ = response;
         None
     }
 
-    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
+    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> Result<Output, Error>;
 }
 
-pub trait Connection: Send + Sync + Debug {
+pub trait Connection: Send + Sync + fmt::Debug {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
@@ -56,16 +53,16 @@ impl Connection for Box<dyn Connection> {
 pub struct EndpointResolverParams(TypeErasedBox);
 
 impl EndpointResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
         Self(TypedBox::new(params).erase())
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
 
-pub trait EndpointResolver: Send + Sync + Debug {
+pub trait EndpointResolver: Send + Sync + fmt::Debug {
     fn resolve_and_apply_endpoint(
         &self,
         params: &EndpointResolverParams,
@@ -137,11 +134,11 @@ pub trait ConfigBagAccessors {
     fn retry_strategy(&self) -> &dyn RetryStrategy;
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
 
-    fn trace_probe(&self) -> &dyn TraceProbe;
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static);
-
     fn request_time(&self) -> Option<RequestTime>;
     fn set_request_time(&mut self, request_time: RequestTime);
+
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>>;
+    fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>);
 }
 
 impl ConfigBagAccessors for ConfigBag {
@@ -259,21 +256,23 @@ impl ConfigBagAccessors for ConfigBag {
         self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
     }
 
-    fn trace_probe(&self) -> &dyn TraceProbe {
-        &**self
-            .get::<Box<dyn TraceProbe>>()
-            .expect("missing trace probe")
-    }
-
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static) {
-        self.put::<Box<dyn TraceProbe>>(Box::new(trace_probe));
-    }
-
     fn request_time(&self) -> Option<RequestTime> {
         self.get::<RequestTime>().cloned()
     }
 
     fn set_request_time(&mut self, request_time: RequestTime) {
         self.put::<RequestTime>(request_time);
+    }
+
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.get::<Arc<dyn AsyncSleep>>().cloned()
+    }
+
+    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        if let Some(sleep_impl) = sleep_impl {
+            self.put::<Arc<dyn AsyncSleep>>(sleep_impl);
+        } else {
+            self.unset::<Arc<dyn AsyncSleep>>();
+        }
     }
 }

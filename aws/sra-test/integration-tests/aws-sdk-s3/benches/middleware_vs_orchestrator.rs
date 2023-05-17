@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate criterion;
 use aws_sdk_s3 as s3;
+use aws_smithy_runtime_api::client::interceptors::Interceptors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use criterion::{BenchmarkId, Criterion};
@@ -94,6 +95,7 @@ async fn orchestrator(client: &s3::Client) {
         fn configure(
             &self,
             cfg: &mut ConfigBag,
+            _interceptors: &mut Interceptors,
         ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
             let params_builder = s3::endpoint::Params::builder()
                 .set_region(Some(self.region.clone()))
@@ -107,7 +109,7 @@ async fn orchestrator(client: &s3::Client) {
         .list_objects_v2()
         .bucket("test-bucket")
         .prefix("prefix~")
-        .send_v2_with_plugin(Some(FixupPlugin {
+        .send_orchestrator_with_plugin(Some(FixupPlugin {
             region: client
                 .conf()
                 .region()

@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -37,8 +38,9 @@ internal class EndpointTraitBindingsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `generate endpoint prefixes`(enableNewSmithyRuntime: Boolean) {
+    @ValueSource(strings = ["middleware", "orchestrator"])
+    fun `generate endpoint prefixes`(smithyRuntimeModeStr: String) {
+        val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         val model = """
             namespace test
             @readonly
@@ -76,7 +78,7 @@ internal class EndpointTraitBindingsTest {
                     RuntimeType.smithyHttp(TestRuntimeConfig),
                     TestRuntimeConfig.operationBuildError(),
                 ) {
-                    endpointBindingGenerator.render(this, "self", enableNewSmithyRuntime)
+                    endpointBindingGenerator.render(this, "self", smithyRuntimeMode)
                 }
             }
             unitTest(
