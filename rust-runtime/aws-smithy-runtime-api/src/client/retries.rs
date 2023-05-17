@@ -5,7 +5,7 @@
 
 use crate::client::interceptors::context::Error;
 use crate::client::interceptors::InterceptorContext;
-use crate::client::orchestrator::BoxError;
+use crate::client::orchestrator::{BoxError, OrchestratorError};
 use crate::config_bag::ConfigBag;
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt::Debug;
@@ -39,7 +39,7 @@ pub enum RetryReason {
 pub trait ClassifyRetry: Send + Sync + Debug {
     /// Run this classifier against an error to determine if it should be retried. Returns
     /// `Some(RetryKind)` if the error should be retried; Otherwise returns `None`.
-    fn classify_retry(&self, error: &Error) -> Option<RetryReason>;
+    fn classify_retry(&self, error: &OrchestratorError<Error>) -> Option<RetryReason>;
 }
 
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl RetryClassifiers {
 }
 
 impl ClassifyRetry for RetryClassifiers {
-    fn classify_retry(&self, error: &Error) -> Option<RetryReason> {
+    fn classify_retry(&self, error: &OrchestratorError<Error>) -> Option<RetryReason> {
         // return the first non-None result
         self.inner.iter().find_map(|cr| cr.classify_retry(error))
     }
