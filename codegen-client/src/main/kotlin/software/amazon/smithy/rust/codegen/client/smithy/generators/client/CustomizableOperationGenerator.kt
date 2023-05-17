@@ -220,7 +220,7 @@ class CustomizableOperationGenerator(
                 /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
                 pub fn config_override(
                     mut self,
-                    config_override: impl Into<crate::config::Builder>,
+                    config_override: impl #{Into}<crate::config::Builder>,
                 ) -> Self {
                     self.config_override = Some(config_override.into());
                     self
