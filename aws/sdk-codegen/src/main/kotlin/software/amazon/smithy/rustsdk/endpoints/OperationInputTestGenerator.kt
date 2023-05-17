@@ -14,7 +14,7 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -120,7 +120,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val moduleName = ctx.moduleUseName()
     private val endpointCustomizations = ctx.rootDecorator.endpointCustomizations(ctx)
     private val model = ctx.model
-    private val instantiator = clientInstantiator(ctx)
+    private val instantiator = ClientInstantiator(ctx)
 
     private fun EndpointTestOperationInput.operationId() =
         ShapeId.fromOptionalNamespace(ctx.serviceShape.id.namespace, operationName)

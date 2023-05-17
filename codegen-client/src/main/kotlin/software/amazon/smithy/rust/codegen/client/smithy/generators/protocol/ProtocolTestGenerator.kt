@@ -20,9 +20,11 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -44,15 +46,47 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import java.util.logging.Logger
 
+data class ClientCreationParams(
+    val codegenContext: ClientCodegenContext,
+    val connectorName: String,
+    val configBuilderName: String,
+    val clientName: String,
+)
+
+interface ProtocolTestGenerator {
+    val codegenContext: ClientCodegenContext
+    val protocolSupport: ProtocolSupport
+    val operationShape: OperationShape
+
+    fun render(writer: RustWriter)
+}
+
 /**
  * Generate protocol tests for an operation
  */
-class ProtocolTestGenerator(
-    private val codegenContext: ClientCodegenContext,
-    private val protocolSupport: ProtocolSupport,
-    private val operationShape: OperationShape,
-    private val writer: RustWriter,
-) {
+class DefaultProtocolTestGenerator(
+    override val codegenContext: ClientCodegenContext,
+    override val protocolSupport: ProtocolSupport,
+    override val operationShape: OperationShape,
+
+    private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
+        rustTemplate(
+            """
+            let smithy_client = #{Builder}::new()
+                .connector(${params.connectorName})
+                .middleware(#{MapRequestLayer}::for_mapper(#{SmithyEndpointStage}::new()))
+                .build();
+            let ${params.clientName} = #{Client}::with_config(smithy_client, ${params.configBuilderName}.build());
+            """,
+            "Client" to ClientRustModule.root.toType().resolve("Client"),
+            "Builder" to ClientRustModule.client.toType().resolve("Builder"),
+            "SmithyEndpointStage" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
+                .resolve("endpoint::middleware::SmithyEndpointStage"),
+            "MapRequestLayer" to RuntimeType.smithyHttpTower(codegenContext.runtimeConfig)
+                .resolve("map_request::MapRequestLayer"),
+        )
+    },
+) : ProtocolTestGenerator {
     private val logger = Logger.getLogger(javaClass.name)
 
     private val inputShape = operationShape.inputShape(codegenContext.model)
@@ -60,7 +94,7 @@ class ProtocolTestGenerator(
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
 
-    private val instantiator = clientInstantiator(codegenContext)
+    private val instantiator = ClientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "SmithyHttp" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
@@ -75,7 +109,7 @@ class ProtocolTestGenerator(
             TestCase()
     }
 
-    fun render() {
+    override fun render(writer: RustWriter) {
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
@@ -166,33 +200,56 @@ class ProtocolTestGenerator(
             writable {
                 val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
                 params.getObjectMember("builtInParams").orNull()?.members?.forEach { (name, value) ->
-                    customizations.firstNotNullOf { it.setBuiltInOnServiceConfig(name.value, value, "builder") }(this)
+                    customizations.firstNotNullOf {
+                        it.setBuiltInOnServiceConfig(name.value, value, "config_builder")
+                    }(this)
                 }
             }
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let (conn, request_receiver) = #{capture_request}(None);
+            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
-            let config = builder.build();
 
             """,
+            "capture_request" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
+                .toDevDependency()
+                .withFeature("test-util")
+                .toType()
+                .resolve("test_connection::capture_request"),
             "config" to ClientRustModule.Config,
             "customParams" to customParams,
         )
-        writeInline("let input =")
-        instantiator.render(this, inputShape, httpRequestTestCase.params)
+        renderClientCreation(this, ClientCreationParams(codegenContext, "conn", "config_builder", "client"))
 
-        rust(""".make_operation(&config).await.expect("operation failed to build");""")
-        rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
+        writeInline("let result = ")
+        instantiator.renderFluentCall(this, "client", operationShape, inputShape, httpRequestTestCase.params)
+        rust(""".send().await;""")
+        // Response parsing will always fail since we feed it an empty response body, so we don't care
+        // if it fails, but it is helpful to print what that failure was for debugging
+        rust("let _ = dbg!(result);")
+        rust("""let http_request = request_receiver.expect_request();""")
+
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
+                when (val bindings = EndpointPrefixGenerator.endpointTraitBindings(codegenContext, operationShape)) {
+                    null -> rust("let endpoint_prefix = None;")
+                    else -> {
+                        withBlock("let input = ", ";") {
+                            instantiator.render(this@renderHttpRequestTestCase, inputShape, httpRequestTestCase.params)
+                        }
+                        withBlock("let endpoint_prefix = Some({", "}.unwrap());") {
+                            bindings.render(this, "input", codegenContext.smithyRuntimeMode, generateValidation = false)
+                        }
+                    }
+                }
                 rustTemplate(
                     """
                     let mut http_request = http_request;
                     let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(${withScheme.dq()}).expect("valid endpoint");
-                    ep.set_endpoint(http_request.uri_mut(), parts.acquire().get()).expect("valid endpoint");
+                    ep.set_endpoint(http_request.uri_mut(), endpoint_prefix.as_ref()).expect("valid endpoint");
                     """,
                     *codegenScope,
                 )

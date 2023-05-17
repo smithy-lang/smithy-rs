@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.NoClientGenerics
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
@@ -96,6 +98,27 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             }
         }
     }
+
+    override fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = DefaultProtocolTestGenerator(
+        codegenContext,
+        baseGenerator.protocolSupport,
+        baseGenerator.operationShape,
+        renderClientCreation = { params ->
+            rustTemplate(
+                """
+                let config = ${params.configBuilderName}
+                    .http_connector(${params.connectorName})
+                    .region(crate::config::Region::new("us-east-1"))
+                    .build();
+                let ${params.clientName} = #{Client}::from_conf(config);
+                """,
+                "Client" to ClientRustModule.root.toType().resolve("Client"),
+            )
+        },
+    )
 }
 
 private class AwsFluentClientExtensions(types: Types) {
