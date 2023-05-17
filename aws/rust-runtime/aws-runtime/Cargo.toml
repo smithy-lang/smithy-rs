@@ -12,6 +12,7 @@ aws-credential-types = { path = "../aws-credential-types" }
 aws-http = { path = "../aws-http" }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
