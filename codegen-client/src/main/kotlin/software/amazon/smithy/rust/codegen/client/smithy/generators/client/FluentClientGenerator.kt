@@ -356,7 +356,7 @@ class FluentClientGenerator(
 
                     /// Consumes this builder, creating a customizable operation that can be modified before being
                     /// sent. The operation's inner [http::Request] can be modified as well.
-                    pub async fn customize(self) -> std::result::Result<
+                    pub async fn customize(self) -> #{Result}<
                         #{CustomizableOperation}#{customizable_op_type_params:W},
                         #{SdkError}<#{OperationError}>
                     > #{send_bounds:W} {
