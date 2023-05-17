@@ -143,12 +143,12 @@ class CustomizableOperationGenerator(
                 .resolve("client::orchestrator::HttpResponse"),
             "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::interceptors::Interceptor"),
+            "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
+                .resolve("client::interceptor::MapRequestInterceptor"),
+            "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
+                .resolve("client::interceptor::MutateRequestInterceptor"),
             "OperationError" to errorType,
             "OperationOutput" to outputType,
-            "RequestMapInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptor::RequestMapInterceptor"),
-            "RequestMutationInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptor::RequestMutationInterceptor"),
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
@@ -189,7 +189,7 @@ class CustomizableOperationGenerator(
                 {
                     self.interceptors.push(
                         #{SharedInterceptor}::new(
-                            #{RequestMapInterceptor}::new(f),
+                            #{MapRequestInterceptor}::new(f),
                         ),
                     );
                     self
@@ -202,7 +202,7 @@ class CustomizableOperationGenerator(
                 {
                     self.interceptors.push(
                         #{SharedInterceptor}::new(
-                            #{RequestMutationInterceptor}::new(f),
+                            #{MutateRequestInterceptor}::new(f),
                         ),
                     );
                     self

@@ -10,18 +10,18 @@ use aws_smithy_runtime_api::config_bag::ConfigBag;
 use std::fmt;
 use std::marker::PhantomData;
 
-pub struct RequestMapInterceptor<F, E> {
+pub struct MapRequestInterceptor<F, E> {
     f: F,
     _phantom: PhantomData<E>,
 }
 
-impl<F, E> fmt::Debug for RequestMapInterceptor<F, E> {
+impl<F, E> fmt::Debug for MapRequestInterceptor<F, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RequestMapInterceptor")
+        write!(f, "MapRequestInterceptor")
     }
 }
 
-impl<F, E> RequestMapInterceptor<F, E> {
+impl<F, E> MapRequestInterceptor<F, E> {
     pub fn new(f: F) -> Self {
         Self {
             f,
@@ -30,7 +30,7 @@ impl<F, E> RequestMapInterceptor<F, E> {
     }
 }
 
-impl<F, E> Interceptor for RequestMapInterceptor<F, E>
+impl<F, E> Interceptor for MapRequestInterceptor<F, E>
 where
     F: Fn(&mut http::Request<SdkBody>) -> Result<(), E> + Send + Sync + 'static,
     E: std::error::Error + Send + Sync + 'static,
@@ -47,23 +47,23 @@ where
     }
 }
 
-pub struct RequestMutationInterceptor<F> {
+pub struct MutateRequestInterceptor<F> {
     f: F,
 }
 
-impl<F> fmt::Debug for RequestMutationInterceptor<F> {
+impl<F> fmt::Debug for MutateRequestInterceptor<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RequestMutationInterceptor")
+        write!(f, "MutateRequestInterceptor")
     }
 }
 
-impl<F> RequestMutationInterceptor<F> {
+impl<F> MutateRequestInterceptor<F> {
     pub fn new(f: F) -> Self {
         Self { f }
     }
 }
 
-impl<F> Interceptor for RequestMutationInterceptor<F>
+impl<F> Interceptor for MutateRequestInterceptor<F>
 where
     F: Fn(&mut http::Request<SdkBody>) + Send + Sync + 'static,
 {
