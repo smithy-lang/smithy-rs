@@ -40,11 +40,12 @@ async fn operation_interceptor_test() {
     let resp = dbg!(
         client
             .list_objects_v2()
-            .config_override(
-                aws_sdk_s3::Config::builder().interceptor(util::TestUserAgentInterceptor)
-            )
             .bucket("test-bucket")
             .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .interceptor(util::TestUserAgentInterceptor)
             .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
@@ -106,11 +107,56 @@ async fn interceptor_priority() {
     let resp = dbg!(
         client
             .list_objects_v2()
-            .config_override(aws_sdk_s3::Config::builder().interceptor(
-                RequestTimeAdvanceInterceptor(Duration::from_secs(1624036048))
-            ))
             .bucket("test-bucket")
             .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .interceptor(RequestTimeAdvanceInterceptor(Duration::from_secs(
+                1624036048
+            )))
+            .send_orchestrator_with_plugin(Some(fixup))
+            .await
+    );
+    let resp = resp.expect("valid e2e test");
+    assert_eq!(resp.name(), Some("test-bucket"));
+    conn.full_validate(MediaType::Xml).await.expect("success")
+}
+
+#[tokio::test]
+async fn set_test_user_agent_through_request_mutation() {
+    let conn = dvr::ReplayingConnection::from_file(LIST_BUCKETS_PATH).unwrap();
+
+    let config = aws_sdk_s3::Config::builder()
+        .credentials_provider(Credentials::for_tests())
+        .region(Region::new("us-east-1"))
+        .http_connector(DynConnector::new(conn.clone()))
+        .build();
+    let client = Client::from_conf(config);
+    let fixup = util::FixupPlugin {
+        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
+    };
+
+    let resp = dbg!(
+        client
+            .list_objects_v2()
+            .bucket("test-bucket")
+            .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .mutate_request(|request| {
+                request.headers_mut()
+                    .insert(
+                        http::HeaderName::from_static("user-agent"),
+                        http::HeaderValue::from_str("aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0").unwrap(),
+                    );
+                request.headers_mut()
+                    .insert(
+                        http::HeaderName::from_static("x-amz-user-agent"),
+                        http::HeaderValue::from_str("aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0").unwrap(),
+                    );
+            })
             .send_orchestrator_with_plugin(Some(fixup))
             .await
     );

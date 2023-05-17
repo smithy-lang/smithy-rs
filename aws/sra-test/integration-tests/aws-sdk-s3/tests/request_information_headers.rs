@@ -68,9 +68,12 @@ async fn three_retries_and_then_success() {
     let resp = dbg!(
         client
             .list_objects_v2()
-            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
@@ -152,7 +155,6 @@ async fn three_retries_and_then_success() {
 //     let resp = dbg!(
 //         client
 //             .list_objects_v2()
-//             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
 //             .bucket("test-bucket")
 //             .prefix("prefix~")
 //             .send_v2_with_plugin(Some(fixup))
@@ -244,7 +246,6 @@ async fn three_retries_and_then_success() {
 //     let resp = dbg!(
 //         client
 //             .list_objects_v2()
-//             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
 //             .bucket("test-bucket")
 //             .prefix("prefix~")
 //             .send_v2_with_plugin(Some(fixup))

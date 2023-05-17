@@ -84,13 +84,17 @@ class FluentClientGenerator(
     fun render(crate: RustCrate) {
         renderFluentClient(crate)
 
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
+                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                    customizableOperationGenerator.renderForOrchestrator(this, operation)
+                }
             }
         }
 
-        CustomizableOperationGenerator(codegenContext, generics).render(crate)
+        customizableOperationGenerator.render(crate)
     }
 
     private fun renderFluentClient(crate: RustCrate) {
@@ -307,9 +311,9 @@ class FluentClientGenerator(
             )
             rustTemplate(
                 """
-                /// Consume this builder, creating a customizable operation that can be modified before being
-                /// sent. The operation's inner [http::Request] can be modified as well.
-                pub async fn customize(self) -> #{Result}<
+                // This function will go away in the near future. Do not rely on it.
+                ##[doc(hidden)]
+                pub async fn customize_middleware(self) -> #{Result}<
                     #{CustomizableOperation}#{customizable_op_type_params:W},
                     #{SdkError}<#{OperationError}>
                 > #{send_bounds:W} {
@@ -349,6 +353,15 @@ class FluentClientGenerator(
                     #{send_bounds:W} {
                         self.send_middleware().await
                     }
+
+                    /// Consumes this builder, creating a customizable operation that can be modified before being
+                    /// sent. The operation's inner [http::Request] can be modified as well.
+                    pub async fn customize(self) -> #{Result}<
+                        #{CustomizableOperation}#{customizable_op_type_params:W},
+                        #{SdkError}<#{OperationError}>
+                    > #{send_bounds:W} {
+                        self.customize_middleware().await
+                    }
                     """,
                     *middlewareScope,
                 )
@@ -357,6 +370,8 @@ class FluentClientGenerator(
             if (smithyRuntimeMode.generateOrchestrator) {
                 val orchestratorScope = arrayOf(
                     *preludeScope,
+                    "CustomizableOperation" to symbolProvider.moduleForBuilder(operation).toType()
+                        .resolve("CustomizableOperation"),
                     "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::orchestrator::HttpResponse"),
                     "OperationError" to errorType,
@@ -382,10 +397,10 @@ class FluentClientGenerator(
                     pub async fn send_orchestrator_with_plugin(self, final_plugin: #{Option}<impl #{RuntimePlugin} + #{Send} + #{Sync} + 'static>) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let mut runtime_plugins = #{RuntimePlugins}::new()
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(self.handle.clone()));
+                        runtime_plugins = runtime_plugins.with_operation_plugin(#{Operation}::new());
                         if let Some(config_override) = self.config_override {
                             runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
                         }
-                        runtime_plugins = runtime_plugins.with_operation_plugin(#{Operation}::new());
                         if let Some(final_plugin) = final_plugin {
                             runtime_plugins = runtime_plugins.with_client_plugin(final_plugin);
                         }
@@ -401,6 +416,12 @@ class FluentClientGenerator(
                                 })
                             })?;
                         #{Ok}(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
+                    }
+
+                    ##[doc(hidden)]
+                    // TODO(enableNewSmithyRuntime): Remove `async` once we switch to orchestrator
+                    pub async fn customize_orchestrator(self) -> #{CustomizableOperation} {
+                        #{CustomizableOperation} { fluent_builder: self, config_override: None, interceptors: vec![] }
                     }
                     """,
                     *orchestratorScope,
@@ -419,6 +440,16 @@ class FluentClientGenerator(
                         pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                             self.send_orchestrator().await
                         }
+
+                        /// Consumes this builder, creating a customizable operation that can be modified before being
+                        /// sent.
+                        // TODO(enableNewSmithyRuntime): Remove `async` and `Result` once we switch to orchestrator
+                        pub async fn customize(self) -> #{Result}<
+                            #{CustomizableOperation},
+                            #{SdkError}<#{OperationError}>
+                        > {
+                            #{Ok}(self.customize_orchestrator().await)
+                        }
                         """,
                         *orchestratorScope,
                     )
@@ -426,17 +457,7 @@ class FluentClientGenerator(
 
                 rustTemplate(
                     """
-                    /// Sets the `config_override` for the builder.
-                    ///
-                    /// `config_override` is applied to the operation configuration level.
-                    /// The fields in the builder that are `Some` override those applied to the service
-                    /// configuration level. For instance,
-                    ///
-                    /// Config A     overridden by    Config B          ==        Config C
-                    /// field_1: None,                field_1: Some(v2),          field_1: Some(v2),
-                    /// field_2: Some(v1),            field_2: Some(v2),          field_2: Some(v2),
-                    /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
-                    pub fn config_override(
+                    pub(crate) fn config_override(
                         mut self,
                         config_override: impl Into<crate::config::Builder>,
                     ) -> Self {
@@ -444,17 +465,7 @@ class FluentClientGenerator(
                         self
                     }
 
-                    /// Sets the `config_override` for the builder.
-                    ///
-                    /// `config_override` is applied to the operation configuration level.
-                    /// The fields in the builder that are `Some` override those applied to the service
-                    /// configuration level. For instance,
-                    ///
-                    /// Config A     overridden by    Config B          ==        Config C
-                    /// field_1: None,                field_1: Some(v2),          field_1: Some(v2),
-                    /// field_2: Some(v1),            field_2: Some(v2),          field_2: Some(v2),
-                    /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
-                    pub fn set_config_override(
+                    pub(crate) fn set_config_override(
                         &mut self,
                         config_override: Option<crate::config::Builder>,
                     ) -> &mut Self {
