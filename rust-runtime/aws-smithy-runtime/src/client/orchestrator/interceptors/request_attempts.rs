@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
 use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 
@@ -45,10 +45,10 @@ impl RequestAttemptsInterceptor {
     }
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for RequestAttemptsInterceptor {
+impl Interceptor for RequestAttemptsInterceptor {
     fn modify_before_retry_loop(
         &self,
-        _ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        _ctx: &mut InterceptorContext<BeforeTransmit>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         cfg.put(RequestAttempts::new());
@@ -57,7 +57,7 @@ impl Interceptor<HttpRequest, HttpResponse> for RequestAttemptsInterceptor {
 
     fn modify_before_transmit(
         &self,
-        _ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        _ctx: &mut InterceptorContext<BeforeTransmit>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         if let Some(request_attempts) = cfg.get::<RequestAttempts>().cloned() {

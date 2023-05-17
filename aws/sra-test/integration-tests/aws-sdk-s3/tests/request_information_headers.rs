@@ -12,11 +12,13 @@ use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_runtime::client::retries::strategy::FixedDelayRetryStrategy;
+use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[derive(Debug)]
 struct FixupPlugin {
     client: Client,
     timestamp: SystemTime,
@@ -35,6 +37,7 @@ async fn three_retries_and_then_success() {
         fn configure(
             &self,
             cfg: &mut ConfigBag,
+            _interceptors: &mut InterceptorRegistrar,
         ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
             let params_builder = Params::builder()
                 .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()))
@@ -68,7 +71,7 @@ async fn three_retries_and_then_success() {
             .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
-            .send_v2_with_plugin(Some(fixup))
+            .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
 

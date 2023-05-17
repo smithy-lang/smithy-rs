@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeDeserialization;
 use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
@@ -48,10 +48,10 @@ fn calculate_skew(time_sent: DateTime, time_received: DateTime) -> Duration {
 }
 
 fn extract_time_sent_from_response(
-    ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
+    ctx: &mut InterceptorContext<BeforeDeserialization>,
 ) -> Result<DateTime, BoxError> {
-    let res = ctx.request()?;
-    let date_header = res
+    let date_header = ctx
+        .response()
         .headers()
         .get("date")
         .ok_or("Response from server does not include a `date` header")?
@@ -59,10 +59,10 @@ fn extract_time_sent_from_response(
     DateTime::from_str(date_header, Format::HttpDate).map_err(Into::into)
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for ServiceClockSkewInterceptor {
+impl Interceptor for ServiceClockSkewInterceptor {
     fn modify_before_deserialization(
         &self,
-        ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        ctx: &mut InterceptorContext<BeforeDeserialization>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let time_received = DateTime::from(SystemTime::now());

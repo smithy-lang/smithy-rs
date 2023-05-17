@@ -4,8 +4,8 @@
  */
 
 use aws_smithy_runtime::client::orchestrator::interceptors::{RequestAttempts, ServiceClockSkew};
+use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
 use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
@@ -76,10 +76,10 @@ impl RequestInfoInterceptor {
     }
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for RequestInfoInterceptor {
+impl Interceptor for RequestInfoInterceptor {
     fn modify_before_transmit(
         &self,
-        context: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        context: &mut InterceptorContext<BeforeTransmit>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut pairs = RequestPairs::new();
@@ -93,7 +93,7 @@ impl Interceptor<HttpRequest, HttpResponse> for RequestInfoInterceptor {
             pairs = pairs.with_pair(pair);
         }
 
-        let headers = context.request_mut()?.headers_mut();
+        let headers = context.request_mut().headers_mut();
         headers.insert(AMZ_SDK_REQUEST, pairs.try_into_header_value()?);
 
         Ok(())
@@ -156,8 +156,8 @@ mod tests {
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
+    use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use aws_smithy_types::retry::RetryConfig;
@@ -166,12 +166,11 @@ mod tests {
     use std::time::Duration;
 
     fn expect_header<'a>(
-        context: &'a InterceptorContext<HttpRequest, HttpResponse>,
+        context: &'a InterceptorContext<BeforeTransmit>,
         header_name: &str,
     ) -> &'a str {
         context
             .request()
-            .unwrap()
             .headers()
             .get(header_name)
             .unwrap()
@@ -181,7 +180,8 @@ mod tests {
 
     #[test]
     fn test_request_pairs_for_initial_attempt() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let context = InterceptorContext::<()>::new(TypedBox::new("doesntmatter").erase());
+        let mut context = context.into_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 
         let mut config = ConfigBag::base();
@@ -193,6 +193,8 @@ mod tests {
         );
         config.put(RequestAttempts::new());
 
+        let _ = context.take_input();
+        let mut context = context.into_before_transmit_phase();
         let interceptor = RequestInfoInterceptor::new();
         interceptor
             .modify_before_transmit(&mut context, &mut config)
