@@ -233,6 +233,8 @@ class DefaultProtocolTestGenerator(
         rust("""let http_request = request_receiver.expect_request();""")
 
         with(httpRequestTestCase) {
+            // Override the endpoint for tests that set a `host`, for example:
+            // https://github.com/awslabs/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
                 when (val bindings = EndpointPrefixGenerator.endpointTraitBindings(codegenContext, operationShape)) {
