@@ -19,6 +19,9 @@
     unreachable_pub
 )]
 
+/// Interceptors for API Gateway
+pub mod apigateway_interceptors;
+
 /// Stub credentials provider for use when no credentials provider is used.
 pub mod no_credentials;
 
