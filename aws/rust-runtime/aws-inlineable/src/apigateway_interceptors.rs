@@ -5,8 +5,9 @@
 
 #![allow(dead_code)]
 
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
+};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use http::header::ACCEPT;
 use http::HeaderValue;
@@ -18,7 +19,7 @@ pub(crate) struct AcceptHeaderInterceptor;
 impl Interceptor for AcceptHeaderInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext<BeforeTransmit>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         context
