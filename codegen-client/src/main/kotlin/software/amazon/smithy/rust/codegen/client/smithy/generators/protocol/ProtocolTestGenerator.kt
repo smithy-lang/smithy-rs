@@ -209,7 +209,8 @@ class DefaultProtocolTestGenerator(
         rustTemplate(
             """
             let (conn, request_receiver) = #{capture_request}(None);
-            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            ##[allow(unused_mut)]
+            let mut config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
 
             """,

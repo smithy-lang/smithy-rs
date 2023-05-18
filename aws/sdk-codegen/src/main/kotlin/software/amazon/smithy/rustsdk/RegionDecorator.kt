@@ -171,7 +171,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
             )
 
             ServiceConfig.BuilderStruct ->
-                rustTemplate("region: Option<#{Region}>,", *codegenScope)
+                rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
 
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
