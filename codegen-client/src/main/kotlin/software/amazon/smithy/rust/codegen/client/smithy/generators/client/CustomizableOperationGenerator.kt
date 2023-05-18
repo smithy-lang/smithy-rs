@@ -123,6 +123,20 @@ class CustomizableOperationGenerator(
                 pub fn request_mut(&mut self) -> &mut #{HttpRequest}<#{SdkBody}> {
                     self.operation.request_mut()
                 }
+
+                ##[doc(hidden)]
+                // This is a temporary method for testing. NEVER use it in production
+                pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
+                    self.operation.properties_mut().insert(request_time);
+                    self
+                }
+
+                ##[doc(hidden)]
+                // This is a temporary method for testing. NEVER use it in production
+                pub fn user_agent_for_tests(mut self) -> Self {
+                    self.operation.properties_mut().insert(aws_http::user_agent::AwsUserAgent::for_tests());
+                    self
+                }
             }
             """,
             *codegenScope,
@@ -262,9 +276,32 @@ class CustomizableOperationGenerator(
                         .send_orchestrator_with_plugin(final_plugin)
                         .await
                 }
+
+                ##[doc(hidden)]
+                // This is a temporary method for testing. NEVER use it in production
+                pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
+                    let interceptor = #{TestParamsSetterInterceptor}::new(move |cfg: &mut #{ConfigBag}| {
+                        cfg.put(request_time);
+                    });
+                    self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                    self
+                }
+
+                ##[doc(hidden)]
+                // This is a temporary method for testing. NEVER use it in production
+                pub fn user_agent_for_tests(mut self) -> Self {
+                    let interceptor = #{TestParamsSetterInterceptor}::new(|cfg: &mut #{ConfigBag}| {
+                        cfg.put(aws_http::user_agent::AwsUserAgent::for_tests());
+                    });
+                    self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                    self
+                }
             }
             """,
             *codegenScope,
+            "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
+            "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
+                .toType().resolve("client::test_util::interceptor::TestParamsSetterInterceptor"),
         )
     }
 }
