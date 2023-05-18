@@ -207,21 +207,3 @@ impl From<Number> for Document {
         Document::Number(value)
     }
 }
-
-impl<'a> PartialEq<&'a str> for Document {
-    fn eq(&self, other: &&'a str) -> bool {
-        match self {
-            Self::String(s) => s.eq(*other),
-            _ => false,
-        }
-    }
-}
-
-impl PartialEq<String> for Document {
-    fn eq(&self, other: &String) -> bool {
-        match self {
-            Self::String(s) => s.eq(other),
-            _ => false,
-        }
-    }
-}

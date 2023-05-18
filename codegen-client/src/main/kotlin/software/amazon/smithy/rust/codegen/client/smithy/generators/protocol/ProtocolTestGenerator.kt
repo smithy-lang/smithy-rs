@@ -184,6 +184,7 @@ class DefaultProtocolTestGenerator(
             is Action.Response -> "_response"
             is Action.Request -> "_request"
         }
+        Attribute.AllowUnusedMut.render(testModuleWriter)
         testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
@@ -209,8 +210,7 @@ class DefaultProtocolTestGenerator(
         rustTemplate(
             """
             let (conn, request_receiver) = #{capture_request}(None);
-            ##[allow(unused_mut)]
-            let mut config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
 
             """,

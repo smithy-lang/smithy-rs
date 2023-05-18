@@ -110,6 +110,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             rustTemplate(
                 """
                 // If the test case was missing endpoint parameters, default a region so it doesn't fail
+                let mut ${params.configBuilderName} = ${params.configBuilderName};
                 if ${params.configBuilderName}.region.is_none() {
                     ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
                 }
