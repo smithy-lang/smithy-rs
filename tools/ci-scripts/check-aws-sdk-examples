@@ -10,9 +10,7 @@ C_RESET='\033[0m'
 set -eux
 cd aws-sdk/examples
 
-for example in *; do
-    echo -e "${C_YELLOW}Checking examples/${example}...${C_RESET}"
-    pushd "${example}" &>/dev/null
-    cargo check
-    popd &>/dev/null
-done
+echo -e "${C_YELLOW}Checking examples...${C_RESET}"
+pushd "${example}" &>/dev/null
+cargo check
+popd &>/dev/null
