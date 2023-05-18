@@ -32,7 +32,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(CredentialsIdentityResolverRegistration(codegenContext))
         }
 
@@ -112,18 +112,24 @@ class CredentialsIdentityResolverRegistration(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.IdentityResolver -> {
+            is ServiceRuntimePluginSection.AdditionalConfig -> {
                 rustTemplate(
                     """
-                    .identity_resolver(
-                        #{SIGV4_SCHEME_ID},
-                        #{CredentialsIdentityResolver}::new(self.handle.conf.credentials_cache())
-                    )
+                    cfg.set_identity_resolvers(
+                        #{IdentityResolvers}::builder()
+                            .identity_resolver(
+                                #{SIGV4_SCHEME_ID},
+                                #{CredentialsIdentityResolver}::new(self.handle.conf.credentials_cache())
+                            )
+                            .build()
+                    );
                     """,
                     "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
                         .resolve("auth::sigv4::SCHEME_ID"),
                     "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
                         .resolve("identity::credentials::CredentialsIdentityResolver"),
+                    "IdentityResolvers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::identity::IdentityResolvers"),
                 )
             }
             else -> {}

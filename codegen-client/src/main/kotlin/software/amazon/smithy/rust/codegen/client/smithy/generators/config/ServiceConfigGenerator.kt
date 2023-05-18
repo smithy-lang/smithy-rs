@@ -88,6 +88,11 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
     /**
+     * A section for setting up a field to be used by RuntimePlugin
+     */
+    object ToRuntimePlugin : ServiceConfig("ToRuntimePlugin")
+
+    /**
      * A section for extra functionality that needs to be defined with the config module
      */
     object Extras : ServiceConfig("Extras")
@@ -145,6 +150,8 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
             ServiceConfig.BuilderBuild -> writable {
                 rust("${param.name}: self.${param.name},")
             }
+
+            ServiceConfig.ToRuntimePlugin -> emptySection
 
             else -> emptySection
         }
@@ -292,17 +299,22 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             "impl #{RuntimePlugin} for Builder",
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
         ) {
-            rustTemplate(
+            rustBlockTemplate(
                 """
-                fn configure(&self, _cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
-                    // TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`.
-
-                    Ok(())
-                }
+                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
                 """,
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
                 "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
-            )
+                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            ) {
+                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
+
+                customizations.forEach {
+                    it.section(ServiceConfig.ToRuntimePlugin)(writer)
+                }
+
+                rust("Ok(())")
+            }
         }
     }
 }

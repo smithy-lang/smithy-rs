@@ -53,6 +53,8 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         AwsRequestIdDecorator(),
         DisabledAuthDecorator(),
         RecursionDetectionDecorator(),
+        InvocationIdDecorator(),
+        RetryInformationHeaderDecorator(),
     ),
 
     // Service specific decorators

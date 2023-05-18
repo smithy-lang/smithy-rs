@@ -3,12 +3,44 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::orchestrator::{BoxFallibleFut, IdentityResolver};
-use aws_smithy_http::property_bag::PropertyBag;
+use crate::client::auth::AuthSchemeId;
+use crate::client::orchestrator::Future;
+use crate::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::SystemTime;
+
+#[cfg(feature = "http-auth")]
+pub mod http;
+
+pub trait IdentityResolver: Send + Sync + Debug {
+    fn resolve_identity(&self, config_bag: &ConfigBag) -> Future<Identity>;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct IdentityResolvers {
+    identity_resolvers: Vec<(AuthSchemeId, Arc<dyn IdentityResolver>)>,
+}
+
+impl IdentityResolvers {
+    pub fn builder() -> builders::IdentityResolversBuilder {
+        builders::IdentityResolversBuilder::new()
+    }
+
+    pub fn identity_resolver(&self, scheme_id: AuthSchemeId) -> Option<&dyn IdentityResolver> {
+        self.identity_resolvers
+            .iter()
+            .find(|resolver| resolver.0 == scheme_id)
+            .map(|resolver| &*resolver.1)
+    }
+
+    pub fn to_builder(self) -> builders::IdentityResolversBuilder {
+        builders::IdentityResolversBuilder {
+            identity_resolvers: self.identity_resolvers,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Identity {
@@ -33,27 +65,35 @@ impl Identity {
     }
 }
 
-#[derive(Debug)]
-pub struct AnonymousIdentity;
+pub mod builders {
+    use super::*;
+    use crate::client::auth::AuthSchemeId;
 
-impl AnonymousIdentity {
-    pub fn new() -> Self {
-        Self
+    #[derive(Debug, Default)]
+    pub struct IdentityResolversBuilder {
+        pub(super) identity_resolvers: Vec<(AuthSchemeId, Arc<dyn IdentityResolver>)>,
     }
-}
 
-#[derive(Debug)]
-pub struct AnonymousIdentityResolver;
+    impl IdentityResolversBuilder {
+        pub fn new() -> Self {
+            Default::default()
+        }
 
-impl AnonymousIdentityResolver {
-    pub fn new() -> Self {
-        AnonymousIdentityResolver
-    }
-}
+        pub fn identity_resolver(
+            mut self,
+            scheme_id: AuthSchemeId,
+            resolver: impl IdentityResolver + 'static,
+        ) -> Self {
+            self.identity_resolvers
+                .push((scheme_id, Arc::new(resolver) as _));
+            self
+        }
 
-impl IdentityResolver for AnonymousIdentityResolver {
-    fn resolve_identity(&self, _: &PropertyBag) -> BoxFallibleFut<Identity> {
-        Box::pin(async { Ok(Identity::new(AnonymousIdentity::new(), None)) })
+        pub fn build(self) -> IdentityResolvers {
+            IdentityResolvers {
+                identity_resolvers: self.identity_resolvers,
+            }
+        }
     }
 }
 

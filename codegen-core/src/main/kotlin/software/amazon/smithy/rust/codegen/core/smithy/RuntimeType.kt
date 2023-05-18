@@ -193,14 +193,67 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * The companion object contains commonly used RuntimeTypes
      */
     companion object {
+        /**
+         * Scope that contains all Rust prelude types, but not macros or functions.
+         *
+         * Prelude docs: https://doc.rust-lang.org/std/prelude/index.html#prelude-contents
+         */
+        val preludeScope by lazy {
+            arrayOf(
+                // Rust 1.0
+                "Copy" to std.resolve("marker::Copy"),
+                "Send" to Send,
+                "Sized" to std.resolve("marker::Sized"),
+                "Sync" to Sync,
+                "Unpin" to std.resolve("marker::Unpin"),
+                "Drop" to std.resolve("ops::Drop"),
+                "Fn" to std.resolve("ops::Fn"),
+                "FnMut" to std.resolve("ops::FnMut"),
+                "FnOnce" to std.resolve("ops::FnOnce"),
+                "Box" to Box,
+                "ToOwned" to std.resolve("borrow::ToOwned"),
+                "Clone" to Clone,
+                "PartialEq" to std.resolve("cmp::PartialEq"),
+                "PartialOrd" to std.resolve("cmp::PartialOrd"),
+                "Eq" to Eq,
+                "Ord" to Ord,
+                "AsRef" to AsRef,
+                "AsMut" to std.resolve("convert::AsMut"),
+                "Into" to Into,
+                "From" to From,
+                "Default" to Default,
+                "Iterator" to std.resolve("iter::Iterator"),
+                "Extend" to std.resolve("iter::Extend"),
+                "IntoIterator" to std.resolve("iter::IntoIterator"),
+                "DoubleEndedIterator" to std.resolve("iter::DoubleEndedIterator"),
+                "ExactSizeIterator" to std.resolve("iter::ExactSizeIterator"),
+                "Option" to Option,
+                "Some" to Option.resolve("Some"),
+                "None" to Option.resolve("None"),
+                "Result" to std.resolve("result::Result"),
+                "Ok" to std.resolve("result::Result::Ok"),
+                "Err" to std.resolve("result::Result::Err"),
+                "String" to String,
+                "ToString" to std.resolve("string::ToString"),
+                "Vec" to Vec,
+
+                // 2021 Edition
+                "TryFrom" to std.resolve("convert::TryFrom"),
+                "TryInto" to std.resolve("convert::TryInto"),
+                "FromIterator" to std.resolve("iter::FromIterator"),
+            )
+        }
+
         // stdlib types
-        val std = RuntimeType("std")
+        val std = RuntimeType("::std")
         val stdCmp = std.resolve("cmp")
         val stdFmt = std.resolve("fmt")
         val stdConvert = std.resolve("convert")
+        val Arc = std.resolve("sync::Arc")
         val AsRef = stdConvert.resolve("AsRef")
-        val ByteSlab = std.resolve("vec::Vec<u8>")
+        val Bool = std.resolve("primitive::bool")
         val Box = std.resolve("boxed::Box")
+        val ByteSlab = std.resolve("vec::Vec<u8>")
         val Clone = std.resolve("clone::Clone")
         val Cow = std.resolve("borrow::Cow")
         val Debug = stdFmt.resolve("Debug")
@@ -210,14 +263,16 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val From = stdConvert.resolve("From")
         val Hash = std.resolve("hash::Hash")
         val HashMap = std.resolve("collections::HashMap")
-        val Ord = stdCmp.resolve("Ord")
+        val Into = stdConvert.resolve("Into")
         val Option = std.resolve("option::Option")
+        val Ord = stdCmp.resolve("Ord")
         val PartialEq = stdCmp.resolve("PartialEq")
         val PartialOrd = stdCmp.resolve("PartialOrd")
         val Phantom = std.resolve("marker::PhantomData")
+        val Send = std.resolve("marker::Send")
         val StdError = std.resolve("error::Error")
         val String = std.resolve("string::String")
-        val Bool = std.resolve("primitive::bool")
+        val Sync = std.resolve("marker::Sync")
         val TryFrom = stdConvert.resolve("TryFrom")
         val Vec = std.resolve("vec::Vec")
         val Arc = std.resolve("sync::Arc")
@@ -255,6 +310,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyClient(runtimeConfig: RuntimeConfig) = CargoDependency.smithyClient(runtimeConfig).toType()
         fun smithyClientTestUtil(runtimeConfig: RuntimeConfig) = CargoDependency.smithyClient(runtimeConfig)
             .copy(features = setOf("test-util"), scope = DependencyScope.Dev).toType()
+
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = CargoDependency.smithyEventStream(runtimeConfig).toType()
         fun smithyHttp(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttp(runtimeConfig).toType()
         fun smithyHttpAuth(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttpAuth(runtimeConfig).toType()
@@ -282,14 +338,24 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
         fun format(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("date_time::Format")
         fun retryErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
-        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
-        fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
+
+        fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")
+
         fun errorMetadata(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::ErrorMetadata")
-        fun errorMetadataBuilder(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::metadata::Builder")
-        fun provideErrorMetadataTrait(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::metadata::ProvideErrorMetadata")
+        fun errorMetadataBuilder(runtimeConfig: RuntimeConfig) =
+            smithyTypes(runtimeConfig).resolve("error::metadata::Builder")
+
+        fun provideErrorMetadataTrait(runtimeConfig: RuntimeConfig) =
+            smithyTypes(runtimeConfig).resolve("error::metadata::ProvideErrorMetadata")
+
         fun unhandledError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::Unhandled")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
-        fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))
+        fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))
+
         fun labelFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("label::$func")
         fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
         fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
@@ -345,7 +411,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun captureRequest(runtimeConfig: RuntimeConfig) =
             CargoDependency.smithyClientTestUtil(runtimeConfig).toType().resolve("test_connection::capture_request")
 
-        fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
+        fun forInlineDependency(inlineDependency: InlineDependency) =
+            RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             "${module.fullyQualifiedPath()}::$name",
@@ -363,5 +430,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
+
+        fun runtimePlugin(runtimeConfig: RuntimeConfig) =
+            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
     }
 }

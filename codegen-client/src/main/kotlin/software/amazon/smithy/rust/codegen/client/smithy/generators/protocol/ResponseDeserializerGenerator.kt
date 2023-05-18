@@ -144,7 +144,7 @@ class ResponseDeserializerGenerator(
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
+            "parse_response" to parserGenerator.parseResponseFn(operationShape, false, customizations),
             "BeforeParseResponse" to writable {
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
@@ -156,11 +156,11 @@ class ResponseDeserializerGenerator(
             """
             pub(crate) fn $fnName<O, E>(result: Result<O, E>) -> Result<#{Output}, #{Error}>
             where
-                O: Send + Sync + 'static,
-                E: Send + Sync + 'static,
+                O: std::fmt::Debug + Send + Sync + 'static,
+                E: std::error::Error + std::fmt::Debug + Send + Sync + 'static,
             {
                 result.map(|output| #{TypedBox}::new(output).erase())
-                    .map_err(|error| #{TypedBox}::new(error).erase())
+                    .map_err(|error| #{TypedBox}::new(error).erase_error())
             }
             """,
             *codegenScope,

@@ -3,27 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::interceptors::InterceptorRegistrar;
 use crate::config_bag::ConfigBag;
+use std::fmt::Debug;
 
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub type BoxRuntimePlugin = Box<dyn RuntimePlugin + Send + Sync>;
 
-pub trait RuntimePlugin {
-    fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError>;
+pub trait RuntimePlugin: Debug {
+    fn configure(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError>;
 }
 
-impl<T> From<T> for Box<dyn RuntimePlugin>
-where
-    T: RuntimePlugin + 'static,
-{
-    fn from(t: T) -> Self {
-        Box::new(t) as _
+impl RuntimePlugin for BoxRuntimePlugin {
+    fn configure(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError> {
+        self.as_ref().configure(cfg, interceptors)
     }
 }
 
 #[derive(Default)]
 pub struct RuntimePlugins {
-    client_plugins: Vec<Box<dyn RuntimePlugin>>,
-    operation_plugins: Vec<Box<dyn RuntimePlugin>>,
+    client_plugins: Vec<BoxRuntimePlugin>,
+    operation_plugins: Vec<BoxRuntimePlugin>,
 }
 
 impl RuntimePlugins {
@@ -33,31 +41,39 @@ impl RuntimePlugins {
 
     pub fn with_client_plugin(
         mut self,
-        plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
+        plugin: impl RuntimePlugin + Send + Sync + 'static,
     ) -> Self {
-        self.client_plugins.push(plugin.into());
+        self.client_plugins.push(Box::new(plugin));
         self
     }
 
     pub fn with_operation_plugin(
         mut self,
-        plugin: impl Into<Box<dyn RuntimePlugin + 'static>>,
+        plugin: impl RuntimePlugin + Send + Sync + 'static,
     ) -> Self {
-        self.operation_plugins.push(plugin.into());
+        self.operation_plugins.push(Box::new(plugin));
         self
     }
 
-    pub fn apply_client_configuration(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    pub fn apply_client_configuration(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError> {
         for plugin in self.client_plugins.iter() {
-            plugin.configure(cfg)?;
+            plugin.configure(cfg, interceptors)?;
         }
 
         Ok(())
     }
 
-    pub fn apply_operation_configuration(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    pub fn apply_operation_configuration(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError> {
         for plugin in self.operation_plugins.iter() {
-            plugin.configure(cfg)?;
+            plugin.configure(cfg, interceptors)?;
         }
 
         Ok(())
@@ -67,12 +83,18 @@ impl RuntimePlugins {
 #[cfg(test)]
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
+    use crate::client::interceptors::InterceptorRegistrar;
     use crate::config_bag::ConfigBag;
 
+    #[derive(Debug)]
     struct SomeStruct;
 
     impl RuntimePlugin for SomeStruct {
-        fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+        fn configure(
+            &self,
+            _cfg: &mut ConfigBag,
+            _inters: &mut InterceptorRegistrar,
+        ) -> Result<(), BoxError> {
             todo!()
         }
     }

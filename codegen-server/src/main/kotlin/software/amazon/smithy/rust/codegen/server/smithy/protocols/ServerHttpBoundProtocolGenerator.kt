@@ -178,16 +178,34 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        val staticContentType = "CONTENT_TYPE_${operationName.uppercase()}"
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
+                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), &$staticContentType) {
                         return Err(#{RequestRejection}::NotAcceptable);
                     }
                     """,
                     *codegenScope,
                 )
+            }
+        }
+        val verifyAcceptHeaderStaticContentTypeInit = writable {
+            httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
+                val init = when (contentType) {
+                    "application/json" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_JSON;"
+                    "application/octet-stream" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_OCTET_STREAM;"
+                    "application/x-www-form-urlencoded" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_WWW_FORM_URLENCODED;"
+                    else ->
+                        """
+                        static $staticContentType: #{OnceCell}::sync::Lazy<#{Mime}::Mime> = #{OnceCell}::sync::Lazy::new(|| {
+                            ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
+                        });
+                        """
+                }
+                rustTemplate(init, *codegenScope)
             }
         }
         val verifyRequestContentTypeHeader = writable {
@@ -215,6 +233,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
+            #{verifyAcceptHeaderStaticContentTypeInit:W}
             #{PinProjectLite}::pin_project! {
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
@@ -267,6 +286,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
+            "verifyAcceptHeaderStaticContentTypeInit" to verifyAcceptHeaderStaticContentTypeInit,
             "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
         )
 

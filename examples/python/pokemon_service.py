@@ -17,8 +17,10 @@ from pokemon_service_server_sdk.error import (
     MasterBallUnsuccessful,
     ResourceNotFoundException,
     UnsupportedRegionError,
+    StorageAccessNotAuthorized,
 )
 from pokemon_service_server_sdk.input import (
+    GetStorageInput,
     CapturePokemonInput,
     CheckHealthInput,
     DoNothingInput,
@@ -28,8 +30,14 @@ from pokemon_service_server_sdk.input import (
 )
 from pokemon_service_server_sdk.logging import TracingHandler
 from pokemon_service_server_sdk.middleware import MiddlewareException, Request, Response
-from pokemon_service_server_sdk.model import CaptureEvent, CapturePokemonEvents, FlavorText, Language
+from pokemon_service_server_sdk.model import (
+    CaptureEvent,
+    CapturePokemonEvents,
+    FlavorText,
+    Language,
+)
 from pokemon_service_server_sdk.output import (
+    GetStorageOutput,
     CapturePokemonOutput,
     CheckHealthOutput,
     DoNothingOutput,
@@ -164,7 +172,11 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
     if content_type == "application/json":
         logging.debug("found valid `application/json` content type")
     else:
-        logging.warning("invalid content type %s, dumping headers: %s", content_type, request.headers.items())
+        logging.warning(
+            "invalid content type %s, dumping headers: %s",
+            content_type,
+            request.headers.items(),
+        )
     return await next(request)
 
 
@@ -198,6 +210,19 @@ def do_nothing(_: DoNothingInput) -> DoNothingOutput:
     return DoNothingOutput()
 
 
+# Retrieves the user's storage.
+@app.get_storage
+def get_storage(input: GetStorageInput) -> GetStorageOutput:
+    logging.debug("attempting to authenticate storage user")
+
+    # We currently only support Ash and he has nothing stored
+    if input.user != "ash" or input.passcode != "pikachu123":
+        logging.debug("authentication failed")
+        raise StorageAccessNotAuthorized()
+
+    return GetStorageOutput([])
+
+
 # Get the translation of a Pokémon specie or an error.
 @app.get_pokemon_species
 def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetPokemonSpeciesOutput:
@@ -218,7 +243,9 @@ def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetP
     if flavor_text_entries:
         logging.debug("total requests executed: %s", context.get_calls_count())
         logging.info("found description for Pokémon %s", input.name)
-        return GetPokemonSpeciesOutput(name=input.name, flavor_text_entries=flavor_text_entries)
+        return GetPokemonSpeciesOutput(
+            name=input.name, flavor_text_entries=flavor_text_entries
+        )
     else:
         logging.warning("description for Pokémon %s not in the database", input.name)
         raise ResourceNotFoundException("Requested Pokémon not available")
@@ -393,7 +420,9 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
 
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
-async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context) -> StreamPokemonRadioOutput:
+async def stream_pokemon_radio(
+    _: StreamPokemonRadioInput, context: Context
+) -> StreamPokemonRadioOutput:
     import aiohttp
 
     radio_url = context.get_random_radio_stream()
