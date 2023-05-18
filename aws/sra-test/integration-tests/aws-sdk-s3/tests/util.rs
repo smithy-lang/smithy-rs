@@ -5,9 +5,9 @@
 
 use aws_http::user_agent::AwsUserAgent;
 use aws_runtime::invocation_id::InvocationId;
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorContext, InterceptorRegistrar,
+    BeforeTransmitInterceptorContextMut, Interceptor, InterceptorRegistrar,
 };
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
@@ -39,7 +39,7 @@ pub struct TestUserAgentInterceptor;
 impl Interceptor for TestUserAgentInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext<BeforeTransmit>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         let headers = context.request_mut().headers_mut();
