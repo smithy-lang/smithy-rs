@@ -8,7 +8,6 @@ use aws_smithy_http::endpoint::{
     apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint,
     SharedEndpointResolver,
 };
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
 use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, EndpointResolver, EndpointResolverParams, HttpRequest,
@@ -89,7 +88,7 @@ where
 }
 
 pub(super) fn orchestrate_endpoint(
-    ctx: &mut InterceptorContext<BeforeTransmit>,
+    ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
     let params = cfg.endpoint_resolver_params();
