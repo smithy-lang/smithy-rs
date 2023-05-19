@@ -126,8 +126,8 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
                     val signingOptional = section.operationShape.hasTrait<OptionalAuthTrait>()
                     rustTemplate(
                         """
-                        let signing_region = cfg.get::<#{SigningRegion}>().expect("region required for signing").clone();
-                        let signing_service = cfg.get::<#{SigningService}>().expect("service required for signing").clone();
+                        let signing_region = cfg.get::<#{SigningRegion}>().cloned();
+                        let signing_service = cfg.get::<#{SigningService}>().cloned();
                         let mut signing_options = #{SigningOptions}::default();
                         signing_options.double_uri_encode = $doubleUriEncode;
                         signing_options.content_sha256_header = $contentSha256Header;
