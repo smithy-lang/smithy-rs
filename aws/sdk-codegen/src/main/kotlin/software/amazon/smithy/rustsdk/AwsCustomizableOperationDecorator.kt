@@ -9,7 +9,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Custo
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -25,6 +24,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
             .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
         "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
         "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::ConfigBagAccessors"),
+        "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::InterceptorContext"),
         "RequestTime" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::RequestTime"),
@@ -38,11 +38,12 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
                 if (section.operationShape == null) {
+                    // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
                     // This branch customizes CustomizableOperation in the middleware. section.operationShape being
                     // null means that this customization is rendered in a place where we don't need to figure out
                     // the module for an operation (which is the case for CustomizableOperation in the middleware
                     // that is rendered in the customize module).
-                    rust(
+                    rustTemplate(
                         """
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
@@ -54,10 +55,11 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn user_agent_for_tests(mut self) -> Self {
-                            self.operation.properties_mut().insert(aws_http::user_agent::AwsUserAgent::for_tests());
+                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
                             self
                         }
-                        """.trimIndent(),
+                        """,
+                        *codegenScope,
                     )
                 } else {
                     // The else branch is for rendering customization for the orchestrator.
@@ -81,12 +83,12 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                                 let headers = context.request_mut().headers_mut();
                                 let user_agent = #{AwsUserAgent}::for_tests();
                                 headers.insert(
-                                    http::header::USER_AGENT,
-                                    http::HeaderValue::try_from(user_agent.ua_header()).unwrap(),
+                                    #{http}::header::USER_AGENT,
+                                    #{http}::HeaderValue::try_from(user_agent.ua_header()).unwrap(),
                                 );
                                 headers.insert(
-                                    http::HeaderName::from_static("x-amz-user-agent"),
-                                    http::HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
+                                    #{http}::HeaderName::from_static("x-amz-user-agent"),
+                                    #{http}::HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
                                 );
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
