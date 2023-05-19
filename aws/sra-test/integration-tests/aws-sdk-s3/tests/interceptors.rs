@@ -11,7 +11,6 @@ use aws_sdk_s3::Client;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
