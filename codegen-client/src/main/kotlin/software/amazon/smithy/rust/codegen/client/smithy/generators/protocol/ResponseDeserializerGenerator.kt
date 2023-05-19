@@ -141,7 +141,7 @@ class ResponseDeserializerGenerator(
             } else {
                 #{parse_response}(status, headers, body)
             };
-            #{type_erase_result}(parse_result).into()
+            #{type_erase_result}(parse_result)
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
