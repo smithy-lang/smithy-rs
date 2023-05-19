@@ -57,6 +57,8 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    tracing::warn!("{:?}", std::env::args_os());
+
     match Args::parse() {
         Args::ClaimCrateNames(args) => subcommand_claim_crate_names(&args).await?,
         Args::UpgradeRuntimeCratesVersion(args) => {
