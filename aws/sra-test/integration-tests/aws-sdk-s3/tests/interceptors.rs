@@ -11,8 +11,10 @@ use aws_sdk_s3::Client;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, Interceptor,
+};
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::orchestrator::RequestTime;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -62,7 +64,7 @@ struct RequestTimeResetInterceptor;
 impl Interceptor for RequestTimeResetInterceptor {
     fn modify_before_signing(
         &self,
-        _context: &mut InterceptorContext<BeforeTransmit>,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         cfg.set_request_time(RequestTime::new(UNIX_EPOCH));
@@ -76,7 +78,7 @@ struct RequestTimeAdvanceInterceptor(Duration);
 impl Interceptor for RequestTimeAdvanceInterceptor {
     fn modify_before_signing(
         &self,
-        _context: &mut InterceptorContext<BeforeTransmit>,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         let request_time = cfg.request_time().unwrap();
