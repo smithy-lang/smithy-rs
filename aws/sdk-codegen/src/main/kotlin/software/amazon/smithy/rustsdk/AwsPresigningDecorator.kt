@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
@@ -100,7 +101,12 @@ class AwsPresigningDecorator internal constructor(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
+    ): List<OperationCustomization> =
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
+            it + listOf(
+                AwsInputPresignedMethod(codegenContext, operation),
+            )
+        }
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen

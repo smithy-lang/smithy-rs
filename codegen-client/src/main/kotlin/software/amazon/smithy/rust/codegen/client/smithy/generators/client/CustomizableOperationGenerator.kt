@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -37,6 +36,8 @@ class CustomizableOperationGenerator(
     fun render(crate: RustCrate) {
         crate.withModule(ClientRustModule.Client.customize) {
             rustTemplate(
+                // TODO(enableNewSmithyRuntime): Stop exporting `Operation` when removing middleware
+                // TODO(enableNewSmithyRuntime): Re-export orchestrator equivalents for retry types when removing middleware
                 """
                 pub use #{Operation};
                 pub use #{Request};
@@ -50,7 +51,9 @@ class CustomizableOperationGenerator(
                 "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                 "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
             )
-            renderCustomizableOperationModule(this)
+            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+                renderCustomizableOperationModule(this)
+            }
         }
     }
 
@@ -164,6 +167,7 @@ class CustomizableOperationGenerator(
                 .resolve("client::interceptors::SharedInterceptor"),
         )
 
+        // TODO(enableNewSmithyRuntime): Centralize this struct rather than generating it once per operation
         writer.rustTemplate(
             """
             /// A wrapper type for [`$builderName`]($builderName) that allows for configuring a single
@@ -244,17 +248,6 @@ class CustomizableOperationGenerator(
                         #{HttpResponse}
                     >
                 > {
-                    self.send_orchestrator_with_plugin(#{Option}::<#{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>>::None)
-                        .await
-                }
-
-                ##[doc(hidden)]
-                // TODO(enableNewSmithyRuntime): Delete when unused
-                /// Equivalent to [`Self::send`] but adds a final runtime plugin to shim missing behavior
-                pub async fn send_orchestrator_with_plugin(
-                    self,
-                    final_plugin: #{Option}<impl #{RuntimePlugin} + #{Send} + #{Sync} + 'static>
-                ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                     let mut config_override = if let Some(config_override) = self.config_override {
                         config_override
                     } else {
@@ -267,7 +260,7 @@ class CustomizableOperationGenerator(
 
                     self.fluent_builder
                         .config_override(config_override)
-                        .send_orchestrator_with_plugin(final_plugin)
+                        .send_orchestrator()
                         .await
                 }
 
@@ -282,7 +275,8 @@ class CustomizableOperationGenerator(
     }
 }
 
-fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: FluentClientGenerics, writer: RustWriter) {
+fun renderCustomizableOperationSend(codegenContext: ClientCodegenContext, generics: FluentClientGenerics, writer: RustWriter) {
+    val runtimeConfig = codegenContext.runtimeConfig
     val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
     val smithyClient = CargoDependency.smithyClient(runtimeConfig).toType()
 
@@ -292,14 +286,16 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
 
     val codegenScope = arrayOf(
         *preludeScope,
-        "combined_generics_decl" to combinedGenerics.declaration(),
-        "handle_generics_bounds" to handleGenerics.bounds(),
+        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        // TODO(enableNewSmithyRuntime): Delete the trait bounds when cleaning up middleware
         "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
         "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
         "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        // TODO(enableNewSmithyRuntime): Delete the generics when cleaning up middleware
+        "combined_generics_decl" to combinedGenerics.declaration(),
+        "handle_generics_bounds" to handleGenerics.bounds(),
     )
 
     if (generics is FlexibleClientGenerics) {
@@ -324,7 +320,7 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
             """,
             *codegenScope,
         )
-    } else {
+    } else if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
         writer.rustTemplate(
             """
             impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
@@ -336,6 +332,7 @@ fun renderCustomizableOperationSend(runtimeConfig: RuntimeConfig, generics: Flue
                 where
                     E: std::error::Error + #{Send} + #{Sync} + 'static,
                     O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
+                    Retry: #{Send} + #{Sync} + #{Clone},
                     Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
                 {
                     self.handle.client.call(self.operation).await
