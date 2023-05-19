@@ -86,7 +86,7 @@ jobs:
           runner: ubuntu-latest
         # TODO(enableNewSmithyRuntime): Remove `check-aws-sdk-orchestrator-impl` when cleaning up middleware
         - action: check-aws-sdk-orchestrator-impl
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
