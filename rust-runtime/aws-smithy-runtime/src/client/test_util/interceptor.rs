@@ -28,14 +28,14 @@ impl<F> TestParamsSetterInterceptor<F> {
 
 impl<F> Interceptor for TestParamsSetterInterceptor<F>
 where
-    F: Fn(&mut ConfigBag) + Send + Sync + 'static,
+    F: Fn(&mut InterceptorContext<BeforeTransmit>, &mut ConfigBag) + Send + Sync + 'static,
 {
     fn modify_before_signing(
         &self,
-        _context: &mut InterceptorContext<BeforeTransmit>,
+        context: &mut InterceptorContext<BeforeTransmit>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        (self.f)(cfg);
+        (self.f)(context, cfg);
 
         Ok(())
     }
@@ -45,8 +45,9 @@ where
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
     use aws_smithy_runtime_api::type_erasure::TypedBox;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
     fn set_test_request_time() {
@@ -59,13 +60,16 @@ mod tests {
         let request_time = UNIX_EPOCH + Duration::from_secs(1624036048);
         let interceptor = TestParamsSetterInterceptor::new({
             let request_time = request_time.clone();
-            move |cfg: &mut ConfigBag| {
-                cfg.put(request_time);
+            move |_: &mut InterceptorContext<BeforeTransmit>, cfg: &mut ConfigBag| {
+                cfg.set_request_time(RequestTime::new(request_time));
             }
         });
         interceptor
             .modify_before_signing(&mut context, &mut cfg)
             .unwrap();
-        assert_eq!(&request_time, cfg.get::<SystemTime>().unwrap());
+        assert_eq!(
+            request_time,
+            cfg.get::<RequestTime>().unwrap().system_time()
+        );
     }
 }
