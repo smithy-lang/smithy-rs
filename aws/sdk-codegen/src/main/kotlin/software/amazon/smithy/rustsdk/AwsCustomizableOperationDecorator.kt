@@ -21,8 +21,8 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         *RuntimeType.preludeScope,
         "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig)
             .resolve("user_agent::AwsUserAgent"),
-        "BeforeTransmit" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::context::phase::BeforeTransmit"),
+        "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
         "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
         "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::ConfigBagAccessors"),
         "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -67,7 +67,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
                             use #{ConfigBagAccessors};
-                            let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{InterceptorContext}<#{BeforeTransmit}>, cfg: &mut #{ConfigBag}| {
+                            let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
                                 cfg.set_request_time(#{RequestTime}::new(request_time));
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
@@ -77,7 +77,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn user_agent_for_tests(mut self) -> Self {
-                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{InterceptorContext}<#{BeforeTransmit}>, _: &mut #{ConfigBag}| {
+                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
                                 let headers = context.request_mut().headers_mut();
                                 let user_agent = #{AwsUserAgent}::for_tests();
                                 headers.insert(

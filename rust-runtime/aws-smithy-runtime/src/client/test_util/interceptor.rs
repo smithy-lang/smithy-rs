@@ -5,8 +5,9 @@
 
 // TODO(enableNewSmithyRuntime): Delete this file once test helpers on `CustomizableOperation` have been removed
 
-use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
-use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
+};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use std::fmt;
 
@@ -28,11 +29,11 @@ impl<F> TestParamsSetterInterceptor<F> {
 
 impl<F> Interceptor for TestParamsSetterInterceptor<F>
 where
-    F: Fn(&mut InterceptorContext<BeforeTransmit>, &mut ConfigBag) + Send + Sync + 'static,
+    F: Fn(&mut BeforeTransmitInterceptorContextMut<'_>, &mut ConfigBag) + Send + Sync + 'static,
 {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext<BeforeTransmit>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         (self.f)(context, cfg);
@@ -45,6 +46,7 @@ where
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use std::time::{Duration, UNIX_EPOCH};
@@ -52,20 +54,21 @@ mod tests {
     #[test]
     fn set_test_request_time() {
         let mut cfg = ConfigBag::base();
-        let context = InterceptorContext::<()>::new(TypedBox::new("anything").erase());
-        let mut context = context.into_serialization_phase();
-        let _ = context.take_input();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
-        let mut context = context.into_before_transmit_phase();
+        let mut ctx = InterceptorContext::new(TypedBox::new("anything").erase());
+        ctx.enter_serialization_phase();
+        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let _ = ctx.take_input();
+        ctx.enter_before_transmit_phase();
+        let mut ctx = Into::into(&mut ctx);
         let request_time = UNIX_EPOCH + Duration::from_secs(1624036048);
         let interceptor = TestParamsSetterInterceptor::new({
             let request_time = request_time.clone();
-            move |_: &mut InterceptorContext<BeforeTransmit>, cfg: &mut ConfigBag| {
+            move |_: &mut BeforeTransmitInterceptorContextMut<'_>, cfg: &mut ConfigBag| {
                 cfg.set_request_time(RequestTime::new(request_time));
             }
         });
         interceptor
-            .modify_before_signing(&mut context, &mut cfg)
+            .modify_before_signing(&mut ctx, &mut cfg)
             .unwrap();
         assert_eq!(
             request_time,
