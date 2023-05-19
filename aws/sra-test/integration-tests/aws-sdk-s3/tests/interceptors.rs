@@ -5,18 +5,20 @@
 
 mod util;
 
+use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::orchestrator::RequestTime;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
+use http::header::USER_AGENT;
+use http::HeaderValue;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIST_BUCKETS_PATH: &str = "test-data/list-objects-v2.json";
@@ -148,16 +150,16 @@ async fn set_test_user_agent_through_request_mutation() {
             .await
             .unwrap()
             .mutate_request(|request| {
-                request.headers_mut()
-                    .insert(
-                        http::HeaderName::from_static("user-agent"),
-                        http::HeaderValue::from_str("aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0").unwrap(),
-                    );
-                request.headers_mut()
-                    .insert(
-                        http::HeaderName::from_static("x-amz-user-agent"),
-                        http::HeaderValue::from_str("aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0").unwrap(),
-                    );
+                let headers = request.headers_mut();
+                let user_agent = AwsUserAgent::for_tests();
+                headers.insert(
+                    USER_AGENT,
+                    HeaderValue::try_from(user_agent.ua_header()).unwrap(),
+                );
+                headers.insert(
+                    util::X_AMZ_USER_AGENT,
+                    HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
+                );
             })
             .send_orchestrator_with_plugin(Some(fixup))
             .await

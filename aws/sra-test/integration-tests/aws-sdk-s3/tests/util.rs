@@ -5,7 +5,6 @@
 
 use aws_http::user_agent::AwsUserAgent;
 use aws_runtime::invocation_id::InvocationId;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor, InterceptorRegistrar,
 };

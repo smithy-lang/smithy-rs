@@ -71,7 +71,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
-        ).render(rustCrate)
+        ).render(rustCrate, listOf(CustomizableOperationTestHelpers(runtimeConfig)))
         rustCrate.withModule(ClientRustModule.Client.customize) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
