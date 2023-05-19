@@ -81,10 +81,10 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
     private val smithyRuntimeMode = codegenContext.smithyRuntimeMode
 
-    fun render(crate: RustCrate) {
+    fun render(crate: RustCrate, customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList()) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics, customizableOperationCustomizations)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)

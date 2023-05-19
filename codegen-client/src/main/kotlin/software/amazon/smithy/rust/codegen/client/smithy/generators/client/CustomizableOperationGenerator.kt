@@ -13,10 +13,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -26,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 class CustomizableOperationGenerator(
     private val codegenContext: ClientCodegenContext,
     private val generics: FluentClientGenerics,
+    private val customizations: List<CustomizableOperationCustomization>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
@@ -123,9 +126,14 @@ class CustomizableOperationGenerator(
                 pub fn request_mut(&mut self) -> &mut #{HttpRequest}<#{SdkBody}> {
                     self.operation.request_mut()
                 }
+
+                #{additional_methods}
             }
             """,
             *codegenScope,
+            "additional_methods" to writable {
+                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(null))
+            },
         )
     }
 
@@ -262,9 +270,14 @@ class CustomizableOperationGenerator(
                         .send_orchestrator_with_plugin(final_plugin)
                         .await
                 }
+
+                #{additional_methods}
             }
             """,
             *codegenScope,
+            "additional_methods" to writable {
+                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(operation))
+            },
         )
     }
 }
