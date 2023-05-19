@@ -59,6 +59,9 @@ abstract class ExecRustBuildTool : DefaultTask() {
         checkNotNull(toolPath) { "toolPath must be set" }
         checkNotNull(binaryName) { "binaryName must be set" }
         checkNotNull(arguments) { "arguments must be set" }
+        println(toolPath)
+        println(binaryName)
+        println(arguments)
 
         // When building with the build Docker image, the Rust tools are already on the path. Just use them.
         if (System.getenv()["SMITHY_RS_DOCKER_BUILD_IMAGE"] == "1") {
