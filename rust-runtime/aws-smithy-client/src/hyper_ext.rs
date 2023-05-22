@@ -229,7 +229,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 ///
 /// Unlike a Smithy client, the [`Service`] inside a [`hyper_ext::Adapter`](Adapter) is actually a service that
 /// accepts a `Uri` and returns a TCP stream. One default implementation of this is provided,
-/// that encrypts the stream with `rustls`
+/// that encrypts the stream with `rustls`.
 ///
 /// # Examples
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
