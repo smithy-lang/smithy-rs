@@ -31,6 +31,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::connector::expect_connector;
+use aws_smithy_types::retry::RetryConfig;
 use ring::digest;
 use zeroize::Zeroizing;
 
@@ -61,9 +62,11 @@ impl SsoCredentialsProvider {
         let fs = provider_config.fs();
         let env = provider_config.env();
 
-        let mut sso_config = SsoConfig::builder().http_connector(expect_connector(
-            provider_config.connector(&Default::default()),
-        ));
+        let mut sso_config = SsoConfig::builder()
+            .http_connector(expect_connector(
+                provider_config.connector(&Default::default()),
+            ))
+            .retry_config(RetryConfig::standard());
         sso_config.set_sleep_impl(provider_config.sleep());
 
         SsoCredentialsProvider {

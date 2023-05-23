@@ -150,6 +150,8 @@ class CustomizableOperationGenerator(
 
         val codegenScope = arrayOf(
             *preludeScope,
+            "HttpRequest" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                .resolve("client::orchestrator::HttpRequest"),
             "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
             "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -193,7 +195,7 @@ class CustomizableOperationGenerator(
                 /// Allows for customizing the operation's request.
                 pub fn map_request<F, E>(mut self, f: F) -> Self
                 where
-                    F: #{Fn}(&mut http::Request<#{SdkBody}>) -> #{Result}<(), E>
+                    F: #{Fn}(#{HttpRequest}) -> #{Result}<#{HttpRequest}, E>
                         + #{Send}
                         + #{Sync}
                         + 'static,

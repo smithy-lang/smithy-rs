@@ -14,7 +14,6 @@ use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentials
 use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
 use aws_sdk_sts::config::{Builder as StsConfigBuilder, Credentials};
 use aws_sdk_sts::Client as StsClient;
-use aws_types::region::Region;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -114,6 +113,7 @@ impl ProviderChain {
             } => {
                 #[cfg(feature = "credentials-sso")]
                 {
+                    use aws_types::region::Region;
                     let sso_config = SsoProviderConfig {
                         account_id: sso_account_id.to_string(),
                         role_name: sso_role_name.to_string(),

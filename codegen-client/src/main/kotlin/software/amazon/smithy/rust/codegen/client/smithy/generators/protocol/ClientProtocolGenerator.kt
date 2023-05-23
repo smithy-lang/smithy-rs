@@ -150,8 +150,9 @@ open class ClientProtocolGenerator(
             if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                 rustTemplate(
                     """
+                    ##[allow(unused_mut)]
                     pub(crate) async fn orchestrate_with_middleware(
-                        input: #{Input},
+                        mut input: #{Input},
                         handle: #{Arc}<crate::client::Handle>,
                         _config_override: #{Option}<crate::config::Builder>,
                     ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>> {
