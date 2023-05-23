@@ -16,7 +16,7 @@ pub(crate) fn expect_connector(connector: Option<DynConnector>) -> DynConnector 
     connector.expect("No HTTP connector was available. Enable the `rustls` crate feature or set a connector to fix this.")
 }
 
-#[cfg(feature = "native-tls")]
+#[cfg(all(feature = "native-tls", not(feature = "allow-compilation")))]
 compile_error!("Feature native-tls has been removed. For upgrade instructions, see: https://awslabs.github.io/smithy-rs/design/transport/connector.html");
 
 #[cfg(feature = "rustls")]

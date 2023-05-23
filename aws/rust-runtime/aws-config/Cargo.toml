@@ -12,6 +12,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = []
+allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
 
