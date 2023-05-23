@@ -23,3 +23,9 @@ message = "Implement `Ord` and `PartialOrd` for `DateTime`."
 author = "henriiik"
 references = ["smithy-rs#2653"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Remove native-tls and add a migration guide."
+author = "82marbag"
+references = ["smithy-rs#2675"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
