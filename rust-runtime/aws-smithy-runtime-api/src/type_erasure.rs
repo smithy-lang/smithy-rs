@@ -69,8 +69,7 @@ where
 {
     /// Converts `TypedBox<T>` to a `TypeErasedError` where `T` implements `Error`.
     pub fn erase_error(self) -> TypeErasedError {
-        let inner = self.inner.downcast::<T>().expect("typechecked");
-        TypeErasedError::new(inner)
+        TypeErasedError::new(self.unwrap())
     }
 }
 
@@ -226,7 +225,8 @@ impl TypeErasedError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TypeErasedError, TypedBox};
+    use std::fmt;
 
     #[derive(Debug)]
     struct Foo(&'static str);
@@ -234,7 +234,7 @@ mod tests {
     struct Bar(isize);
 
     #[test]
-    fn test() {
+    fn test_typed_boxes() {
         let foo = TypedBox::new(Foo("1"));
         let bar = TypedBox::new(Bar(2));
 
@@ -267,5 +267,44 @@ mod tests {
         foo_erased.downcast_mut::<Foo>().expect("it's a Foo").0 = "4";
         let foo = *foo_erased.downcast::<Foo>().expect("it's a Foo");
         assert_eq!("4", foo.0);
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct TestErr {
+        inner: &'static str,
+    }
+
+    impl TestErr {
+        fn new(inner: &'static str) -> Self {
+            Self { inner }
+        }
+    }
+
+    impl fmt::Display for TestErr {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "Error: {}", self.inner)
+        }
+    }
+
+    impl std::error::Error for TestErr {}
+
+    #[test]
+    fn test_typed_erased_errors_can_be_downcast() {
+        let test_err = TestErr::new("something failed!");
+        let type_erased_test_err = TypeErasedError::new(test_err.clone());
+        let actual = type_erased_test_err
+            .downcast::<TestErr>()
+            .expect("type erased error can be downcast into original type");
+        assert_eq!(test_err, *actual);
+    }
+
+    #[test]
+    fn test_typed_erased_errors_can_be_unwrapped() {
+        let test_err = TestErr::new("something failed!");
+        let type_erased_test_err = TypedBox::new(test_err.clone()).erase_error();
+        let actual = TypedBox::<TestErr>::assume_from(type_erased_test_err.into())
+            .expect("type erased error can be downcast into original type")
+            .unwrap();
+        assert_eq!(test_err, actual);
     }
 }

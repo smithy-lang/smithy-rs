@@ -19,13 +19,14 @@
     unreachable_pub
 )]
 
+/// Interceptors for API Gateway
+pub mod apigateway_interceptors;
+
 /// Stub credentials provider for use when no credentials provider is used.
 pub mod no_credentials;
 
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
-// TODO(CrateReorganization): Delete the `old_presigning` module
-pub mod old_presigning;
 
 /// Special logic for extracting request IDs from S3's responses.
 pub mod s3_request_id;

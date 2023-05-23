@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Errors that can occur while running the orchestrator.
+mod error;
+
 use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, HttpAuthSchemes};
 use crate::client::identity::IdentityResolvers;
 use crate::client::interceptors::context::{Error, Input, Output};
@@ -13,17 +16,19 @@ use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::EndpointPrefix;
+use aws_smithy_types::endpoint::Endpoint;
 use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+pub use error::OrchestratorError;
+
 pub type HttpRequest = http::Request<SdkBody>;
 pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
+pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
 pub trait RequestSerializer: Send + Sync + fmt::Debug {
@@ -31,12 +36,18 @@ pub trait RequestSerializer: Send + Sync + fmt::Debug {
 }
 
 pub trait ResponseDeserializer: Send + Sync + fmt::Debug {
-    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<Result<Output, Error>> {
+    fn deserialize_streaming(
+        &self,
+        response: &mut HttpResponse,
+    ) -> Option<Result<Output, OrchestratorError<Error>>> {
         let _ = response;
         None
     }
 
-    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> Result<Output, Error>;
+    fn deserialize_nonstreaming(
+        &self,
+        response: &HttpResponse,
+    ) -> Result<Output, OrchestratorError<Error>>;
 }
 
 pub trait Connection: Send + Sync + fmt::Debug {
@@ -63,12 +74,7 @@ impl EndpointResolverParams {
 }
 
 pub trait EndpointResolver: Send + Sync + fmt::Debug {
-    fn resolve_and_apply_endpoint(
-        &self,
-        params: &EndpointResolverParams,
-        endpoint_prefix: Option<&EndpointPrefix>,
-        request: &mut HttpRequest,
-    ) -> Result<(), BoxError>;
+    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> Result<Endpoint, BoxError>;
 }
 
 /// Time that the request is being made (so that time can be overridden in the [`ConfigBag`]).

@@ -41,6 +41,7 @@ class ResponseDeserializerGenerator(
             "Instrument" to CargoDependency.Tracing.toType().resolve("Instrument"),
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
+            "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
             "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
@@ -98,7 +99,7 @@ class ResponseDeserializerGenerator(
                 if !response.status().is_success() && response.status().as_u16() != $successCode {
                     return None;
                 }
-                Some(#{type_erase_result}(#{parse_streaming_response}(response)))
+                Some(#{type_erase_result}(#{parse_streaming_response}(response)).into())
             }
             """,
             *codegenScope,
@@ -117,7 +118,7 @@ class ResponseDeserializerGenerator(
             """
             // For streaming operations, we only hit this case if its an error
             let body = response.body().bytes().expect("body loaded");
-            #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
+            #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body)).into()
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
@@ -154,13 +155,14 @@ class ResponseDeserializerGenerator(
     private fun typeEraseResult(): RuntimeType = ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
         rustTemplate(
             """
-            pub(crate) fn $fnName<O, E>(result: Result<O, E>) -> Result<#{Output}, #{Error}>
+            pub(crate) fn $fnName<O, E>(result: Result<O, E>) -> Result<#{Output}, #{OrchestratorError}<#{Error}>>
             where
                 O: std::fmt::Debug + Send + Sync + 'static,
                 E: std::error::Error + std::fmt::Debug + Send + Sync + 'static,
             {
                 result.map(|output| #{TypedBox}::new(output).erase())
                     .map_err(|error| #{TypedBox}::new(error).erase_error())
+                    .map_err(Into::into)
             }
             """,
             *codegenScope,
