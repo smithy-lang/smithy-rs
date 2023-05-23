@@ -9,11 +9,11 @@ use std::time::SystemTime;
 
 /// Trait with a `now()` function returning the current time
 pub trait TimeSource: Debug + Send + Sync {
-    /// Returns a future that sleeps for the given `duration` of time.
+    /// Returns the current time
     fn now(&self) -> SystemTime;
 }
 
-/// Timesource delegating to SystemTime::now()
+/// Time source that delegates to [`SystemTime::now`]
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct SystemTimeSource;
