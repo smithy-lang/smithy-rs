@@ -95,6 +95,9 @@ use crate::http_connector::ConnectorSettings;
 #[cfg(feature = "rustls")]
 use crate::hyper_ext::Adapter as HyperAdapter;
 
+#[cfg(feature = "native-tls")]
+compile_error!("Feature native-tls has been removed. For upgrade instructions, see: https://awslabs.github.io/smithy-rs/design/transport/connector.html");
+
 /// Max idle connections is not standardized across SDKs. Java V1 and V2 use 50, and Go V2 uses 100.
 /// The number below was chosen arbitrarily between those two reference points, and should allow
 /// for 14 separate SDK clients in a Lambda where the max file handles is 1024.
