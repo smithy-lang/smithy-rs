@@ -10,28 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[smithy-rs]]
-message = "The `Debug` implementation for `PropertyBag` now prints a list of the types it contains. This significantly improves debuggability."
-author = "rcoh"
-references = ["smithy-rs#2612"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-
-
-[[smithy-rs]]
-message = "Implement `Ord` and `PartialOrd` for `DateTime`."
-author = "henriiik"
-references = ["smithy-rs#2653", "smithy-rs#2656"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-
-[[aws-sdk-rust]]
-message = "Avoid extending IMDS credentials' expiry unconditionally, which may incorrectly extend it beyond what is originally defined; If returned credentials are not stale, use them as they are."
-references = ["smithy-rs#2687", "smithy-rs#2694"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Fix compiler errors in generated code when naming shapes after types in the Rust standard library prelude."
-references = ["smithy-rs#2696"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
-author = "jdisanti"

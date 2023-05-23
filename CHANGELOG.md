@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 23rd, 2023
+==============
+**New this release:**
+- (all, [smithy-rs#2612](https://github.com/awslabs/smithy-rs/issues/2612)) The `Debug` implementation for `PropertyBag` now prints a list of the types it contains. This significantly improves debuggability.
+- (all, [smithy-rs#2653](https://github.com/awslabs/smithy-rs/issues/2653), [smithy-rs#2656](https://github.com/awslabs/smithy-rs/issues/2656), @henriiik) Implement `Ord` and `PartialOrd` for `DateTime`.
+- 🐛 (client, [smithy-rs#2696](https://github.com/awslabs/smithy-rs/issues/2696)) Fix compiler errors in generated code when naming shapes after types in the Rust standard library prelude.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @henriiik ([smithy-rs#2653](https://github.com/awslabs/smithy-rs/issues/2653), [smithy-rs#2656](https://github.com/awslabs/smithy-rs/issues/2656))
+
+
 April 26th, 2023
 ================
 **Breaking Changes:**
