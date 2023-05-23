@@ -6,6 +6,7 @@
 //! Maintain a cache of discovered endpoints
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::TimeSource;
 use aws_smithy_client::erase::boxclone::BoxFuture;
 use aws_smithy_http::endpoint::{ResolveEndpoint, ResolveEndpointError};
 use aws_smithy_types::endpoint::Endpoint;
@@ -24,6 +25,7 @@ pub struct ReloadEndpoint {
     error: Arc<Mutex<Option<ResolveEndpointError>>>,
     rx: Receiver<()>,
     sleep: Arc<dyn AsyncSleep>,
+    time: Arc<dyn TimeSource>,
 }
 
 impl Debug for ReloadEndpoint {
@@ -45,24 +47,29 @@ impl ReloadEndpoint {
 
     /// An infinite loop task that will reload the endpoint
     ///
-    /// This task will terminate when the corresponding [`EndpointCache`] is dropped.
+    /// This task will terminate when the corresponding [`Client`](crate::Client) is dropped.
     pub async fn reload_task(mut self) {
         loop {
             match self.rx.try_recv() {
                 Ok(_) | Err(TryRecvError::Closed) => break,
                 _ => {}
             }
-            let should_reload = self
-                .endpoint
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map(|e| e.is_expired())
-                .unwrap_or(true);
-            if should_reload {
-                self.reload_once().await;
-            }
-            self.sleep.sleep(Duration::from_secs(60)).await
+            self.reload_increment(self.time.now()).await;
+            self.sleep.sleep(Duration::from_secs(60)).await;
+        }
+    }
+
+    async fn reload_increment(&self, now: SystemTime) {
+        let should_reload = self
+            .endpoint
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|e| e.is_expired(now))
+            .unwrap_or(true);
+        if should_reload {
+            tracing::debug!("reloading endpoint, previous endpoint was expired");
+            self.reload_once().await;
         }
     }
 }
@@ -88,9 +95,10 @@ struct ExpiringEndpoint {
 }
 
 impl ExpiringEndpoint {
-    fn is_expired(&self) -> bool {
-        match SystemTime::now().duration_since(self.expiry) {
-            Err(e) => true,
+    fn is_expired(&self, now: SystemTime) -> bool {
+        tracing::debug!(expiry = ?self.expiry, now = ?now, delta = ?self.expiry.duration_since(now), "checking expiry status of endpoint");
+        match self.expiry.duration_since(now) {
+            Err(_) => true,
             Ok(t) => t < Duration::from_secs(120),
         }
     }
@@ -99,6 +107,7 @@ impl ExpiringEndpoint {
 pub(crate) async fn create_cache<F>(
     loader_fn: impl Fn() -> F + Send + Sync + 'static,
     sleep: Arc<dyn AsyncSleep>,
+    time: Arc<dyn TimeSource>,
 ) -> Result<(EndpointCache, ReloadEndpoint), ResolveEndpointError>
 where
     F: Future<Output = Result<(Endpoint, SystemTime), ResolveEndpointError>> + Send + 'static,
@@ -117,11 +126,12 @@ where
         error: error_holder,
         rx,
         sleep,
+        time,
     };
     reloader.reload_once().await;
-    if let Err(e) = cache.resolve_endpoint() {
-        return Err(e);
-    }
+    // if we didn't successfully get an endpoint, bail out so the client knows
+    // configuration failed to work
+    cache.resolve_endpoint()?;
     Ok((cache, reloader))
 }
 
@@ -145,26 +155,135 @@ impl EndpointCache {
 #[cfg(test)]
 mod test {
     use crate::endpoint_discovery::{create_cache, EndpointCache};
+    use aws_credential_types::time_source::TimeSource;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::test_util::controlled_time_and_sleep;
+    use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_http::endpoint::ResolveEndpointError;
+    use aws_smithy_types::endpoint::Endpoint;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
-
-    fn check_send<T: Send>() {}
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use tokio::time::timeout;
 
     fn check_send_v<T: Send>(t: T) -> T {
         t
     }
 
     #[tokio::test]
+    #[allow(unused_must_use)]
     async fn check_traits() {
-        // check_send::<EndpointCache>();
-
         let (cache, reloader) = create_cache(
-            || async { Err(ResolveEndpointError::message("stub")) },
+            || async {
+                Ok((
+                    Endpoint::builder().url("http://foo.com").build(),
+                    SystemTime::now(),
+                ))
+            },
             Arc::new(TokioSleep::new()),
+            Arc::new(SystemTimeSource::new()),
         )
         .await
         .unwrap();
         check_send_v(reloader.reload_task());
+        check_send_v(cache);
+    }
+
+    #[tokio::test]
+    async fn erroring_endpoint_always_reloaded() {
+        let expiry = UNIX_EPOCH + Duration::from_secs(123456789);
+        let ct = Arc::new(AtomicUsize::new(0));
+        let (cache, reloader) = create_cache(
+            move || {
+                let shared_ct = ct.clone();
+                shared_ct.fetch_add(1, Ordering::AcqRel);
+                async move {
+                    Ok((
+                        Endpoint::builder()
+                            .url(format!("http://foo.com/{shared_ct:?}"))
+                            .build(),
+                        expiry,
+                    ))
+                }
+            },
+            Arc::new(TokioSleep::new()),
+            Arc::new(SystemTimeSource::new()),
+        )
+        .await
+        .expect("returns an endpoint");
+        assert_eq!(
+            cache.resolve_endpoint().expect("ok").url(),
+            "http://foo.com/1"
+        );
+        // 120 second buffer
+        reloader
+            .reload_increment(expiry - Duration::from_secs(240))
+            .await;
+        assert_eq!(
+            cache.resolve_endpoint().expect("ok").url(),
+            "http://foo.com/1"
+        );
+
+        reloader.reload_increment(expiry).await;
+        assert_eq!(
+            cache.resolve_endpoint().expect("ok").url(),
+            "http://foo.com/2"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_advance_of_task() {
+        let expiry = UNIX_EPOCH + Duration::from_secs(123456789);
+        // expires in 8 minutes
+        let (time, sleep, mut gate) = controlled_time_and_sleep(expiry - Duration::from_secs(239));
+        let ct = Arc::new(AtomicUsize::new(0));
+        let (cache, reloader) = create_cache(
+            move || {
+                let shared_ct = ct.clone();
+                shared_ct.fetch_add(1, Ordering::AcqRel);
+                async move {
+                    Ok((
+                        Endpoint::builder()
+                            .url(format!("http://foo.com/{shared_ct:?}"))
+                            .build(),
+                        expiry,
+                    ))
+                }
+            },
+            Arc::new(sleep.clone()),
+            Arc::new(time.clone()),
+        )
+        .await
+        .expect("first load success");
+        let reload_task = tokio::spawn(reloader.reload_task());
+        assert!(!reload_task.is_finished());
+        // expiry occurs after 2 sleeps
+        // t = 0
+        assert_eq!(
+            gate.expect_sleep().await.duration(),
+            Duration::from_secs(60)
+        );
+        assert_eq!(cache.resolve_endpoint().unwrap().url(), "http://foo.com/1");
+        // t = 60
+
+        let sleep = gate.expect_sleep().await;
+        // we're still holding the drop guard, so we haven't expired yet.
+        assert_eq!(cache.resolve_endpoint().unwrap().url(), "http://foo.com/1");
+        assert_eq!(sleep.duration(), Duration::from_secs(60));
+        sleep.allow_progress();
+        // t = 120
+
+        let sleep = gate.expect_sleep().await;
+        assert_eq!(cache.resolve_endpoint().unwrap().url(), "http://foo.com/2");
+        sleep.allow_progress();
+
+        let sleep = gate.expect_sleep().await;
+        drop(cache);
+        sleep.allow_progress();
+
+        timeout(Duration::from_secs(1), reload_task)
+            .await
+            .expect("task finishes successfully")
+            .expect("finishes");
     }
 }

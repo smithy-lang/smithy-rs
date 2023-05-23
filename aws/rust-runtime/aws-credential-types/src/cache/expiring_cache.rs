@@ -59,14 +59,6 @@ where
             .map(|(creds, _expiry)| creds)
     }
 
-    /// Attempts to load the cached value if it has been set
-    ///
-    /// # Panics
-    /// This function panics if it is called from an asynchronous context
-    pub fn try_blocking_get(&self) -> Option<T> {
-        self.value.blocking_read().get().map(|(v, _exp)| v.clone())
-    }
-
     /// Attempts to refresh the cached value with the given future.
     /// If multiple threads attempt to refresh at the same time, one of them will win,
     /// and the others will await that thread's result rather than multiple refreshes occurring.
