@@ -1,4 +1,46 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 23rd, 2023
+==============
+**New this release:**
+- (all, [smithy-rs#2612](https://github.com/awslabs/smithy-rs/issues/2612)) The `Debug` implementation for `PropertyBag` now prints a list of the types it contains. This significantly improves debuggability.
+- (all, [smithy-rs#2653](https://github.com/awslabs/smithy-rs/issues/2653), [smithy-rs#2656](https://github.com/awslabs/smithy-rs/issues/2656), @henriiik) Implement `Ord` and `PartialOrd` for `DateTime`.
+- 🐛 (client, [smithy-rs#2696](https://github.com/awslabs/smithy-rs/issues/2696)) Fix compiler errors in generated code when naming shapes after types in the Rust standard library prelude.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @henriiik ([smithy-rs#2653](https://github.com/awslabs/smithy-rs/issues/2653), [smithy-rs#2656](https://github.com/awslabs/smithy-rs/issues/2656))
+
+
+April 26th, 2023
+================
+**Breaking Changes:**
+- ⚠ (all, [smithy-rs#2611](https://github.com/awslabs/smithy-rs/issues/2611)) Update MSRV to Rust 1.67.1
+
+**New this release:**
+- 🎉 (server, [smithy-rs#2540](https://github.com/awslabs/smithy-rs/issues/2540)) Implement layer for servers to handle [ALB health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html).
+    Take a look at `aws_smithy_http_server::plugin::alb_health_check` to learn about it.
+- 🎉 (client, [smithy-rs#2254](https://github.com/awslabs/smithy-rs/issues/2254), @eduardomourar) Clients now compile for the `wasm32-unknown-unknown` and `wasm32-wasi` targets when no default features are enabled. WebAssembly is not officially supported yet, but this is a great first step towards it!
+- (server, [smithy-rs#2540](https://github.com/awslabs/smithy-rs/issues/2540)) Implement `PluginPipeline::http_layer` which allows you to apply a `tower::Layer` to all operations.
+- (client, [aws-sdk-rust#784](https://github.com/awslabs/aws-sdk-rust/issues/784), @abusch) Implement std::error::Error#source() properly for the service meta Error enum.
+- 🐛 (all, [smithy-rs#2496](https://github.com/awslabs/smithy-rs/issues/2496)) The outputs for event stream operations now implement the `Sync` auto-trait.
+- 🐛 (all, [smithy-rs#2495](https://github.com/awslabs/smithy-rs/issues/2495)) Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts.
+- 🐛 (client, [smithy-rs#2495](https://github.com/awslabs/smithy-rs/issues/2495)) Streaming operations now emit the request ID at the `debug` log level like their non-streaming counterparts.
+- (client, [smithy-rs#2507](https://github.com/awslabs/smithy-rs/issues/2507)) The `enableNewCrateOrganizationScheme` codegen flag has been removed. If you opted out of the new crate organization scheme, it must be adopted now in order to upgrade (see [the upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/2449) from March 23rd's release).
+- (client, [smithy-rs#2534](https://github.com/awslabs/smithy-rs/issues/2534)) `aws_smithy_types::date_time::Format` has been re-exported in service client crates.
+- 🐛 (server, [smithy-rs#2582](https://github.com/awslabs/smithy-rs/issues/2582), [smithy-rs#2585](https://github.com/awslabs/smithy-rs/issues/2585)) Fix generation of constrained shapes reaching `@sensitive` shapes
+- 🐛 (server, [smithy-rs#2583](https://github.com/awslabs/smithy-rs/issues/2583), [smithy-rs#2584](https://github.com/awslabs/smithy-rs/issues/2584)) Fix server code generation bug affecting constrained shapes bound with `@httpPayload`
+- (client, [smithy-rs#2603](https://github.com/awslabs/smithy-rs/issues/2603)) Add a sensitive method to `ParseHttpResponse`. When this returns true, logging of the HTTP response body will be suppressed.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @abusch ([aws-sdk-rust#784](https://github.com/awslabs/aws-sdk-rust/issues/784))
+- @eduardomourar ([smithy-rs#2254](https://github.com/awslabs/smithy-rs/issues/2254))
+
+
+April 11th, 2023
+================
+
+
 March 23rd, 2023
 ================
 **Breaking Changes:**
