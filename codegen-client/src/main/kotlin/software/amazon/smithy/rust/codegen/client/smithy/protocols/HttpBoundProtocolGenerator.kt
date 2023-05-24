@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -61,6 +62,7 @@ open class HttpBoundProtocolTraitImplGenerator(
     private val parserGenerator = ProtocolParserGenerator(codegenContext, protocol)
 
     private val codegenScope = arrayOf(
+        *preludeScope,
         "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
         "http" to RuntimeType.Http,
@@ -101,7 +103,7 @@ open class HttpBoundProtocolTraitImplGenerator(
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
+            "parse_response" to parserGenerator.parseResponseFn(operationShape, true, customizations),
             "BeforeParseResponse" to writable {
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
@@ -114,7 +116,7 @@ open class HttpBoundProtocolTraitImplGenerator(
         rustTemplate(
             """
             impl #{ParseStrict} for $operationName {
-                type Output = std::result::Result<#{O}, #{E}>;
+                type Output = #{Result}<#{O}, #{E}>;
                 fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                      let (success, status) = (response.status().is_success(), response.status().as_u16());
                      let headers = response.headers();
@@ -144,14 +146,14 @@ open class HttpBoundProtocolTraitImplGenerator(
         rustTemplate(
             """
             impl #{ParseResponse} for $operationName {
-                type Output = std::result::Result<#{O}, #{E}>;
-                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
+                type Output = #{Result}<#{O}, #{E}>;
+                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> #{Option}<Self::Output> {
                      #{BeforeParseResponse}
                     // This is an error, defer to the non-streaming parser
                     if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
-                        return None;
+                        return #{None};
                     }
-                    Some(#{parse_streaming_response}(response))
+                    #{Some}(#{parse_streaming_response}(response))
                 }
                 fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                     // if streaming, we only hit this case if its an error
@@ -180,7 +182,7 @@ open class HttpBoundProtocolTraitImplGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "op_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(op_response: &mut #{operation}::Response) -> #{Result}<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,

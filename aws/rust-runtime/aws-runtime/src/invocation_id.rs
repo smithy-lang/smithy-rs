@@ -4,7 +4,9 @@
  */
 
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, Interceptor,
+};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use http::{HeaderName, HeaderValue};
 use uuid::Uuid;
@@ -37,10 +39,10 @@ impl Default for InvocationIdInterceptor {
 impl Interceptor for InvocationIdInterceptor {
     fn modify_before_retry_loop(
         &self,
-        context: &mut InterceptorContext,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let headers = context.request_mut()?.headers_mut();
+        let headers = context.request_mut().headers_mut();
         let id = _cfg.get::<InvocationId>().unwrap_or(&self.id);
         headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
         Ok(())
@@ -78,23 +80,25 @@ mod tests {
     use http::HeaderValue;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a HeaderValue {
-        context
-            .request()
-            .unwrap()
-            .headers()
-            .get(header_name)
-            .unwrap()
+        context.request().headers().get(header_name).unwrap()
     }
 
     #[test]
     fn test_id_is_generated_and_set() {
         let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
 
         let mut config = ConfigBag::base();
         let interceptor = InvocationIdInterceptor::new();
+        let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_retry_loop(&mut context, &mut config)
+            .modify_before_signing(&mut ctx, &mut config)
+            .unwrap();
+        interceptor
+            .modify_before_retry_loop(&mut ctx, &mut config)
             .unwrap();
 
         let header = expect_header(&context, "amz-sdk-invocation-id");

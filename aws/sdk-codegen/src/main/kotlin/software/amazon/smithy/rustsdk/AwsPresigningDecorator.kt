@@ -250,6 +250,7 @@ class AwsPresignedFluentBuilderMethod(
 ) : FluentClientCustomization() {
     private val codegenScope = (
         presigningTypes + arrayOf(
+            *RuntimeType.preludeScope,
             "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
@@ -264,7 +265,7 @@ class AwsPresignedFluentBuilderMethod(
                     pub async fn presigned(
                         self,
                         presigning_config: #{PresigningConfig},
-                    ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
+                    ) -> #{Result}<#{PresignedRequest}, #{SdkError}<#{OpError}>>
                     """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,

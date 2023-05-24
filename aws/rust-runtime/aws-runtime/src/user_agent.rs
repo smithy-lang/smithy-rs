@@ -5,7 +5,9 @@
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_smithy_runtime_api::client::interceptors::error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, Interceptor,
+};
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
@@ -72,7 +74,7 @@ fn header_values(
 impl Interceptor for UserAgentInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let api_metadata = cfg
@@ -95,7 +97,7 @@ impl Interceptor for UserAgentInterceptor {
                 Cow::Owned(ua)
             });
 
-        let headers = context.request_mut()?.headers_mut();
+        let headers = context.request_mut().headers_mut();
         let (user_agent, x_amz_user_agent) = header_values(&ua)?;
         headers.append(USER_AGENT, user_agent);
         headers.append(X_AMZ_USER_AGENT, x_amz_user_agent);
@@ -115,7 +117,6 @@ mod tests {
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
-            .unwrap()
             .headers()
             .get(header_name)
             .unwrap()
@@ -123,18 +124,27 @@ mod tests {
             .unwrap()
     }
 
+    fn context() -> InterceptorContext {
+        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        context.enter_serialization_phase();
+        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
+        context
+    }
+
     #[test]
     fn test_overridden_ua() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let mut config = ConfigBag::base();
         config.put(AwsUserAgent::for_tests());
         config.put(ApiMetadata::new("unused", "unused"));
 
         let interceptor = UserAgentInterceptor::new();
+        let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut context, &mut config)
+            .modify_before_signing(&mut ctx, &mut config)
             .unwrap();
 
         let header = expect_header(&context, "user-agent");
@@ -149,16 +159,16 @@ mod tests {
 
     #[test]
     fn test_default_ua() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
         let mut config = ConfigBag::base();
         config.put(api_metadata.clone());
 
         let interceptor = UserAgentInterceptor::new();
+        let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut context, &mut config)
+            .modify_before_signing(&mut ctx, &mut config)
             .unwrap();
 
         let expected_ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata);
@@ -178,17 +188,17 @@ mod tests {
 
     #[test]
     fn test_app_name() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
         let mut config = ConfigBag::base();
-        config.put(api_metadata.clone());
+        config.put(api_metadata);
         config.put(AppName::new("my_awesome_app").unwrap());
 
         let interceptor = UserAgentInterceptor::new();
+        let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut context, &mut config)
+            .modify_before_signing(&mut ctx, &mut config)
             .unwrap();
 
         let app_value = "app/my_awesome_app";
@@ -207,17 +217,17 @@ mod tests {
 
     #[test]
     fn test_api_metadata_missing() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
-
+        let mut context = context();
         let mut config = ConfigBag::base();
 
         let interceptor = UserAgentInterceptor::new();
+        let mut ctx = Into::into(&mut context);
+
         let error = format!(
             "{}",
             DisplayErrorContext(
                 &*interceptor
-                    .modify_before_signing(&mut context, &mut config)
+                    .modify_before_signing(&mut ctx, &mut config)
                     .expect_err("it should error")
             )
         );

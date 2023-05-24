@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.NoClientGenerics
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
@@ -69,7 +71,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
-        ).render(rustCrate)
+        ).render(rustCrate, listOf(CustomizableOperationTestHelpers(runtimeConfig)))
         rustCrate.withModule(ClientRustModule.Client.customize) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
@@ -96,6 +98,29 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             }
         }
     }
+
+    override fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = DefaultProtocolTestGenerator(
+        codegenContext,
+        baseGenerator.protocolSupport,
+        baseGenerator.operationShape,
+        renderClientCreation = { params ->
+            rustTemplate(
+                """
+                // If the test case was missing endpoint parameters, default a region so it doesn't fail
+                let mut ${params.configBuilderName} = ${params.configBuilderName};
+                if ${params.configBuilderName}.region.is_none() {
+                    ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
+                }
+                let config = ${params.configBuilderName}.http_connector(${params.connectorName}).build();
+                let ${params.clientName} = #{Client}::from_conf(config);
+                """,
+                "Client" to ClientRustModule.root.toType().resolve("Client"),
+            )
+        },
+    )
 }
 
 private class AwsFluentClientExtensions(types: Types) {
@@ -223,6 +248,7 @@ private fun renderCustomizableOperationSendMethod(
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(
+        *RuntimeType.preludeScope,
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
@@ -238,11 +264,11 @@ private fun renderCustomizableOperationSendMethod(
             #{handle_generics_bounds:W}
         {
             /// Sends this operation's request
-            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+            pub async fn send<T, E>(self) -> #{Result}<T, #{SdkError}<E>>
             where
-                E: std::error::Error + Send + Sync + 'static,
-                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
+                E: std::error::Error + #{Send} + #{Sync} + 'static,
+                O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
             {
                 self.handle.client.call(self.operation).await
             }

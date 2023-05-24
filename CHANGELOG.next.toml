@@ -20,7 +20,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 [[smithy-rs]]
 message = "Implement `Ord` and `PartialOrd` for `DateTime`."
 author = "henriiik"
-references = ["smithy-rs#2653"]
+references = ["smithy-rs#2653", "smithy-rs#2656"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 
 [[smithy-rs]]

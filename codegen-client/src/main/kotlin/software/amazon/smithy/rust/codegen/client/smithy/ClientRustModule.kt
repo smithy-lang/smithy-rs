@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -122,7 +123,7 @@ class ClientModuleDocProvider(
                 operation call. For example, this can be used to add an additional HTTP header:
 
                 ```ignore
-                ## async fn wrapper() -> Result<(), $moduleUseName::Error> {
+                ## async fn wrapper() -> #{Result}<(), $moduleUseName::Error> {
                 ## let client: $moduleUseName::Client = unimplemented!();
                 use #{http}::header::{HeaderName, HeaderValue};
 
@@ -142,6 +143,7 @@ class ClientModuleDocProvider(
                 ## }
                 ```
                 """.trimIndent(),
+                *RuntimeType.preludeScope,
                 "http" to CargoDependency.Http.toDevDependency().toType(),
             )
         }
@@ -194,6 +196,10 @@ object ClientModuleProvider : ModuleProvider {
             operationModuleName,
             parent = ClientRustModule.Operation,
             documentationOverride = "Types for the `$contextName` operation.",
+            // TODO(https://github.com/tokio-rs/tokio/issues/5683): Uncomment the NoImplicitPrelude attribute once this Tokio issue is resolved
+            // // Disable the Rust prelude since every prelude type should be referenced with its
+            // // fully qualified name to avoid name collisions with the generated operation shapes.
+            // additionalAttributes = listOf(Attribute.NoImplicitPrelude)
         )
     }
 }

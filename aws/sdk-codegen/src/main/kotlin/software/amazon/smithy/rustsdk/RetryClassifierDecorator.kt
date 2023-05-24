@@ -57,7 +57,7 @@ class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : Operati
 
 class OperationRetryClassifiersFeature(
     codegenContext: ClientCodegenContext,
-    operation: OperationShape,
+    operationShape: OperationShape,
 ) : OperationRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
@@ -72,9 +72,10 @@ class OperationRetryClassifiersFeature(
         "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
         "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
         "RetryClassifiers" to smithyRuntimeApi.resolve("client::retries::RetryClassifiers"),
-        "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operation),
+        "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
+        "OrchestratorError" to smithyRuntimeApi.resolve("client::orchestrator::OrchestratorError"),
         "SdkError" to RuntimeType.smithyHttp(runtimeConfig).resolve("result::SdkError"),
-        "ErasedError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypeErasedBox"),
+        "ErasedError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypeErasedError"),
     )
 
     override fun section(section: OperationRuntimePluginSection) = when (section) {
@@ -89,9 +90,9 @@ class OperationRetryClassifiersFeature(
                     }
                 }
                 impl #{ClassifyRetry} for HttpStatusCodeClassifier {
-                    fn classify_retry(&self, error: &#{ErasedError}) -> Option<#{RetryReason}> {
-                        let error = error.downcast_ref::<#{SdkError}<#{OperationError}>>().expect("The error type is always known");
-                        self.0.classify_error(error)
+                    fn classify_retry(&self, _error: &#{OrchestratorError}<#{ErasedError}>) -> Option<#{RetryReason}> {
+                        // TODO(enableNewSmithyRuntime): classify the error with self.0
+                        None
                     }
                 }
                 """,
@@ -108,9 +109,9 @@ class OperationRetryClassifiersFeature(
                     }
                 }
                 impl #{ClassifyRetry} for AwsErrorCodeClassifier {
-                    fn classify_retry(&self, error: &#{ErasedError}) -> Option<#{RetryReason}> {
-                        let error = error.downcast_ref::<#{SdkError}<#{OperationError}>>().expect("The error type is always known");
-                        self.0.classify_error(error)
+                    fn classify_retry(&self, _error: &#{OrchestratorError}<#{ErasedError}>) -> Option<#{RetryReason}> {
+                        // TODO(enableNewSmithyRuntime): classify the error with self.0
+                        None
                     }
                 }
                 """,
@@ -127,9 +128,9 @@ class OperationRetryClassifiersFeature(
                     }
                 }
                 impl #{ClassifyRetry} for ModeledAsRetryableClassifier {
-                    fn classify_retry(&self, error: &#{ErasedError}) -> Option<#{RetryReason}> {
-                        let error = error.downcast_ref::<#{SdkError}<#{OperationError}>>().expect("The error type is always known");
-                        self.0.classify_error(error)
+                    fn classify_retry(&self, _error: &#{OrchestratorError}<#{ErasedError}>) -> Option<#{RetryReason}> {
+                        // TODO(enableNewSmithyRuntime): classify the error with self.0
+                        None
                     }
                 }
                 """,
@@ -146,9 +147,9 @@ class OperationRetryClassifiersFeature(
                     }
                 }
                 impl #{ClassifyRetry} for AmzRetryAfterHeaderClassifier {
-                    fn classify_retry(&self, error: &#{ErasedError}) -> Option<#{RetryReason}> {
-                        let error = error.downcast_ref::<#{SdkError}<#{OperationError}>>().expect("The error type is always known");
-                        self.0.classify_error(error)
+                    fn classify_retry(&self, _error: &#{OrchestratorError}<#{ErasedError}>) -> Option<#{RetryReason}> {
+                        // TODO(enableNewSmithyRuntime): classify the error with self.0
+                        None
                     }
                 }
                 """,
@@ -165,9 +166,9 @@ class OperationRetryClassifiersFeature(
                     }
                 }
                 impl #{ClassifyRetry} for SmithyErrorClassifier {
-                    fn classify_retry(&self, error: &#{ErasedError}) -> Option<#{RetryReason}> {
-                        let error = error.downcast_ref::<#{SdkError}<#{OperationError}>>().expect("The error type is always known");
-                        self.0.classify_error(error)
+                    fn classify_retry(&self, _error: &#{OrchestratorError}<#{ErasedError}>) -> Option<#{RetryReason}> {
+                        // TODO(enableNewSmithyRuntime): classify the error with self.0
+                        None
                     }
                 }
                 """,
