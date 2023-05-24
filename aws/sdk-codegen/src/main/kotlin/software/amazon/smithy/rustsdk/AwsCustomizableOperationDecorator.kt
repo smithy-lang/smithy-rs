@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -37,12 +38,8 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
     override fun section(section: CustomizableOperationSection): Writable =
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
-                if (section.operationShape == null) {
+                if (section.runtimeMode == SmithyRuntimeMode.Middleware) {
                     // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
-                    // This branch customizes CustomizableOperation in the middleware. section.operationShape being
-                    // null means that this customization is rendered in a place where we don't need to figure out
-                    // the module for an operation (which is the case for CustomizableOperation in the middleware
-                    // that is rendered in the customize module).
                     rustTemplate(
                         """
                         ##[doc(hidden)]
@@ -62,7 +59,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         *codegenScope,
                     )
                 } else {
-                    // The else branch is for rendering customization for the orchestrator.
+                    assert(section.runtimeMode == SmithyRuntimeMode.Orchestrator)
                     rustTemplate(
                         """
                         ##[doc(hidden)]

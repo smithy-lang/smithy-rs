@@ -5,13 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -19,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
  * Generates the code required to add the `.customize()` function to the
@@ -132,21 +133,18 @@ class CustomizableOperationGenerator(
             """,
             *codegenScope,
             "additional_methods" to writable {
-                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(null))
+                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(SmithyRuntimeMode.Middleware))
             },
         )
     }
 
-    fun renderForOrchestrator(writer: RustWriter, operation: OperationShape) {
-        val symbolProvider = codegenContext.symbolProvider
-        val model = codegenContext.model
-
-        val builderName = operation.fluentBuilderType(symbolProvider).name
-        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-        val errorType = symbolProvider.symbolForOperationError(operation)
-
+    fun renderForOrchestrator(crate: RustCrate) {
         val codegenScope = arrayOf(
             *preludeScope,
+            "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                .resolve("orchestrator::CustomizableOperation"),
+            "CustomizableSend" to ClientRustModule.Client.customize.toType()
+                .resolve("internal::CustomizableSend"),
             "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
             "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -155,130 +153,188 @@ class CustomizableOperationGenerator(
                 .resolve("client::interceptor::MapRequestInterceptor"),
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptor::MutateRequestInterceptor"),
-            "OperationError" to errorType,
-            "OperationOutput" to outputType,
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+            "SendResult" to ClientRustModule.Client.customize.toType()
+                .resolve("internal::SendResult"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::interceptors::SharedInterceptor"),
         )
 
-        writer.rustTemplate(
-            """
-            /// A wrapper type for [`$builderName`]($builderName) that allows for configuring a single
-            /// operation invocation.
-            pub struct CustomizableOperation {
-                pub(crate) fluent_builder: $builderName,
-                pub(crate) config_override: #{Option}<crate::config::Builder>,
-                pub(crate) interceptors: Vec<#{SharedInterceptor}>,
+        val customizeModule = ClientRustModule.Client.customize
+
+        crate.withModule(customizeModule) {
+            renderConvenienceAliases(customizeModule, this)
+
+            // TODO(enableNewSmithyRuntime): Render it directly under the customize module when CustomizableOperation
+            //  in the middleware has been removed.
+            withInlineModule(
+                RustModule.new(
+                    "orchestrator",
+                    Visibility.PUBLIC,
+                    true,
+                    customizeModule,
+                    documentationOverride = "Module for defining types for `CustomizableOperation` in the orchestrator",
+                ),
+                null,
+            ) {
+                rustTemplate(
+                    """
+                    /// `CustomizableOperation` allows for configuring a single operation invocation before it is sent.
+                    pub struct CustomizableOperation<S> {
+                        pub(crate) customizable_send: S,
+                        pub(crate) config_override: #{Option}<crate::config::Builder>,
+                        pub(crate) interceptors: Vec<#{SharedInterceptor}>,
+                    }
+
+                    impl<S> CustomizableOperation<S> {
+                        /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                        ///
+                        /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
+                        /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
+                        /// The order in which those user-specified operation interceptors are invoked should not be relied upon
+                        /// as it is an implementation detail.
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
+                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+
+                        /// Allows for customizing the operation's request.
+                        pub fn map_request<F, E>(mut self, f: F) -> Self
+                        where
+                            F: #{Fn}(&mut http::Request<#{SdkBody}>) -> #{Result}<(), E>
+                                + #{Send}
+                                + #{Sync}
+                                + 'static,
+                            E: ::std::error::Error + #{Send} + #{Sync} + 'static,
+                        {
+                            self.interceptors.push(
+                                #{SharedInterceptor}::new(
+                                    #{MapRequestInterceptor}::new(f),
+                                ),
+                            );
+                            self
+                        }
+
+                        /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
+                        pub fn mutate_request<F>(mut self, f: F) -> Self
+                        where
+                            F: #{Fn}(&mut http::Request<#{SdkBody}>) + #{Send} + #{Sync} + 'static,
+                        {
+                            self.interceptors.push(
+                                #{SharedInterceptor}::new(
+                                    #{MutateRequestInterceptor}::new(f),
+                                ),
+                            );
+                            self
+                        }
+
+                        /// Overrides config for a single operation invocation.
+                        ///
+                        /// `config_override` is applied to the operation configuration level.
+                        /// The fields in the builder that are `Some` override those applied to the service
+                        /// configuration level. For instance,
+                        ///
+                        /// Config A     overridden by    Config B          ==        Config C
+                        /// field_1: None,                field_1: Some(v2),          field_1: Some(v2),
+                        /// field_2: Some(v1),            field_2: Some(v2),          field_2: Some(v2),
+                        /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
+                        pub fn config_override(
+                            mut self,
+                            config_override: impl #{Into}<crate::config::Builder>,
+                        ) -> Self {
+                            self.config_override = Some(config_override.into());
+                            self
+                        }
+
+                        /// Sends the request and returns the response.
+                        pub async fn send<T, E, R>(
+                            self,
+                        ) -> #{SendResult}<T, E>
+                        where
+                            S: #{CustomizableSend}<T, E, R>,
+                            E: std::error::Error + #{Send} + #{Sync} + 'static,
+                            R: #{RuntimePlugin}
+                                + #{Send}
+                                + #{Sync}
+                                + 'static,
+                        {
+                            self.send_orchestrator_with_plugin(None).await
+                        }
+
+                        ##[doc(hidden)]
+                        // TODO(enableNewSmithyRuntime): Delete when unused
+                        /// Equivalent to [`Self::send`] but adds a final runtime plugin to shim missing behavior
+                        pub async fn send_orchestrator_with_plugin<T, E, R>(
+                            self,
+                            final_plugin: #{Option}<R>,
+                        ) -> #{SendResult}<T, E>
+                        where
+                            S: #{CustomizableSend}<T, E, R>,
+                            R: #{RuntimePlugin}
+                                + #{Send}
+                                + #{Sync}
+                                + 'static,
+                            E: std::error::Error + #{Send} + #{Sync} + 'static,
+                        {
+                            let mut config_override = if let Some(config_override) = self.config_override {
+                                config_override
+                            } else {
+                                crate::config::Builder::new()
+                            };
+
+                            self.interceptors.into_iter().for_each(|interceptor| {
+                                config_override.add_interceptor(interceptor);
+                            });
+
+                            (self.customizable_send)(config_override, final_plugin).await
+                        }
+
+                        #{additional_methods}
+                    }
+                    """,
+                    *codegenScope,
+                    "additional_methods" to writable {
+                        writeCustomizations(
+                            customizations,
+                            CustomizableOperationSection.CustomizableOperationImpl(SmithyRuntimeMode.Orchestrator),
+                        )
+                    },
+                )
             }
+        }
+    }
 
-            impl CustomizableOperation {
-                /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
-                ///
-                /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
-                /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
-                /// The order in which those user-specified operation interceptors are invoked should not be relied upon
-                /// as it is an implementation detail.
-                pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
-                    self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                    self
-                }
+    private fun renderConvenienceAliases(parentModule: RustModule, writer: RustWriter) {
+        writer.withInlineModule(RustModule.new("internal", Visibility.PUBCRATE, true, parentModule), null) {
+            rustTemplate(
+                """
+                pub type BoxFuture<T> = ::std::pin::Pin<#{Box}<dyn ::std::future::Future<Output = T> + #{Send}>>;
 
-                /// Allows for customizing the operation's request.
-                pub fn map_request<F, E>(mut self, f: F) -> Self
-                where
-                    F: #{Fn}(&mut http::Request<#{SdkBody}>) -> #{Result}<(), E>
-                        + #{Send}
-                        + #{Sync}
-                        + 'static,
-                    E: ::std::error::Error + #{Send} + #{Sync} + 'static,
-                {
-                    self.interceptors.push(
-                        #{SharedInterceptor}::new(
-                            #{MapRequestInterceptor}::new(f),
-                        ),
-                    );
-                    self
-                }
-
-                /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
-                pub fn mutate_request<F>(mut self, f: F) -> Self
-                where
-                    F: #{Fn}(&mut http::Request<#{SdkBody}>) + #{Send} + #{Sync} + 'static,
-                {
-                    self.interceptors.push(
-                        #{SharedInterceptor}::new(
-                            #{MutateRequestInterceptor}::new(f),
-                        ),
-                    );
-                    self
-                }
-
-                /// Overrides config for a single operation invocation.
-                ///
-                /// `config_override` is applied to the operation configuration level.
-                /// The fields in the builder that are `Some` override those applied to the service
-                /// configuration level. For instance,
-                ///
-                /// Config A     overridden by    Config B          ==        Config C
-                /// field_1: None,                field_1: Some(v2),          field_1: Some(v2),
-                /// field_2: Some(v1),            field_2: Some(v2),          field_2: Some(v2),
-                /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
-                pub fn config_override(
-                    mut self,
-                    config_override: impl #{Into}<crate::config::Builder>,
-                ) -> Self {
-                    self.config_override = Some(config_override.into());
-                    self
-                }
-
-                /// Sends the request and returns the response.
-                pub async fn send(
-                    self
-                ) -> #{Result}<
-                    #{OperationOutput},
+                pub type SendResult<T, E> = #{Result}<
+                    T,
                     #{SdkError}<
-                        #{OperationError},
-                        #{HttpResponse}
-                    >
-                > {
-                    self.send_orchestrator_with_plugin(#{Option}::<#{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>>::None)
-                        .await
-                }
+                        E,
+                        #{HttpResponse},
+                    >,
+                >;
 
-                ##[doc(hidden)]
-                // TODO(enableNewSmithyRuntime): Delete when unused
-                /// Equivalent to [`Self::send`] but adds a final runtime plugin to shim missing behavior
-                pub async fn send_orchestrator_with_plugin(
-                    self,
-                    final_plugin: #{Option}<impl #{RuntimePlugin} + #{Send} + #{Sync} + 'static>
-                ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                    let mut config_override = if let Some(config_override) = self.config_override {
-                        config_override
-                    } else {
-                        crate::config::Builder::new()
-                    };
+                pub trait CustomizableSend<T, E, R>:
+                    #{FnOnce}(crate::config::Builder, Option<R>) -> BoxFuture<SendResult<T, E>>
+                {}
 
-                    self.interceptors.into_iter().for_each(|interceptor| {
-                        config_override.add_interceptor(interceptor);
-                    });
-
-                    self.fluent_builder
-                        .config_override(config_override)
-                        .send_orchestrator_with_plugin(final_plugin)
-                        .await
-                }
-
-                #{additional_methods}
-            }
-            """,
-            *codegenScope,
-            "additional_methods" to writable {
-                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(operation))
-            },
-        )
+                impl<F, T, E, R> CustomizableSend<T, E, R> for F
+                where
+                    F: #{FnOnce}(crate::config::Builder, Option<R>) -> BoxFuture<SendResult<T, E>>
+                {}
+                """,
+                *preludeScope,
+                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                    .resolve("client::orchestrator::HttpResponse"),
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            )
+        }
     }
 }
 

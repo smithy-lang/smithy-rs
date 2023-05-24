@@ -88,13 +88,13 @@ class FluentClientGenerator(
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
-                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                    customizableOperationGenerator.renderForOrchestrator(this, operation)
-                }
             }
         }
 
         customizableOperationGenerator.render(crate)
+        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            customizableOperationGenerator.renderForOrchestrator(crate)
+        }
     }
 
     private fun renderFluentClient(crate: RustCrate) {
@@ -370,8 +370,10 @@ class FluentClientGenerator(
             if (smithyRuntimeMode.generateOrchestrator) {
                 val orchestratorScope = arrayOf(
                     *preludeScope,
-                    "CustomizableOperation" to symbolProvider.moduleForBuilder(operation).toType()
-                        .resolve("CustomizableOperation"),
+                    "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                        .resolve("orchestrator::CustomizableOperation"),
+                    "CustomizableSend" to ClientRustModule.Client.customize.toType()
+                        .resolve("internal::CustomizableSend"),
                     "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::orchestrator::HttpResponse"),
                     "OperationError" to errorType,
@@ -380,6 +382,8 @@ class FluentClientGenerator(
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::runtime_plugin::RuntimePlugins"),
+                    "SendResult" to ClientRustModule.Client.customize.toType()
+                        .resolve("internal::SendResult"),
                     "SdkError" to RuntimeType.sdkError(runtimeConfig),
                     "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
                     "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
@@ -420,8 +424,32 @@ class FluentClientGenerator(
 
                     ##[doc(hidden)]
                     // TODO(enableNewSmithyRuntime): Remove `async` once we switch to orchestrator
-                    pub async fn customize_orchestrator(self) -> #{CustomizableOperation} {
-                        #{CustomizableOperation} { fluent_builder: self, config_override: None, interceptors: vec![] }
+                    pub async fn customize_orchestrator<R>(
+                        self,
+                    ) -> #{CustomizableOperation}<
+                        Box<dyn #{CustomizableSend}<
+                            #{OperationOutput},
+                            #{OperationError},
+                            R,
+                        >,
+                    >>
+                    where
+                        R: #{RuntimePlugin}
+                            + #{Send}
+                            + #{Sync}
+                            + 'static,
+                    {
+                        #{CustomizableOperation} {
+                            customizable_send: #{Box}::new(move |config_override, final_plugin| {
+                                #{Box}::pin(async {
+                                    self.config_override(config_override)
+                                        .send_orchestrator_with_plugin(final_plugin)
+                                        .await
+                                })
+                            }),
+                            config_override: None,
+                            interceptors: vec![],
+                        }
                     }
                     """,
                     *orchestratorScope,
@@ -444,10 +472,24 @@ class FluentClientGenerator(
                         /// Consumes this builder, creating a customizable operation that can be modified before being
                         /// sent.
                         // TODO(enableNewSmithyRuntime): Remove `async` and `Result` once we switch to orchestrator
-                        pub async fn customize(self) -> #{Result}<
-                            #{CustomizableOperation},
-                            #{SdkError}<#{OperationError}>
-                        > {
+                        pub async fn customize<R>(
+                            self,
+                        ) -> #{Result}<
+                            #{CustomizableOperation}<
+                                #{Box}<dyn #{CustomizableSend}<
+                                    #{OperationOutput},
+                                    #{OperationError},
+                                    R,
+                                >>,
+                            >,
+                            #{SdkError}<#{OperationError}>,
+                        >
+                        where
+                            R: #{RuntimePlugin}
+                                + #{Send}
+                                + #{Sync}
+                                + 'static,
+                        {
                             #{Ok}(self.customize_orchestrator().await)
                         }
                         """,
