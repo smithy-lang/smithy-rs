@@ -25,12 +25,14 @@ bytes = "1"
 http = "0.2.8"
 http-body = "0.4.5"
 pin-project-lite = "0.2.7"
+fastrand = "1.9.0"
 pin-utils = "0.1.0"
 tokio = { version = "1.25", features = [] }
 tracing = "0.1.37"
 
 [dev-dependencies]
-aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 tokio = { version = "1.25", features = ["macros", "rt", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 tracing-test = "0.2.1"

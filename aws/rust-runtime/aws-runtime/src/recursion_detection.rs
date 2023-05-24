@@ -159,7 +159,7 @@ mod tests {
         RecursionDetectionInterceptor { env }
             .modify_before_signing(&mut ctx, &mut config)
             .expect("interceptor must succeed");
-        let mutated_request = context.request();
+        let mutated_request = context.request().expect("request exists");
         for name in mutated_request.headers().keys() {
             assert_eq!(
                 mutated_request.headers().get_all(name).iter().count(),

@@ -7,6 +7,9 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
+[features]
+test-util = []
+
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-http = { path = "../aws-http" }
@@ -22,6 +25,8 @@ tracing = "0.1"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"]  }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
 proptest = "1"
 serde = { version = "1", features = ["derive"]}

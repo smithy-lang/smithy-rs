@@ -106,6 +106,13 @@ pub struct TypeErasedBox {
     >,
 }
 
+#[cfg(feature = "test-util")]
+impl TypeErasedBox {
+    pub fn doesnt_matter() -> crate::client::interceptors::context::Input {
+        Self::new("doesn't matter")
+    }
+}
+
 impl fmt::Debug for TypeErasedBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("TypeErasedBox:")?;

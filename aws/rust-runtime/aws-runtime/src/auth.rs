@@ -313,7 +313,11 @@ pub mod sigv4 {
         ) -> Result<(), BoxError> {
             let operation_config =
                 Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-            let request_time = config_bag.request_time().unwrap_or_default().system_time();
+            let request_time = if let Some(req_time) = config_bag.request_time() {
+                req_time.system_time()
+            } else {
+                config_bag.time_source().now()
+            };
 
             let credentials = if let Some(creds) = identity.data::<Credentials>() {
                 creds

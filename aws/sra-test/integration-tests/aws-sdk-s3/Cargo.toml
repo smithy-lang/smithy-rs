@@ -7,11 +7,13 @@ publish = false
 
 [dependencies]
 aws-http = { path = "../../../rust-runtime/aws-http" }
-aws-runtime = { path = "../../../rust-runtime/aws-runtime" }
+aws-runtime = { path = "../../../rust-runtime/aws-runtime", features = ["test-util"] }
 aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3", features = ["test-util"] }
 aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client", features = ["test-util", "rustls"] }
+aws-smithy-types = { path = "../../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime" }
 aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api" }
+aws-smithy-async = { path = "../../../../rust-runtime/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-types = { path = "../../../rust-runtime/aws-types" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 http = "0.2.3"

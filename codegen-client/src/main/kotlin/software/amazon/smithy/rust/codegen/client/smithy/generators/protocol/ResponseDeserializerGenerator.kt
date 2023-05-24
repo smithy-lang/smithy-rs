@@ -99,6 +99,7 @@ class ResponseDeserializerGenerator(
                 if !response.status().is_success() && response.status().as_u16() != $successCode {
                     return None;
                 }
+                ##[allow(clippy::useless_conversion)]
                 Some(#{type_erase_result}(#{parse_streaming_response}(response)).into())
             }
             """,
@@ -118,6 +119,7 @@ class ResponseDeserializerGenerator(
             """
             // For streaming operations, we only hit this case if its an error
             let body = response.body().bytes().expect("body loaded");
+            ##[allow(clippy::useless_conversion)]
             #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body)).into()
             """,
             *codegenScope,
@@ -135,7 +137,7 @@ class ResponseDeserializerGenerator(
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
-             #{BeforeParseResponse}
+            #{BeforeParseResponse}
             let parse_result = if !success && status != $successCode {
                 #{parse_error}(status, headers, body)
             } else {

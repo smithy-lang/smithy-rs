@@ -15,8 +15,11 @@ use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::TimeSource;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_types::endpoint::Endpoint;
+use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
@@ -82,12 +85,6 @@ pub trait EndpointResolver: Send + Sync + fmt::Debug {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RequestTime(SystemTime);
 
-impl Default for RequestTime {
-    fn default() -> Self {
-        Self(SystemTime::now())
-    }
-}
-
 impl RequestTime {
     /// Create a new [`RequestTime`].
     pub fn new(time: SystemTime) -> Self {
@@ -139,6 +136,15 @@ pub trait ConfigBagAccessors {
 
     fn retry_strategy(&self) -> &dyn RetryStrategy;
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
+
+    fn retry_config(&self) -> Option<&RetryConfig>;
+    fn set_retry_config(&mut self, retry_config: RetryConfig);
+
+    fn timeout_config(&self) -> Option<&TimeoutConfig>;
+    fn set_timeout_config(&mut self, retry_config: TimeoutConfig);
+
+    fn time_source(&self) -> &dyn TimeSource;
+    fn set_time_source(&mut self, time_source: impl TimeSource + 'static);
 
     fn request_time(&self) -> Option<RequestTime>;
     fn set_request_time(&mut self, request_time: RequestTime);
@@ -260,6 +266,32 @@ impl ConfigBagAccessors for ConfigBag {
 
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
         self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
+    }
+
+    fn retry_config(&self) -> Option<&RetryConfig> {
+        self.get::<RetryConfig>()
+    }
+
+    fn set_retry_config(&mut self, retry_config: RetryConfig) {
+        self.put::<RetryConfig>(retry_config);
+    }
+
+    fn timeout_config(&self) -> Option<&TimeoutConfig> {
+        self.get::<TimeoutConfig>()
+    }
+
+    fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
+        self.put::<TimeoutConfig>(timeout_config);
+    }
+
+    fn time_source(&self) -> &dyn TimeSource {
+        &**self
+            .get::<Box<dyn TimeSource>>()
+            .expect("a time source must be set")
+    }
+
+    fn set_time_source(&mut self, time_source: impl TimeSource + 'static) {
+        self.put::<Box<dyn TimeSource>>(Box::new(time_source));
     }
 
     fn request_time(&self) -> Option<RequestTime> {

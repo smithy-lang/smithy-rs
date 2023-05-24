@@ -10,7 +10,9 @@ use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKin
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
-use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpResponse};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxError, ConfigBagAccessors, HttpResponse, OrchestratorError,
+};
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -125,15 +127,26 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     }
 
     loop {
+        if !ctx.rewind(cfg) {
+            break;
+        }
         let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
-        async {
+        let maybe_timeout = async {
             try_attempt(ctx, cfg, interceptors).await;
             finally_attempt(ctx, cfg, interceptors).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
         .maybe_timeout_with_config(attempt_timeout_config)
         .await
-        .expect("These are infallible; The retry strategy will decide whether to stop or not.");
+        .map_err(|err| {
+            // TODO ensure that this timeout error is correctly handled by the retry classifier.
+            OrchestratorError::other(
+                err.into_source()
+                    .expect("we know this is an `SdkError::TimeoutError`"),
+            )
+        });
+        halt_on_err!([ctx] => maybe_timeout);
+
         let retry_strategy = cfg.retry_strategy();
         let should_attempt = halt_on_err!([ctx] => retry_strategy.should_attempt_retry(ctx, cfg).map_err(Into::into));
         match should_attempt {
@@ -143,9 +156,10 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
             ShouldAttempt::No => {
                 break;
             }
-            ShouldAttempt::YesAfterDelay(_delay) => {
-                // TODO(enableNewSmithyRuntime): implement retries with explicit delay
-                todo!("implement retries with an explicit delay.")
+            ShouldAttempt::YesAfterDelay(delay) => {
+                let sleep_impl = halt_on_err!([ctx] => cfg.sleep_impl().ok_or(OrchestratorError::other("The retry strategy requested a delay before sending the next request, but no 'async sleep' implementation was set.")));
+                sleep_impl.sleep(delay).await;
+                continue;
             }
         }
     }
@@ -183,7 +197,9 @@ async fn try_attempt(
 
     ctx.enter_deserialization_phase();
     let output_or_error = async {
-        let response = ctx.response_mut();
+        let response = ctx
+            .response_mut()
+            .ok_or("No response was present in the InterceptorContext")?;
         let response_deserializer = cfg.response_deserializer();
         match response_deserializer.deserialize_streaming(response) {
             Some(output_or_error) => Ok(output_or_error),

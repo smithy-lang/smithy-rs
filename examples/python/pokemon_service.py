@@ -27,6 +27,7 @@ from pokemon_service_server_sdk.input import (
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     StreamPokemonRadioInput,
+    CapturePokemonInput,
 )
 from pokemon_service_server_sdk.logging import TracingHandler
 from pokemon_service_server_sdk.middleware import MiddlewareException, Request, Response
@@ -44,6 +45,7 @@ from pokemon_service_server_sdk.output import (
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     StreamPokemonRadioOutput,
+    CapturePokemonOutput,
 )
 from pokemon_service_server_sdk.tls import TlsConfig
 from pokemon_service_server_sdk.types import ByteStream

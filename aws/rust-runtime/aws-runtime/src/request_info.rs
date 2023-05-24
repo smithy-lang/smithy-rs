@@ -7,14 +7,14 @@ use aws_smithy_runtime::client::orchestrator::interceptors::{RequestAttempts, Se
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
-use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::DateTime;
 use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
@@ -63,15 +63,30 @@ impl RequestInfoInterceptor {
     }
 
     fn build_ttl_pair(&self, cfg: &ConfigBag) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
-        let timeout_config = cfg.get::<TimeoutConfig>()?;
+        let timeout_config = cfg.timeout_config()?;
         let socket_read = timeout_config.read_timeout()?;
         let estimated_skew: Duration = cfg.get::<ServiceClockSkew>().cloned()?.into();
-        let current_time = SystemTime::now();
+        let current_time = cfg.time_source().now();
         let ttl = current_time.checked_add(socket_read + estimated_skew)?;
         let timestamp = DateTime::from(ttl);
-        let formatted_timestamp = timestamp
+        let mut formatted_timestamp = timestamp
             .fmt(Format::DateTime)
             .expect("the resulting DateTime will always be valid");
+
+        if let Some(start_of_fractional_secs) = formatted_timestamp.rfind('.') {
+            formatted_timestamp.truncate(start_of_fractional_secs)
+        }
+
+        // If the Z was removed when we deleted fractional seconds, re-add it
+        if !formatted_timestamp.ends_with('Z') {
+            formatted_timestamp.push('Z');
+        }
+
+        // Remove dashes and colons
+        formatted_timestamp = formatted_timestamp
+            .chars()
+            .filter(|&c| c != '-' && c != ':')
+            .collect();
 
         Some((Cow::Borrowed("ttl"), Cow::Owned(formatted_timestamp)))
     }
@@ -84,13 +99,13 @@ impl Interceptor for RequestInfoInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut pairs = RequestPairs::new();
+        if let Some(pair) = self.build_ttl_pair(cfg) {
+            pairs = pairs.with_pair(pair);
+        }
         if let Some(pair) = self.build_attempts_pair(cfg) {
             pairs = pairs.with_pair(pair);
         }
         if let Some(pair) = self.build_max_attempts_pair(cfg) {
-            pairs = pairs.with_pair(pair);
-        }
-        if let Some(pair) = self.build_ttl_pair(cfg) {
             pairs = pairs.with_pair(pair);
         }
 
@@ -159,7 +174,7 @@ mod tests {
     use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use http::HeaderValue;
@@ -168,6 +183,7 @@ mod tests {
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .expect("request is set")
             .headers()
             .get(header_name)
             .unwrap()
@@ -177,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_request_pairs_for_initial_attempt() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 
