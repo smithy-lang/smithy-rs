@@ -179,9 +179,12 @@ impl AssumeRoleProviderBuilder {
         self
     }
 
+    #[deprecated(
+        note = "This should not be necessary as the default, no caching, is usually what you want."
+    )]
     /// Set the [`CredentialsCache`] for credentials retrieved from STS.
     ///
-    /// By default, an [`AssumeRoleProvider`] internally uses 'NoCredentialsCache` because the
+    /// By default, an [`AssumeRoleProvider`] internally uses `NoCredentialsCache` because the
     /// provider itself will be wrapped by `LazyCredentialsCache` when a service client is created.
     pub fn credentials_cache(mut self, cache: CredentialsCache) -> Self {
         self.credentials_cache = Some(cache);
