@@ -46,7 +46,7 @@ impl Interceptor for RequestAttemptsInterceptor {
         let mut request_attempts: RequestAttempts = cfg
             .get()
             .cloned()
-            .unwrap_or_else(|| RequestAttempts { attempts: 0 });
+            .unwrap_or(RequestAttempts { attempts: 0 });
         request_attempts.increment();
         cfg.put(request_attempts);
 

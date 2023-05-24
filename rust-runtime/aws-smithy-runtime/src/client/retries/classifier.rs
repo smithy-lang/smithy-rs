@@ -26,6 +26,15 @@ where
 {
     /// Create a new ModeledAsRetryableClassifier
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<E> Default for ModeledAsRetryableClassifier<E>
+where
+    E: StdError + ProvideErrorKind + Send + Sync + 'static,
+{
+    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }
@@ -71,6 +80,15 @@ where
 {
     /// Create a new SmithyErrorClassifier
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<E> Default for SmithyErrorClassifier<E>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }

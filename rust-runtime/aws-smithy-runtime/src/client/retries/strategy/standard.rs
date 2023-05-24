@@ -143,12 +143,12 @@ mod tests {
 
     #[test]
     fn no_retry_necessary_for_ok_result() {
-        let mut cfg = ConfigBag::base();
+        let cfg = ConfigBag::base();
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         let strategy = StandardRetryStrategy::default();
         ctx.set_output_or_error(Ok(TypeErasedBox::doesnt_matter()));
         let actual = strategy
-            .should_attempt_retry(&ctx, &mut cfg)
+            .should_attempt_retry(&ctx, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::No, actual);
     }
@@ -169,10 +169,10 @@ mod tests {
     // Test that error kinds produce the correct "retry after X seconds" output.
     // All error kinds are handled in the same way for the standard strategy.
     fn test_should_retry_error_kind(error_kind: ErrorKind) {
-        let (ctx, mut cfg) = set_up_cfg_and_context(error_kind, 3);
+        let (ctx, cfg) = set_up_cfg_and_context(error_kind, 3);
         let strategy = StandardRetryStrategy::default().with_base(|| 1.0);
         let actual = strategy
-            .should_attempt_retry(&ctx, &mut cfg)
+            .should_attempt_retry(&ctx, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::YesAfterDelay(Duration::from_secs(4)), actual);
     }
@@ -201,12 +201,12 @@ mod tests {
     fn dont_retry_when_out_of_attempts() {
         let current_attempts = 4;
         let max_attempts = current_attempts;
-        let (ctx, mut cfg) = set_up_cfg_and_context(ErrorKind::TransientError, current_attempts);
+        let (ctx, cfg) = set_up_cfg_and_context(ErrorKind::TransientError, current_attempts);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(max_attempts);
         let actual = strategy
-            .should_attempt_retry(&ctx, &mut cfg)
+            .should_attempt_retry(&ctx, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::No, actual);
     }
