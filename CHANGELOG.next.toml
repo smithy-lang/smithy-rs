@@ -652,3 +652,9 @@ message = "Public fields in structs are no longer marked as `#[doc(hidden)]`, an
 references = ["smithy-rs#2854"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The AppName property can now be set with `sdk_ua_app_id` in profile files. The old field, `sdk-ua-app-id`, is maintained for backwards compatibility."
+references = ["smithy-rs#2724"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
