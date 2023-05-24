@@ -41,3 +41,9 @@ message = "Fix error message when `credentials-sso` feature is not enabled on `a
 references = ["smithy-rs#2722", "aws-sdk-rust#703"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`SsoCredentialsProvider`, `AssumeRoleProvider`, and `WebIdentityTokenCredentialsProvider` now use `NoCredentialsCache` internally when fetching credentials using an STS client. This avoids double-caching when these providers are wrapped by `LazyCredentialsCache` when a service client is created."
+references = ["smithy-rs#2720"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
