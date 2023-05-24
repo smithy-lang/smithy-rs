@@ -408,8 +408,11 @@ class FluentClientGenerator(
                     ##[doc(hidden)]
                     pub async fn send_middleware(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                     #{send_bounds:W} {
-                        let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        #{Operation}::orchestrate_with_middleware(input, self.handle, #{None}).await
+                        let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
+                            .make_operation(&self.handle.conf)
+                            .await
+                            .map_err(#{SdkError}::construction_failure)?;
+                        self.handle.client.call(op).await
                     }
                     """,
                     *middlewareScope,
@@ -461,7 +464,7 @@ class FluentClientGenerator(
                     ##[doc(hidden)]
                     pub async fn send_orchestrator(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        #{Operation}::orchestrate_with_invoke(input, self.handle, self.config_override).await
+                        #{Operation}::orchestrate(input, self.handle, self.config_override).await
                     }
 
                     ##[doc(hidden)]

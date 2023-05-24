@@ -172,7 +172,7 @@ class PaginatorGenerator private constructor(
                             #{Err}(e) => { let _ = tx.send(#{Err}(e)).await; return; }
                         };
                         loop {
-                            let resp = #{operation}::orchestrate(input.clone(), handle.clone(), None).await;
+                            let resp = #{orchestrate};
                             // If the input member is None or it was an error
                             let done = match resp {
                                 #{Ok}(ref resp) => {
@@ -207,6 +207,32 @@ class PaginatorGenerator private constructor(
                     rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
                 } else {
                     rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                }
+            },
+            "orchestrate" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    rustTemplate(
+                        """
+                        {
+                            let op = match input.make_operation(&handle.conf)
+                                .await
+                                .map_err(#{SdkError}::construction_failure) {
+                                #{Ok}(op) => op,
+                                #{Err}(e) => {
+                                    let _ = tx.send(#{Err}(e)).await;
+                                    return;
+                                }
+                            };
+                            handle.client.call(op).await
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        "#{operation}::orchestrate(input.clone(), handle.clone(), None).await",
+                        *codegenScope,
+                    )
                 }
             },
         )

@@ -116,53 +116,6 @@ open class ClientProtocolGenerator(
                     .resolve("client::runtime_plugin::RuntimePlugins"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
-            if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                rustTemplate(
-                    """
-                    // This is only used by paginators, and not all services have those
-                    ##[allow(dead_code)]
-                    pub(crate) async fn orchestrate(
-                        input: #{Input},
-                        handle: #{Arc}<crate::client::Handle>,
-                        config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>> {
-                        Self::orchestrate_with_middleware(input, handle, config_override).await
-                    }
-                    """,
-                    *codegenScope,
-                )
-            } else {
-                rustTemplate(
-                    """
-                    // This is only used by paginators, and not all services have those
-                    ##[allow(dead_code)]
-                    pub(crate) async fn orchestrate(
-                        input: #{Input},
-                        handle: #{Arc}<crate::client::Handle>,
-                        config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                        Self::orchestrate_with_invoke(input, handle, config_override).await
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                rustTemplate(
-                    """
-                    ##[allow(unused_mut)]
-                    pub(crate) async fn orchestrate_with_middleware(
-                        mut input: #{Input},
-                        handle: #{Arc}<crate::client::Handle>,
-                        _config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>> {
-                        let op = input.make_operation(&handle.conf).await.map_err(#{SdkError}::construction_failure)?;
-                        handle.client.call(op).await
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 val setupRuntimePluginsFn =
                     RuntimeType.forInlineFun("setup_runtime_plugins", ClientRustModule.Operation) {
@@ -186,7 +139,7 @@ open class ClientProtocolGenerator(
                     }
                 rustTemplate(
                     """
-                    pub(crate) async fn orchestrate_with_invoke(
+                    pub(crate) async fn orchestrate(
                         input: #{Input},
                         handle: #{Arc}<crate::client::Handle>,
                         config_override: #{Option}<crate::config::Builder>,
