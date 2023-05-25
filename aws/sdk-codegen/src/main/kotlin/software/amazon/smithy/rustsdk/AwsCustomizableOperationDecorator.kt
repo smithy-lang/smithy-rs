@@ -28,8 +28,8 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::InterceptorContext"),
-        "StaticTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
-            .resolve("test_util::StaticTimeSource"),
+        "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
+            .resolve("time::SharedTimeSource"),
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::SharedInterceptor"),
         "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
@@ -50,7 +50,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(#{StaticTimeSource}::new(request_time));
+                            self.operation.properties_mut().insert(#{SharedTimeSource}::new(request_time));
                             self
                         }
 
@@ -72,7 +72,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
                             use #{ConfigBagAccessors};
                             let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.set_request_time(#{StaticTimeSource}::new(request_time));
+                                cfg.set_request_time(#{SharedTimeSource}::new(request_time));
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self

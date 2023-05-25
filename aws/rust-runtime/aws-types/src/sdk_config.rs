@@ -573,8 +573,8 @@ impl SdkConfig {
     }
 
     /// Configured time source
-    pub fn time_source(&self) -> Option<SharedTimeSource> {
-        self.time_source.clone()
+    pub fn time_source(&self) -> Option<&SharedTimeSource> {
+        self.time_source.as_ref()
     }
 
     /// Configured app name
