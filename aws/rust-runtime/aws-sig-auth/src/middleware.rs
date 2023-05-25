@@ -5,7 +5,6 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::SystemTime;
 
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
@@ -13,6 +12,7 @@ use aws_smithy_http::property_bag::PropertyBag;
 
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 
@@ -145,9 +145,10 @@ fn signing_config(
     let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
-            .get::<SystemTime>()
-            .copied()
-            .unwrap_or_else(SystemTime::now),
+            .get::<SharedTimeSource>()
+            .map(|t| t.now())
+            // TODO(enableNewSmithyRuntime): Remove this fallback
+            .unwrap_or_else(|| SharedTimeSource::default().now()),
         region,
         payload_override,
         service: signing_service,
@@ -199,6 +200,7 @@ mod test {
 
     use aws_credential_types::Credentials;
     use aws_endpoint::AwsAuthStage;
+    use aws_smithy_async::time::SharedTimeSource;
     use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
 
@@ -249,7 +251,9 @@ mod test {
         let req = operation::Request::new(req)
             .augment(|req, conf| {
                 conf.insert(region.clone());
-                conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                conf.insert(SharedTimeSource::new(
+                    UNIX_EPOCH + Duration::new(1611160427, 0),
+                ));
                 conf.insert(SigningService::from_static("kinesis"));
                 conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)

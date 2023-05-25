@@ -21,7 +21,7 @@ aws-sig-auth = { path = "../aws-sig-auth" }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
+aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
@@ -44,6 +44,7 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = [
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime" }
 tempfile = "3.2.0"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -23,11 +23,13 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
         "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
-        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::ConfigBagAccessors"),
+        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            .resolve("client::orchestrator::ConfigBagAccessors"),
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::InterceptorContext"),
-        "RequestTime" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::RequestTime"),
+        "StaticTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
+            .resolve("test_util::StaticTimeSource"),
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::SharedInterceptor"),
         "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
@@ -48,7 +50,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(request_time);
+                            self.operation.properties_mut().insert(#{StaticTimeSource}::new(request_time));
                             self
                         }
 
@@ -70,7 +72,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
                             use #{ConfigBagAccessors};
                             let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.set_request_time(#{RequestTime}::new(request_time));
+                                cfg.set_request_time(#{StaticTimeSource}::new(request_time));
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self

@@ -8,6 +8,7 @@ mod util;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
+use aws_smithy_async::test_util::StaticTimeSource;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
@@ -15,7 +16,6 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::client::orchestrator::RequestTime;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use http::header::USER_AGENT;
 use http::HeaderValue;
@@ -66,7 +66,7 @@ impl Interceptor for RequestTimeResetInterceptor {
         _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
-        cfg.set_request_time(RequestTime::new(UNIX_EPOCH));
+        cfg.set_request_time(StaticTimeSource::new(UNIX_EPOCH));
 
         Ok(())
     }
@@ -81,7 +81,7 @@ impl Interceptor for RequestTimeAdvanceInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
         let request_time = cfg.request_time().unwrap();
-        let request_time = RequestTime::new(request_time.system_time() + self.0);
+        let request_time = StaticTimeSource::new(request_time.now() + self.0);
         cfg.set_request_time(request_time);
 
         Ok(())

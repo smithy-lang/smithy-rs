@@ -13,15 +13,14 @@ use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_runtime::client::retries::strategy::FixedDelayRetryStrategy;
 use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug)]
 struct FixupPlugin {
     client: Client,
-    timestamp: SystemTime,
 }
 
 // # One SDK operation invocation.
@@ -44,7 +43,6 @@ async fn three_retries_and_then_success() {
                 .bucket("test-bucket");
 
             cfg.put(params_builder);
-            cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
             cfg.put(AwsUserAgent::for_tests());
             cfg.put(InvocationId::for_tests());
             cfg.set_retry_strategy(FixedDelayRetryStrategy::one_second_delay());
@@ -58,11 +56,11 @@ async fn three_retries_and_then_success() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .http_connector(DynConnector::new(conn.clone()))
+        .time_source(UNIX_EPOCH + Duration::from_secs(1624036048))
         .build();
     let client = Client::from_conf(config);
     let fixup = FixupPlugin {
         client: client.clone(),
-        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
     };
 
     let resp = dbg!(
