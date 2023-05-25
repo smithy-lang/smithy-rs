@@ -63,7 +63,9 @@ pub fn default_connector(
     _settings: &ConnectorSettings,
     _sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> Option<DynConnector> {
-    Some(DynConnector::new(crate::wasi_adapter::Adapter::default()))
+    Some(DynConnector::new(
+        aws_smithy_wasm::wasi_adapter::Adapter::default(),
+    ))
 }
 
 /// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
