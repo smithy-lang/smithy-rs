@@ -141,7 +141,6 @@ class ServiceSpecificDecorator(
         delegateTo.serviceRuntimePluginCustomizations(codegenContext, baseCustomizations)
     }
 
-
     override fun protocolTestGenerator(
         codegenContext: ClientCodegenContext,
         baseGenerator: ProtocolTestGenerator,
