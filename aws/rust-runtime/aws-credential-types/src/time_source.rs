@@ -17,7 +17,6 @@ impl TimeSourceTrait for TimeSource {
 /// Time source abstraction
 ///
 /// Simple abstraction representing time either real-time or manually-specified for testing
-/// ```
 #[derive(Debug, Clone)]
 // TODO(breakingChangeWindow): Delete this struct
 pub struct TimeSource(Inner);
@@ -51,6 +50,8 @@ impl Default for TimeSource {
 }
 
 /// Time Source that can be manually moved for tests
+/// > This has been superseded by [`aws_smithy_async::time::TimeSource`] and will be removed in a
+/// > future release.
 ///
 /// # Examples
 ///
@@ -110,8 +111,6 @@ impl TestingTimeSource {
     }
 }
 
-// In the future, if needed we can add a time source trait, however, the testing time source
-// should cover most test use cases.
 #[derive(Debug, Clone)]
 enum Inner {
     Default,

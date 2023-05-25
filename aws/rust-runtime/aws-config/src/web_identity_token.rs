@@ -205,6 +205,7 @@ impl Builder {
             source,
             fs: conf.fs(),
             sts_client: StsClient::from_conf(conf.sts_client_config().build()),
+            time_source: conf.time_source(),
         }
     }
 }

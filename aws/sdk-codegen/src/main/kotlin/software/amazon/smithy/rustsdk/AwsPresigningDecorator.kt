@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Mak
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -208,12 +207,14 @@ class AwsInputPresignedMethod(
                 *codegenScope,
             )
             rustBlock("") {
-                rust(
+                rustTemplate(
                     """
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
-                    props.insert(presigning_config.start_time());
+                    props.insert(#{SharedTimeSource}::new(presigning_config.start_time()));
                     """,
+                    "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
+                        .resolve("time::SharedTimeSource"),
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(

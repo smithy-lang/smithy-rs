@@ -47,11 +47,8 @@ impl AsRef<str> for Signature {
 /// - [`Credentials`](Credentials): Credentials to sign with
 /// - [`OperationSigningConfig`](OperationSigningConfig): Operation specific signing configuration, e.g.
 ///   changes to URL encoding behavior, or headers that must be omitted.
+/// - [`SharedTimeSource`]: The time source to use when signing the request.
 /// If any of these fields are missing, the middleware will return an error.
-///
-/// The following fields MAY be present in the property bag:
-/// - [`SystemTime`](SystemTime): The timestamp to use when signing the request. If this field is not present
-///   [`SystemTime::now`](SystemTime::now) will be used.
 #[derive(Clone, Debug)]
 pub struct SigV4SigningStage {
     signer: SigV4Signer,
