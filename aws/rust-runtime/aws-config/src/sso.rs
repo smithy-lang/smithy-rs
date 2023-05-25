@@ -14,6 +14,7 @@ use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
 
+use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_sdk_sso::types::RoleCredentials;
@@ -214,6 +215,7 @@ async fn load_sso_credentials(
     let config = sso_config
         .clone()
         .region(sso_provider_config.region.clone())
+        .credentials_cache(CredentialsCache::no_caching())
         .build();
     // TODO(enableNewSmithyRuntime): Use `customize().config_override()` to set the region instead of creating a new client once middleware is removed
     let client = SsoClient::from_conf(config);
