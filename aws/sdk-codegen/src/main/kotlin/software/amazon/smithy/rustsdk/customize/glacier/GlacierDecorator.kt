@@ -169,13 +169,11 @@ private fun inlineModule(runtimeConfig: RuntimeConfig) = RuntimeType.forInlineDe
 )
 
 private fun glacierInterceptorDependencies(runtimeConfig: RuntimeConfig) = listOf(
-    CargoDependency.Ring,
-    CargoDependency.TokioStream,
-    CargoDependency.BytesUtils,
-    CargoDependency.Bytes,
-    CargoDependency.Tokio,
-    CargoDependency.Hex,
-    CargoDependency.TempFile,
-    CargoDependency.smithyRuntimeApi(runtimeConfig),
     AwsCargoDependency.awsRuntime(runtimeConfig),
+    AwsCargoDependency.awsSigv4(runtimeConfig),
+    CargoDependency.Bytes,
+    CargoDependency.Hex,
+    CargoDependency.Ring,
+    CargoDependency.smithyHttp(runtimeConfig),
+    CargoDependency.smithyRuntimeApi(runtimeConfig),
 )

@@ -7,7 +7,7 @@
 #![allow(dead_code)]
 
 use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
-use aws_sig_auth::signer::SignableBody;
+use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream;
 use aws_smithy_runtime_api::client::interceptors::{
