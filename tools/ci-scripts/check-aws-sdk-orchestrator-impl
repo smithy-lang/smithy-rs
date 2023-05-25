@@ -23,7 +23,6 @@ services_that_fail_compile=(\
 # TODO(enableNewSmithyRuntime): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
     "dynamodb"\
-    "glacier"\
     "route53"\
     "sts"\
 )
@@ -32,6 +31,7 @@ services_that_pass_tests=(\
     "config"\
     "ec2"\
     "ecs"\
+    "glacier"\
     "iam"\
     "kms"\
     "lambda"\

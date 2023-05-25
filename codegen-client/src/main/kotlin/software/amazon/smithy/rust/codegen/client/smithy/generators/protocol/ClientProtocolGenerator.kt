@@ -74,7 +74,12 @@ open class ClientProtocolGenerator(
             }
         }
 
-        renderOperationStruct(operationWriter, operationShape, operationCustomizations, codegenDecorator)
+        renderOperationStruct(
+            operationWriter,
+            operationShape,
+            operationCustomizations,
+            codegenDecorator,
+        )
     }
 
     private fun renderOperationStruct(
@@ -183,7 +188,7 @@ open class ClientProtocolGenerator(
             ResponseDeserializerGenerator(codegenContext, protocol)
                 .render(operationWriter, operationShape, operationCustomizations)
             RequestSerializerGenerator(codegenContext, protocol, bodyGenerator)
-                .render(operationWriter, operationShape, operationCustomizations)
+                .render(operationWriter, operationShape)
 
             EndpointParamsInterceptorGenerator(codegenContext)
                 .render(operationWriter, operationShape)
