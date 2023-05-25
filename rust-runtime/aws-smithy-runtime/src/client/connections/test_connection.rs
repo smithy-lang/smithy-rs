@@ -241,7 +241,7 @@ impl Connection for TestConnection {
             simulated_latency = Duration::from_secs(0);
             Err(ConnectorError::other("No more data".into(), None).into())
         };
-        // TODO does it break things if we're always sleeping (even if only for 0s)?
+
         let sleep = self.sleep_impl.sleep(simulated_latency);
 
         Box::pin(async move {
