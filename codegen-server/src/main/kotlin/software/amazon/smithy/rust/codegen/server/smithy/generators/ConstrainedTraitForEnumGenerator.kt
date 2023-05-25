@@ -11,6 +11,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -30,7 +31,7 @@ class ConstrainedTraitForEnumGenerator(
 
         val symbol = symbolProvider.toSymbol(shape)
         val name = symbol.name
-        val unconstrainedType = "String"
+        val unconstrainedType = RuntimeType.String.fullyQualifiedName()
 
         writer.rustTemplate(
             """
@@ -38,12 +39,13 @@ class ConstrainedTraitForEnumGenerator(
                 type Unconstrained = $unconstrainedType;
             }
 
-            impl From<$unconstrainedType> for #{MaybeConstrained} {
+            impl #{From}<$unconstrainedType> for #{MaybeConstrained} {
                 fn from(value: $unconstrainedType) -> Self {
                     Self::Unconstrained(value)
                 }
             }
             """,
+            *preludeScope,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
         )

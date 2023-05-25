@@ -12,7 +12,7 @@ Generate an SDK:
 `./gradlew :aws:sdk:assemble`
 
 Generate, compile, and test an SDK:
-`./gradlew :aws:sdk:build`
+`./gradlew :aws:sdk:check`
 
 Run an SDK example:
 `./gradlew :aws:sdk:runExample --example dynamo-helloworld`
