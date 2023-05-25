@@ -138,14 +138,9 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
         }
         .maybe_timeout_with_config(attempt_timeout_config)
         .await
-        .map_err(|err| {
-            // TODO ensure that this timeout error is correctly handled by the retry classifier.
-            OrchestratorError::other(
-                err.into_source()
-                    .expect("we know this is an `SdkError::TimeoutError`"),
-            )
-        });
-        halt_on_err!([ctx] => maybe_timeout);
+        .map_err(OrchestratorError::other);
+        // We continue when encountering a timeout error. The retry classifier will decide what to do with it.
+        continue_on_err!([ctx] => maybe_timeout);
 
         let retry_strategy = cfg.retry_strategy();
         let should_attempt = halt_on_err!([ctx] => retry_strategy.should_attempt_retry(ctx, cfg).map_err(Into::into));

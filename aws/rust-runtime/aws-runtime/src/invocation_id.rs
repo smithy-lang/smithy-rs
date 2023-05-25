@@ -155,12 +155,11 @@ mod tests {
     use http::HeaderValue;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a HeaderValue {
-        context
-            .request()
-            .expect("request is set")
-            .headers()
+        let req = context.request().expect("request is set");
+
+        req.headers()
             .get(header_name)
-            .unwrap()
+            .expect(&format!("header {} is present", header_name))
     }
 
     #[test]
@@ -179,10 +178,10 @@ mod tests {
         let interceptor = InvocationIdInterceptor::new();
         let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut ctx, &mut config)
+            .modify_before_retry_loop(&mut ctx, &mut config)
             .unwrap();
         interceptor
-            .modify_before_retry_loop(&mut ctx, &mut config)
+            .modify_before_transmit(&mut ctx, &mut config)
             .unwrap();
 
         let header = expect_header(&context, "amz-sdk-invocation-id");
