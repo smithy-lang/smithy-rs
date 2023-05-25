@@ -20,6 +20,7 @@ use aws_credential_types::cache::ExpiringCache;
 use aws_credential_types::time_source::TimeSource;
 use aws_http::user_agent::UserAgentStage;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::retry;
 use aws_smithy_http::body::SdkBody;
@@ -65,7 +66,7 @@ pub(super) struct TokenMiddleware {
     client: Arc<aws_smithy_client::Client<DynConnector, MapRequestLayer<UserAgentStage>>>,
     token_parser: GetTokenResponseHandler,
     token: ExpiringCache<Token, ImdsError>,
-    time_source: TimeSource,
+    time_source: SharedTimeSource,
     endpoint: Uri,
     token_ttl: Duration,
 }
@@ -79,7 +80,7 @@ impl Debug for TokenMiddleware {
 impl TokenMiddleware {
     pub(super) fn new(
         connector: DynConnector,
-        time_source: TimeSource,
+        time_source: SharedTimeSource,
         endpoint: Uri,
         token_ttl: Duration,
         retry_config: retry::Config,
@@ -170,7 +171,7 @@ impl AsyncMapRequest for TokenMiddleware {
 
 #[derive(Clone)]
 struct GetTokenResponseHandler {
-    time: TimeSource,
+    time: SharedTimeSource,
 }
 
 impl ParseStrictResponse for GetTokenResponseHandler {

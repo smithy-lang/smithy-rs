@@ -571,7 +571,9 @@ mod loader {
                 .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
 
             let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
-                let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+                let mut builder = CredentialsCache::lazy_builder().time_source(
+                    aws_credential_types::time_source::TimeSource::shared(conf.time_source()),
+                );
                 builder.set_sleep(conf.sleep());
                 builder.into_credentials_cache()
             });

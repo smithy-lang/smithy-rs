@@ -97,7 +97,12 @@ impl ProviderChain {
                         web_identity_token_file: web_identity_token_file.into(),
                         role_arn: role_arn.to_string(),
                         session_name: session_name.map(|sess| sess.to_string()).unwrap_or_else(
-                            || sts::util::default_session_name("web-identity-token-profile"),
+                            || {
+                                sts::util::default_session_name(
+                                    "web-identity-token-profile",
+                                    provider_config.time_source(),
+                                )
+                            },
                         ),
                     })
                     .configure(provider_config)
