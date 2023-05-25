@@ -307,7 +307,7 @@ class CustomizableOperationGenerator(
                     #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
                 {}
 
-                impl<F, T, E, R> CustomizableSend<T, E> for F
+                impl<F, T, E> CustomizableSend<T, E> for F
                 where
                     F: #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
                 {}
