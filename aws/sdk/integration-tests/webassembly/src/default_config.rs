@@ -3,19 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_credential_types::Credentials;
 use aws_smithy_types::{retry::RetryConfig, timeout::TimeoutConfig};
 use aws_types::region::Region;
-use std::{env, future::Future};
+use std::future::Future;
 
 pub(crate) fn get_default_config() -> impl Future<Output = aws_config::SdkConfig> {
     aws_config::from_env()
         .region(Region::from_static("us-west-2"))
-        .credentials_provider(Credentials::from_keys(
-            env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID"),
-            env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY"),
-            env::var("AWS_SESSION_TOKEN").ok(),
-        ))
         .timeout_config(TimeoutConfig::disabled())
         .retry_config(RetryConfig::disabled())
         .load()
