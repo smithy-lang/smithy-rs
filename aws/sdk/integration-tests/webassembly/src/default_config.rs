@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_types::region::Region;
 use std::future::Future;
 
 pub(crate) fn get_default_config() -> impl Future<Output = aws_config::SdkConfig> {
-    aws_config::from_env()
-        .region(Region::from_static("us-west-2"))
-        .load()
+    aws_config::from_env().region("us-west-2").load()
 }
 
 #[tokio::test]

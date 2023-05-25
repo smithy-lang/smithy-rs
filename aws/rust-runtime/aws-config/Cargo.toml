@@ -16,6 +16,8 @@ allow-compilation = [] # our tests use `cargo test --all-features` and native-tl
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
 
+wasm = ["dep:aws-smithy-wasm"]
+
 default = ["client-hyper", "rustls", "rt-tokio", "credentials-sso"]
 
 [dependencies]
@@ -47,8 +49,8 @@ ring = { version = "0.16", optional = true }
 hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
-[target.'cfg(target_family = "wasm")'.dependencies]
-aws-smithy-wasm = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-wasm" }
+# used for WebAssembly target family
+aws-smithy-wasm = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-wasm", optional = true }
 
 [dev-dependencies]
 futures-util = { version = "0.3.16", default-features = false }

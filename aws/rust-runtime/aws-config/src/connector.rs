@@ -55,6 +55,7 @@ pub fn default_connector(
 
 /// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
 #[cfg(all(
+    feature = "wasm",
     target_family = "wasm",
     target_os = "wasi",
     not(any(feature = "rustls", feature = "native-tls"))
@@ -70,7 +71,7 @@ pub fn default_connector(
 
 /// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
 #[cfg(not(any(
-    all(target_family = "wasm", target_os = "wasi"),
+    all(feature = "wasm", target_family = "wasm", target_os = "wasi"),
     feature = "rustls",
     feature = "native-tls"
 )))]
