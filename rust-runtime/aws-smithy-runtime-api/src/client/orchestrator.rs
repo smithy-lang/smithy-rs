@@ -107,6 +107,9 @@ impl RequestTime {
 /// Immediately after serialization (before the `read_after_serialization` interceptor hook),
 /// if it was set to `Requested` in the config bag, it will be replaced back into the config bag as
 /// `Loaded` with the request body contents for use in later interceptors.
+///
+/// This all happens before the attempt loop, so the loaded request body will remain available
+/// for interceptors that run in any subsequent retry attempts.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum LoadedRequestBody {
