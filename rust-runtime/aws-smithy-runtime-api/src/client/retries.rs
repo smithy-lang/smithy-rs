@@ -37,7 +37,7 @@ pub enum RetryReason {
     Explicit(Duration),
 }
 
-/// Classifies what kind of retry is needed for a given [`Error`].
+/// Classifies what kind of retry is needed for a given an [`InterceptorContext`].
 pub trait ClassifyRetry: Send + Sync + Debug {
     /// Run this classifier against an error to determine if it should be retried. Returns
     /// `Some(RetryKind)` if the error should be retried; Otherwise returns `None`.
