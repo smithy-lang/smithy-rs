@@ -38,7 +38,7 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
     override fun payloadMetadata(operationShape: OperationShape) =
         ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
 
-    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generatePayload(writer: RustWriter, shapeName: String, operationShape: OperationShape) {
         writer.writeWithNoFormatting(body)
     }
 }

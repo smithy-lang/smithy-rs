@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
-internal class SigV4SigningCustomizationTest {
+internal class SigV4SigningDecoratorTest {
     @Test
     fun `generates a valid config`() {
         val project = stubConfigProject(
