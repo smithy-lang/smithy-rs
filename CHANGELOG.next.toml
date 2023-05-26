@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Remove native-tls and add a migration guide."
+author = "82marbag"
+references = ["smithy-rs#2675"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "Remove native-tls and add a migration guide."
+author = "82marbag"
+references = ["smithy-rs#2675"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
 message = "Fix error message when `credentials-sso` feature is not enabled on `aws-config`. NOTE: if you use `no-default-features`, you will need to manually able `credentials-sso` after 0.55.*"
 references = ["smithy-rs#2722", "aws-sdk-rust#703"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
