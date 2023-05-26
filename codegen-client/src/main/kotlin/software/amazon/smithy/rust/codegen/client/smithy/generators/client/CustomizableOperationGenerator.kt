@@ -310,6 +310,8 @@ class CustomizableOperationGenerator(
                 where
                     F: #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
                 {}
+
+                pub type BoxCustomizableSend<T, E> = #{Box}<dyn CustomizableSend<T, E>>;
                 """,
                 *preludeScope,
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)

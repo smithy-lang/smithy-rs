@@ -450,10 +450,10 @@ class FluentClientGenerator(
             if (smithyRuntimeMode.generateOrchestrator) {
                 val orchestratorScope = arrayOf(
                     *preludeScope,
+                    "BoxCustomizableSend" to ClientRustModule.Client.customize.toType()
+                        .resolve("internal::BoxCustomizableSend"),
                     "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                         .resolve("orchestrator::CustomizableOperation"),
-                    "CustomizableSend" to ClientRustModule.Client.customize.toType()
-                        .resolve("internal::CustomizableSend"),
                     "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::orchestrator::HttpResponse"),
                     "Operation" to operationSymbol,
@@ -476,11 +476,11 @@ class FluentClientGenerator(
                     pub async fn customize_orchestrator(
                         self,
                     ) -> #{CustomizableOperation}<
-                        Box<dyn #{CustomizableSend}<
+                        #{BoxCustomizableSend}<
                             #{OperationOutput},
                             #{OperationError},
                         >,
-                    >>
+                    >
                     {
                         #{CustomizableOperation} {
                             customizable_send: #{Box}::new(move |config_override| {
@@ -519,10 +519,10 @@ class FluentClientGenerator(
                             self,
                         ) -> #{Result}<
                             #{CustomizableOperation}<
-                                #{Box}<dyn #{CustomizableSend}<
+                                #{BoxCustomizableSend}<
                                     #{OperationOutput},
                                     #{OperationError},
-                                >>,
+                                >,
                             >,
                             #{SdkError}<#{OperationError}>,
                         >
