@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -38,28 +37,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
     override fun section(section: CustomizableOperationSection): Writable =
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
-                if (section.runtimeMode == SmithyRuntimeMode.Middleware) {
-                    // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
-                    rustTemplate(
-                        """
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(request_time);
-                            self
-                        }
-
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn user_agent_for_tests(mut self) -> Self {
-                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    assert(section.runtimeMode == SmithyRuntimeMode.Orchestrator)
+                if (section.isRuntimeModeOrchestrator) {
                     rustTemplate(
                         """
                         ##[doc(hidden)]
@@ -89,6 +67,26 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                                 );
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
+                    rustTemplate(
+                        """
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
+                            self.operation.properties_mut().insert(request_time);
+                            self
+                        }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn user_agent_for_tests(mut self) -> Self {
+                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
                             self
                         }
                         """,

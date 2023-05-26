@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
@@ -136,7 +135,7 @@ class CustomizableOperationGenerator(
             """,
             *codegenScope,
             "additional_methods" to writable {
-                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(SmithyRuntimeMode.Middleware))
+                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(false))
             },
         )
     }
@@ -281,7 +280,7 @@ class CustomizableOperationGenerator(
                     "additional_methods" to writable {
                         writeCustomizations(
                             customizations,
-                            CustomizableOperationSection.CustomizableOperationImpl(SmithyRuntimeMode.Orchestrator),
+                            CustomizableOperationSection.CustomizableOperationImpl(true),
                         )
                     },
                 )
