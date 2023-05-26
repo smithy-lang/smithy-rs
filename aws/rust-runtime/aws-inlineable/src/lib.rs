@@ -34,6 +34,9 @@ pub mod s3_request_id;
 /// Glacier-specific checksumming behavior
 pub mod glacier_checksums;
 
+/// Glacier-specific behavior
+pub mod glacier_interceptors;
+
 /// Default middleware stack for AWS services
 pub mod middleware;
 
