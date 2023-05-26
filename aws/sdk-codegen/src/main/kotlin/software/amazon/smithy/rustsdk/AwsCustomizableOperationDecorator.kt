@@ -69,6 +69,16 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self
                         }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn remove_invocation_id_for_tests(mut self) -> Self {
+                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
+                                context.request_mut().headers_mut().remove("amz-sdk-invocation-id");
+                            });
+                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
                         """,
                         *codegenScope,
                     )
@@ -87,6 +97,12 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn user_agent_for_tests(mut self) -> Self {
                             self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
+                            self
+                        }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn remove_invocation_id_for_tests(self) -> Self {
                             self
                         }
                         """,
