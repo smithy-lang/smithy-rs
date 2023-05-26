@@ -186,13 +186,13 @@ class CustomizableOperationGenerator(
                 rustTemplate(
                     """
                     /// `CustomizableOperation` allows for configuring a single operation invocation before it is sent.
-                    pub struct CustomizableOperation<S> {
-                        pub(crate) customizable_send: S,
+                    pub struct CustomizableOperation<T, E> {
+                        pub(crate) customizable_send: #{Box}<dyn #{CustomizableSend}<T, E>>,
                         pub(crate) config_override: #{Option}<crate::config::Builder>,
                         pub(crate) interceptors: Vec<#{SharedInterceptor}>,
                     }
 
-                    impl<S> CustomizableOperation<S> {
+                    impl<T, E> CustomizableOperation<T, E> {
                         /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
@@ -205,13 +205,13 @@ class CustomizableOperationGenerator(
                         }
 
                         /// Allows for customizing the operation's request.
-                        pub fn map_request<F, E>(mut self, f: F) -> Self
+                        pub fn map_request<F, MapE>(mut self, f: F) -> Self
                         where
-                            F: #{Fn}(#{HttpRequest}) -> #{Result}<#{HttpRequest}, E>
+                            F: #{Fn}(#{HttpRequest}) -> #{Result}<#{HttpRequest}, MapE>
                                 + #{Send}
                                 + #{Sync}
                                 + 'static,
-                            E: ::std::error::Error + #{Send} + #{Sync} + 'static,
+                            MapE: ::std::error::Error + #{Send} + #{Sync} + 'static,
                         {
                             self.interceptors.push(
                                 #{SharedInterceptor}::new(
@@ -253,11 +253,10 @@ class CustomizableOperationGenerator(
                         }
 
                         /// Sends the request and returns the response.
-                        pub async fn send<T, E>(
+                        pub async fn send(
                             self,
                         ) -> #{SendResult}<T, E>
                         where
-                            S: #{CustomizableSend}<T, E>,
                             E: std::error::Error + #{Send} + #{Sync} + 'static,
                         {
                             let mut config_override = if let Some(config_override) = self.config_override {
@@ -310,8 +309,6 @@ class CustomizableOperationGenerator(
                 where
                     F: #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
                 {}
-
-                pub type BoxCustomizableSend<T, E> = #{Box}<dyn CustomizableSend<T, E>>;
                 """,
                 *preludeScope,
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)

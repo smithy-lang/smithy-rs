@@ -450,8 +450,6 @@ class FluentClientGenerator(
             if (smithyRuntimeMode.generateOrchestrator) {
                 val orchestratorScope = arrayOf(
                     *preludeScope,
-                    "BoxCustomizableSend" to ClientRustModule.Client.customize.toType()
-                        .resolve("internal::BoxCustomizableSend"),
                     "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                         .resolve("orchestrator::CustomizableOperation"),
                     "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -476,10 +474,8 @@ class FluentClientGenerator(
                     pub async fn customize_orchestrator(
                         self,
                     ) -> #{CustomizableOperation}<
-                        #{BoxCustomizableSend}<
-                            #{OperationOutput},
-                            #{OperationError},
-                        >,
+                        #{OperationOutput},
+                        #{OperationError},
                     >
                     {
                         #{CustomizableOperation} {
@@ -519,10 +515,8 @@ class FluentClientGenerator(
                             self,
                         ) -> #{Result}<
                             #{CustomizableOperation}<
-                                #{BoxCustomizableSend}<
-                                    #{OperationOutput},
-                                    #{OperationError},
-                                >,
+                                #{OperationOutput},
+                                #{OperationError},
                             >,
                             #{SdkError}<#{OperationError}>,
                         >
