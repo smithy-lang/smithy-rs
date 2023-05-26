@@ -53,7 +53,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
         rustCrate.withModule(ClientRustModule.Client.customize) {
-            renderCustomizableOperationSend(codegenContext.runtimeConfig, generics, this)
+            renderCustomizableOperationSend(codegenContext, generics, this)
         }
 
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
