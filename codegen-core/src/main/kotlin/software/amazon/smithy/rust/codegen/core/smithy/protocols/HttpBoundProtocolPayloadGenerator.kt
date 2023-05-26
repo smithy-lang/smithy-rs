@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamErrorMarshallerGenerator
@@ -46,6 +47,7 @@ data class EventStreamBodyParams(
     val memberName: String,
     val marshallerConstructorFn: RuntimeType,
     val errorMarshallerConstructorFn: RuntimeType,
+    val additionalPayloadContext: AdditionalPayloadContext,
 )
 
 class HttpBoundProtocolPayloadGenerator(
@@ -69,7 +71,10 @@ class HttpBoundProtocolPayloadGenerator(
     )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
+    override fun payloadMetadata(
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
             HttpMessageType.RESPONSE -> operationShape.outputShape(model) to
                 httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
@@ -98,32 +103,43 @@ class HttpBoundProtocolPayloadGenerator(
         }
     }
 
-    override fun generatePayload(writer: RustWriter, shapeName: String, operationShape: OperationShape) {
+    override fun generatePayload(
+        writer: RustWriter,
+        shapeName: String,
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         when (httpMessageType) {
-            HttpMessageType.RESPONSE -> generateResponsePayload(writer, shapeName, operationShape)
-            HttpMessageType.REQUEST -> generateRequestPayload(writer, shapeName, operationShape)
+            HttpMessageType.RESPONSE -> generateResponsePayload(writer, shapeName, operationShape, additionalPayloadContext)
+            HttpMessageType.REQUEST -> generateRequestPayload(writer, shapeName, operationShape, additionalPayloadContext)
         }
     }
 
-    private fun generateRequestPayload(writer: RustWriter, shapeName: String, operationShape: OperationShape) {
+    private fun generateRequestPayload(
+        writer: RustWriter, shapeName: String, operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         val payloadMemberName = httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
             val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, shapeName, serializerGenerator.operationInputSerializer(operationShape))
         } else {
-            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName)
+            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName, additionalPayloadContext)
         }
     }
 
-    private fun generateResponsePayload(writer: RustWriter, shapeName: String, operationShape: OperationShape) {
+    private fun generateResponsePayload(
+        writer: RustWriter, shapeName: String, operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         val payloadMemberName = httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
             val serializerGenerator = protocol.structuredDataSerializer()
             generateStructureSerializer(writer, shapeName, serializerGenerator.operationOutputSerializer(operationShape))
         } else {
-            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName)
+            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName, additionalPayloadContext)
         }
     }
 
@@ -132,16 +148,17 @@ class HttpBoundProtocolPayloadGenerator(
         shapeName: String,
         operationShape: OperationShape,
         payloadMemberName: String,
+        additionalPayloadContext: AdditionalPayloadContext,
     ) {
         val serializerGenerator = protocol.structuredDataSerializer()
 
         if (operationShape.isEventStream(model)) {
             if (operationShape.isInputEventStream(model) && target == CodegenTarget.CLIENT) {
                 val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
-                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, shapeName)
+                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, shapeName, additionalPayloadContext)
             } else if (operationShape.isOutputEventStream(model) && target == CodegenTarget.SERVER) {
                 val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
-                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, "output")
+                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, "output", additionalPayloadContext)
             } else {
                 throw CodegenException("Payload serializer for event streams with an invalid configuration")
             }
@@ -171,6 +188,7 @@ class HttpBoundProtocolPayloadGenerator(
         memberShape: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
         outerName: String,
+        additionalPayloadContext: AdditionalPayloadContext,
     ) {
         val memberName = symbolProvider.toMemberName(memberShape)
         val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
@@ -207,6 +225,7 @@ class HttpBoundProtocolPayloadGenerator(
                 memberName,
                 marshallerConstructorFn,
                 errorMarshallerConstructorFn,
+                additionalPayloadContext,
             ),
         )
     }

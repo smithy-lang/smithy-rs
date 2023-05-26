@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -47,7 +48,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         }
 }
 
-private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
+private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
@@ -72,6 +73,11 @@ private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodege
             }
 
             is ServiceRuntimePluginSection.AdditionalConfig -> {
+                val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
+                if (serviceHasEventStream) {
+                    // enable the aws-runtime `sign-eventstream` feature
+                    addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
+                }
                 section.putConfigValue(this) {
                     rustTemplate("#{SigningService}::from_static(self.handle.conf.signing_service())", *codegenScope)
                 }

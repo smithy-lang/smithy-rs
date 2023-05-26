@@ -52,6 +52,18 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = "For event stream operations such as S3 SelectObjectContent or Transcribe StartStreamTranscription, the `EventStreamSender` in the input now requires the passed in `Stream` impl to implement `Sync`."
+references = ["smithy-rs#2673"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "For event stream operations, the `EventStreamSender` in inputs/outputs now requires the passed in `Stream` impl to implement `Sync`."
+references = ["smithy-rs#2673"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "The `SigningInstructions` in the `aws-sigv4` module are now public. This allows them to be named in a function signature."
 references = ["smithy-rs#2730"]
 author = "cholcombe973"
