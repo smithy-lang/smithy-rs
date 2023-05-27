@@ -44,7 +44,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError> {
         // Look a the result. If it's OK then we're done; No retry required. Otherwise, we need to inspect it
-        let error = match ctx.output_or_error() {
+        let error = match ctx.output_or_error().expect("set ahead of time") {
             Ok(_) => {
                 tracing::trace!("request succeeded, no retry necessary");
                 return Ok(ShouldAttempt::No);

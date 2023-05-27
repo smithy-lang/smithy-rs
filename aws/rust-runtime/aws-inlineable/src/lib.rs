@@ -28,6 +28,12 @@ pub mod no_credentials;
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
 
+/// Presigning tower service
+pub mod presigning_service;
+
+/// Presigning interceptors
+pub mod presigning_interceptors;
+
 /// Special logic for extracting request IDs from S3's responses.
 pub mod s3_request_id;
 

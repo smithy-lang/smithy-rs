@@ -49,6 +49,11 @@ impl From<InvalidHeaderValue> for UserAgentInterceptorError {
     }
 }
 
+/// Config marker that disables the user agent interceptor.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DisableUserAgentInterceptor;
+
 /// Generates and attaches the AWS SDK's user agent to a HTTP request
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -117,6 +122,7 @@ mod tests {
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .unwrap()
             .headers()
             .get(header_name)
             .unwrap()

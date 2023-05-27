@@ -8,8 +8,8 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -17,8 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 
 class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
@@ -29,14 +27,10 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
-        baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)
-
-    override fun operationRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations + OperationRetryClassifiersFeature(codegenContext, operation)
+        baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig) + OperationRetryClassifiersFeature(
+            codegenContext,
+            operation,
+        )
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
@@ -58,7 +52,7 @@ class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : Operati
 class OperationRetryClassifiersFeature(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
-) : OperationRuntimePluginCustomization() {
+) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
     private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
@@ -78,8 +72,8 @@ class OperationRetryClassifiersFeature(
         "ErasedError" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypeErasedError"),
     )
 
-    override fun section(section: OperationRuntimePluginSection) = when (section) {
-        is OperationRuntimePluginSection.RuntimePluginSupportingTypes -> writable {
+    override fun section(section: OperationSection) = when (section) {
+        is OperationSection.RuntimePluginSupportingTypes -> writable {
             Attribute(derive(RuntimeType.Debug)).render(this)
             rustTemplate(
                 """
@@ -176,7 +170,7 @@ class OperationRetryClassifiersFeature(
             )
         }
 
-        is OperationRuntimePluginSection.RetryClassifier -> writable {
+        is OperationSection.RetryClassifier -> writable {
             rustTemplate(
                 """
                 .with_classifier(SmithyErrorClassifier::new())

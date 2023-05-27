@@ -19,6 +19,11 @@ use std::time::{Duration, SystemTime};
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
 
+/// Config marker that disables the invocation ID interceptor.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DisableRequestInfoInterceptor;
+
 /// Generates and attaches a request header that communicates request-related metadata.
 /// Examples include:
 ///
@@ -168,6 +173,7 @@ mod tests {
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .unwrap()
             .headers()
             .get(header_name)
             .unwrap()

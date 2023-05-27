@@ -457,6 +457,8 @@ class FluentClientGenerator(
                     "Operation" to operationSymbol,
                     "OperationError" to errorType,
                     "OperationOutput" to outputType,
+                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::runtime_plugin::RuntimePlugins"),
                     "SendResult" to ClientRustModule.Client.customize.toType()
                         .resolve("internal::SendResult"),
                     "SdkError" to RuntimeType.sdkError(runtimeConfig),
@@ -466,7 +468,12 @@ class FluentClientGenerator(
                     ##[doc(hidden)]
                     pub async fn send_orchestrator(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        #{Operation}::orchestrate(input, self.handle, self.config_override).await
+                        let runtime_plugins = #{Operation}::register_runtime_plugins(
+                            #{RuntimePlugins}::new(),
+                            self.handle,
+                            self.config_override
+                        );
+                        #{Operation}::orchestrate(&runtime_plugins, input).await
                     }
 
                     ##[doc(hidden)]

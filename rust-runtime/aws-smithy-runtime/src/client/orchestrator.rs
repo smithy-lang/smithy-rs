@@ -51,11 +51,32 @@ macro_rules! continue_on_err {
     };
 }
 
-#[tracing::instrument(skip_all)]
 pub async fn invoke(
     input: Input,
     runtime_plugins: &RuntimePlugins,
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
+    invoke_with_stop_point(input, runtime_plugins, StopPoint::None)
+        .await?
+        .finalize()
+}
+
+/// Allows for returning early at different points during orchestration.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopPoint {
+    /// Don't stop orchestration early
+    None,
+
+    /// Stop the orchestrator before transmitting the request
+    BeforeTransmit,
+}
+
+#[tracing::instrument(skip_all, name = "invoke")]
+pub async fn invoke_with_stop_point(
+    input: Input,
+    runtime_plugins: &RuntimePlugins,
+    stop_point: StopPoint,
+) -> Result<InterceptorContext, SdkError<Error, HttpResponse>> {
     let mut cfg = ConfigBag::base();
     let cfg = &mut cfg;
 
@@ -70,10 +91,10 @@ pub async fn invoke(
         // If running the pre-execution interceptors failed, then we skip running the op and run the
         // final interceptors instead.
         if !ctx.is_failed() {
-            try_op(&mut ctx, cfg, &interceptors).await;
+            try_op(&mut ctx, cfg, &interceptors, stop_point).await;
         }
         finally_op(&mut ctx, cfg, &interceptors).await;
-        ctx.finalize()
+        Ok(ctx)
     }
     .maybe_timeout_with_config(operation_timeout_config)
     .await
@@ -97,7 +118,12 @@ fn apply_configuration(
     Ok(())
 }
 
-async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors: &Interceptors) {
+async fn try_op(
+    ctx: &mut InterceptorContext,
+    cfg: &mut ConfigBag,
+    interceptors: &Interceptors,
+    stop_point: StopPoint,
+) {
     // Before serialization
     halt_on_err!([ctx] => interceptors.read_before_serialization(ctx, cfg));
     halt_on_err!([ctx] => interceptors.modify_before_serialization(ctx, cfg));
@@ -114,9 +140,10 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     // Load the request body into memory if configured to do so
     if let LoadedRequestBody::Requested = cfg.loaded_request_body() {
         let mut body = SdkBody::taken();
-        mem::swap(&mut body, ctx.request_mut().body_mut());
+        mem::swap(&mut body, ctx.request_mut().expect("set above").body_mut());
         let loaded_body = halt_on_err!([ctx] => ByteStream::new(body).collect().await).into_bytes();
-        *ctx.request_mut().body_mut() = SdkBody::from(loaded_body.clone());
+        *ctx.request_mut().as_mut().expect("set above").body_mut() =
+            SdkBody::from(loaded_body.clone());
         cfg.set_loaded_request_body(LoadedRequestBody::Loaded(loaded_body));
     }
 
@@ -144,7 +171,7 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     loop {
         let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
         async {
-            try_attempt(ctx, cfg, interceptors).await;
+            try_attempt(ctx, cfg, interceptors, stop_point).await;
             finally_attempt(ctx, cfg, interceptors).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
@@ -172,6 +199,7 @@ async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
     interceptors: &Interceptors,
+    stop_point: StopPoint,
 ) {
     halt_on_err!([ctx] => interceptors.read_before_attempt(ctx, cfg));
     halt_on_err!([ctx] => orchestrate_endpoint(ctx, cfg));
@@ -184,11 +212,16 @@ async fn try_attempt(
     halt_on_err!([ctx] => interceptors.modify_before_transmit(ctx, cfg));
     halt_on_err!([ctx] => interceptors.read_before_transmit(ctx, cfg));
 
+    // Return early if a stop point is set for before transmit
+    if let StopPoint::BeforeTransmit = stop_point {
+        return;
+    }
+
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
     ctx.enter_transmit_phase();
     let call_result = halt_on_err!([ctx] => {
-        let request = ctx.take_request();
+        let request = ctx.take_request().expect("set during serialization");
         cfg.connection().call(request).await
     });
     ctx.set_response(call_result);
@@ -200,7 +233,7 @@ async fn try_attempt(
 
     ctx.enter_deserialization_phase();
     let output_or_error = async {
-        let response = ctx.response_mut();
+        let response = ctx.response_mut().expect("set during transmit");
         let response_deserializer = cfg.response_deserializer();
         match response_deserializer.deserialize_streaming(response) {
             Some(output_or_error) => Ok(output_or_error),
@@ -242,6 +275,7 @@ mod tests {
     use crate::client::orchestrator::endpoints::{
         StaticUriEndpointResolver, StaticUriEndpointResolverParams,
     };
+    use crate::client::orchestrator::{invoke_with_stop_point, StopPoint};
     use crate::client::retries::strategy::NeverRetryStrategy;
     use crate::client::runtime_plugin::anonymous_auth::AnonymousAuthRuntimePlugin;
     use crate::client::test_util::{
@@ -265,7 +299,7 @@ mod tests {
     use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
     use aws_smithy_types::config_bag::ConfigBag;
-    use aws_smithy_types::type_erasure::TypeErasedBox;
+    use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
     use http::StatusCode;
     use tracing_test::traced_test;
 
@@ -882,5 +916,34 @@ mod tests {
             &FinalizerInterceptorContextRef<'_>,
             expected
         );
+    }
+
+    #[tokio::test]
+    async fn test_stop_points() {
+        let runtime_plugins = || {
+            RuntimePlugins::new()
+                .with_operation_plugin(TestOperationRuntimePlugin)
+                .with_operation_plugin(AnonymousAuthRuntimePlugin)
+        };
+
+        // StopPoint::None should result in a response getting set since orchestration doesn't stop
+        let context = invoke_with_stop_point(
+            TypedBox::new(()).erase(),
+            &runtime_plugins(),
+            StopPoint::None,
+        )
+        .await
+        .expect("success");
+        assert!(context.response().is_some());
+
+        // StopPoint::BeforeTransmit will exit right before sending the request, so there should be no response
+        let context = invoke_with_stop_point(
+            TypedBox::new(()).erase(),
+            &runtime_plugins(),
+            StopPoint::BeforeTransmit,
+        )
+        .await
+        .expect("success");
+        assert!(context.response().is_none());
     }
 }

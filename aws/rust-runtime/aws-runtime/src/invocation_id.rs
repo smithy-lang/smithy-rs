@@ -14,6 +14,11 @@ use uuid::Uuid;
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
 
+/// Config marker that disables the invocation ID interceptor.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DisableInvocationIdInterceptor;
+
 /// This interceptor generates a UUID and attaches it to all request attempts made as part of this operation.
 #[non_exhaustive]
 #[derive(Debug)]
@@ -80,7 +85,12 @@ mod tests {
     use http::HeaderValue;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a HeaderValue {
-        context.request().headers().get(header_name).unwrap()
+        context
+            .request()
+            .unwrap()
+            .headers()
+            .get(header_name)
+            .unwrap()
     }
 
     #[test]

@@ -8,61 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-
-sealed class OperationRuntimePluginSection(name: String) : Section(name) {
-    /**
-     * Hook for adding additional things to config inside operation runtime plugins.
-     */
-    data class AdditionalConfig(
-        val configBagName: String,
-        val interceptorRegistrarName: String,
-        val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("AdditionalConfig") {
-        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
-            writer.rustTemplate(
-                """
-                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
-                """,
-                "interceptor" to interceptor,
-                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
-            )
-        }
-    }
-
-    /**
-     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
-     *
-     * Should emit 1+ lines of code that look like the following:
-     * ```rust
-     * .with_classifier(AwsErrorCodeClassifier::new())
-     * .with_classifier(HttpStatusCodeClassifier::new())
-     * ```
-     */
-    data class RetryClassifier(
-        val configBagName: String,
-        val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("RetryClassifier")
-
-    /**
-     * Hook for adding supporting types for operation-specific runtime plugins.
-     * Examples include various operation-specific types (retry classifiers, config bag types, etc.)
-     */
-    data class RuntimePluginSupportingTypes(
-        val configBagName: String,
-        val operationShape: OperationShape,
-    ) : OperationRuntimePluginSection("RuntimePluginSupportingTypes")
-}
-
-typealias OperationRuntimePluginCustomization = NamedCustomization<OperationRuntimePluginSection>
 
 /**
  * Generates operation-level runtime plugins
@@ -89,7 +38,7 @@ class OperationRuntimePluginGenerator(
         writer: RustWriter,
         operationShape: OperationShape,
         operationStructName: String,
-        customizations: List<OperationRuntimePluginCustomization>,
+        customizations: List<OperationCustomization>,
     ) {
         writer.rustTemplate(
             """
@@ -118,16 +67,16 @@ class OperationRuntimePluginGenerator(
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationRuntimePluginSection.AdditionalConfig("cfg", "_interceptors", operationShape),
+                    OperationSection.AdditionalRuntimePluginConfig(customizations, "cfg", "_interceptors", operationShape),
                 )
             },
             "retry_classifier_customizations" to writable {
-                writeCustomizations(customizations, OperationRuntimePluginSection.RetryClassifier("cfg", operationShape))
+                writeCustomizations(customizations, OperationSection.RetryClassifier(customizations, "cfg", operationShape))
             },
             "runtime_plugin_supporting_types" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationRuntimePluginSection.RuntimePluginSupportingTypes("cfg", operationShape),
+                    OperationSection.RuntimePluginSupportingTypes(customizations, "cfg", operationShape),
                 )
             },
         )

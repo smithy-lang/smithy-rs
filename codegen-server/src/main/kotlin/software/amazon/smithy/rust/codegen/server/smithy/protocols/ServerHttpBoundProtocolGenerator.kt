@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
@@ -106,7 +105,6 @@ class ServerHttpBoundProtocolGenerator(
     customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
     additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ServerProtocolGenerator(
-    codegenContext,
     protocol,
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
 ) {
@@ -185,7 +183,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "Tracing" to RuntimeType.Tracing,
     )
 
-    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 

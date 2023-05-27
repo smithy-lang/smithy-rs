@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 /** Allows for additional context to be given to the payload generator from where it is being called */
 interface AdditionalPayloadContext
@@ -54,20 +52,4 @@ interface ProtocolPayloadGenerator {
         operationShape: OperationShape,
         additionalPayloadContext: AdditionalPayloadContext = object : AdditionalPayloadContext {},
     )
-}
-
-/**
- * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
- */
-abstract class ProtocolGenerator(
-    codegenContext: CodegenContext,
-    /**
-     * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
-     * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
-     * and an output shape is build from an `http::Response`.
-     */
-    private val protocol: Protocol,
-) {
-    protected val symbolProvider = codegenContext.symbolProvider
-    protected val model = codegenContext.model
 }

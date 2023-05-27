@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Intercep
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.TimeSourceOperationCustomization
@@ -26,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLints
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
 val TestUtilFeature = Feature("test-util", false, listOf())

@@ -118,17 +118,13 @@ where
     }
 
     /// Retrieve the input for the operation being invoked.
-    pub fn input(&self) -> &I {
-        self.input
-            .as_ref()
-            .expect("input is present in 'before serialization'")
+    pub fn input(&self) -> Option<&I> {
+        self.input.as_ref()
     }
 
     /// Retrieve the input for the operation being invoked.
-    pub fn input_mut(&mut self) -> &mut I {
-        self.input
-            .as_mut()
-            .expect("input is present in 'before serialization'")
+    pub fn input_mut(&mut self) -> Option<&mut I> {
+        self.input.as_mut()
     }
 
     /// Takes ownership of the input.
@@ -143,25 +139,19 @@ where
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn request(&self) -> &Request {
-        self.request
-            .as_ref()
-            .expect("request populated in 'before transmit'")
+    pub fn request(&self) -> Option<&Request> {
+        self.request.as_ref()
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
-    pub fn request_mut(&mut self) -> &mut Request {
-        self.request
-            .as_mut()
-            .expect("request populated in 'before transmit'")
+    pub fn request_mut(&mut self) -> Option<&mut Request> {
+        self.request.as_mut()
     }
 
     /// Takes ownership of the request.
-    pub fn take_request(&mut self) -> Request {
-        self.request
-            .take()
-            .expect("take request once during 'transmit'")
+    pub fn take_request(&mut self) -> Option<Request> {
+        self.request.take()
     }
 
     /// Set the response for the operation being invoked.
@@ -170,17 +160,13 @@ where
     }
 
     /// Returns the response.
-    pub fn response(&self) -> &Response {
-        self.response.as_ref().expect(
-            "response set in 'before deserialization' and available in the phases following it",
-        )
+    pub fn response(&self) -> Option<&Response> {
+        self.response.as_ref()
     }
 
     /// Returns a mutable reference to the response.
-    pub fn response_mut(&mut self) -> &mut Response {
-        self.response.as_mut().expect(
-            "response is set in 'before deserialization' and available in the following phases",
-        )
+    pub fn response_mut(&mut self) -> Option<&mut Response> {
+        self.response.as_mut()
     }
 
     /// Set the output or error for the operation being invoked.
@@ -189,18 +175,13 @@ where
     }
 
     /// Returns the deserialized output or error.
-    pub fn output_or_error(&self) -> Result<&O, &OrchestratorError<E>> {
-        self.output_or_error
-            .as_ref()
-            .expect("output set in Phase::AfterDeserialization")
-            .as_ref()
+    pub fn output_or_error(&self) -> Option<Result<&O, &OrchestratorError<E>>> {
+        self.output_or_error.as_ref().map(Result::as_ref)
     }
 
     /// Returns the mutable reference to the deserialized output or error.
-    pub fn output_or_error_mut(&mut self) -> &mut Result<O, OrchestratorError<E>> {
-        self.output_or_error
-            .as_mut()
-            .expect("output set in 'after deserialization'")
+    pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
+        self.output_or_error.as_mut()
     }
 
     /// Advance to the Serialization phase.
@@ -228,7 +209,7 @@ where
             self.request.is_some(),
             "request must be set before calling enter_before_transmit_phase"
         );
-        self.request_checkpoint = try_clone(self.request());
+        self.request_checkpoint = try_clone(self.request().expect("checked above"));
         self.tainted = true;
         self.phase = Phase::BeforeTransmit;
     }
@@ -356,7 +337,10 @@ mod tests {
         let output = TypedBox::new("output".to_string()).erase();
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!("input", context.input().downcast_ref::<String>().unwrap());
+        assert_eq!(
+            "input",
+            context.input().unwrap().downcast_ref::<String>().unwrap()
+        );
         context.input_mut();
 
         context.enter_serialization_phase();
@@ -408,7 +392,10 @@ mod tests {
         let error = TypedBox::new(Error).erase_error();
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!("input", context.input().downcast_ref::<String>().unwrap());
+        assert_eq!(
+            "input",
+            context.input().unwrap().downcast_ref::<String>().unwrap()
+        );
 
         context.enter_serialization_phase();
         let _ = context.take_input();
@@ -421,14 +408,14 @@ mod tests {
         context.enter_before_transmit_phase();
 
         // Modify the test header post-checkpoint to simulate modifying the request for signing or a mutating interceptor
-        context.request_mut().headers_mut().remove("test");
-        context.request_mut().headers_mut().insert(
+        context.request_mut().unwrap().headers_mut().remove("test");
+        context.request_mut().unwrap().headers_mut().insert(
             "test",
             HeaderValue::from_static("request-modified-after-signing"),
         );
 
         context.enter_transmit_phase();
-        let request = context.take_request();
+        let request = context.take_request().unwrap();
         assert_eq!(
             "request-modified-after-signing",
             request.headers().get("test").unwrap()
@@ -444,7 +431,7 @@ mod tests {
         // Now after rewinding, the test header should be its original value
         assert_eq!(
             "the-original-un-mutated-request",
-            context.request().headers().get("test").unwrap()
+            context.request().unwrap().headers().get("test").unwrap()
         );
 
         context.enter_transmit_phase();
