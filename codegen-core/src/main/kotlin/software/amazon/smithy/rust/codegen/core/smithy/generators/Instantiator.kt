@@ -333,6 +333,23 @@ open class Instantiator(
      * ```
      */
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, headers: Map<String, String>, ctx: Ctx) {
+        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
+
+        renderStructureMembers(writer, shape, data, headers, ctx)
+
+        writer.rust(".build()")
+        if (builderKindBehavior.hasFallibleBuilder(shape)) {
+            writer.rust(".unwrap()")
+        }
+    }
+
+    protected fun renderStructureMembers(
+        writer: RustWriter,
+        shape: StructureShape,
+        data: ObjectNode,
+        headers: Map<String, String>,
+        ctx: Ctx,
+    ) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
             val setterName = builderKindBehavior.setterName(memberShape)
             writer.withBlock(".$setterName(", ")") {
@@ -340,7 +357,6 @@ open class Instantiator(
             }
         }
 
-        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
         if (defaultsForRequiredFields) {
             shape.allMembers.entries
                 .filter { (name, memberShape) ->
@@ -374,11 +390,6 @@ open class Instantiator(
             ?.let {
                 renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
             }
-
-        writer.rust(".build()")
-        if (builderKindBehavior.hasFallibleBuilder(shape)) {
-            writer.rust(".unwrap()")
-        }
     }
 
     /**

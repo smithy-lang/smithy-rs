@@ -19,6 +19,9 @@
     unreachable_pub
 )]
 
+/// Interceptors for API Gateway
+pub mod apigateway_interceptors;
+
 /// Stub credentials provider for use when no credentials provider is used.
 pub mod no_credentials;
 
@@ -30,6 +33,9 @@ pub mod s3_request_id;
 
 /// Glacier-specific checksumming behavior
 pub mod glacier_checksums;
+
+/// Glacier-specific behavior
+pub mod glacier_interceptors;
 
 /// Default middleware stack for AWS services
 pub mod middleware;

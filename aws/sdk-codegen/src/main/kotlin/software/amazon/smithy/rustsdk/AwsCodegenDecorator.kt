@@ -54,6 +54,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         DisabledAuthDecorator(),
         RecursionDetectionDecorator(),
         InvocationIdDecorator(),
+        RetryInformationHeaderDecorator(),
     ),
 
     // Service specific decorators
