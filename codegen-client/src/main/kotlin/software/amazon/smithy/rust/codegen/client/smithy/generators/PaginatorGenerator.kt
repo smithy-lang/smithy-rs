@@ -11,16 +11,16 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedPaginatorModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -68,7 +68,11 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo = idx.getPaginationInfo(codegenContext.serviceShape, operation).orNull()
         ?: PANIC("failed to load pagination info")
-    private val module = codegenContext.featureGatedPaginatorModule(symbolProvider, operation)
+    private val module = RustModule.public(
+        "paginator",
+        parent = symbolProvider.moduleForShape(operation),
+        documentationOverride = "Paginator for this operation",
+    )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
@@ -82,6 +86,7 @@ class PaginatorGenerator private constructor(
     )
 
     private val codegenScope = arrayOf(
+        *preludeScope,
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
@@ -100,6 +105,7 @@ class PaginatorGenerator private constructor(
         "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
 
         // SDK Types
+        "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "client" to RuntimeType.smithyClient(runtimeConfig),
         "fn_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::fn_stream"),
@@ -154,31 +160,22 @@ class PaginatorGenerator private constructor(
                 /// Create the pagination stream
                 ///
                 /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
+                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
                 #{send_bounds:W} {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
-                    #{fn_stream}::FnStream::new(move |tx| Box::pin(async move {
+                    #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
-                            Ok(input) => input,
-                            Err(e) => { let _ = tx.send(Err(e)).await; return; }
+                            #{Ok}(input) => input,
+                            #{Err}(e) => { let _ = tx.send(#{Err}(e)).await; return; }
                         };
                         loop {
-                            let op = match input.make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure) {
-                                Ok(op) => op,
-                                Err(e) => {
-                                    let _ = tx.send(Err(e)).await;
-                                    return;
-                                }
-                            };
-                            let resp = handle.client.call(op).await;
+                            let resp = #{orchestrate};
                             // If the input member is None or it was an error
                             let done = match resp {
-                                Ok(ref resp) => {
+                                #{Ok}(ref resp) => {
                                     let new_token = #{output_token}(resp);
                                     let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
                                     if !is_empty && new_token == input.$inputTokenMember.as_ref() && self.stop_on_duplicate_token {
@@ -188,7 +185,7 @@ class PaginatorGenerator private constructor(
                                         is_empty
                                     }
                                 },
-                                Err(_) => true,
+                                #{Err}(_) => true,
                             };
                             if tx.send(resp).await.is_err() {
                                 // receiving end was dropped
@@ -205,6 +202,39 @@ class PaginatorGenerator private constructor(
             *codegenScope,
             "items_fn" to itemsFn(),
             "output_token" to outputTokenLens,
+            "item_type" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
+                } else {
+                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                }
+            },
+            "orchestrate" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    rustTemplate(
+                        """
+                        {
+                            let op = match input.make_operation(&handle.conf)
+                                .await
+                                .map_err(#{SdkError}::construction_failure) {
+                                #{Ok}(op) => op,
+                                #{Err}(e) => {
+                                    let _ = tx.send(#{Err}(e)).await;
+                                    return;
+                                }
+                            };
+                            handle.client.call(op).await
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        "#{operation}::orchestrate(input.clone(), handle.clone(), None).await",
+                        *codegenScope,
+                    )
+                }
+            },
         )
     }
 
@@ -259,7 +289,7 @@ class PaginatorGenerator private constructor(
                     /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
+                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
                     #{send_bounds:W} {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
@@ -270,6 +300,13 @@ class PaginatorGenerator private constructor(
                     outputShape,
                     paginationInfo.itemsMemberPath,
                 ),
+                "item_type" to writable {
+                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}>>", *codegenScope)
+                    } else {
+                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                    }
+                },
                 *codegenScope,
             )
         }
@@ -280,16 +317,17 @@ class PaginatorGenerator private constructor(
             val memberName = symbolProvider.toMemberName(it)
             val pageSizeT =
                 symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
-            rust(
+            rustTemplate(
                 """
                 /// Set the page size
                 ///
                 /// _Note: this method will override any previously set value for `$memberName`_
                 pub fn page_size(mut self, limit: $pageSizeT) -> Self {
-                    self.builder.$memberName = Some(limit);
+                    self.builder.$memberName = #{Some}(limit);
                     self
                 }
                 """,
+                *preludeScope,
             )
         }
     }

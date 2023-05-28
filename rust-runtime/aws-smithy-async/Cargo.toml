@@ -9,15 +9,16 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 rt-tokio = ["tokio/time"]
+test-util = []
 
 [dependencies]
 pin-project-lite = "0.2"
-tokio = { version = "1.8.4", features = ["sync"] }
-tokio-stream = "0.1.5"
-futures-util = "0.3.16"
+tokio = { version = "1.23.1", features = ["sync"] }
+tokio-stream = { version = "0.1.5", default-features = false }
+futures-util = { version = "0.3.16", default-features = false }
 
 [dev-dependencies]
-tokio = { version = "1.8.4", features = ["rt", "macros", "test-util"] }
+tokio = { version = "1.23.1", features = ["rt", "macros", "test-util"] }
 tokio-test = "0.4.2"
 
 [package.metadata.docs.rs]

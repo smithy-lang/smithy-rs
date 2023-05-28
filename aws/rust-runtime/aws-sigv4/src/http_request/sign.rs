@@ -210,12 +210,14 @@ fn calculate_signing_params<'a>(
         ),
         (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
+
     if let Some(security_token) = params.security_token {
         signing_params.push((
             param::X_AMZ_SECURITY_TOKEN,
             Cow::Owned(security_token.to_string()),
         ));
     }
+
     Ok((signing_params, signature))
 }
 
@@ -254,7 +256,7 @@ fn calculate_signing_headers<'a>(
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");
     let mut headers = HeaderMap::new();
-    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time);
+    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
     headers.insert(
         "authorization",
         build_authorization_header(params.access_key, &creq, sts, &signature),
@@ -264,16 +266,26 @@ fn calculate_signing_headers<'a>(
             &mut headers,
             header::X_AMZ_CONTENT_SHA_256,
             &values.content_sha256,
+            false,
         );
     }
-    if let Some(security_token) = values.security_token {
-        add_header(&mut headers, header::X_AMZ_SECURITY_TOKEN, security_token);
+
+    if let Some(security_token) = params.security_token {
+        add_header(
+            &mut headers,
+            header::X_AMZ_SECURITY_TOKEN,
+            security_token,
+            true,
+        );
     }
+
     Ok(SigningOutput::new(headers, signature))
 }
 
-fn add_header(map: &mut HeaderMap<HeaderValue>, key: &'static str, value: &str) {
-    map.insert(key, HeaderValue::try_from(value).expect(key));
+fn add_header(map: &mut HeaderMap<HeaderValue>, key: &'static str, value: &str, sensitive: bool) {
+    let mut value = HeaderValue::try_from(value).expect(key);
+    value.set_sensitive(sensitive);
+    map.insert(key, value);
 }
 
 // add signature to authorization header
@@ -306,7 +318,9 @@ mod tests {
         make_headers_comparable, test_request, test_signed_request,
         test_signed_request_query_params,
     };
-    use crate::http_request::{SignatureLocation, SigningParams, SigningSettings};
+    use crate::http_request::{
+        SessionTokenMode, SignatureLocation, SigningParams, SigningSettings,
+    };
     use http::{HeaderMap, HeaderValue};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
@@ -454,6 +468,70 @@ mod tests {
                         Signature=4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
                 )
                 .unwrap(),
+            )
+            .body("")
+            .unwrap();
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn test_sign_headers_excluding_session_token() {
+        let settings = SigningSettings {
+            session_token_mode: SessionTokenMode::Exclude,
+            ..Default::default()
+        };
+        let mut params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .body("")
+            .unwrap();
+        let out_without_session_token = sign(SignableRequest::from(&original), &params).unwrap();
+        params.security_token = Some("notarealsessiontoken");
+
+        let out_with_session_token_but_excluded =
+            sign(SignableRequest::from(&original), &params).unwrap();
+        assert_eq!(
+            "d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+            out_with_session_token_but_excluded.signature
+        );
+        assert_eq!(
+            out_with_session_token_but_excluded.signature,
+            out_without_session_token.signature
+        );
+
+        let mut signed = original;
+        out_with_session_token_but_excluded
+            .output
+            .apply_to_request(&mut signed);
+
+        let mut expected = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header(
+                "x-amz-date",
+                HeaderValue::from_str("20150830T123600Z").unwrap(),
+            )
+            .header(
+                "authorization",
+                HeaderValue::from_str(
+                    "AWS4-HMAC-SHA256 \
+                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        SignedHeaders=host;x-amz-date, \
+                        Signature=d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+                )
+                .unwrap(),
+            )
+            .header(
+                "x-amz-security-token",
+                HeaderValue::from_str("notarealsessiontoken").unwrap(),
             )
             .body("")
             .unwrap();

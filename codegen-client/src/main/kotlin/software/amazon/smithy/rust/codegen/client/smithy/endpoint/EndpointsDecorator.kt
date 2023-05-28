@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -101,6 +102,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
     override val name: String = "Endpoints"
     override val order: Byte = 0
 
+    // TODO(enableNewSmithyRuntime): Remove `operationCustomizations` and `InjectEndpointInMakeOperation`
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
@@ -165,6 +167,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
         override fun section(section: OperationSection): Writable {
             val codegenScope = arrayOf(
+                *RuntimeType.preludeScope,
                 "Params" to typesGenerator.paramsStruct(),
                 "ResolveEndpointError" to types.resolveEndpointError,
             )
@@ -173,10 +176,10 @@ class EndpointsDecorator : ClientCodegenDecorator {
                     rustTemplate(
                         """
                         let params_result = #{Params}::builder()#{builderFields:W}.build()
-                            .map_err(|err|#{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
+                            .map_err(|err| #{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
                         let (endpoint_result, params) = match params_result {
-                            Ok(params) => (${section.config}.endpoint_resolver.resolve_endpoint(&params), Some(params)),
-                            Err(e) => (Err(e), None)
+                            #{Ok}(params) => (${section.config}.endpoint_resolver.resolve_endpoint(&params), #{Some}(params)),
+                            #{Err}(e) => (#{Err}(e), #{None})
                         };
                         """,
                         "builderFields" to builderFields(typesGenerator.params, section),
@@ -187,7 +190,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
                 is OperationSection.MutateRequest -> writable {
                     // insert the endpoint the bag
                     rustTemplate("${section.request}.properties_mut().insert(endpoint_result);")
-                    rustTemplate("""if let Some(params) = params { ${section.request}.properties_mut().insert(params); }""")
+                    rustTemplate("""if let #{Some}(params) = params { ${section.request}.properties_mut().insert(params); }""", *codegenScope)
                 }
 
                 else -> emptySection
@@ -198,15 +201,15 @@ class EndpointsDecorator : ClientCodegenDecorator {
             val node = this
             return writable {
                 when (node) {
-                    is StringNode -> rust("Some(${node.value.dq()}.to_string())")
-                    is BooleanNode -> rust("Some(${node.value})")
+                    is StringNode -> rustTemplate("#{Some}(${node.value.dq()}.to_string())", *RuntimeType.preludeScope)
+                    is BooleanNode -> rustTemplate("#{Some}(${node.value})", *RuntimeType.preludeScope)
                     else -> PANIC("unsupported default value: $node")
                 }
             }
         }
 
         private fun builderFields(params: Parameters, section: OperationSection.MutateInput) = writable {
-            val memberParams = idx.getContextParams(operationShape)
+            val memberParams = idx.getContextParams(operationShape).toList().sortedBy { it.first.memberName }
             val builtInParams = params.toList().filter { it.isBuiltIn }
             // first load builtins and their defaults
             builtInParams.forEach { param ->

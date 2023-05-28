@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
-extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
+extra["displayName"] = "Smithy :: Rust :: AWS-SDK :: Ad-hoc Test"
+extra["moduleName"] = "software.amazon.smithy.rust.awssdk.adhoc.test"
 
 tasks["jar"].enabled = false
 
@@ -37,6 +37,8 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
+
 val allCodegenTests = listOf(
     CodegenTest(
         "com.amazonaws.apigateway#BackplaneControlService",
@@ -46,7 +48,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -63,7 +65,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {

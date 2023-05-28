@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGener
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
@@ -41,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -49,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -79,16 +79,8 @@ class ClientCodegenVisitor(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
             nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-            moduleProvider = when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                true -> ClientModuleProvider
-                else -> OldModuleSchemeClientModuleProvider
-            },
-            nameBuilderFor = { symbol ->
-                when (settings.codegenConfig.enableNewCrateOrganizationScheme) {
-                    true -> "${symbol.name}Builder"
-                    else -> "Builder"
-                }
-            },
+            moduleProvider = ClientModuleProvider,
+            nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
@@ -195,29 +187,10 @@ class ClientCodegenVisitor(
      * - Operation structures
      */
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(
-            rustCrate,
-            protocolGenerator,
-            protocolGeneratorFactory.support(),
-            codegenContext,
-            codegenDecorator,
-        ).render()
+        ServiceGenerator(rustCrate, codegenContext, codegenDecorator).render()
     }
 
     override fun getDefault(shape: Shape?) {
-    }
-
-    // TODO(CrateReorganization): Remove this function when cleaning up `enableNewCrateOrganizationScheme`
-    private fun RustCrate.maybeInPrivateModuleWithReexport(
-        privateModule: RustModule.LeafModule,
-        symbol: Symbol,
-        writer: Writable,
-    ) {
-        if (codegenContext.settings.codegenConfig.enableNewCrateOrganizationScheme) {
-            inPrivateModuleWithReexport(privateModule, symbol, writer)
-        } else {
-            withModule(symbol.module(), writer)
-        }
     }
 
     private fun privateModule(shape: Shape): RustModule.LeafModule =
@@ -278,10 +251,10 @@ class ClientCodegenVisitor(
         }
 
         val privateModule = privateModule(shape)
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
             renderStruct(this)
         }
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.symbolForBuilder(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.symbolForBuilder(shape)) {
             renderBuilder(this)
         }
     }
@@ -294,7 +267,7 @@ class ClientCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         if (shape.hasTrait<EnumTrait>()) {
             val privateModule = privateModule(shape)
-            rustCrate.maybeInPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
+            rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
                 ClientEnumGenerator(codegenContext, shape).render(this)
             }
         }
@@ -308,7 +281,7 @@ class ClientCodegenVisitor(
      * Note: this does not generate serializers
      */
     override fun unionShape(shape: UnionShape) {
-        rustCrate.maybeInPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
+        rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
         if (shape.isEventStream()) {
@@ -324,16 +297,38 @@ class ClientCodegenVisitor(
     }
 
     /**
-     * Generate errors for operation shapes
+     * Generate operations
      */
-    override fun operationShape(shape: OperationShape) {
-        rustCrate.withModule(symbolProvider.moduleForOperationError(shape)) {
-            OperationErrorGenerator(
-                model,
-                symbolProvider,
-                shape,
-                codegenDecorator.errorCustomizations(codegenContext, emptyList()),
-            ).render(this)
+    override fun operationShape(operationShape: OperationShape) {
+        rustCrate.useShapeWriter(operationShape) operationWriter@{
+            rustCrate.useShapeWriter(operationShape.inputShape(codegenContext.model)) inputWriter@{
+                // Render the operation shape & serializers input `input.rs`
+                protocolGenerator.renderOperation(
+                    this@operationWriter,
+                    this@inputWriter,
+                    operationShape,
+                    codegenDecorator,
+                )
+
+                // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
+                codegenDecorator.protocolTestGenerator(
+                    codegenContext,
+                    DefaultProtocolTestGenerator(
+                        codegenContext,
+                        protocolGeneratorFactory.support(),
+                        operationShape,
+                    ),
+                ).render(this@operationWriter)
+            }
+
+            rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
+                OperationErrorGenerator(
+                    model,
+                    symbolProvider,
+                    operationShape,
+                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                ).render(this)
+            }
         }
     }
 }

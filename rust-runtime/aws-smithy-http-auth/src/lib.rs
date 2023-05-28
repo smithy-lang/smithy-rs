@@ -3,8 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// TODO(enableNewSmithyRuntime): The contents of this crate are moving into aws-smithy-runtime.
+// This crate is kept to continue sorting the middleware implementation until it is removed.
+// When removing the old implementation, clear out this crate and deprecate it.
+
 #![allow(clippy::derive_partial_eq_without_eq)]
-#![warn(missing_debug_implementations, missing_docs, rustdoc::all)]
+#![warn(
+    missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
 
 //! Smithy HTTP Auth Types
 

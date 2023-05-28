@@ -5,9 +5,9 @@
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
-    missing_debug_implementations,
     missing_docs,
-    rustdoc::all,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
     rust_2018_idioms
 )]
 
@@ -18,6 +18,9 @@
 
 pub mod future;
 pub mod rt;
+#[cfg(feature = "test-util")]
+pub mod test_util;
+pub mod time;
 
 /// Given an `Instant` and a `Duration`, assert time elapsed since `Instant` is equal to `Duration`.
 /// This macro allows for a 5ms margin of error.
@@ -37,12 +40,13 @@ macro_rules! assert_elapsed {
     ($start:expr, $dur:expr, $margin_of_error:expr) => {{
         let elapsed = $start.elapsed();
         // type ascription improves compiler error when wrong type is passed
-        let lower: std::time::Duration = $dur;
         let margin_of_error: std::time::Duration = $margin_of_error;
+        let lower: std::time::Duration = $dur - margin_of_error;
+        let upper: std::time::Duration = $dur + margin_of_error;
 
         // Handles ms rounding
         assert!(
-            elapsed >= lower && elapsed <= lower + margin_of_error,
+            elapsed >= lower && elapsed <= upper,
             "actual = {:?}, expected = {:?}",
             elapsed,
             lower

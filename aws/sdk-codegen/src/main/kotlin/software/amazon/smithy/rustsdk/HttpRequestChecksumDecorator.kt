@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuild
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
@@ -41,12 +42,16 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
+    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator upon launching the orchestrator
+    private fun applies(codegenContext: ClientCodegenContext): Boolean =
+        codegenContext.smithyRuntimeMode.generateMiddleware
+
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
+    ): List<OperationCustomization> = baseCustomizations.letIf(applies(codegenContext)) {
+        it + HttpRequestChecksumCustomization(codegenContext, operation)
     }
 }
 

@@ -12,8 +12,8 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
-import software.amazon.smithy.rust.codegen.client.smithy.OldModuleSchemeClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
@@ -54,7 +54,7 @@ val TestClientRustSymbolProviderConfig = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-    moduleProvider = OldModuleSchemeClientModuleProvider,
+    moduleProvider = ClientModuleProvider,
 )
 
 private class ClientTestCodegenDecorator : ClientCodegenDecorator {

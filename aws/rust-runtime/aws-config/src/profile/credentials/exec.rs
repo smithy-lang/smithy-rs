@@ -7,15 +7,13 @@ use super::repr::{self, BaseProvider};
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
-use crate::sso::{SsoConfig, SsoCredentialsProvider};
+#[cfg(feature = "credentials-sso")]
+use crate::sso::{SsoCredentialsProvider, SsoProviderConfig};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
-use aws_sdk_sts::middleware::DefaultMiddleware;
-use aws_sdk_sts::operation::assume_role::AssumeRoleInput;
-use aws_sdk_sts::{config::Credentials, Config};
-use aws_smithy_client::erase::DynConnector;
-use aws_types::region::Region;
+use aws_sdk_sts::config::{Builder as StsConfigBuilder, Credentials};
+use aws_sdk_sts::Client as StsClient;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -26,39 +24,28 @@ pub(super) struct AssumeRoleProvider {
     session_name: Option<String>,
 }
 
-#[derive(Debug)]
-pub(super) struct ClientConfiguration {
-    pub(super) sts_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
-    pub(super) region: Option<Region>,
-}
-
 impl AssumeRoleProvider {
     pub(super) async fn credentials(
         &self,
         input_credentials: Credentials,
-        client_config: &ClientConfiguration,
+        sts_config: &StsConfigBuilder,
     ) -> provider::Result {
-        let config = Config::builder()
+        let config = sts_config
+            .clone()
             .credentials_provider(input_credentials)
-            .region(client_config.region.clone())
             .build();
+        let client = StsClient::from_conf(config);
         let session_name = &self
             .session_name
             .as_ref()
             .cloned()
             .unwrap_or_else(|| sts::util::default_session_name("assume-role-from-profile"));
-        let operation = AssumeRoleInput::builder()
+        let assume_role_creds = client
+            .assume_role()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)
-            .build()
-            .expect("operation is valid")
-            .make_operation(&config)
-            .await
-            .expect("valid operation");
-        let assume_role_creds = client_config
-            .sts_client
-            .call(operation)
+            .send()
             .await
             .map_err(CredentialsError::provider_error)?
             .credentials;
@@ -117,19 +104,30 @@ impl ProviderChain {
                     .build();
                 Arc::new(provider)
             }
+            #[allow(unused_variables)]
             BaseProvider::Sso {
                 sso_account_id,
                 sso_region,
                 sso_role_name,
                 sso_start_url,
             } => {
-                let sso_config = SsoConfig {
-                    account_id: sso_account_id.to_string(),
-                    role_name: sso_role_name.to_string(),
-                    start_url: sso_start_url.to_string(),
-                    region: Region::new(sso_region.to_string()),
-                };
-                Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                #[cfg(feature = "credentials-sso")]
+                {
+                    use aws_types::region::Region;
+                    let sso_config = SsoProviderConfig {
+                        account_id: sso_account_id.to_string(),
+                        role_name: sso_role_name.to_string(),
+                        start_url: sso_start_url.to_string(),
+                        region: Region::new(sso_region.to_string()),
+                    };
+                    Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                }
+                #[cfg(not(feature = "credentials-sso"))]
+                {
+                    Err(ProfileFileError::FeatureNotEnabled {
+                        feature: "credentials-sso".into(),
+                    })?
+                }
             }
         };
         tracing::info!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());

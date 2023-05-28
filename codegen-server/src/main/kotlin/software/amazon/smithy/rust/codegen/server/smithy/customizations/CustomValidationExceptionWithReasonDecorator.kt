@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -35,6 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.StringTraitI
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -67,11 +67,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
     override val shapeId: ShapeId =
         ShapeId.from(codegenContext.settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse)
 
-    override fun renderImplFromConstraintViolationForRequestRejection(): Writable = writable {
-        val codegenScope = arrayOf(
-            "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
-            "From" to RuntimeType.From,
-        )
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable = writable {
         rustTemplate(
             """
             impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -89,7 +85,8 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                 }
             }
             """,
-            *codegenScope,
+            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "From" to RuntimeType.From,
         )
     }
 
@@ -101,7 +98,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                         is Pattern -> {
                             rustTemplate(
                                 """
-                                Self::Pattern(string) => crate::model::ValidationExceptionField {
+                                Self::Pattern(_) => crate::model::ValidationExceptionField {
                                     message: #{MessageWritable:W},
                                     name: path,
                                     reason: crate::model::ValidationExceptionFieldReason::PatternNotValid,
@@ -140,12 +137,12 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
 
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) = writable {
         val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-        val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+        val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
         rustTemplate(
             """
             pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                 crate::model::ValidationExceptionField {
-                    message: format!(r##"$message"##, &self.0, &path),
+                    message: format!(r##"$message"##, &path),
                     name: path,
                     reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                 }
@@ -160,8 +157,8 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
             """
             pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                 match self {
-                    Self::Range(value) => crate::model::ValidationExceptionField {
-                        message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}", value, &path),
+                    Self::Range(_) => crate::model::ValidationExceptionField {
+                        message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}", &path),
                         name: path,
                         reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                     }
@@ -243,7 +240,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                     rust(
                         """
                         ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                            message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                            message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
                             name: path + "/${it.forMember.memberName}",
                             reason: crate::model::ValidationExceptionFieldReason::Other,
                         },

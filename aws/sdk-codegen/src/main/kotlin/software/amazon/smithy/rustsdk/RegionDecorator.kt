@@ -10,9 +10,9 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.featureGatedConfigModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -116,7 +116,7 @@ class RegionDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (usesRegion(codegenContext)) {
-            rustCrate.withModule(codegenContext.featureGatedConfigModule()) {
+            rustCrate.withModule(ClientRustModule.Config) {
                 rust("pub use #T::Region;", region(codegenContext.runtimeConfig))
             }
         }
@@ -171,7 +171,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
             )
 
             ServiceConfig.BuilderStruct ->
-                rustTemplate("region: Option<#{Region}>,", *codegenScope)
+                rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
 
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
@@ -189,6 +189,12 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                     /// ```
                     pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
                         self.region = region.into();
+                        self
+                    }
+
+                    /// Sets the AWS region to use when making requests.
+                    pub fn set_region(&mut self, region: Option<#{Region}>) -> &mut Self {
+                        self.region = region;
                         self
                     }
                     """,

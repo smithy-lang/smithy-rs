@@ -130,7 +130,6 @@ open class AwsJson(
         "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
 
@@ -144,23 +143,22 @@ open class AwsJson(
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
                 *errorScope,

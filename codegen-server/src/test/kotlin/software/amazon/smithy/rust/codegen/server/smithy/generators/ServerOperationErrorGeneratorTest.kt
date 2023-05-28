@@ -22,6 +22,13 @@ class ServerOperationErrorGeneratorTest {
     private val baseModel = """
         namespace error
 
+        use aws.protocols#restJson1
+
+        @restJson1
+        service MyService {
+            operations: [Greeting]
+        }
+
         operation Greeting {
             errors: [InvalidGreeting, ComplexError, FooException, Deprecated]
         }

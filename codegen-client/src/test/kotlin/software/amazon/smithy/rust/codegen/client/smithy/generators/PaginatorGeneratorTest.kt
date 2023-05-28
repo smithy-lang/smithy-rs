@@ -6,9 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
@@ -67,9 +70,31 @@ internal class PaginatorGeneratorTest {
         }
     """.asSmithyModel()
 
+    // TODO(enableNewSmithyRuntime): Remove this middleware test when launching
+    @Test
+    fun `generate paginators that compile with middleware`() {
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+            rustCrate.integrationTest("paginators_generated") {
+                Attribute.AllowUnusedImports.render(this)
+                rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")
+            }
+        }
+    }
+
+    private fun enableNewSmithyRuntime(): ObjectNode = ObjectNode.objectNodeBuilder()
+        .withMember(
+            "codegen",
+            ObjectNode.objectNodeBuilder()
+                .withMember("enableNewSmithyRuntime", StringNode.from("orchestrator")).build(),
+        )
+        .build()
+
     @Test
     fun `generate paginators that compile`() {
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(
+            model,
+            params = IntegrationTestParams(additionalSettings = enableNewSmithyRuntime()),
+        ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
                 Attribute.AllowUnusedImports.render(this)
                 rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")

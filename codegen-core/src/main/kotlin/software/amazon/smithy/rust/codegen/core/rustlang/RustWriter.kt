@@ -26,6 +26,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -87,7 +88,9 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     block: T.() -> Unit,
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
-        conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
+        withTemplate(textAfterNewLine, ctx) { tail ->
+            conditionalBlock(header, tail, conditional = true, block = block)
+        }
     }
 }
 
@@ -136,6 +139,21 @@ fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
     block(this)
     if (conditional) {
         closeBlock(textAfterNewLine.trim())
+    }
+    return this
+}
+
+fun RustWriter.conditionalBlockTemplate(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
+    conditional: Boolean = true,
+    vararg args: Pair<String, Any>,
+    block: RustWriter.() -> Unit,
+): RustWriter {
+    withTemplate(textBeforeNewLine.trim(), args) { beforeNewLine ->
+        withTemplate(textAfterNewLine.trim(), args) { afterNewLine ->
+            conditionalBlock(beforeNewLine, afterNewLine, conditional = conditional, block = block)
+        }
     }
     return this
 }
@@ -468,7 +486,8 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
-
+                fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
@@ -514,7 +533,7 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate") || filename.startsWith("tests/")) {
+            require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
                 "We can only write into files in the crate (got $namespace)"
             }
         }
@@ -605,7 +624,7 @@ class RustWriter private constructor(
         when {
             member.isOptional() -> {
                 val innerValue = ValueExpression.Reference(safeName("inner"))
-                rustBlock("if let Some(${innerValue.name}) = ${value.asRef()}") {
+                rustBlockTemplate("if let #{Some}(${innerValue.name}) = ${value.asRef()}", *preludeScope) {
                     block(innerValue)
                 }
             }

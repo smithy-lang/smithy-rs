@@ -60,7 +60,7 @@ impl CredentialsProviderChain {
     }
 
     /// Add a fallback to the default provider chain
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     pub async fn or_default_provider(self) -> Self {
         self.or_else(
             "DefaultProviderChain",
@@ -69,7 +69,7 @@ impl CredentialsProviderChain {
     }
 
     /// Creates a credential provider chain that starts with the default provider
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     pub async fn default_provider() -> Self {
         Self::first_try(
             "DefaultProviderChain",
@@ -174,11 +174,10 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(300)),
         );
         match timeout.await {
-            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
+            Ok(_) => panic!("provide_credentials completed before timeout future"),
             Err(_err) => match chain.fallback_on_interrupt() {
                 Some(actual) => assert_eq!(actual, expected),
-                None => assert!(
-                    false,
+                None => panic!(
                     "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
                 ),
             },
@@ -208,11 +207,10 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)),
         );
         match timeout.await {
-            Ok(_) => assert!(false, "provide_credentials completed before timeout future"),
+            Ok(_) => panic!("provide_credentials completed before timeout future"),
             Err(_err) => match chain.fallback_on_interrupt() {
                 Some(actual) => assert_eq!(actual, expected),
-                None => assert!(
-                    false,
+                None => panic!(
                     "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
                 ),
             },

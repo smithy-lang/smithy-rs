@@ -18,19 +18,10 @@
 //! [`Client`](crate::Client), directly, use the `dyn_https_https()` method to match that default behavior:
 //!
 #![cfg_attr(
-    not(all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    )),
+    not(all(feature = "rustls", feature = "client-hyper")),
     doc = "```no_run,ignore"
 )]
-#![cfg_attr(
-    all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    ),
-    doc = "```no_run"
-)]
+#![cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 //! use aws_smithy_client::Client;
 //!
 //! let client = Client::builder()
@@ -144,7 +135,7 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
 impl<C> Service<http::Request<SdkBody>> for Adapter<C>
 where
     C: Clone + Send + Sync + 'static,
-    C: tower::Service<Uri>,
+    C: Service<Uri>,
     C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
@@ -236,9 +227,9 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 
 /// Builder for [`hyper_ext::Adapter`](Adapter)
 ///
-/// Unlike a Smithy client, the [`tower::Service`] inside a [`hyper_ext::Adapter`](Adapter) is actually a service that
-/// accepts a `Uri` and returns a TCP stream. Two default implementations of this are provided, one
-/// that encrypts the stream with `rustls`, the other that encrypts the stream with `native-tls`.
+/// Unlike a Smithy client, the [`Service`] inside a [`hyper_ext::Adapter`](Adapter) is actually a service that
+/// accepts a `Uri` and returns a TCP stream. One default implementation of this is provided,
+/// that encrypts the stream with `rustls`.
 ///
 /// # Examples
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
@@ -270,7 +261,7 @@ impl Builder {
     pub fn build<C>(self, connector: C) -> Adapter<C>
     where
         C: Clone + Send + Sync + 'static,
-        C: tower::Service<Uri>,
+        C: Service<Uri>,
         C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
@@ -312,7 +303,7 @@ impl Builder {
     /// Set the async sleep implementation used for timeouts
     ///
     /// Calling this is only necessary for testing or to use something other than
-    /// [`aws_smithy_async::rt::sleep::default_async_sleep`].
+    /// [`default_async_sleep`].
     pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep + 'static>) -> Self {
         self.sleep_impl = Some(sleep_impl);
         self
@@ -321,7 +312,7 @@ impl Builder {
     /// Set the async sleep implementation used for timeouts
     ///
     /// Calling this is only necessary for testing or to use something other than
-    /// [`aws_smithy_async::rt::sleep::default_async_sleep`].
+    /// [`default_async_sleep`].
     pub fn set_sleep_impl(
         &mut self,
         sleep_impl: Option<Arc<dyn AsyncSleep + 'static>>,
@@ -421,14 +412,14 @@ mod timeout_middleware {
         /// Create a new `ConnectTimeout` around `inner`.
         ///
         /// Typically, `I` will implement [`hyper::client::connect::Connect`].
-        pub fn new(inner: I, sleep: Arc<dyn AsyncSleep>, timeout: Duration) -> Self {
+        pub(crate) fn new(inner: I, sleep: Arc<dyn AsyncSleep>, timeout: Duration) -> Self {
             Self {
                 inner,
                 timeout: Some((sleep, timeout)),
             }
         }
 
-        pub fn no_timeout(inner: I) -> Self {
+        pub(crate) fn no_timeout(inner: I) -> Self {
             Self {
                 inner,
                 timeout: None,
@@ -437,7 +428,7 @@ mod timeout_middleware {
     }
 
     #[derive(Clone, Debug)]
-    pub struct HttpReadTimeout<I> {
+    pub(crate) struct HttpReadTimeout<I> {
         inner: I,
         timeout: Option<(Arc<dyn AsyncSleep>, Duration)>,
     }
@@ -446,14 +437,14 @@ mod timeout_middleware {
         /// Create a new `HttpReadTimeout` around `inner`.
         ///
         /// Typically, `I` will implement [`tower::Service<http::Request<SdkBody>>`].
-        pub fn new(inner: I, sleep: Arc<dyn AsyncSleep>, timeout: Duration) -> Self {
+        pub(crate) fn new(inner: I, sleep: Arc<dyn AsyncSleep>, timeout: Duration) -> Self {
             Self {
                 inner,
                 timeout: Some((sleep, timeout)),
             }
         }
 
-        pub fn no_timeout(inner: I) -> Self {
+        pub(crate) fn no_timeout(inner: I) -> Self {
             Self {
                 inner,
                 timeout: None,
@@ -722,7 +713,7 @@ mod test {
             _cx: &mut Context<'_>,
             _buf: &mut ReadBuf<'_>,
         ) -> Poll<std::io::Result<()>> {
-            Poll::Ready(Err(std::io::Error::new(
+            Poll::Ready(Err(Error::new(
                 ErrorKind::ConnectionReset,
                 "connection reset",
             )))
@@ -754,7 +745,7 @@ mod test {
 
     impl<T> tower::Service<Uri> for TestConnection<T>
     where
-        T: Clone + hyper::client::connect::Connection,
+        T: Clone + Connection,
     {
         type Response = T;
         type Error = BoxError;

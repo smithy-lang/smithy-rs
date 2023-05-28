@@ -3,23 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![warn(
-    missing_debug_implementations,
-    missing_docs,
-    rustdoc::all,
-    unreachable_pub
-)]
-
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
-use crate::connection::ConnectionMetadata;
-use crate::operation;
-use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
-use aws_smithy_types::error::ErrorMetadata;
-use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+
+use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::ErrorMetadata;
+use aws_smithy_types::retry::ErrorKind;
+
+use crate::connection::ConnectionMetadata;
+use crate::operation;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -341,7 +336,7 @@ pub enum SdkError<E, R = operation::Response> {
     DispatchFailure(DispatchFailure),
 
     /// A response was received but it was not parseable according the the protocol (for example
-    /// the server hung up while the body was being read)
+    /// the server hung up without sending a complete response)
     ResponseError(ResponseError<R>),
 
     /// An error response was received from the service
@@ -438,6 +433,30 @@ impl<E, R> SdkError<E, R> {
             ResponseError(context) => Ok(context.source),
             DispatchFailure(context) => Ok(context.source.into()),
             ServiceError(context) => Ok(context.source.into()),
+        }
+    }
+
+    /// Return a reference to this error's raw response, if it contains one. Otherwise, return `None`.
+    pub fn raw_response(&self) -> Option<&R> {
+        match self {
+            Self::ServiceError(inner) => Some(inner.raw()),
+            Self::ResponseError(inner) => Some(inner.raw()),
+            _ => None,
+        }
+    }
+
+    /// Maps the service error type in `SdkError::ServiceError`
+    #[doc(hidden)]
+    pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
+        match self {
+            Self::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
+                source: map(context.source),
+                raw: context.raw,
+            }),
+            Self::ConstructionFailure(context) => SdkError::<E2, R>::ConstructionFailure(context),
+            Self::DispatchFailure(context) => SdkError::<E2, R>::DispatchFailure(context),
+            Self::ResponseError(context) => SdkError::<E2, R>::ResponseError(context),
+            Self::TimeoutError(context) => SdkError::<E2, R>::TimeoutError(context),
         }
     }
 }

@@ -521,6 +521,7 @@ mod tests {
         let server_packages = vec![
             package("aws-smithy-http-server", &[]),
             package("aws-smithy-http-server-python", &[]),
+            package("aws-smithy-http-server-typescript", &[]),
         ];
         for pkg in server_packages {
             assert_eq!(

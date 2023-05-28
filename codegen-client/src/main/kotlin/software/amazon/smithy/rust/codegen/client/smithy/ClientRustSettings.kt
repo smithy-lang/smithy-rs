@@ -72,6 +72,43 @@ data class ClientRustSettings(
     }
 }
 
+// TODO(enableNewSmithyRuntime): Remove this mode after switching to the orchestrator
+enum class SmithyRuntimeMode {
+    Middleware,
+    BothDefaultMiddleware,
+    BothDefaultOrchestrator,
+    Orchestrator,
+    ;
+
+    val exclusivelyGenerateMiddleware: Boolean get() = generateMiddleware && !generateOrchestrator
+
+    val generateMiddleware: Boolean get() = when (this) {
+        Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+        else -> false
+    }
+
+    val generateOrchestrator: Boolean get() = when (this) {
+        Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+        else -> false
+    }
+
+    val defaultToMiddleware: Boolean get() = when (this) {
+        Middleware, BothDefaultMiddleware -> true
+        else -> false
+    }
+    val defaultToOrchestrator: Boolean get() = !defaultToMiddleware
+
+    companion object {
+        fun fromString(value: String): SmithyRuntimeMode = when (value) {
+            "middleware" -> Middleware
+            "orchestrator" -> Orchestrator
+            "both_default_middleware" -> BothDefaultMiddleware
+            "both_default_orchestrator" -> BothDefaultOrchestrator
+            else -> throw IllegalArgumentException("unknown runtime mode: $value")
+        }
+    }
+}
+
 /**
  * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
  * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
@@ -86,8 +123,8 @@ data class ClientCodegenConfig(
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
-    // TODO(CrateReorganization): Remove this once we commit to the breaking change
-    val enableNewCrateOrganizationScheme: Boolean = defaultEnableNewCrateOrganizationScheme,
+    // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
+    val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -96,7 +133,7 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private const val defaultEnableNewCrateOrganizationScheme = true
+        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Middleware
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -109,14 +146,14 @@ data class ClientCodegenConfig(
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewCrateOrganizationScheme = node.get().getBooleanMemberOrDefault("enableNewCrateOrganizationScheme", defaultEnableNewCrateOrganizationScheme),
+                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(
+                        node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware"),
+                    ),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = defaultEventStreamAllowList,
-                    enableNewCrateOrganizationScheme = defaultEnableNewCrateOrganizationScheme,
                 )
             }
     }

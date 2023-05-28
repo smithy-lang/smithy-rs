@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -16,6 +17,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
@@ -24,8 +27,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-
+import software.amazon.smithy.rust.codegen.server.smithy.generators.DocHandlerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.handlerImports
 object ServerRustModule {
     val root = RustModule.LibRs
 
@@ -37,6 +42,7 @@ object ServerRustModule {
     val Output = RustModule.public("output")
     val Types = RustModule.public("types")
     val Server = RustModule.public("server")
+    val Service = RustModule.private("service")
 
     val UnconstrainedModule =
         software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
@@ -44,23 +50,73 @@ object ServerRustModule {
         software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 }
 
-class ServerModuleDocProvider : ModuleDocProvider {
-    override fun docsWriter(module: RustModule.LeafModule): Writable? = writable {
-        docs(
-            when (module) {
-                ServerRustModule.Error -> "All error types that operations can return. Documentation on these types is copied from the model."
-                ServerRustModule.Operation -> "All operations that this crate can perform."
-                // TODO(ServerTeam): Document this module (I don't have context)
-                ServerRustModule.OperationShape -> ""
-                ServerRustModule.Model -> "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model."
-                ServerRustModule.Input -> "Input structures for operations. Documentation on these types is copied from the model."
-                ServerRustModule.Output -> "Output structures for operations. Documentation on these types is copied from the model."
-                ServerRustModule.Types -> "Data primitives referenced by other data types."
-                ServerRustModule.Server -> "Contains the types that are re-exported from the `aws-smithy-http-server` crate."
-                ServerRustModule.UnconstrainedModule -> "Unconstrained types for constrained shapes."
-                ServerRustModule.ConstrainedModule -> "Constrained types for constrained shapes."
-                else -> TODO("Document this module: $module")
-            },
+class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) : ModuleDocProvider {
+    override fun docsWriter(module: RustModule.LeafModule): Writable? {
+        val strDoc: (String) -> Writable = { str -> writable { docs(escape(str)) } }
+        return when (module) {
+            ServerRustModule.Error -> strDoc("All error types that operations can return. Documentation on these types is copied from the model.")
+            ServerRustModule.Operation -> strDoc("All operations that this crate can perform.")
+            ServerRustModule.OperationShape -> operationShapeModuleDoc()
+            ServerRustModule.Model -> strDoc("Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
+            ServerRustModule.Input -> strDoc("Input structures for operations. Documentation on these types is copied from the model.")
+            ServerRustModule.Output -> strDoc("Output structures for operations. Documentation on these types is copied from the model.")
+            ServerRustModule.Types -> strDoc("Data primitives referenced by other data types.")
+            ServerRustModule.Server -> strDoc("Contains the types that are re-exported from the `aws-smithy-http-server` crate.")
+            ServerRustModule.UnconstrainedModule -> strDoc("Unconstrained types for constrained shapes.")
+            ServerRustModule.ConstrainedModule -> strDoc("Constrained types for constrained shapes.")
+            else -> TODO("Document this module: $module")
+        }
+    }
+
+    private fun operationShapeModuleDoc(): Writable = writable {
+        val index = TopDownIndex.of(codegenContext.model)
+        val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
+
+        val firstOperation = operations.first() ?: return@writable
+        val firstOperationSymbol = codegenContext.symbolProvider.toSymbol(firstOperation)
+        val firstOperationName = firstOperationSymbol.name.toPascalCase()
+        val crateName = codegenContext.settings.moduleName.toSnakeCase()
+
+        rustTemplate(
+            """
+            /// A collection of types representing each operation defined in the service closure.
+            ///
+            /// ## Constructing an [`Operation`](#{SmithyHttpServer}::operation::OperationShapeExt)
+            ///
+            /// To apply middleware to specific operations the [`Operation`](#{SmithyHttpServer}::operation::Operation)
+            /// API must be used.
+            ///
+            /// Using the [`OperationShapeExt`](#{SmithyHttpServer}::operation::OperationShapeExt) trait
+            /// implemented on each ZST we can construct an [`Operation`](#{SmithyHttpServer}::operation::Operation)
+            /// with appropriate constraints given by Smithy.
+            ///
+            /// #### Example
+            ///
+            /// ```no_run
+            /// use $crateName::operation_shape::$firstOperationName;
+            /// use #{SmithyHttpServer}::operation::OperationShapeExt;
+            ///
+            #{HandlerImports:W}
+            ///
+            #{Handler:W}
+            ///
+            /// let operation = $firstOperationName::from_handler(handler)
+            ///     .layer(todo!("Provide a layer implementation"));
+            /// ```
+            ///
+            /// ## Use as Marker Structs
+            ///
+            /// The [plugin system](#{SmithyHttpServer}::plugin) also makes use of these
+            /// [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
+            /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. The traits, such as
+            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape) can be used to provide
+            /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
+            """.trimIndent(),
+            "SmithyHttpServer" to
+                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///")::render,
+            "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
         )
     }
 }

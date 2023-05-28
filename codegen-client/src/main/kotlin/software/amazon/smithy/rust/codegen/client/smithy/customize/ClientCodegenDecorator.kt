@@ -10,9 +10,12 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -58,6 +61,31 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
      * Hook to customize client construction documentation.
      */
     fun clientConstructionDocs(codegenContext: ClientCodegenContext, baseDocs: Writable): Writable = baseDocs
+
+    /**
+     * Hooks to register additional service-level runtime plugins at codegen time
+     */
+    fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations
+
+    /**
+     * Hooks to register additional operation-level runtime plugins at codegen time
+     */
+    fun operationRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationRuntimePluginCustomization>,
+    ): List<OperationRuntimePluginCustomization> = baseCustomizations
+
+    /**
+     * Hook to override the protocol test generator
+     */
+    fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = baseGenerator
 }
 
 /**
@@ -106,6 +134,30 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
         combineCustomizations(baseDocs) { decorator, customizations ->
             decorator.clientConstructionDocs(codegenContext, customizations)
         }
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.serviceRuntimePluginCustomizations(codegenContext, customizations)
+        }
+
+    override fun operationRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationRuntimePluginCustomization>,
+    ): List<OperationRuntimePluginCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.operationRuntimePluginCustomizations(codegenContext, operation, customizations)
+        }
+
+    override fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = combineCustomizations(baseGenerator) { decorator, gen ->
+        decorator.protocolTestGenerator(codegenContext, gen)
+    }
 
     companion object {
         fun fromClasspath(

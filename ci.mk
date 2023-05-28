@@ -116,6 +116,14 @@ generate-aws-sdk:
 generate-codegen-diff:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-deterministic-codegen
+check-deterministic-codegen:
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-semver
+check-semver:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: generate-smithy-rs-release
 generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)

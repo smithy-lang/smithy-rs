@@ -89,19 +89,18 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
         listOf("x-amzn-errortype" to errorShape.id.toString())
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
+                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
                 *errorScope,
