@@ -12,7 +12,7 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Fix tiny_map from_iter where one operation was being dropped"
+message = "Fix bug in AWS JSON 1.x routers where, if a service had more than 14 operations, the router was created without the route for the 15th operation."
 author = "thor-bjorgvinsson"
 references = ["smithy-rs#2733"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" ="server" }
