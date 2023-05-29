@@ -9,8 +9,10 @@ use crate::endpoint::error::InvalidEndpointError;
 use crate::operation::error::BuildError;
 use http::uri::{Authority, Uri};
 use std::borrow::Cow;
+use std::fmt::{Debug, Formatter};
 use std::result::Result as StdResult;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub mod error;
 pub mod middleware;
@@ -32,6 +34,41 @@ impl<T> ResolveEndpoint<T> for &'static str {
         Ok(aws_smithy_types::endpoint::Endpoint::builder()
             .url(*self)
             .build())
+    }
+}
+
+/// Endpoint Resolver wrapper that may be shared
+#[derive(Clone)]
+pub struct SharedEndpointResolver<T>(Arc<dyn ResolveEndpoint<T>>);
+
+impl<T> Debug for SharedEndpointResolver<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedEndpointResolver").finish()
+    }
+}
+
+impl<T> SharedEndpointResolver<T> {
+    /// Create a new `SharedEndpointResolver` from `ResolveEndpoint`
+    pub fn new(resolve_endpoint: impl ResolveEndpoint<T> + 'static) -> Self {
+        Self(Arc::new(resolve_endpoint))
+    }
+}
+
+impl<T> AsRef<dyn ResolveEndpoint<T>> for SharedEndpointResolver<T> {
+    fn as_ref(&self) -> &(dyn ResolveEndpoint<T> + 'static) {
+        self.0.as_ref()
+    }
+}
+
+impl<T> From<Arc<dyn ResolveEndpoint<T>>> for SharedEndpointResolver<T> {
+    fn from(resolve_endpoint: Arc<dyn ResolveEndpoint<T>>) -> Self {
+        SharedEndpointResolver(resolve_endpoint)
+    }
+}
+
+impl<T> ResolveEndpoint<T> for SharedEndpointResolver<T> {
+    fn resolve_endpoint(&self, params: &T) -> Result {
+        self.0.resolve_endpoint(params)
     }
 }
 

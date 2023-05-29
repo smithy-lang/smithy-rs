@@ -44,6 +44,7 @@ object AwsRuntimeType {
     fun presigning(): RuntimeType =
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
 
+    // TODO(enableNewSmithyRuntime): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,
@@ -70,4 +71,7 @@ object AwsRuntimeType {
 
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
     fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()
+
+    fun awsRuntime(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntime(runtimeConfig).toType()
+    fun awsRuntimeApi(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntimeApi(runtimeConfig).toType()
 }

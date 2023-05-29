@@ -16,6 +16,7 @@ import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -40,17 +41,22 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -78,6 +84,18 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
 import java.util.logging.Logger
 
 /**
+ * Class describing a ServerHttpBoundProtocol section that can be used in a customization.
+ */
+sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
+    data class AfterTimestampDeserializedMember(val shape: MemberShape) : ServerHttpBoundProtocolSection("AfterTimestampDeserializedMember")
+}
+
+/**
+ * Customization for the ServerHttpBoundProtocol generator.
+ */
+typealias ServerHttpBoundProtocolCustomization = NamedCustomization<ServerHttpBoundProtocolSection>
+
+/**
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
  * See `ServerRestJson.kt` for more info.
@@ -85,10 +103,12 @@ import java.util.logging.Logger
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
     protocol: ServerProtocol,
+    customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
+    additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
+    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
 ) {
     // Define suffixes for operation input / output / error wrappers
     companion object {
@@ -97,6 +117,31 @@ class ServerHttpBoundProtocolGenerator(
     }
 }
 
+class ServerHttpBoundProtocolPayloadGenerator(
+    codegenContext: CodegenContext,
+    protocol: Protocol,
+) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
+    codegenContext, protocol, HttpMessageType.RESPONSE,
+    renderEventStreamBody = { writer, params ->
+        writer.rustTemplate(
+            """
+            {
+                let error_marshaller = #{errorMarshallerConstructorFn}();
+                let marshaller = #{marshallerConstructorFn}();
+                let signer = #{NoOpSigner}{};
+                let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
+                    ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
+                adapter
+            }
+            """,
+            "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+            "NoOpSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::NoOpSigner"),
+            "marshallerConstructorFn" to params.marshallerConstructorFn,
+            "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+        )
+    },
+)
+
 /*
  * Generate all operation input parsers and output serializers for streaming and
  * non-streaming types.
@@ -104,6 +149,8 @@ class ServerHttpBoundProtocolGenerator(
 class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
+    private val customizations: List<ServerHttpBoundProtocolCustomization>,
+    private val additionalHttpBindingCustomizations: List<HttpBindingCustomization>,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
@@ -111,7 +158,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
-    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     private val codegenScope = arrayOf(
@@ -119,6 +165,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "Cow" to RuntimeType.Cow,
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
+        "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
         "HttpBody" to RuntimeType.HttpBody,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "Hyper" to RuntimeType.Hyper,
@@ -159,16 +206,34 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        val staticContentType = "CONTENT_TYPE_${operationName.uppercase()}"
         val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), ${contentType.dq()}) {
-                        return Err(#{RuntimeError}::NotAcceptable)
+                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), &$staticContentType) {
+                        return Err(#{RequestRejection}::NotAcceptable);
                     }
                     """,
                     *codegenScope,
                 )
+            }
+        }
+        val verifyAcceptHeaderStaticContentTypeInit = writable {
+            httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
+                val init = when (contentType) {
+                    "application/json" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_JSON;"
+                    "application/octet-stream" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_OCTET_STREAM;"
+                    "application/x-www-form-urlencoded" -> "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_WWW_FORM_URLENCODED;"
+                    else ->
+                        """
+                        static $staticContentType: #{OnceCell}::sync::Lazy<#{Mime}::Mime> = #{OnceCell}::sync::Lazy::new(|| {
+                            ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
+                        });
+                        """
+                }
+                rustTemplate(init, *codegenScope)
             }
         }
         val verifyRequestContentTypeHeader = writable {
@@ -183,9 +248,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             ?.let { "Some(${it.dq()})" } ?: "None"
                         rustTemplate(
                             """
-                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType).is_err() {
-                                return Err(#{RuntimeError}::UnsupportedMediaType)
-                            }
+                            #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
                             """,
                             *codegenScope,
                         )
@@ -195,9 +258,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+            #{verifyAcceptHeaderStaticContentTypeInit:W}
             #{PinProjectLite}::pin_project! {
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
@@ -234,18 +298,23 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             .await
                             .map_err(Into::into)
                     };
+                    use #{FuturesUtil}::future::TryFutureExt;
+                    let fut = fut.map_err(|e: #{RequestRejection}| {
+                        #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                        #{RuntimeError}::from(e)
+                    });
                     $inputFuture {
                         inner: Box::pin(fut)
                     }
                 }
             }
-
-            """.trimIndent(),
+            """,
             *codegenScope,
             "I" to inputSymbol,
             "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
+            "verifyAcceptHeaderStaticContentTypeInit" to verifyAcceptHeaderStaticContentTypeInit,
             "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
         )
 
@@ -390,7 +459,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         errorSymbol: Symbol,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
+        val structuredDataSerializer = protocol.structuredDataSerializer()
         withBlock("match error {", "}") {
             val errors = operationShape.operationErrors(model)
             errors.forEach {
@@ -463,12 +532,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
-            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
+            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(", "));", *codegenScope) {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
         } ?: run {
-            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
+            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
             withBlockTemplate("let payload = ", ";") {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
@@ -568,9 +637,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderHttpResponseCode(defaultCode: Int) = writable {
         check(defaultCode in 100..999) {
             """
-           Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
-           "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
-           """.replace("\n", "").trimIndent()
+            Smithy library lied to us. According to https://smithy.io/2.0/spec/http-bindings.html#http-trait,
+            "The provided value SHOULD be between 100 and 599, and it MUST be between 100 and 999".
+            """.replace("\n", "").trimIndent()
         }
         rustTemplate(
             """
@@ -611,8 +680,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
-        val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
+        val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust(
             "let mut input = #T::default();",
@@ -952,12 +1021,15 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 val timestampFormatType = RuntimeType.parseTimestampFormat(CodegenTarget.SERVER, runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
-                                    let v = #{DateTime}::from_str(&v, #{format})?#{ConvertInto:W};
+                                    let v = #{DateTime}::from_str(&v, #{format})?
                                     """.trimIndent(),
                                     *codegenScope,
                                     "format" to timestampFormatType,
-                                    "ConvertInto" to typeConversionGenerator.convertViaInto(memberShape),
                                 )
+                                for (customization in customizations) {
+                                    customization.section(ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember(it.member))(this)
+                                }
+                                rust(";")
                             }
                             else -> { // Number or boolean.
                                 rust(
@@ -1047,7 +1119,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
@@ -1109,22 +1181,24 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?#{ConvertInto:W};
+                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
-                                "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                             )
                         } else {
                             rustTemplate(
                                 """
-                                let value = #{DateTime}::from_str(value, #{format})?#{ConvertInto:W};
+                                let value = #{DateTime}::from_str(value, #{format})?
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
-                                "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                             )
                         }
+                        for (customization in customizations) {
+                            customization.section(ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember(binding.member))(this)
+                        }
+                        rust(";")
                     }
                     else -> {
                         check(target is NumberShape || target is BooleanShape)

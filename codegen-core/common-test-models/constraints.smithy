@@ -12,7 +12,9 @@ service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
+        ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
+
         // `httpQueryParams` and `httpPrefixHeaders` are structurually
         // exclusive, so we need one operation per target shape type
         // combination.
@@ -56,6 +58,13 @@ operation ConstrainedShapesOperation {
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/constrained-http-payload-bound-shape-operation", method: "POST")
+operation ConstrainedHttpPayloadBoundShapeOperation {
+    input: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
+    output: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -311,6 +320,12 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     enumStringListQuery: ListOfEnumString,
 }
 
+structure ConstrainedHttpPayloadBoundShapeOperationInputOutput {
+    @required
+    @httpPayload
+    httpPayloadBoundConstrainedShape: ConA
+}
+
 structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
     @httpQueryParams
     mapOfPatternString: MapOfPatternString
@@ -454,6 +469,7 @@ structure ConA {
 
     conBList: ConBList,
     lengthList: LengthList,
+    sensitiveLengthList: SensitiveLengthList,
 
     conBSet: ConBSet,
 
@@ -865,6 +881,14 @@ list ConBListInner {
 list LengthList {
     member: String
 }
+
+@length(max: 69)
+list SensitiveLengthList {
+    member: SensitiveStructure
+}
+
+@sensitive
+structure SensitiveStructure { }
 
 set ConBSet {
     member: ConBSetInner

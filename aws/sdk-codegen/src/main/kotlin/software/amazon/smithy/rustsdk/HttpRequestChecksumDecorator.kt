@@ -42,9 +42,9 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
+    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator upon launching the orchestrator
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime
+        codegenContext.smithyRuntimeMode.generateMiddleware
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,

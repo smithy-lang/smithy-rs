@@ -20,9 +20,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -86,6 +88,11 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
     /**
+     * A section for setting up a field to be used by RuntimePlugin
+     */
+    object ToRuntimePlugin : ServiceConfig("ToRuntimePlugin")
+
+    /**
      * A section for extra functionality that needs to be defined with the config module
      */
     object Extras : ServiceConfig("Extras")
@@ -143,6 +150,8 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
             ServiceConfig.BuilderBuild -> writable {
                 rust("${param.name}: self.${param.name},")
             }
+
+            ServiceConfig.ToRuntimePlugin -> emptySection
 
             else -> emptySection
         }
@@ -226,12 +235,25 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Default)]")
+        writer.raw("#[derive(Clone, Default)]")
         writer.rustBlock("pub struct Builder") {
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
+
+        // Custom implementation for Debug so we don't need to enforce Debug down the chain
+        writer.rustBlock("impl std::fmt::Debug for Builder") {
+            writer.rustTemplate(
+                """
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let mut config = f.debug_struct("Builder");
+                    config.finish()
+                }
+                """,
+            )
+        }
+
         writer.rustBlock("impl Builder") {
             writer.docs("Constructs a config builder.")
             writer.rustTemplate("pub fn new() -> Self { Self::default() }")
@@ -268,6 +290,31 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
         customizations.forEach {
             it.section(ServiceConfig.Extras)(writer)
+        }
+    }
+
+    fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        writer.rustBlockTemplate(
+            "impl #{RuntimePlugin} for Builder",
+            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+        ) {
+            rustBlockTemplate(
+                """
+                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
+                """,
+                "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            ) {
+                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
+
+                customizations.forEach {
+                    it.section(ServiceConfig.ToRuntimePlugin)(writer)
+                }
+
+                rust("Ok(())")
+            }
         }
     }
 }

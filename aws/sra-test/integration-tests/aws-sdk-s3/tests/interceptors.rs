@@ -3,101 +3,168 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// type TxReq = http::Request<SdkBody>;
-// type TxRes = http::Response<SdkBody>;
-//
-// pub struct SigV4SigningConfigInterceptor {
-//     pub signing_service: &'static str,
-//     pub signing_region: Option<aws_types::region::Region>,
-// }
+mod util;
 
-// // Mount the interceptors
-// let mut interceptors = Interceptors::new();
-// let sig_v4_signing_config_interceptor = SigV4SigningConfigInterceptor {
-//     signing_region: service_config.region.clone(),
-//     signing_service: service_config.signing_service(),
-// };
-// let credentials_cache_interceptor = CredentialsCacheInterceptor {
-//     shared_credentials_cache: service_config.credentials_cache.clone(),
-// };
-// let checksum_interceptor = ChecksumInterceptor {
-//     checksum_mode: input.checksum_mode().cloned(),
-// };
-// interceptors
-//     .with_interceptor(sig_v4_signing_config_interceptor)
-//     .with_interceptor(credentials_cache_interceptor)
-//     .with_interceptor(checksum_interceptor);
+use aws_http::user_agent::AwsUserAgent;
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::Client;
+use aws_smithy_client::dvr;
+use aws_smithy_client::dvr::MediaType;
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, Interceptor,
+};
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::orchestrator::RequestTime;
+use aws_smithy_runtime_api::config_bag::ConfigBag;
+use http::header::USER_AGENT;
+use http::HeaderValue;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-// let token_bucket = Box::new(standard::TokenBucket::builder().max_tokens(500).build());
-//
-// impl<ModReq, ModRes> Interceptor<ModReq, TxReq, TxRes, ModRes> for SigV4SigningConfigInterceptor {
-//     fn modify_before_signing(
-//         &mut self,
-//         context: &mut InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
-//     ) -> Result<(), InterceptorError> {
-//         let mut props = context.properties_mut();
-//
-//         let mut signing_config = OperationSigningConfig::default_config();
-//         signing_config.signing_options.content_sha256_header = true;
-//         signing_config.signing_options.double_uri_encode = false;
-//         signing_config.signing_options.normalize_uri_path = false;
-//         props.insert(signing_config);
-//         props.insert(aws_types::SigningService::from_static(self.signing_service));
-//
-//         if let Some(signing_region) = self.signing_region.as_ref() {
-//             props.insert(aws_types::region::SigningRegion::from(
-//                 signing_region.clone(),
-//             ));
-//         }
-//
-//         Ok(())
-//     }
-// }
-//
-// pub struct CredentialsCacheInterceptor {
-//     pub shared_credentials_cache: SharedCredentialsCache,
-// }
-//
-// impl<ModReq, ModRes> Interceptor<ModReq, TxReq, TxRes, ModRes> for CredentialsCacheInterceptor {
-//     fn modify_before_signing(
-//         &mut self,
-//         context: &mut InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
-//     ) -> Result<(), InterceptorError> {
-//         match self
-//             .shared_credentials_cache
-//             .as_ref()
-//             .provide_cached_credentials()
-//             .now_or_never()
-//         {
-//             Some(Ok(creds)) => {
-//                 context.properties_mut().insert(creds);
-//             }
-//             // ignore the case where there is no credentials cache wired up
-//             Some(Err(CredentialsError::CredentialsNotLoaded { .. })) => {
-//                 tracing::info!("credentials cache returned CredentialsNotLoaded, ignoring")
-//             }
-//             // if we get another error class, there is probably something actually wrong that the user will
-//             // want to know about
-//             Some(Err(other)) => return Err(InterceptorError::ModifyBeforeSigning(other.into())),
-//             None => unreachable!("fingers crossed that creds are always available"),
-//         }
-//
-//         Ok(())
-//     }
-// }
-//
-// pub struct ChecksumInterceptor {
-//     pub checksum_mode: Option<ChecksumMode>,
-// }
-//
-// impl<ModReq, ModRes> Interceptor<ModReq, TxReq, TxRes, ModRes> for ChecksumInterceptor {
-//     fn modify_before_serialization(
-//         &mut self,
-//         context: &mut InterceptorContext<ModReq, TxReq, TxRes, ModRes>,
-//     ) -> Result<(), InterceptorError> {
-//         let mut props = context.properties_mut();
-//         props.insert(self.checksum_mode.clone());
-//
-//         Ok(())
-//     }
-// }
+const LIST_BUCKETS_PATH: &str = "test-data/list-objects-v2.json";
+
+#[tokio::test]
+async fn operation_interceptor_test() {
+    tracing_subscriber::fmt::init();
+
+    let conn = dvr::ReplayingConnection::from_file(LIST_BUCKETS_PATH).unwrap();
+
+    // Not setting `TestUserAgentInterceptor` here, expecting it to be set later by the
+    // operation-level config.
+    let config = aws_sdk_s3::Config::builder()
+        .credentials_provider(Credentials::for_tests())
+        .region(Region::new("us-east-1"))
+        .http_connector(DynConnector::new(conn.clone()))
+        .build();
+    let client = Client::from_conf(config);
+    let fixup = util::FixupPlugin {
+        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
+    };
+
+    let resp = dbg!(
+        client
+            .list_objects_v2()
+            .bucket("test-bucket")
+            .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .interceptor(util::TestUserAgentInterceptor)
+            .send_orchestrator_with_plugin(Some(fixup))
+            .await
+    );
+    let resp = resp.expect("valid e2e test");
+    assert_eq!(resp.name(), Some("test-bucket"));
+    conn.full_validate(MediaType::Xml).await.expect("success")
+}
+
+#[derive(Debug)]
+struct RequestTimeResetInterceptor;
+impl Interceptor for RequestTimeResetInterceptor {
+    fn modify_before_signing(
+        &self,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
+        cfg.set_request_time(RequestTime::new(UNIX_EPOCH));
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct RequestTimeAdvanceInterceptor(Duration);
+impl Interceptor for RequestTimeAdvanceInterceptor {
+    fn modify_before_signing(
+        &self,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::client::interceptors::BoxError> {
+        let request_time = cfg.request_time().unwrap();
+        let request_time = RequestTime::new(request_time.system_time() + self.0);
+        cfg.set_request_time(request_time);
+
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn interceptor_priority() {
+    let conn = dvr::ReplayingConnection::from_file(LIST_BUCKETS_PATH).unwrap();
+
+    // `RequestTimeResetInterceptor` will reset a `RequestTime` to `UNIX_EPOCH`, whose previous
+    // value should be `SystemTime::now()` set by `FixupPlugin`.
+    let config = aws_sdk_s3::Config::builder()
+        .credentials_provider(Credentials::for_tests())
+        .region(Region::new("us-east-1"))
+        .http_connector(DynConnector::new(conn.clone()))
+        .interceptor(util::TestUserAgentInterceptor)
+        .interceptor(RequestTimeResetInterceptor)
+        .build();
+    let client = Client::from_conf(config);
+    let fixup = util::FixupPlugin {
+        timestamp: SystemTime::now(),
+    };
+
+    // `RequestTimeAdvanceInterceptor` configured at the operation level should run after,
+    // expecting the `RequestTime` to move forward by the specified amount since `UNIX_EPOCH`.
+    let resp = dbg!(
+        client
+            .list_objects_v2()
+            .bucket("test-bucket")
+            .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .interceptor(RequestTimeAdvanceInterceptor(Duration::from_secs(
+                1624036048
+            )))
+            .send_orchestrator_with_plugin(Some(fixup))
+            .await
+    );
+    let resp = resp.expect("valid e2e test");
+    assert_eq!(resp.name(), Some("test-bucket"));
+    conn.full_validate(MediaType::Xml).await.expect("success")
+}
+
+#[tokio::test]
+async fn set_test_user_agent_through_request_mutation() {
+    let conn = dvr::ReplayingConnection::from_file(LIST_BUCKETS_PATH).unwrap();
+
+    let config = aws_sdk_s3::Config::builder()
+        .credentials_provider(Credentials::for_tests())
+        .region(Region::new("us-east-1"))
+        .http_connector(DynConnector::new(conn.clone()))
+        .build();
+    let client = Client::from_conf(config);
+    let fixup = util::FixupPlugin {
+        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
+    };
+
+    let resp = dbg!(
+        client
+            .list_objects_v2()
+            .bucket("test-bucket")
+            .prefix("prefix~")
+            .customize()
+            .await
+            .unwrap()
+            .mutate_request(|request| {
+                let headers = request.headers_mut();
+                let user_agent = AwsUserAgent::for_tests();
+                headers.insert(
+                    USER_AGENT,
+                    HeaderValue::try_from(user_agent.ua_header()).unwrap(),
+                );
+                headers.insert(
+                    util::X_AMZ_USER_AGENT,
+                    HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
+                );
+            })
+            .send_orchestrator_with_plugin(Some(fixup))
+            .await
+    );
+    let resp = resp.expect("valid e2e test");
+    assert_eq!(resp.name(), Some("test-bucket"));
+    conn.full_validate(MediaType::Xml).await.expect("success")
+}

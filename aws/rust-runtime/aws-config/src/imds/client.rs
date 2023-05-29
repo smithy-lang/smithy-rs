@@ -280,6 +280,10 @@ impl ParseStrictResponse for ImdsGetResponseHandler {
             Err(InnerImdsError::BadStatus)
         }
     }
+
+    fn sensitive(&self) -> bool {
+        true
+    }
 }
 
 /// IMDSv2 Endpoint Mode
@@ -929,7 +933,7 @@ pub(crate) mod test {
 
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
         use aws_smithy_types::error::display::DisplayErrorContext;

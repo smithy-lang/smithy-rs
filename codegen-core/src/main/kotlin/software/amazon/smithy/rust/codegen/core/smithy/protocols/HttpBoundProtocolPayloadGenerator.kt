@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -26,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamErrorMarshallerGenerator
@@ -42,10 +42,19 @@ import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
+data class EventStreamBodyParams(
+    val outerName: String,
+    val memberName: String,
+    val marshallerConstructorFn: RuntimeType,
+    val errorMarshallerConstructorFn: RuntimeType,
+    val additionalPayloadContext: AdditionalPayloadContext,
+)
+
 class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
+    private val renderEventStreamBody: (RustWriter, EventStreamBodyParams) -> Unit,
 ) : ProtocolPayloadGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -62,7 +71,10 @@ class HttpBoundProtocolPayloadGenerator(
     )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
+    override fun payloadMetadata(
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
             HttpMessageType.RESPONSE -> operationShape.outputShape(model) to
                 httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
@@ -91,50 +103,62 @@ class HttpBoundProtocolPayloadGenerator(
         }
     }
 
-    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generatePayload(
+        writer: RustWriter,
+        shapeName: String,
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         when (httpMessageType) {
-            HttpMessageType.RESPONSE -> generateResponsePayload(writer, self, operationShape)
-            HttpMessageType.REQUEST -> generateRequestPayload(writer, self, operationShape)
+            HttpMessageType.RESPONSE -> generateResponsePayload(writer, shapeName, operationShape, additionalPayloadContext)
+            HttpMessageType.REQUEST -> generateRequestPayload(writer, shapeName, operationShape, additionalPayloadContext)
         }
     }
 
-    private fun generateRequestPayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+    private fun generateRequestPayload(
+        writer: RustWriter, shapeName: String, operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         val payloadMemberName = httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-            generateStructureSerializer(writer, self, serializerGenerator.operationInputSerializer(operationShape))
+            val serializerGenerator = protocol.structuredDataSerializer()
+            generateStructureSerializer(writer, shapeName, serializerGenerator.operationInputSerializer(operationShape))
         } else {
-            generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
+            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName, additionalPayloadContext)
         }
     }
 
-    private fun generateResponsePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+    private fun generateResponsePayload(
+        writer: RustWriter, shapeName: String, operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         val payloadMemberName = httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
 
         if (payloadMemberName == null) {
-            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-            generateStructureSerializer(writer, self, serializerGenerator.operationOutputSerializer(operationShape))
+            val serializerGenerator = protocol.structuredDataSerializer()
+            generateStructureSerializer(writer, shapeName, serializerGenerator.operationOutputSerializer(operationShape))
         } else {
-            generatePayloadMemberSerializer(writer, self, operationShape, payloadMemberName)
+            generatePayloadMemberSerializer(writer, shapeName, operationShape, payloadMemberName, additionalPayloadContext)
         }
     }
 
     private fun generatePayloadMemberSerializer(
         writer: RustWriter,
-        self: String,
+        shapeName: String,
         operationShape: OperationShape,
         payloadMemberName: String,
+        additionalPayloadContext: AdditionalPayloadContext,
     ) {
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+        val serializerGenerator = protocol.structuredDataSerializer()
 
         if (operationShape.isEventStream(model)) {
             if (operationShape.isInputEventStream(model) && target == CodegenTarget.CLIENT) {
                 val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
-                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, "self")
+                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, shapeName, additionalPayloadContext)
             } else if (operationShape.isOutputEventStream(model) && target == CodegenTarget.SERVER) {
                 val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
-                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, "output")
+                writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator, "output", additionalPayloadContext)
             } else {
                 throw CodegenException("Payload serializer for event streams with an invalid configuration")
             }
@@ -144,16 +168,16 @@ class HttpBoundProtocolPayloadGenerator(
                 HttpMessageType.RESPONSE -> operationShape.outputShape(model).expectMember(payloadMemberName)
                 HttpMessageType.REQUEST -> operationShape.inputShape(model).expectMember(payloadMemberName)
             }
-            writer.serializeViaPayload(bodyMetadata, self, payloadMember, serializerGenerator)
+            writer.serializeViaPayload(bodyMetadata, shapeName, payloadMember, serializerGenerator)
         }
     }
 
-    private fun generateStructureSerializer(writer: RustWriter, self: String, serializer: RuntimeType?) {
+    private fun generateStructureSerializer(writer: RustWriter, shapeName: String, serializer: RuntimeType?) {
         if (serializer == null) {
             writer.rust("\"\"")
         } else {
             writer.rust(
-                "#T(&$self)?",
+                "#T(&$shapeName)?",
                 serializer,
             )
         }
@@ -164,6 +188,7 @@ class HttpBoundProtocolPayloadGenerator(
         memberShape: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
         outerName: String,
+        additionalPayloadContext: AdditionalPayloadContext,
     ) {
         val memberName = symbolProvider.toMemberName(memberShape)
         val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
@@ -193,53 +218,31 @@ class HttpBoundProtocolPayloadGenerator(
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
         //  parameters that are not `@eventHeader` or `@eventPayload`.
-        when (target) {
-            CodegenTarget.CLIENT ->
-                rustTemplate(
-                    """
-                    {
-                        let error_marshaller = #{errorMarshallerConstructorFn}();
-                        let marshaller = #{marshallerConstructorFn}();
-                        let signer = _config.new_event_stream_signer(properties.clone());
-                        let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, _> =
-                            $outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer);
-                        let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
-                        body
-                    }
-                    """,
-                    *codegenScope,
-                    "marshallerConstructorFn" to marshallerConstructorFn,
-                    "errorMarshallerConstructorFn" to errorMarshallerConstructorFn,
-                )
-            CodegenTarget.SERVER -> {
-                rustTemplate(
-                    """
-                    {
-                        let error_marshaller = #{errorMarshallerConstructorFn}();
-                        let marshaller = #{marshallerConstructorFn}();
-                        let signer = #{NoOpSigner}{};
-                        let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, _> =
-                            $outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer);
-                        adapter
-                    }
-                    """,
-                    *codegenScope,
-                    "marshallerConstructorFn" to marshallerConstructorFn,
-                    "errorMarshallerConstructorFn" to errorMarshallerConstructorFn,
-                )
-            }
-        }
+        renderEventStreamBody(
+            this,
+            EventStreamBodyParams(
+                outerName,
+                memberName,
+                marshallerConstructorFn,
+                errorMarshallerConstructorFn,
+                additionalPayloadContext,
+            ),
+        )
     }
 
     private fun RustWriter.serializeViaPayload(
         payloadMetadata: ProtocolPayloadGenerator.PayloadMetadata,
-        self: String,
+        shapeName: String,
         member: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
     ) {
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
-            val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
+            val outputT = if (member.isStreaming(model)) {
+                symbolProvider.toSymbol(member)
+            } else {
+                RuntimeType.ByteSlab.toSymbol()
+            }
             rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
@@ -277,7 +280,7 @@ class HttpBoundProtocolPayloadGenerator(
                 }
             }
         }
-        rust("#T($ref $self.${symbolProvider.toMemberName(member)})?", serializer)
+        rust("#T($ref $shapeName.${symbolProvider.toMemberName(member)})?", serializer)
     }
 
     private fun RustWriter.renderPayload(

@@ -10,11 +10,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerSection
@@ -30,13 +32,22 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]
  * with AwsJson specific configurations.
  */
-class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
-    ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
+class ServerAwsJsonFactory(
+    private val version: AwsJsonVersion,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
+    private val additionalServerHttpBoundProtocolCustomizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
+    private val additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
+) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
     override fun protocol(codegenContext: ServerCodegenContext): ServerProtocol =
-        ServerAwsJsonProtocol(codegenContext, version)
+        ServerAwsJsonProtocol(codegenContext, version, additionalParserCustomizations)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
+        ServerHttpBoundProtocolGenerator(
+            codegenContext,
+            protocol(codegenContext),
+            additionalServerHttpBoundProtocolCustomizations,
+            additionalHttpBindingCustomizations,
+        )
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

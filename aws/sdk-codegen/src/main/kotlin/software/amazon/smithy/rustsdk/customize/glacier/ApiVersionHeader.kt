@@ -13,6 +13,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 
+// TODO(enableNewSmithyRuntime): Delete this file when cleaning up middleware.
+
 class ApiVersionHeader(
     /**
      * ApiVersion

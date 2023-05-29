@@ -16,6 +16,7 @@ import java.nio.file.Path
 sealed class DependencyScope {
     object Dev : DependencyScope()
     object Compile : DependencyScope()
+    object Build : DependencyScope()
 }
 
 sealed class DependencyLocation
@@ -196,7 +197,7 @@ data class CargoDependency(
     }
 
     fun toType(): RuntimeType {
-        return RuntimeType(rustName, this)
+        return RuntimeType("::$rustName", this)
     }
 
     companion object {

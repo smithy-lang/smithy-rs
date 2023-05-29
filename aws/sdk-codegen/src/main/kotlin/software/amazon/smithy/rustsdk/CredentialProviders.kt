@@ -9,8 +9,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -19,10 +22,19 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
     override val order: Byte = 0
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            it + listOf(CredentialsIdentityResolverRegistration(codegenContext))
+        }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -89,6 +101,38 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             )
 
             else -> emptySection
+        }
+    }
+}
+
+class CredentialsIdentityResolverRegistration(
+    codegenContext: ClientCodegenContext,
+) : ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+
+    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+        when (section) {
+            is ServiceRuntimePluginSection.AdditionalConfig -> {
+                rustTemplate(
+                    """
+                    cfg.set_identity_resolvers(
+                        #{IdentityResolvers}::builder()
+                            .identity_resolver(
+                                #{SIGV4_SCHEME_ID},
+                                #{CredentialsIdentityResolver}::new(self.handle.conf.credentials_cache())
+                            )
+                            .build()
+                    );
+                    """,
+                    "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                        .resolve("auth::sigv4::SCHEME_ID"),
+                    "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                        .resolve("identity::credentials::CredentialsIdentityResolver"),
+                    "IdentityResolvers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::identity::IdentityResolvers"),
+                )
+            }
+            else -> {}
         }
     }
 }
