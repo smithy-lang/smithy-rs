@@ -72,7 +72,7 @@ class ConstrainedCollectionGenerator(
         }
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "std::vec::Vec<#{ValueMemberSymbol}>"
+        val inner = "::std::vec::Vec<#{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constrainedSymbol = symbolProvider.toSymbol(shape)
 

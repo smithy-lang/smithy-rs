@@ -83,6 +83,10 @@ class HttpResponseChecksumCustomization(
                 }
             }
             is OperationSection.MutateOutput -> {
+                if (!section.propertyBagAvailable) {
+                    return emptySection
+                }
+
                 // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
                 val responseAlgorithms = checksumTrait.responseAlgorithms
                     .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }

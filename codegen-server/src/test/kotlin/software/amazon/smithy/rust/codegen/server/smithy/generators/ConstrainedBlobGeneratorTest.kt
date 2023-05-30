@@ -117,7 +117,7 @@ class ConstrainedBlobGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
+    fun `type should not be constructable without using a constructor`() {
         val model = """
             namespace test
 
@@ -139,6 +139,6 @@ class ConstrainedBlobGeneratorTest {
         ).render()
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedBlob(pub(crate) aws_smithy_types::Blob);"
+        writer.toString() shouldContain "pub struct ConstrainedBlob(pub(crate) ::aws_smithy_types::Blob);"
     }
 }

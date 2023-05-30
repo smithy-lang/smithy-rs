@@ -8,9 +8,11 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumType
@@ -65,7 +67,7 @@ open class ConstrainedEnum(
         }
         rustBlock("impl #T<&str> for ${context.enumName}", RuntimeType.TryFrom) {
             rust("type Error = #T;", constraintViolationSymbol)
-            rustBlock("fn try_from(s: &str) -> Result<Self, <Self as #T<&str>>::Error>", RuntimeType.TryFrom) {
+            rustBlockTemplate("fn try_from(s: &str) -> #{Result}<Self, <Self as #{TryFrom}<&str>>::Error>", *preludeScope) {
                 rustBlock("match s") {
                     context.sortedMembers.forEach { member ->
                         rust("${member.value.dq()} => Ok(${context.enumName}::${member.derivedName()}),")
@@ -78,13 +80,12 @@ open class ConstrainedEnum(
             """
             impl #{TryFrom}<#{String}> for ${context.enumName} {
                 type Error = #{ConstraintViolation};
-                fn try_from(s: #{String}) -> std::result::Result<Self, <Self as #{TryFrom}<String>>::Error> {
+                fn try_from(s: #{String}) -> #{Result}<Self, <Self as #{TryFrom}<#{String}>>::Error> {
                     s.as_str().try_into()
                 }
             }
             """,
-            "String" to RuntimeType.String,
-            "TryFrom" to RuntimeType.TryFrom,
+            *preludeScope,
             "ConstraintViolation" to constraintViolationSymbol,
         )
     }

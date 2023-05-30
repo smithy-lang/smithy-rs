@@ -10,6 +10,7 @@ aws-http = { path = "../../../rust-runtime/aws-http" }
 aws-runtime = { path = "../../../rust-runtime/aws-runtime" }
 aws-sdk-s3 = { path = "../../build/sdk/aws-sdk-s3", features = ["test-util"] }
 aws-smithy-client = { path = "../../../../rust-runtime/aws-smithy-client", features = ["test-util", "rustls"] }
+aws-smithy-runtime = { path = "../../../../rust-runtime/aws-smithy-runtime" }
 aws-smithy-runtime-api = { path = "../../../../rust-runtime/aws-smithy-runtime-api" }
 aws-types = { path = "../../../rust-runtime/aws-types" }
 criterion = { version = "0.4", features = ["async_tokio"] }

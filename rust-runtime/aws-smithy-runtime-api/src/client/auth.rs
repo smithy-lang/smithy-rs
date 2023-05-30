@@ -7,9 +7,9 @@ use crate::client::identity::{Identity, IdentityResolver, IdentityResolvers};
 use crate::client::orchestrator::{BoxError, HttpRequest};
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
-use std::any::Any;
+use aws_smithy_types::Document;
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt;
 use std::sync::Arc;
 
 #[cfg(feature = "http-auth")]
@@ -35,31 +35,37 @@ impl AuthSchemeId {
     }
 }
 
+impl From<&'static str> for AuthSchemeId {
+    fn from(scheme_id: &'static str) -> Self {
+        Self::new(scheme_id)
+    }
+}
+
 #[derive(Debug)]
 pub struct AuthOptionResolverParams(TypeErasedBox);
 
 impl AuthOptionResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
         Self(TypedBox::new(params).erase())
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
 
-pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options<'a>(
-        &'a self,
+pub trait AuthOptionResolver: Send + Sync + fmt::Debug {
+    fn resolve_auth_options(
+        &self,
         params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError>;
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError>;
 }
 
 impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
-    fn resolve_auth_options<'a>(
-        &'a self,
+    fn resolve_auth_options(
+        &self,
         params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError> {
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
         (**self).resolve_auth_options(params)
     }
 }
@@ -68,7 +74,7 @@ impl AuthOptionResolver for Box<dyn AuthOptionResolver> {
 struct HttpAuthSchemesInner {
     schemes: Vec<(AuthSchemeId, Box<dyn HttpAuthScheme>)>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HttpAuthSchemes {
     inner: Arc<HttpAuthSchemesInner>,
 }
@@ -87,7 +93,7 @@ impl HttpAuthSchemes {
     }
 }
 
-pub trait HttpAuthScheme: Send + Sync + Debug {
+pub trait HttpAuthScheme: Send + Sync + fmt::Debug {
     fn scheme_id(&self) -> AuthSchemeId;
 
     fn identity_resolver<'a>(
@@ -98,7 +104,7 @@ pub trait HttpAuthScheme: Send + Sync + Debug {
     fn request_signer(&self) -> &dyn HttpRequestSigner;
 }
 
-pub trait HttpRequestSigner: Send + Sync + Debug {
+pub trait HttpRequestSigner: Send + Sync + fmt::Debug {
     /// Return a signed version of the given request using the given identity.
     ///
     /// If the provided identity is incompatible with this signer, an error must be returned.
@@ -106,8 +112,32 @@ pub trait HttpRequestSigner: Send + Sync + Debug {
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
+        auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError>;
+}
+
+/// Endpoint configuration for the selected auth scheme.
+///
+/// This struct gets added to the request state by the auth orchestrator.
+#[non_exhaustive]
+#[derive(Clone, Debug)]
+pub struct AuthSchemeEndpointConfig<'a>(Option<&'a Document>);
+
+impl<'a> AuthSchemeEndpointConfig<'a> {
+    /// Creates a new [`AuthSchemeEndpointConfig`].
+    pub fn new(config: Option<&'a Document>) -> Self {
+        Self(config)
+    }
+
+    /// Creates an empty AuthSchemeEndpointConfig.
+    pub fn empty() -> Self {
+        Self(None)
+    }
+
+    pub fn config(&self) -> Option<&'a Document> {
+        self.0
+    }
 }
 
 pub mod builders {
