@@ -199,7 +199,7 @@ fun RustType.qualifiedName(): String {
 
 /** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
-    return "impl Into<${this.render(fullyQualified)}>"
+    return "impl ${RuntimeType.Into.fullyQualifiedName()}<${this.render(fullyQualified)}>"
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
@@ -498,6 +498,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
+        val NoImplicitPrelude = Attribute("no_implicit_prelude")
         fun shouldPanic(expectedMessage: String) =
             Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
 

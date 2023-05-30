@@ -10,10 +10,10 @@ use aws_smithy_runtime_api::client::auth::option_resolver::{
     StaticAuthOptionResolver, StaticAuthOptionResolverParams,
 };
 use aws_smithy_runtime_api::client::auth::{
-    AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
+    AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
 };
 use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
-use aws_smithy_runtime_api::client::interceptors::Interceptors;
+use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
@@ -29,13 +29,21 @@ const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 /// **The above components will replace any existing ones!** As such, don't use this plugin unless:
 /// - You only need to make anonymous requests, such as when interacting with [Open Data](https://aws.amazon.com/opendata/).
 /// - You're writing orchestrator tests and don't care about authentication.
+#[non_exhaustive]
+#[derive(Debug, Default)]
 pub struct AnonymousAuthRuntimePlugin;
+
+impl AnonymousAuthRuntimePlugin {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl RuntimePlugin for AnonymousAuthRuntimePlugin {
     fn configure(
         &self,
         cfg: &mut ConfigBag,
-        _interceptors: &mut Interceptors,
+        _interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         cfg.set_auth_option_resolver_params(StaticAuthOptionResolverParams::new().into());
         cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
@@ -75,6 +83,7 @@ impl HttpRequestSigner for AnonymousSigner {
         &self,
         _request: &mut HttpRequest,
         _identity: &Identity,
+        _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         Ok(())
