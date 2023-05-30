@@ -68,3 +68,9 @@ message = "The `SigningInstructions` in the `aws-sigv4` module are now public. T
 references = ["smithy-rs#2730"]
 author = "cholcombe973"
 meta = { "breaking" = false, "tada" = false, "bug" = true }
+
+[[smithy-rs]]
+message = "Code generation will abort if the `ignoreUnsupportedConstraints` codegen flag has no effect, that is, if all constraint traits used in your model are well-supported. Please remove the flag in such case."
+references = ["smithy-rs#2539"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
