@@ -276,6 +276,7 @@ class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomiz
                 if let Some(timeout_config) = self.handle.conf.timeout_config() {
                     ${section.configBagName}.put(timeout_config.clone());
                 }
+                ${section.configBagName}.put(self.handle.conf.time_source.clone());
                 """,
             )
         }

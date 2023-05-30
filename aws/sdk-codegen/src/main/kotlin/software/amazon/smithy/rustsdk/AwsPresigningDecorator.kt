@@ -21,10 +21,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -34,10 +34,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
@@ -100,7 +100,12 @@ class AwsPresigningDecorator internal constructor(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
+    ): List<OperationCustomization> =
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
+            it + listOf(
+                AwsInputPresignedMethod(codegenContext, operation),
+            )
+        }
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
@@ -173,7 +178,7 @@ class AwsInputPresignedMethod(
         MakeOperationGenerator(
             codegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,
@@ -202,12 +207,14 @@ class AwsInputPresignedMethod(
                 *codegenScope,
             )
             rustBlock("") {
-                rust(
+                rustTemplate(
                     """
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
-                    props.insert(presigning_config.start_time());
+                    props.insert(#{SharedTimeSource}::new(presigning_config.start_time()));
                     """,
+                    "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
+                        .resolve("time::SharedTimeSource"),
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(

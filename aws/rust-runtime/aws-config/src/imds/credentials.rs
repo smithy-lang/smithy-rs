@@ -14,8 +14,8 @@ use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
@@ -53,7 +53,7 @@ pub struct ImdsCredentialsProvider {
     client: LazyClient,
     env: Env,
     profile: Option<String>,
-    time_source: TimeSource,
+    time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
 }
 
@@ -390,7 +390,10 @@ mod test {
             .build();
         let creds = provider.provide_credentials().await.expect("valid creds");
         // The expiry should be equal to what is originally set (==2021-09-21T04:16:53Z).
-        assert!(creds.expiry() == UNIX_EPOCH.checked_add(Duration::from_secs(1632197813)));
+        assert_eq!(
+            creds.expiry(),
+            UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
+        );
         connection.assert_requests_match(&[]);
 
         // There should not be logs indicating credentials are extended for stability.
@@ -444,7 +447,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
@@ -463,7 +466,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
         let client = crate::imds::Client::builder()
@@ -484,7 +487,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         use aws_smithy_async::rt::sleep::AsyncSleep;
         let client = crate::imds::Client::builder()

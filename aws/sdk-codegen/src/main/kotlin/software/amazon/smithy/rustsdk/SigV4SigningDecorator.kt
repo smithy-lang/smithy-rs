@@ -16,7 +16,7 @@ import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -77,17 +77,17 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
 }
 
 class SigV4SigningConfig(
-    runtimeConfig: RuntimeConfig,
+    private val runtimeConfig: RuntimeConfig,
     private val serviceHasEventStream: Boolean,
     private val sigV4Trait: SigV4Trait,
-) : EventStreamSigningConfig(runtimeConfig) {
-    private val codegenScope = arrayOf(
-        "SigV4Signer" to AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).resolve("event_stream::SigV4Signer"),
-    )
-
-    override fun configImplSection(): Writable {
-        return writable {
-            rustTemplate(
+) : ConfigCustomization() {
+    override fun section(section: ServiceConfig): Writable = writable {
+        if (section is ServiceConfig.ConfigImpl) {
+            if (serviceHasEventStream) {
+                // enable the aws-sig-auth `sign-eventstream` feature
+                addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
+            }
+            rust(
                 """
                 /// The signature version 4 service signing name to use in the credential scope when signing requests.
                 ///
@@ -97,24 +97,7 @@ class SigV4SigningConfig(
                     ${sigV4Trait.name.dq()}
                 }
                 """,
-                *codegenScope,
             )
-            if (serviceHasEventStream) {
-                rustTemplate(
-                    "#{signerFn:W}",
-                    "signerFn" to
-                        renderEventStreamSignerFn { propertiesName ->
-                            writable {
-                                rustTemplate(
-                                    """
-                                    #{SigV4Signer}::new($propertiesName)
-                                    """,
-                                    *codegenScope,
-                                )
-                            }
-                        },
-                )
-            }
         }
     }
 }
@@ -209,5 +192,3 @@ class SigV4SigningFeature(
         }
     }
 }
-
-fun RuntimeConfig.sigAuth() = awsRuntimeCrate("aws-sig-auth")

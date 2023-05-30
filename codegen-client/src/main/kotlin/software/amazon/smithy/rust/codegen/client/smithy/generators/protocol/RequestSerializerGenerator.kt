@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -17,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -38,6 +38,7 @@ class RequestSerializerGenerator(
             val orchestrator = runtimeApi.resolve("client::orchestrator")
             arrayOf(
                 "BoxError" to orchestrator.resolve("BoxError"),
+                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
                 "HttpRequest" to orchestrator.resolve("HttpRequest"),
                 "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
                 "Input" to interceptorContext.resolve("Input"),
@@ -52,7 +53,7 @@ class RequestSerializerGenerator(
         }
     }
 
-    fun render(writer: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun render(writer: RustWriter, operationShape: OperationShape) {
         val inputShape = operationShape.inputShape(codegenContext.model)
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputSymbol = symbolProvider.toSymbol(inputShape)
@@ -62,7 +63,7 @@ class RequestSerializerGenerator(
             struct ${operationName}RequestSerializer;
             impl #{RequestSerializer} for ${operationName}RequestSerializer {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
-                fn serialize_input(&self, input: #{Input}) -> Result<#{HttpRequest}, #{BoxError}> {
+                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
                     let mut request_builder = {
                         #{create_http_request}
@@ -77,7 +78,14 @@ class RequestSerializerGenerator(
             "ConcreteInput" to inputSymbol,
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to writable {
-                val body = writable { bodyGenerator.generatePayload(this, "input", operationShape) }
+                val body = writable {
+                    bodyGenerator.generatePayload(
+                        this,
+                        "input",
+                        operationShape,
+                        ClientAdditionalPayloadContext(propertyBagAvailable = false),
+                    )
+                }
                 val streamingMember = inputShape.findStreamingMember(codegenContext.model)
                 val isBlobStreaming =
                     streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
