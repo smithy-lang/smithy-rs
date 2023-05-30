@@ -107,7 +107,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         .with_metadata(operation::Metadata::new("test-op", "test-service"))
 }
 
-#[cfg(any(feature = "native-tls", feature = "rustls"))]
+#[cfg(feature = "rustls")]
 #[test]
 fn test_default_client() {
     let client = Client::builder()

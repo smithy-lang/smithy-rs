@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -33,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -178,7 +178,7 @@ class AwsInputPresignedMethod(
         MakeOperationGenerator(
             codegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,
