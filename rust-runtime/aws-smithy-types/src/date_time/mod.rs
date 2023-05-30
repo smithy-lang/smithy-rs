@@ -602,6 +602,7 @@ mod test {
         assert!(fourth == fourth);
     }
 
+    /// checks the value can be serialized/de-serialized in human readable datetime format
     #[cfg(all(
         test,
         aws_sdk_unstable,
@@ -625,7 +626,7 @@ mod test {
         assert!(test.unwrap().datetime == datetime);
     }
 
-    /// checks that they are serialized into tuples
+    /// checks the value can be serialized/deserialized into tuples
     #[cfg(all(
         test,
         aws_sdk_unstable,

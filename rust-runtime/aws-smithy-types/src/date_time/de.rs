@@ -12,7 +12,6 @@ struct DateTimeVisitor;
 enum VisitorState {
     Second,
     SubsecondNanos,
-    Unexpected,
 }
 
 impl VisitorState {
@@ -79,7 +78,6 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
             VisitorState::Unexpected => fail(VisitorState::UNEXPECTED_VISITOR_STATE),
             VisitorState::SubsecondNanos => {
                 self.subsecond_nanos = v;
-                self.state = VisitorState::Unexpected;
                 Ok(self)
             }
             _ => fail("`subsecond_nanos` value must be u32"),
