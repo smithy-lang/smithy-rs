@@ -4,7 +4,7 @@
  */
 
 use crate::client::interceptors::InterceptorRegistrar;
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

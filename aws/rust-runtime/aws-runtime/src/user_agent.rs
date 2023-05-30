@@ -8,7 +8,7 @@ use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
 use http::header::{InvalidHeaderValue, USER_AGENT};

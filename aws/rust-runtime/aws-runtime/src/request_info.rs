@@ -7,7 +7,7 @@ use aws_smithy_runtime::client::orchestrator::interceptors::{RequestAttempts, Se
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;

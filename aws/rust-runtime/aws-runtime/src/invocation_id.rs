@@ -7,7 +7,7 @@ use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::{HeaderName, HeaderValue};
 use uuid::Uuid;
 
