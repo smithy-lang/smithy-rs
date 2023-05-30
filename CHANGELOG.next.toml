@@ -80,3 +80,15 @@ message = "Code generation will abort if the `ignoreUnsupportedConstraints` code
 references = ["smithy-rs#2539"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
