@@ -87,6 +87,12 @@ references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
+[[smithy-rs]]
+message = "The property bag type for Time is now `SharedTimeSource`, not `SystemTime`. If your code relies on setting request time, use `aws_smithy_async::time::SharedTimeSource`."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
 [[aws-sdk-rust]]
 message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
 references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
