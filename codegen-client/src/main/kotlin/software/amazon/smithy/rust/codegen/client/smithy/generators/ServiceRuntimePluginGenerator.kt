@@ -73,6 +73,7 @@ class ServiceRuntimePluginGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val http = RuntimeType.smithyHttp(rc)
+        val client = RuntimeType.smithyClient(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
@@ -87,15 +88,18 @@ class ServiceRuntimePluginGenerator(
             "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
+            "HttpConnector" to client.resolve("http_connector::HttpConnector"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
+            "StandardRetryStrategy" to runtime.resolve("client::retries::strategy::StandardRetryStrategy"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
+            "default_connector" to client.resolve("conns::default_connector"),
+            "require_connector" to client.resolve("conns::require_connector"),
             "SystemTimeSource" to smithyAsync(rc).resolve("time::SystemTimeSource"),
             "debug" to RuntimeType.Tracing.resolve("debug"),
         )
@@ -134,18 +138,16 @@ class ServiceRuntimePluginGenerator(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
-                    ${"" /* TODO(EndpointResolver): Create endpoint params builder from service config */}
-                    cfg.put(#{Params}::builder());
-
                     let retry_classifiers = #{RetryClassifiers}::new()
                         #{retry_classifier_customizations};
                     cfg.set_retry_classifiers(retry_classifiers);
 
-                    // TODO(RuntimePlugins): Wire up standard retry
-                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
                     // TODO(RuntimePlugins): Decide if this is how we want to put the retry config into the bag
                     if let Some(retry_config) = self.handle.conf.retry_config() {
                         cfg.set_retry_config(retry_config.clone());
+                        cfg.set_retry_strategy(#{StandardRetryStrategy}::new(retry_config));
+                    } else {
+                        cfg.set_retry_strategy(#{StandardRetryStrategy}::default());
                     }
 
                     // TODO(RuntimePlugins): Decide if this is how we want to put the timeout config into the bag
@@ -156,16 +158,18 @@ class ServiceRuntimePluginGenerator(
                     // TODO(RuntimePlugins) Ensure this can be overridden during testing if necessary
                     cfg.set_time_source(#{SystemTimeSource}::new());
 
-                    // TODO(RuntimePlugins): Replace this with the correct long-term solution
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    cfg.set_sleep_impl(sleep_impl.clone());
-                    let connection: Option<#{Box}<dyn #{Connection}>> = self.handle.conf.http_connector()
-                            .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| #{Box}::new(#{DynConnectorAdapter}::new(c)) as _);
-                    match connection {
-                        Some(connection) => { cfg.set_connection(connection); },
-                        None => #{debug}!("Service config provided no HTTP connector. A connection is required to send requests, so ensure you set one with a Runtime Plugin."),
-                    }
+                    let timeout_config = self.handle.conf.timeout_config();
+                    let connector_settings = timeout_config.map(#{ConnectorSettings}::from_timeout_config).unwrap_or_default();
+                    let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
+                        // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                        #{require_connector}(
+                            self.handle.conf.http_connector()
+                                .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                                .or_else(|| #{default_connector}(&connector_settings, sleep_impl))
+                        )?
+                    )) as _;
+                    cfg.set_connection(connection);
 
                     #{additional_config}
 

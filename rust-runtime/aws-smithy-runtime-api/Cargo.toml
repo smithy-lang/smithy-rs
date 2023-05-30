@@ -18,6 +18,7 @@ test-util = []
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
+bytes = "1"
 http = "0.2.3"
 tokio = { version = "1.25", features = ["sync"] }
 tracing = "0.1.37"

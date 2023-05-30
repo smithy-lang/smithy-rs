@@ -15,14 +15,13 @@ cd smithy-rs
 # TODO(enableNewSmithyRuntime): Move these into `services_that_compile` as more progress is made
 services_that_fail_compile=(\
     "s3"\
-    "s3control"\
-    "transcribestreaming"\
+    "polly"\
 )
 
 # TODO(enableNewSmithyRuntime): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
+    "aws-config"\
     "dynamodb"\
-    "glacier"\
     "route53"\
     "sts"\
 )
@@ -31,12 +30,14 @@ services_that_pass_tests=(\
     "config"\
     "ec2"\
     "ecs"\
+    "glacier"\
     "iam"\
     "kms"\
     "lambda"\
-    "polly"\
     "qldbsession"\
+    "s3control"\
     "sso"\
+    "transcribestreaming"\
 )
 
 ./gradlew aws:sdk:assemble -Psmithy.runtime.mode=orchestrator
@@ -45,14 +46,14 @@ cd aws/sdk/build/aws-sdk/sdk
 for service in "${services_that_compile[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo check --all-features' on '${service}'${C_RESET}"
-    cargo check --all-features
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo check --all-features
     popd
 done
 
 for service in "${services_that_pass_tests[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo test --all-features' on '${service}'${C_RESET}"
-    cargo test --all-features --no-fail-fast
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo test --all-features --no-fail-fast
     popd
 done
 

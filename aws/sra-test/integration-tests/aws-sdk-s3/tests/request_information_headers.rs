@@ -14,6 +14,7 @@ use aws_sdk_s3::primitives::SdkBody;
 use aws_sdk_s3::Client;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_async::test_util::{instant_time_and_sleep, ManualTimeSource};
+use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_runtime::client::connections::test_connection::{ConnectionEvent, TestConnection};
 use aws_smithy_runtime::client::retries::strategy::FixedDelayRetryStrategy;
@@ -29,7 +30,6 @@ use std::time::{Duration, UNIX_EPOCH};
 #[derive(Debug)]
 struct FixupPlugin {
     client: Client,
-    connection: TestConnection,
     time_source: ManualTimeSource,
     invocation_ids: Vec<InvocationId>,
 }
@@ -51,7 +51,6 @@ impl RuntimePlugin for FixupPlugin {
             cfg.put::<Box<dyn InvocationIdGenerator>>(Box::new(gen));
         }
 
-        cfg.set_connection(self.connection.clone());
         cfg.put(params_builder);
         cfg.set_time_source(self.time_source.clone());
         cfg.put(AwsUserAgent::for_tests());
@@ -187,16 +186,16 @@ async fn three_retries_and_then_success() {
     let conn = TestConnection::new(events, sleep_impl.clone());
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
-        .http_connector(HttpConnector::Prebuilt(None))
         .retry_config(RetryConfig::standard().with_max_attempts(4))
         .timeout_config(timeout_config)
         .sleep_impl(sleep_impl.clone())
         .region(Region::new("us-east-1"))
+        .http_connector(DynConnector::new(conn.clone()))
+        .time_source(UNIX_EPOCH + Duration::from_secs(1624036048))
         .build();
     let client = Client::from_conf(config);
     let fixup = FixupPlugin {
         client: client.clone(),
-        connection: conn.clone(),
         time_source,
         invocation_ids: vec![InvocationId::from_str(
             "3dfe4f26-c090-4887-8c14-7bac778bca07",
@@ -278,7 +277,7 @@ async fn three_successful_attempts() {
     let conn = TestConnection::new(events, sleep_impl.clone());
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
-        .http_connector(HttpConnector::Prebuilt(None))
+        .http_connector(DynConnector::new(conn.clone()))
         .retry_config(RetryConfig::standard().with_max_attempts(3))
         .timeout_config(timeout_config)
         .sleep_impl(Arc::new(sleep_impl.clone()))
@@ -294,7 +293,6 @@ async fn three_successful_attempts() {
     ] {
         let fixup = FixupPlugin {
             client: client.clone(),
-            connection: conn.clone(),
             time_source: time_source.clone(),
             invocation_ids: vec![id],
         };
@@ -364,7 +362,7 @@ async fn slow_network_and_late_client_clock() {
     let conn = TestConnection::new(events, sleep_impl.clone());
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
-        .http_connector(HttpConnector::Prebuilt(None))
+        .http_connector(DynConnector::new(conn.clone()))
         .retry_config(RetryConfig::standard().with_max_attempts(3))
         .timeout_config(timeout_config)
         .sleep_impl(sleep_impl)
@@ -375,7 +373,6 @@ async fn slow_network_and_late_client_clock() {
 
     let fixup = FixupPlugin {
         client: client.clone(),
-        connection: conn.clone(),
         time_source,
         invocation_ids: vec![InvocationId::from_str(
             "3dfe4f26-c090-4887-8c14-7bac778bca07",

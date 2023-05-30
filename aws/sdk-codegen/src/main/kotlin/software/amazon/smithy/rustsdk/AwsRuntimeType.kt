@@ -41,9 +41,15 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 }
 
 object AwsRuntimeType {
-    fun presigning(): RuntimeType =
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
+    fun presigning(): RuntimeType = RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "presigning",
+            visibility = Visibility.PUBLIC,
+            CargoDependency.Tower,
+        ),
+    )
 
+    // TODO(enableNewSmithyRuntime): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,

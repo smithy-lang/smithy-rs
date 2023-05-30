@@ -10,6 +10,7 @@ use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryReason, RetryStrategy, ShouldAttempt,
 };
 use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::retry::RetryConfig;
 use std::time::Duration;
 
 const DEFAULT_MAX_ATTEMPTS: u32 = 4;
@@ -23,6 +24,13 @@ pub struct StandardRetryStrategy {
 }
 
 impl StandardRetryStrategy {
+    pub fn new(retry_config: &RetryConfig) -> Self {
+        // TODO(enableNewSmithyRuntime) add support for `retry_config.reconnect_mode()` here or in the orchestrator flow.
+        Self::default()
+            .with_max_attempts(retry_config.max_attempts())
+            .with_initial_backoff(retry_config.initial_backoff())
+    }
+
     pub fn with_base(mut self, base: fn() -> f64) -> Self {
         self.base = base;
         self

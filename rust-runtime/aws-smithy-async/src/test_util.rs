@@ -13,7 +13,7 @@ use tokio::sync::Barrier;
 use tokio::time::timeout;
 
 use crate::rt::sleep::{AsyncSleep, Sleep};
-use crate::time::TimeSource;
+use crate::time::{SharedTimeSource, TimeSource};
 
 /// Manually controlled time source
 #[derive(Debug, Clone)]
@@ -237,6 +237,49 @@ pub fn instant_time_and_sleep(start_time: SystemTime) -> (ManualTimeSource, Inst
     (ManualTimeSource { start_time, log }, sleep)
 }
 
+#[derive(Debug)]
+/// Time source that always returns the same time
+pub struct StaticTimeSource {
+    time: SystemTime,
+}
+
+impl StaticTimeSource {
+    /// Creates a new static time source that always returns the same time
+    pub fn new(time: SystemTime) -> Self {
+        Self { time }
+    }
+}
+
+impl TimeSource for StaticTimeSource {
+    fn now(&self) -> SystemTime {
+        self.time
+    }
+}
+
+impl TimeSource for SystemTime {
+    fn now(&self) -> SystemTime {
+        *self
+    }
+}
+
+impl From<StaticTimeSource> for SharedTimeSource {
+    fn from(value: StaticTimeSource) -> Self {
+        SharedTimeSource::new(value)
+    }
+}
+
+impl From<SystemTime> for SharedTimeSource {
+    fn from(value: SystemTime) -> Self {
+        SharedTimeSource::new(value)
+    }
+}
+
+impl From<ManualTimeSource> for SharedTimeSource {
+    fn from(value: ManualTimeSource) -> Self {
+        SharedTimeSource::new(value)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::rt::sleep::AsyncSleep;
@@ -274,7 +317,7 @@ mod test {
 
         let guard = gate.expect_sleep().await;
         assert_eq!(progress.load(Ordering::Acquire), 2);
-        assert_eq!(task.is_finished(), false);
+        assert!(!task.is_finished(), "task should not be finished");
         guard.allow_progress();
         timeout(Duration::from_secs(1), task)
             .await

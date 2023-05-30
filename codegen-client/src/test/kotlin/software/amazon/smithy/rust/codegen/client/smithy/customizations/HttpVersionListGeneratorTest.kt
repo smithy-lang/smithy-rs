@@ -6,19 +6,9 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -172,7 +162,6 @@ internal class HttpVersionListGeneratorTest {
         clientIntegrationTest(
             model,
             IntegrationTestParams(addModuleToEventStreamAllowList = true),
-            additionalDecorators = listOf(FakeSigningDecorator()),
         ) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_eventstream_http") {
@@ -193,80 +182,6 @@ internal class HttpVersionListGeneratorTest {
                     """,
                 )
             }
-        }
-    }
-}
-
-class FakeSigningDecorator : ClientCodegenDecorator {
-    override val name: String = "fakesigning"
-    override val order: Byte = 0
-    override fun classpathDiscoverable(): Boolean = false
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations.filterNot {
-            it is EventStreamSigningConfig
-        } + FakeSigningConfig(codegenContext.runtimeConfig)
-    }
-}
-
-class FakeSigningConfig(
-    runtimeConfig: RuntimeConfig,
-) : EventStreamSigningConfig(runtimeConfig) {
-    private val codegenScope = arrayOf(
-        "SharedPropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
-        "SignMessageError" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessageError"),
-        "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
-        "Message" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::Message"),
-    )
-
-    override fun section(section: ServiceConfig): Writable {
-        return when (section) {
-            is ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Creates a new Event Stream `SignMessage` implementor.
-                    pub fn new_event_stream_signer(
-                        &self,
-                        properties: #{SharedPropertyBag}
-                    ) -> FakeSigner {
-                        FakeSigner::new(properties)
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-
-            is ServiceConfig.Extras -> writable {
-                rustTemplate(
-                    """
-                    /// Fake signing implementation.
-                    ##[derive(Debug)]
-                    pub struct FakeSigner;
-
-                    impl FakeSigner {
-                        /// Create a real `FakeSigner`
-                        pub fn new(_properties: #{SharedPropertyBag}) -> Self {
-                            Self {}
-                        }
-                    }
-
-                    impl #{SignMessage} for FakeSigner {
-                        fn sign(&mut self, message: #{Message}) -> Result<#{Message}, #{SignMessageError}> {
-                            Ok(message)
-                        }
-
-                        fn sign_empty(&mut self) -> Option<Result<#{Message}, #{SignMessageError}>> {
-                            Some(Ok(#{Message}::new(Vec::new())))
-                        }
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-
-            else -> emptySection
         }
     }
 }
