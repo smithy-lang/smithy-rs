@@ -82,7 +82,26 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
 
 [[smithy-rs]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "The property bag type for Time is now `SharedTimeSource`, not `SystemTime`. If your code relies on setting request time, use `aws_smithy_async::time::SharedTimeSource`."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
 message = "Bump dependency on `lambda_http` by `aws-smithy-http-server` to 0.8.0. This version of `aws-smithy-http-server` is only guaranteed to be compatible with 0.8.0, or semver-compatible versions of 0.8.0 of the `lambda_http` crate. It will not work with versions prior to 0.8.0 _at runtime_, making requests to your smithy-rs service unroutable, so please make sure you're running your service in a compatible configuration"
 author = "david-perez"
 references = ["smithy-rs#2676", "smithy-rs#2685"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+
