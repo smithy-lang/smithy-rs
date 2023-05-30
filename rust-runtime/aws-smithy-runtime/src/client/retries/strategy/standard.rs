@@ -75,7 +75,7 @@ impl RetryStrategy for StandardRetryStrategy {
             "This must never be called without reaching the point where the result exists.",
         );
         if output_or_error.is_ok() {
-            tracing::trace!("request succeeded, no retry necessary");
+            tracing::debug!("request succeeded, no retry necessary");
             return Ok(ShouldAttempt::No);
         }
 

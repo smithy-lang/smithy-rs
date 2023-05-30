@@ -108,7 +108,7 @@ pub struct TypeErasedBox {
 
 #[cfg(feature = "test-util")]
 impl TypeErasedBox {
-    pub fn doesnt_matter() -> crate::client::interceptors::context::Input {
+    pub fn doesnt_matter() -> Self {
         Self::new("doesn't matter")
     }
 }

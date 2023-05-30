@@ -229,7 +229,7 @@ pub fn controlled_time_and_sleep(
     (ManualTimeSource { start_time, log }, sleep, gate)
 }
 
-/// Returns a trio of tools to test interactions with time. Sleeps will end instantly, but the
+/// Returns a duo of tools to test interactions with time. Sleeps will end instantly, but the
 /// desired length of the sleeps will be recorded for later verification.
 pub fn instant_time_and_sleep(start_time: SystemTime) -> (ManualTimeSource, InstantSleep) {
     let log = Arc::new(Mutex::new(vec![]));

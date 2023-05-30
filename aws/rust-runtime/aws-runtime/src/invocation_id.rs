@@ -133,6 +133,7 @@ impl InvocationId {
     }
 }
 
+/// Defaults to a random UUID.
 impl Default for InvocationId {
     fn default() -> Self {
         let id = Uuid::new_v4();

@@ -44,9 +44,7 @@ pub trait ClassifyRetry: Send + Sync + Debug {
     fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason>;
 
     /// The name that this classifier should report for debugging purposes.
-    fn name(&self) -> &'static str {
-        "(unnamed classifier)"
-    }
+    fn name(&self) -> &'static str;
 }
 
 #[derive(Debug)]
