@@ -55,7 +55,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         let request_attempts: &RequestAttempts = cfg
             .get()
             .expect("at least one request attempt is made before any retry is attempted");
-        if request_attempts.attempts() == self.max_attempts {
+        if request_attempts.attempts() == self.max_attempts as usize {
             tracing::trace!(
                 attempts = request_attempts.attempts(),
                 max_attempts = self.max_attempts,

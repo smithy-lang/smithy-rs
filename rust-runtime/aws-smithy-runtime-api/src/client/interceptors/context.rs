@@ -289,7 +289,8 @@ where
         self.request_checkpoint = try_clone(self.request());
     }
 
-    // Returns false if rewinding isn't possible
+    /// Returns false if rewinding isn't possible
+    #[doc(hidden)]
     pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
         // If request_checkpoint was never set, then this is not a retryable request
         if self.request_checkpoint.is_none() {
