@@ -5,24 +5,24 @@
 
 #[derive(Debug, Clone, Copy)]
 pub struct RequestAttempts {
-    attempts: u32,
+    attempts: usize,
 }
 
 impl RequestAttempts {
     #[cfg(any(feature = "test-util", test))]
-    pub fn new(attempts: u32) -> Self {
+    pub fn new(attempts: usize) -> Self {
         Self { attempts }
     }
 
-    pub fn attempts(&self) -> u32 {
+    pub fn attempts(&self) -> usize {
         self.attempts
     }
 }
 
-impl From<u8> for RequestAttempts {
-    fn from(value: u8) -> Self {
+impl From<usize> for RequestAttempts {
+    fn from(value: usize) -> Self {
         Self {
-            attempts: value as u32,
+            attempts: value as usize,
         }
     }
 }
