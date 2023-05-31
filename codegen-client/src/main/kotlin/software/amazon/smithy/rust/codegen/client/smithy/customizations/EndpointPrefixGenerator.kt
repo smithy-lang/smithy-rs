@@ -15,25 +15,28 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class EndpointPrefixGenerator(private val codegenContext: ClientCodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
-    override fun section(section: OperationSection): Writable = when (section) {
-        is OperationSection.MutateRequest -> writable {
+    companion object {
+        fun endpointTraitBindings(codegenContext: ClientCodegenContext, shape: OperationShape): EndpointTraitBindings? =
             shape.getTrait(EndpointTrait::class.java).map { epTrait ->
-                val endpointTraitBindings = EndpointTraitBindings(
+                EndpointTraitBindings(
                     codegenContext.model,
                     codegenContext.symbolProvider,
                     codegenContext.runtimeConfig,
                     shape,
                     epTrait,
                 )
+            }.orNull()
+    }
+
+    override fun section(section: OperationSection): Writable = when (section) {
+        is OperationSection.MutateRequest -> writable {
+            endpointTraitBindings(codegenContext, shape)?.also { endpointTraitBindings ->
                 withBlock("let endpoint_prefix = ", "?;") {
-                    endpointTraitBindings.render(
-                        this,
-                        "self",
-                        codegenContext.settings.codegenConfig.enableNewSmithyRuntime,
-                    )
+                    endpointTraitBindings.render(this, "self", codegenContext.smithyRuntimeMode)
                 }
                 rust("request.properties_mut().insert(endpoint_prefix);")
             }

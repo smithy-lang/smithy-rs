@@ -3,46 +3,55 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Errors that can occur while running the orchestrator.
+mod error;
+
 use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, HttpAuthSchemes};
 use crate::client::identity::IdentityResolvers;
-use crate::client::interceptors::context::{Input, OutputOrError};
+use crate::client::interceptors::context::{Error, Input, Output};
 use crate::client::retries::RetryClassifiers;
 use crate::client::retries::RetryStrategy;
 use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
+use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::EndpointPrefix;
-use std::any::Any;
-use std::fmt::Debug;
+use aws_smithy_types::endpoint::Endpoint;
+use bytes::Bytes;
+use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
-use std::time::SystemTime;
+use std::sync::Arc;
+
+pub use error::OrchestratorError;
 
 pub type HttpRequest = http::Request<SdkBody>;
 pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>>>>;
+pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
-pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self);
+pub trait RequestSerializer: Send + Sync + fmt::Debug {
+    fn serialize_input(&self, input: Input, cfg: &mut ConfigBag) -> Result<HttpRequest, BoxError>;
 }
 
-pub trait RequestSerializer: Send + Sync + Debug {
-    fn serialize_input(&self, input: Input) -> Result<HttpRequest, BoxError>;
-}
-
-pub trait ResponseDeserializer: Send + Sync + Debug {
-    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
+pub trait ResponseDeserializer: Send + Sync + fmt::Debug {
+    fn deserialize_streaming(
+        &self,
+        response: &mut HttpResponse,
+    ) -> Option<Result<Output, OrchestratorError<Error>>> {
         let _ = response;
         None
     }
 
-    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
+    fn deserialize_nonstreaming(
+        &self,
+        response: &HttpResponse,
+    ) -> Result<Output, OrchestratorError<Error>>;
 }
 
-pub trait Connection: Send + Sync + Debug {
+pub trait Connection: Send + Sync + fmt::Debug {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
@@ -56,45 +65,37 @@ impl Connection for Box<dyn Connection> {
 pub struct EndpointResolverParams(TypeErasedBox);
 
 impl EndpointResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
+    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
         Self(TypedBox::new(params).erase())
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
 
-pub trait EndpointResolver: Send + Sync + Debug {
-    fn resolve_and_apply_endpoint(
-        &self,
-        params: &EndpointResolverParams,
-        endpoint_prefix: Option<&EndpointPrefix>,
-        request: &mut HttpRequest,
-    ) -> Result<(), BoxError>;
+pub trait EndpointResolver: Send + Sync + fmt::Debug {
+    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> Result<Endpoint, BoxError>;
 }
 
-/// Time that the request is being made (so that time can be overridden in the [`ConfigBag`]).
+/// Informs the orchestrator on whether or not the request body needs to be loaded into memory before transmit.
+///
+/// This enum gets placed into the `ConfigBag` to change the orchestrator behavior.
+/// Immediately after serialization (before the `read_after_serialization` interceptor hook),
+/// if it was set to `Requested` in the config bag, it will be replaced back into the config bag as
+/// `Loaded` with the request body contents for use in later interceptors.
+///
+/// This all happens before the attempt loop, so the loaded request body will remain available
+/// for interceptors that run in any subsequent retry attempts.
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct RequestTime(SystemTime);
-
-impl Default for RequestTime {
-    fn default() -> Self {
-        Self(SystemTime::now())
-    }
-}
-
-impl RequestTime {
-    /// Create a new [`RequestTime`].
-    pub fn new(time: SystemTime) -> Self {
-        Self(time)
-    }
-
-    /// Returns the request time as a [`SystemTime`].
-    pub fn system_time(&self) -> SystemTime {
-        self.0
-    }
+#[derive(Clone, Debug)]
+pub enum LoadedRequestBody {
+    /// Don't attempt to load the request body into memory.
+    NotNeeded,
+    /// Attempt to load the request body into memory.
+    Requested,
+    /// The request body is already loaded.
+    Loaded(Bytes),
 }
 
 pub trait ConfigBagAccessors {
@@ -122,7 +123,7 @@ pub trait ConfigBagAccessors {
     fn http_auth_schemes(&self) -> &HttpAuthSchemes;
     fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes);
 
-    fn request_serializer(&self) -> &dyn RequestSerializer;
+    fn request_serializer(&self) -> Arc<dyn RequestSerializer>;
     fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static);
 
     fn response_deserializer(&self) -> &dyn ResponseDeserializer;
@@ -137,12 +138,17 @@ pub trait ConfigBagAccessors {
     fn retry_strategy(&self) -> &dyn RetryStrategy;
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
 
-    fn trace_probe(&self) -> &dyn TraceProbe;
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static);
+    fn request_time(&self) -> Option<SharedTimeSource>;
+    fn set_request_time(&mut self, time_source: impl TimeSource + 'static);
 
-    fn request_time(&self) -> Option<RequestTime>;
-    fn set_request_time(&mut self, request_time: RequestTime);
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>>;
+    fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>);
+
+    fn loaded_request_body(&self) -> &LoadedRequestBody;
+    fn set_loaded_request_body(&mut self, loaded_request_body: LoadedRequestBody);
 }
+
+const NOT_NEEDED: LoadedRequestBody = LoadedRequestBody::NotNeeded;
 
 impl ConfigBagAccessors for ConfigBag {
     fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams {
@@ -217,14 +223,14 @@ impl ConfigBagAccessors for ConfigBag {
         self.put::<HttpAuthSchemes>(http_auth_schemes);
     }
 
-    fn request_serializer(&self) -> &dyn RequestSerializer {
-        &**self
-            .get::<Box<dyn RequestSerializer>>()
+    fn request_serializer(&self) -> Arc<dyn RequestSerializer> {
+        self.get::<Arc<dyn RequestSerializer>>()
             .expect("missing request serializer")
+            .clone()
     }
 
     fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static) {
-        self.put::<Box<dyn RequestSerializer>>(Box::new(request_serializer));
+        self.put::<Arc<dyn RequestSerializer>>(Arc::new(request_serializer));
     }
 
     fn response_deserializer(&self) -> &dyn ResponseDeserializer {
@@ -259,21 +265,31 @@ impl ConfigBagAccessors for ConfigBag {
         self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
     }
 
-    fn trace_probe(&self) -> &dyn TraceProbe {
-        &**self
-            .get::<Box<dyn TraceProbe>>()
-            .expect("missing trace probe")
+    fn request_time(&self) -> Option<SharedTimeSource> {
+        self.get::<SharedTimeSource>().cloned()
     }
 
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static) {
-        self.put::<Box<dyn TraceProbe>>(Box::new(trace_probe));
+    fn set_request_time(&mut self, request_time: impl TimeSource + 'static) {
+        self.put::<SharedTimeSource>(SharedTimeSource::new(request_time));
     }
 
-    fn request_time(&self) -> Option<RequestTime> {
-        self.get::<RequestTime>().cloned()
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.get::<Arc<dyn AsyncSleep>>().cloned()
     }
 
-    fn set_request_time(&mut self, request_time: RequestTime) {
-        self.put::<RequestTime>(request_time);
+    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        if let Some(sleep_impl) = sleep_impl {
+            self.put::<Arc<dyn AsyncSleep>>(sleep_impl);
+        } else {
+            self.unset::<Arc<dyn AsyncSleep>>();
+        }
+    }
+
+    fn loaded_request_body(&self) -> &LoadedRequestBody {
+        self.get::<LoadedRequestBody>().unwrap_or(&NOT_NEEDED)
+    }
+
+    fn set_loaded_request_body(&mut self, loaded_request_body: LoadedRequestBody) {
+        self.put::<LoadedRequestBody>(loaded_request_body);
     }
 }

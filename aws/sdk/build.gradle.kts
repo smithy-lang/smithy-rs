@@ -60,6 +60,7 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -102,8 +103,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewCrateOrganizationScheme": true,
-                            "enableNewSmithyRuntime": false
+                            "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -151,6 +151,8 @@ tasks.register("generateSmithyBuild") {
 }
 
 tasks.register("generateIndexMd") {
+    dependsOn("smithyBuildJar")
+
     inputs.property("servicelist", awsServices.services.toString())
     val indexMd = outputDir.resolve("index.md")
     outputs.file(indexMd)
@@ -161,6 +163,8 @@ tasks.register("generateIndexMd") {
 
 tasks.register("relocateServices") {
     description = "relocate AWS services to their final destination"
+    dependsOn("smithyBuildJar")
+
     doLast {
         awsServices.services.forEach {
             logger.info("Relocating ${it.module}...")
@@ -186,6 +190,8 @@ tasks.register("relocateServices") {
 
 tasks.register("relocateExamples") {
     description = "relocate the examples folder & rewrite path dependencies"
+    dependsOn("smithyBuildJar")
+
     doLast {
         if (awsServices.examples.isNotEmpty()) {
             copy {
@@ -207,6 +213,8 @@ tasks.register("relocateExamples") {
 
 tasks.register("relocateTests") {
     description = "relocate the root integration tests and rewrite path dependencies"
+    dependsOn("smithyBuildJar")
+
     doLast {
         if (awsServices.rootTests.isNotEmpty()) {
             copy {
@@ -230,6 +238,7 @@ tasks.register("relocateTests") {
 tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     description = "Adds dependency path and corrects version number of examples after relocation"
     enabled = awsServices.examples.isNotEmpty()
+    dependsOn("relocateExamples")
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
@@ -257,6 +266,7 @@ fun rewritePathDependency(line: String): String {
 }
 
 tasks.register<Copy>("copyAllRuntimes") {
+    dependsOn("smithyBuildJar")
     from("$rootDir/aws/rust-runtime") {
         CrateSet.AWS_SDK_RUNTIME.forEach { include("$it/**") }
     }
@@ -293,6 +303,7 @@ tasks.register("relocateRuntime") {
 }
 
 tasks.register<Copy>("relocateChangelog") {
+    dependsOn("smithyBuildJar")
     from("$rootDir/aws")
     include("SDK_CHANGELOG.md")
     into(outputDir)
@@ -328,6 +339,11 @@ tasks.register("generateCargoWorkspace") {
 
 tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the generated services"
+    dependsOn("relocateServices")
+    dependsOn("relocateRuntime")
+    dependsOn("relocateAwsRuntime")
+    dependsOn("relocateExamples")
+    dependsOn("relocateTests")
 
     inputs.dir(publisherToolPath)
     outputs.dir(outputDir)
@@ -339,18 +355,10 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
             add("--disable-version-number-validation")
         }
     }
-
-    dependsOn("assemble")
-    dependsOn("relocateServices")
-    dependsOn("relocateRuntime")
-    dependsOn("relocateAwsRuntime")
-    dependsOn("relocateExamples")
-    dependsOn("relocateTests")
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
     description = "Run the publisher tool's `hydrate-readme` sub-command to create the final AWS Rust SDK README file"
-
     dependsOn("generateVersionManifest")
 
     inputs.dir(publisherToolPath)
@@ -385,7 +393,9 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     binaryName = "publisher"
     arguments = mutableListOf(
         "generate-version-manifest",
-        "--location",
+        "--input-location",
+        sdkOutputDir.absolutePath,
+        "--output-location",
         outputDir.absolutePath,
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,
@@ -399,10 +409,17 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     }
 }
 
-tasks.register("finalizeSdk") {
-    dependsOn("assemble")
+tasks["smithyBuildJar"].apply {
+    inputs.file(buildDir.resolve("smithy-build.json"))
+    inputs.dir(projectDir.resolve("aws-models"))
+    dependsOn("generateSmithyBuild")
+    dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
-    finalizedBy(
+}
+tasks["assemble"].apply {
+    dependsOn(
+        "deleteSdk",
+        "smithyBuildJar",
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
@@ -415,24 +432,13 @@ tasks.register("finalizeSdk") {
         "hydrateReadme",
         "relocateChangelog",
     )
-}
-
-tasks["smithyBuildJar"].apply {
-    inputs.file(buildDir.resolve("smithy-build.json"))
-    inputs.dir(projectDir.resolve("aws-models"))
-    dependsOn("generateSmithyBuild")
-    dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
-}
-tasks["assemble"].apply {
-    dependsOn("deleteSdk")
-    dependsOn("smithyBuildJar")
-    finalizedBy("finalizeSdk")
 }
 
 project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
 project.registerGenerateCargoConfigTomlTask(outputDir)
 
+tasks["test"].dependsOn("assemble")
 tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 
 tasks.register<Delete>("deleteSdk") {
