@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -35,10 +36,15 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import java.nio.file.Path
 
 private class TestProtocolPayloadGenerator(private val body: String) : ProtocolPayloadGenerator {
-    override fun payloadMetadata(operationShape: OperationShape) =
+    override fun payloadMetadata(operationShape: OperationShape, additionalPayloadContext: AdditionalPayloadContext) =
         ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
 
-    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generatePayload(
+        writer: RustWriter,
+        shapeName: String,
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
         writer.writeWithNoFormatting(body)
     }
 }

@@ -23,20 +23,17 @@ sealed class OperationRuntimePluginSection(name: String) : Section(name) {
      */
     data class AdditionalConfig(
         val configBagName: String,
+        val interceptorRegistrarName: String,
         val operationShape: OperationShape,
     ) : OperationRuntimePluginSection("AdditionalConfig") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $configBagName.get::<#{Interceptors}<#{HttpRequest}, #{HttpResponse}>>()
-                    .expect("interceptors set")
-                    .register_operation_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
-                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
                 "interceptor" to interceptor,
+                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
@@ -76,13 +73,14 @@ class OperationRuntimePluginGenerator(
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         arrayOf(
-            "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
         )
     }
 
@@ -95,7 +93,7 @@ class OperationRuntimePluginGenerator(
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
-                fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
+                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}> {
                     use #{ConfigBagAccessors} as _;
                     cfg.set_request_serializer(${operationStructName}RequestSerializer);
                     cfg.set_response_deserializer(${operationStructName}ResponseDeserializer);
@@ -119,7 +117,7 @@ class OperationRuntimePluginGenerator(
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationRuntimePluginSection.AdditionalConfig("cfg", operationShape),
+                    OperationRuntimePluginSection.AdditionalConfig("cfg", "_interceptors", operationShape),
                 )
             },
             "retry_classifier_customizations" to writable {

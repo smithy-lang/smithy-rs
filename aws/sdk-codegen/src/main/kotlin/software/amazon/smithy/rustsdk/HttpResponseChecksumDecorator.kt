@@ -35,7 +35,7 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
 
     // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
     private fun applies(codegenContext: ClientCodegenContext, operationShape: OperationShape): Boolean =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
+        codegenContext.smithyRuntimeMode.generateMiddleware && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -83,6 +83,10 @@ class HttpResponseChecksumCustomization(
                 }
             }
             is OperationSection.MutateOutput -> {
+                if (!section.propertyBagAvailable) {
+                    return emptySection
+                }
+
                 // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
                 val responseAlgorithms = checksumTrait.responseAlgorithms
                     .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }

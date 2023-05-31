@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
+// TODO(enableNewSmithyRuntime): Delete this file when cleaning up middleware.
+
 class AccountIdAutofill : OperationCustomization() {
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = false
