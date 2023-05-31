@@ -483,7 +483,7 @@ class FluentClientGenerator(
                         """,
                         *middlewareScope,
                     )
-                }                
+                }
             }
 
             if (smithyRuntimeMode.generateOrchestrator) {
