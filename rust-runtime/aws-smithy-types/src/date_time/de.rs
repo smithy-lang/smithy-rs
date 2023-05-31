@@ -119,7 +119,7 @@ fn human_readable_datetime() {
     }
     let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
     let test = serde_json::from_str::<Test>(&datetime_json).ok();
-    assert!(test == Some(Test{datetime}));
+    assert!(test == Some(Test { datetime }));
 }
 
 /// checks the value can be serialized/deserialized into tuples
