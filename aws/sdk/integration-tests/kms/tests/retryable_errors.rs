@@ -110,7 +110,7 @@ mod orchestrator_mode_tests {
         .await;
 
         dbg!(&err);
-        let classifier = AwsErrorCodeClassifier::new();
+        let classifier = AwsErrorCodeClassifier::<CreateAliasError>::new();
         let retry_kind = classifier.classify_error(&err);
         assert_eq!(
             Some(RetryReason::Error(ErrorKind::ThrottlingError)),
@@ -129,7 +129,7 @@ mod orchestrator_mode_tests {
         .await;
 
         dbg!(&err);
-        let classifier = AwsErrorCodeClassifier::new();
+        let classifier = AwsErrorCodeClassifier::<CreateAliasError>::new();
         let retry_kind = classifier.classify_error(&err);
         assert_eq!(
             Some(RetryReason::Error(ErrorKind::ThrottlingError)),
