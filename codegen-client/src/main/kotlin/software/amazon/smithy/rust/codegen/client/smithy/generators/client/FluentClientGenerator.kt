@@ -372,7 +372,7 @@ class FluentClientGenerator(
                     }
                 }
             }
-            
+
             // this fixes this error
             //  error[E0592]: duplicate definitions with name `set_fields`
             //     --> sdk/connectcases/src/operation/update_case/builders.rs:115:5
@@ -408,7 +408,7 @@ class FluentClientGenerator(
                     "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
                 )
             }
-            
+
             if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,
