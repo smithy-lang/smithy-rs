@@ -39,7 +39,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     """
                     let config = aws_config::load_from_env().await;
                     // You MUST call `enable_endpoint_discovery` to produce a working client for this service.
-                    let ${it.clientName} = ${it.crateName}::Client::new(&config).enable_endpoint_discovery();
+                    let ${it.clientName} = ${it.crateName}::Client::new(&config).enable_endpoint_discovery().await;
                     """.replaceIndent(it.indent),
                 )
             },
