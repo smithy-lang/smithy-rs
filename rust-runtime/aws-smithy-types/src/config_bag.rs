@@ -239,7 +239,7 @@ impl Layer {
 
 /// Makes itself accessible as a config bag
 pub trait Accessor {
-    /// TODO: Clarify what this associated type is for
+    /// TODO(smithy-rs#2735): Clarify what this associated type is for
     type Setter: Setter;
     /// Returns the underlying read-only config bag
     fn config(&self) -> &ConfigBag;
@@ -561,7 +561,7 @@ impl From<ConfigBag> for FrozenConfigBag {
     }
 }
 
-// TODO: Clarify what this is for and provide comments
+// TODO(smithy-rs#2735): Clarify what this is for and provide comments
 /*
 #[derive(Debug)]
 pub enum SourceInfo {

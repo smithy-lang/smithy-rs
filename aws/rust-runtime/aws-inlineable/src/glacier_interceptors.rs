@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::{
     Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
 use http::header::{HeaderName, HeaderValue};
 use http::Request;
