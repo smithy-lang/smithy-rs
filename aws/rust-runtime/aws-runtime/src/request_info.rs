@@ -45,7 +45,7 @@ impl RequestInfoInterceptor {
         let request_attempts = cfg
             .get::<RequestAttempts>()
             .map(|r_a| r_a.attempts())
-            .unwrap_or(1);
+            .unwrap_or(0);
         let request_attempts = request_attempts.to_string();
         Some((Cow::Borrowed("attempt"), Cow::Owned(request_attempts)))
     }
