@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -147,6 +148,11 @@ class ServiceSpecificDecorator(
     ): ProtocolTestGenerator = baseGenerator.maybeApply(codegenContext.serviceShape) {
         delegateTo.protocolTestGenerator(codegenContext, baseGenerator)
     }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf<AdHocCustomization>().maybeApply(codegenContext.serviceShape) {
+            delegateTo.extraSections(codegenContext)
+        }
 
     override fun operationRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
