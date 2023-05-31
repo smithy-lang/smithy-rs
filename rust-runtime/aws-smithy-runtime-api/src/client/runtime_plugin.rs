@@ -90,7 +90,7 @@ impl RuntimePlugins {
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
     use crate::client::interceptors::InterceptorRegistrar;
-    use crate::config_bag::ConfigBag;
+    use aws_smithy_types::config_bag::ConfigBag;
 
     #[derive(Debug)]
     struct SomeStruct;

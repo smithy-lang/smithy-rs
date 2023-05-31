@@ -234,7 +234,7 @@ fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
 mod account_id_autofill_tests {
     use super::*;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
     fn autofill_account_id() {
@@ -273,7 +273,7 @@ mod account_id_autofill_tests {
 mod api_version_tests {
     use super::*;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
     fn api_version_interceptor() {

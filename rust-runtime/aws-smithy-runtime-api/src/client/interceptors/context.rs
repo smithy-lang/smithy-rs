@@ -345,8 +345,8 @@ fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::type_erasure::TypedBox;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_types::type_erasure::TypedBox;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 

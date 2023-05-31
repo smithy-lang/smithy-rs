@@ -48,7 +48,7 @@ mod tests {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
