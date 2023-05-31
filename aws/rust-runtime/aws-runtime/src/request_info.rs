@@ -8,7 +8,7 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -166,10 +166,10 @@ mod tests {
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
     use std::time::Duration;
 

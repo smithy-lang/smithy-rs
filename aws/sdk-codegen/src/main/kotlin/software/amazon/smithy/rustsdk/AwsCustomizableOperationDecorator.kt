@@ -22,7 +22,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
             .resolve("user_agent::AwsUserAgent"),
         "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
-        "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
+        "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
         "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::orchestrator::ConfigBagAccessors"),
         "http" to CargoDependency.Http.toType(),

@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::mem;
 use tracing::{debug, debug_span, Instrument};
 
@@ -286,8 +286,8 @@ mod tests {
     };
     use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::StatusCode;
     use tracing_test::traced_test;
 

@@ -66,12 +66,13 @@ class ServiceRuntimePluginGenerator(
         val client = RuntimeType.smithyClient(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),

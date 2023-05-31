@@ -29,7 +29,7 @@ impl<T> TypedBox<T>
 where
     T: fmt::Debug + Send + Sync + 'static,
 {
-    /// Given a type `T`, create a new `TypedBox`.
+    /// Creates a new `TypedBox` from `inner` of type `T`
     pub fn new(inner: T) -> Self {
         Self {
             inner: TypeErasedBox::new(inner),
@@ -125,8 +125,7 @@ impl fmt::Debug for TypeErasedBox {
 }
 
 impl TypeErasedBox {
-    /// Given some type `T`, create and return a new `TypeErasedBox`. `T` must implement `Send`,
-    /// `Sync`, and `std::fmt::Debug`. It must also be `'static`.
+    /// Create a new `TypeErasedBox` from `value` of type `T`
     pub fn new<T: Send + Sync + fmt::Debug + 'static>(value: T) -> Self {
         let debug = |value: &Box<dyn Any + Send + Sync>, f: &mut fmt::Formatter<'_>| {
             fmt::Debug::fmt(value.downcast_ref::<T>().expect("type-checked"), f)
@@ -194,8 +193,7 @@ impl StdError for TypeErasedError {
 }
 
 impl TypeErasedError {
-    /// Given some type `T`, create and return a new `TypeErasedError`. `T` must implement `Send`,
-    /// `Sync`, `std::error::Error`, and `std::fmt::Debug`. It must also be `'static`.
+    /// Create a new `TypeErasedError` from `value` of type `T`
     pub fn new<T: StdError + Send + Sync + fmt::Debug + 'static>(value: T) -> Self {
         let debug = |value: &Box<dyn Any + Send + Sync>, f: &mut fmt::Formatter<'_>| {
             fmt::Debug::fmt(value.downcast_ref::<T>().expect("typechecked"), f)

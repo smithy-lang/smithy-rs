@@ -7,7 +7,7 @@ use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::{HeaderName, HeaderValue};
 use std::fmt::Debug;
 use uuid::Uuid;
@@ -158,8 +158,8 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::{
         BeforeTransmitInterceptorContextMut, Interceptor, InterceptorContext,
     };
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
 
     fn expect_header<'a>(

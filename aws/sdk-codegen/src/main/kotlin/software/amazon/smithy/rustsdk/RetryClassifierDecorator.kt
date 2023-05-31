@@ -75,7 +75,7 @@ class OperationRetryClassifiersFeature(
         "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
         "OrchestratorError" to smithyRuntimeApi.resolve("client::orchestrator::OrchestratorError"),
         "SdkError" to RuntimeType.smithyHttp(runtimeConfig).resolve("result::SdkError"),
-        "ErasedError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypeErasedError"),
+        "ErasedError" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypeErasedError"),
     )
 
     override fun section(section: OperationRuntimePluginSection) = when (section) {
