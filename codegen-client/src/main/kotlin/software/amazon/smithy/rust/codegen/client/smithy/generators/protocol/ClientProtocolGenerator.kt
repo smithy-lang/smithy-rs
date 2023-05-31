@@ -164,7 +164,7 @@ open class ClientProtocolGenerator(
                     }
                     """,
                     *codegenScope,
-                    "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
+                    "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
                     "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
                     "setup_runtime_plugins" to setupRuntimePluginsFn,
                 )
