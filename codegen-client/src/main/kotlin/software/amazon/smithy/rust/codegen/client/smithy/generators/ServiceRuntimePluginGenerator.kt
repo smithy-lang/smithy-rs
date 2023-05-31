@@ -31,6 +31,15 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
 
     /**
+     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
+     *
+     * Should emit code that looks like the following:
+     ```
+     .with_classifier(AwsErrorCodeClassifier::new())
+     */
+    data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -82,6 +91,7 @@ class ServiceRuntimePluginGenerator(
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
@@ -125,6 +135,11 @@ class ServiceRuntimePluginGenerator(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
+                    // TODO(enableNewSmithyRuntime): Use the `store_append` method of ConfigBag to insert classifiers
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+                    cfg.set_retry_classifiers(retry_classifiers);
+
                     // TODO(enableNewSmithyRuntime): Wire up standard retry
                     cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
 
@@ -153,6 +168,9 @@ class ServiceRuntimePluginGenerator(
             *codegenScope,
             "http_auth_scheme_customizations" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
+            },
+            "retry_classifier_customizations" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RetryClassifier("cfg"))
             },
             "additional_config" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_interceptors"))
