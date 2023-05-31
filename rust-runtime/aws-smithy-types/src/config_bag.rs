@@ -77,7 +77,7 @@ impl<T: Default> Default for Value<T> {
 }
 
 /// A named layer comprising a config bag
-pub struct Layer {
+struct Layer {
     name: Cow<'static, str>,
     props: TypeIdMap<TypeErasedBox>,
 }
@@ -193,21 +193,21 @@ impl Debug for Layer {
 
 impl Layer {
     /// Inserts `value` into the layer
-    pub fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
+    fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
         self.props
             .insert(TypeId::of::<T>(), TypeErasedBox::new(value));
         self
     }
 
     /// Retrieves the value of type `T` from this layer if exists
-    pub fn get<T: Send + Sync + Store + 'static>(&self) -> Option<&T::StoredType> {
+    fn get<T: Send + Sync + Store + 'static>(&self) -> Option<&T::StoredType> {
         self.props
             .get(&TypeId::of::<T>())
             .map(|t| t.downcast_ref().expect("typechecked"))
     }
 
     /// Returns a mutable reference to `T` if it is stored in this layer
-    pub fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
+    fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
         self.props
             .get_mut(&TypeId::of::<T>())
             .map(|t| t.downcast_mut().expect("typechecked"))
@@ -215,7 +215,7 @@ impl Layer {
 
     /// Returns a mutable reference to `T` if it is stored in this layer, otherwise returns the
     /// [`Default`] implementation of `T`
-    pub fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
+    fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
     where
         T::StoredType: Default,
     {
@@ -224,16 +224,6 @@ impl Layer {
             .or_insert_with(|| TypeErasedBox::new(T::StoredType::default()))
             .downcast_mut()
             .expect("typechecked")
-    }
-
-    /// Checks whether this layer is empty or not
-    pub fn is_empty(&self) -> bool {
-        self.props.is_empty()
-    }
-
-    /// Returns the number of values stored in this layer
-    pub fn len(&self) -> usize {
-        self.props.len()
     }
 }
 
