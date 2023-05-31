@@ -105,8 +105,3 @@ author = "david-perez"
 references = ["smithy-rs#2676", "smithy-rs#2685"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 
-[[smithy-rs]]
-message = "The `config_bag` and `type_erasure` modules have been moved to the `aws-smithy-types` crate from the `aws-smithy-runtime-api` crate."
-references = ["smithy-rs#2735"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
-author = "ysaito1001"
