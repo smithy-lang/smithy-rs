@@ -110,9 +110,9 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::error::display::DisplayErrorContext;
+    use aws_smithy_types::type_erasure::TypedBox;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context

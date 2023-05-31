@@ -8,7 +8,7 @@ extern crate criterion;
 use aws_sdk_s3 as s3;
 use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use criterion::{BenchmarkId, Criterion};
 
 macro_rules! test_connection {

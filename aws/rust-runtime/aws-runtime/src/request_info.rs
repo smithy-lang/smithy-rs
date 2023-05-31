@@ -158,10 +158,10 @@ mod tests {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_smithy_types::type_erasure::TypedBox;
     use http::HeaderValue;
     use std::time::Duration;
 
