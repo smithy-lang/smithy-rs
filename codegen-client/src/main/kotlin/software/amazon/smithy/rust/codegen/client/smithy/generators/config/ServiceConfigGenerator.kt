@@ -308,16 +308,18 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
 
     fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
         val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         writer.rustBlockTemplate(
             "impl #{RuntimePlugin} for Builder",
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+
         ) {
             rustBlockTemplate(
                 """
                 fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
                 """,
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+                "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
                 "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             ) {
                 rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")

@@ -71,7 +71,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         /// ## fn example() {
                         /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
                         /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-                        /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+                        /// use aws_smithy_types::config_bag::ConfigBag;
                         /// use $moduleUseName::config::Config;
                         ///
                         /// fn base_url() -> String {
@@ -122,7 +122,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         /// ## fn example() {
                         /// use aws_smithy_runtime_api::client::interceptors::context::phase::BeforeTransmit;
                         /// use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext, SharedInterceptor};
-                        /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+                        /// use aws_smithy_types::config_bag::ConfigBag;
                         /// use $moduleUseName::config::{Builder, Config};
                         ///
                         /// fn base_url() -> String {

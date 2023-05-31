@@ -118,10 +118,10 @@ mod test {
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
-    use aws_smithy_runtime_api::type_erasure::{TypeErasedBox, TypeErasedError};
     use aws_smithy_types::error::metadata::ProvideErrorMetadata;
     use aws_smithy_types::error::ErrorMetadata;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+    use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
     use std::fmt;
     use std::time::Duration;
 
