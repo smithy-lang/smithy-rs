@@ -25,7 +25,7 @@ impl serde::Serialize for DateTime {
     }
 }
 
-/// checks the value can be serialized/de-serialized in human readable datetime format
+/// check for human redable format
 #[test]
 fn human_readable_datetime() {
     use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ fn human_readable_datetime() {
     assert!(serde_json::to_string(&Test { datetime }).ok() == Some(datetime_json.to_string()));
 }
 
-/// checks the value can be serialized/deserialized into tuples
+/// check for non-human redable format
 #[test]
 fn not_human_readable_datetime() {
     let cbor = ciborium::value::Value::Array(vec![
