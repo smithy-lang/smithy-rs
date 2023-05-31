@@ -33,7 +33,9 @@ object AwsDocs {
                 codegenContext.rootDecorator.extraSections(codegenContext),
                 DocSection.CreateClient(crateName = crateName, indent = indent),
             ) {
-                addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
+                if (canRelyOnAwsConfig(codegenContext)) {
+                    addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
+                }
                 rustTemplate(
                     """
                     let config = aws_config::load_from_env().await;
