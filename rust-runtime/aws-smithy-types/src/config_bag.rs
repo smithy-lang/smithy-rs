@@ -237,20 +237,6 @@ impl Layer {
     }
 }
 
-/// Makes itself accessible as a config bag
-pub trait Accessor {
-    /// TODO(smithy-rs#2735): Clarify what this associated type is for
-    type Setter: Setter;
-    /// Returns the underlying read-only config bag
-    fn config(&self) -> &ConfigBag;
-}
-
-/// Makes itself settable via a config bag
-pub trait Setter {
-    /// Returns the underlying mutable config bag
-    fn config(&mut self) -> &mut ConfigBag;
-}
-
 fn no_op(_: &mut ConfigBag) {}
 
 impl FrozenConfigBag {
@@ -561,15 +547,6 @@ impl From<ConfigBag> for FrozenConfigBag {
     }
 }
 
-// TODO(smithy-rs#2735): Clarify what this is for and provide comments
-/*
-#[derive(Debug)]
-pub enum SourceInfo {
-    Set { layer: &'static str, value: String },
-    Unset { layer: &'static str },
-    Inherit { layer: &'static str },
-}
-*/
 #[cfg(test)]
 mod test {
     use super::ConfigBag;
