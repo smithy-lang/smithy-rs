@@ -74,7 +74,6 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     /// Enable endpoint discovery for this client
                     ///
                     /// This method MUST be called to construct a working client.
-                    ##[must_use]
                     pub async fn enable_endpoint_discovery(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{ResolveEndpointError}> {
                         let mut new_conf = self.conf().clone();
                         let sleep = self.conf().sleep_impl().expect("sleep impl must be provided");

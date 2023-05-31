@@ -154,12 +154,10 @@ impl EndpointCache {
 
 #[cfg(test)]
 mod test {
-    use crate::endpoint_discovery::{create_cache, EndpointCache};
-    use aws_credential_types::time_source::TimeSource;
+    use crate::endpoint_discovery::create_cache;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::controlled_time_and_sleep;
     use aws_smithy_async::time::SystemTimeSource;
-    use aws_smithy_http::endpoint::ResolveEndpointError;
     use aws_smithy_types::endpoint::Endpoint;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
