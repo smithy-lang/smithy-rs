@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::client::orchestrator::interceptors::{RequestAttempts, ServiceClockSkew};
+use aws_smithy_runtime::client::orchestrator::interceptors::ServiceClockSkew;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
+use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
@@ -68,10 +69,18 @@ impl RequestInfoInterceptor {
         let estimated_skew: Duration = cfg.get::<ServiceClockSkew>().cloned()?.into();
         let current_time = SystemTime::now();
         let ttl = current_time.checked_add(socket_read + estimated_skew)?;
-        let timestamp = DateTime::from(ttl);
-        let formatted_timestamp = timestamp
+        let mut timestamp = DateTime::from(ttl);
+        // Set subsec_nanos to 0 so that the formatted `DateTime` won't have fractional seconds.
+        timestamp.set_subsec_nanos(0);
+        let mut formatted_timestamp = timestamp
             .fmt(Format::DateTime)
             .expect("the resulting DateTime will always be valid");
+
+        // Remove dashes and colons
+        formatted_timestamp = formatted_timestamp
+            .chars()
+            .filter(|&c| c != '-' && c != ':')
+            .collect();
 
         Some((Cow::Borrowed("ttl"), Cow::Owned(formatted_timestamp)))
     }
@@ -84,13 +93,13 @@ impl Interceptor for RequestInfoInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut pairs = RequestPairs::new();
+        if let Some(pair) = self.build_ttl_pair(cfg) {
+            pairs = pairs.with_pair(pair);
+        }
         if let Some(pair) = self.build_attempts_pair(cfg) {
             pairs = pairs.with_pair(pair);
         }
         if let Some(pair) = self.build_max_attempts_pair(cfg) {
-            pairs = pairs.with_pair(pair);
-        }
-        if let Some(pair) = self.build_ttl_pair(cfg) {
             pairs = pairs.with_pair(pair);
         }
 
@@ -156,10 +165,9 @@ mod tests {
     use super::RequestInfoInterceptor;
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
     use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use http::HeaderValue;
@@ -177,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_request_pairs_for_initial_attempt() {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 
@@ -188,7 +196,6 @@ mod tests {
                 .read_timeout(Duration::from_secs(30))
                 .build(),
         );
-        config.put(RequestAttempts::new());
 
         let _ = context.take_input();
         context.enter_before_transmit_phase();

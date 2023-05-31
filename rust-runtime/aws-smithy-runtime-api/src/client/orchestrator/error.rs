@@ -24,7 +24,8 @@ pub enum OrchestratorError<E: Debug> {
 
 impl<E: Debug> OrchestratorError<E> {
     /// Create a new `OrchestratorError` from a [`BoxError`].
-    pub fn other(err: BoxError) -> Self {
+    pub fn other(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
+        let err = err.into();
         Self::Other { err }
     }
 
@@ -121,6 +122,6 @@ where
     E: Debug + std::error::Error + 'static,
 {
     fn from(err: aws_smithy_http::byte_stream::error::Error) -> Self {
-        Self::other(err.into())
+        Self::other(err)
     }
 }

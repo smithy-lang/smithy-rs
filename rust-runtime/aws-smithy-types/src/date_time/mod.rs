@@ -183,6 +183,12 @@ impl DateTime {
         self.subsecond_nanos
     }
 
+    /// Set the "sub-second" nanoseconds of this `DateTime`.
+    pub fn set_subsec_nanos(&mut self, subsec_nanos: u32) -> &mut Self {
+        self.subsecond_nanos = subsec_nanos;
+        self
+    }
+
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
     ///
     /// This is fallible since `DateTime` holds more precision than an `i64`, and will
