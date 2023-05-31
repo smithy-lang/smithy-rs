@@ -33,7 +33,7 @@ internal class RustTypeParametersTest {
     @Test
     fun `rustTypeParameters accepts RuntimeType`() {
         val runtimeType = RuntimeType.String
-        forInputExpectOutput(runtimeType, "'<std::string::String>'")
+        forInputExpectOutput(runtimeType, "'<::std::string::String>'")
     }
 
     @Test
@@ -60,7 +60,7 @@ internal class RustTypeParametersTest {
         writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
         writer.rustInlineTemplate("'")
 
-        writer.toString() shouldContain "'<crate::operation::Operation, (), std::string::String, T, A, B>'"
+        writer.toString() shouldContain "'<crate::operation::Operation, (), ::std::string::String, T, A, B>'"
     }
 
     @Test

@@ -198,7 +198,7 @@ data class CargoDependency(
     }
 
     fun toType(): RuntimeType {
-        return RuntimeType(rustName, this)
+        return RuntimeType("::$rustName", this)
     }
 
     companion object {

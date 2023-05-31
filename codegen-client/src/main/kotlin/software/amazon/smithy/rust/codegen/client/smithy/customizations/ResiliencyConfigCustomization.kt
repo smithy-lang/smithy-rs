@@ -6,8 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -256,6 +260,24 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
                 "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
+            )
+        }
+    }
+}
+
+class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+            rust(
+                """
+                if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
+                    ${section.configBagName}.put(sleep_impl);
+                }
+                if let Some(timeout_config) = self.handle.conf.timeout_config() {
+                    ${section.configBagName}.put(timeout_config.clone());
+                }
+                ${section.configBagName}.put(self.handle.conf.time_source.clone());
+                """,
             )
         }
     }

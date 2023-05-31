@@ -12,14 +12,106 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "The `Debug` implementation for `PropertyBag` now prints a list of the types it contains. This significantly improves debuggability."
-author = "rcoh"
-references = ["smithy-rs#2612"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+message = "Fix bug in AWS JSON 1.x routers where, if a service had more than 14 operations, the router was created without the route for the 15th operation."
+author = "thor-bjorgvinsson"
+references = ["smithy-rs#2733"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" ="server" }
 
+[[aws-sdk-rust]]
+message = "Remove native-tls and add a migration guide."
+author = "82marbag"
+references = ["smithy-rs#2675"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 
 [[smithy-rs]]
-message = "Implement `Ord` and `PartialOrd` for `DateTime`."
-author = "henriiik"
-references = ["smithy-rs#2653"]
+message = "Remove native-tls and add a migration guide."
+author = "82marbag"
+references = ["smithy-rs#2675"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
+message = "Fix error message when `credentials-sso` feature is not enabled on `aws-config`. NOTE: if you use `no-default-features`, you will need to manually able `credentials-sso` after 0.55.*"
+references = ["smithy-rs#2722", "aws-sdk-rust#703"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`SsoCredentialsProvider`, `AssumeRoleProvider`, and `WebIdentityTokenCredentialsProvider` now use `NoCredentialsCache` internally when fetching credentials using an STS client. This avoids double-caching when these providers are wrapped by `LazyCredentialsCache` when a service client is created."
+references = ["smithy-rs#2720"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+<details>
+<summary>Breaking change in how event stream signing works (click to expand more details)</summary>
+
+This change will only impact you if you are wiring up their own event stream signing/authentication scheme. If you're using `aws-sig-auth` to use AWS SigV4 event stream signing, then this change will **not** impact you.
+
+Previously, event stream signing was configured at codegen time by placing a `new_event_stream_signer` method on the `Config`. This function was called at serialization time to connect the signer to the streaming body. Now, instead, a special `DeferredSigner` is wired up at serialization time that relies on a signing implementation to be sent on a channel by the HTTP request signer. To do this, a `DeferredSignerSender` must be pulled out of the property bag, and its `send()` method called with the desired event stream signing implementation.
+
+See the changes in https://github.com/awslabs/smithy-rs/pull/2671 for an example of how this was done for SigV4.
+</details>
+"""
+references = ["smithy-rs#2671"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "For event stream operations such as S3 SelectObjectContent or Transcribe StartStreamTranscription, the `EventStreamSender` in the input now requires the passed in `Stream` impl to implement `Sync`."
+references = ["smithy-rs#2673"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "For event stream operations, the `EventStreamSender` in inputs/outputs now requires the passed in `Stream` impl to implement `Sync`."
+references = ["smithy-rs#2673"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `SigningInstructions` in the `aws-sigv4` module are now public. This allows them to be named in a function signature."
+references = ["smithy-rs#2730"]
+author = "cholcombe973"
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+
+[[smithy-rs]]
+message = "Code generation will abort if the `ignoreUnsupportedConstraints` codegen flag has no effect, that is, if all constraint traits used in your model are well-supported. Please remove the flag in such case."
+references = ["smithy-rs#2539"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
+
+[[smithy-rs]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "The property bag type for Time is now `SharedTimeSource`, not `SystemTime`. If your code relies on setting request time, use `aws_smithy_async::time::SharedTimeSource`."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported."
+references = ["smithy-rs#2728", "smithy-rs#2262", "aws-sdk-rust#2087"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Bump dependency on `lambda_http` by `aws-smithy-http-server` to 0.8.0. This version of `aws-smithy-http-server` is only guaranteed to be compatible with 0.8.0, or semver-compatible versions of 0.8.0 of the `lambda_http` crate. It will not work with versions prior to 0.8.0 _at runtime_, making requests to your smithy-rs service unroutable, so please make sure you're running your service in a compatible configuration"
+author = "david-perez"
+references = ["smithy-rs#2676", "smithy-rs#2685"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = """Remove `PollError` from an operations `Service::Error`.
+
+Any [`tower::Service`](https://docs.rs/tower/latest/tower/trait.Service.html) provided to
+[`Operation::from_service`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/struct.Operation.html#method.from_service)
+no longer requires `Service::Error = OperationError<Op::Error, PollError>`, instead requiring just `Service::Error = Op::Error`.
+"""
+references = ["smithy-rs#2457"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"

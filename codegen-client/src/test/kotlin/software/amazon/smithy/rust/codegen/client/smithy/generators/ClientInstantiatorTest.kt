@@ -47,7 +47,7 @@ internal class ClientInstantiatorTest {
     @Test
     fun `generate named enums`() {
         val shape = model.lookup<StringShape>("com.test#NamedEnum")
-        val sut = clientInstantiator(codegenContext)
+        val sut = ClientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject(symbolProvider)
@@ -66,7 +66,7 @@ internal class ClientInstantiatorTest {
     @Test
     fun `generate unnamed enums`() {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = clientInstantiator(codegenContext)
+        val sut = ClientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject(symbolProvider)
