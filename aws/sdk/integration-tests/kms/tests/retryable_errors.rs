@@ -73,8 +73,13 @@ mod orchestrator_mode_tests {
     use aws_sdk_kms as kms;
     use aws_smithy_client::test_connection::infallible_connection_fn;
     use aws_smithy_http::result::SdkError;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+    use aws_smithy_runtime_api::client::retries::ClassifyRetry;
     use aws_smithy_runtime_api::client::retries::RetryReason;
+    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
+    use aws_smithy_runtime_api::type_erasure::TypeErasedError;
     use aws_smithy_types::retry::ErrorKind;
     use bytes::Bytes;
     use kms::operation::create_alias::CreateAliasError;
@@ -111,7 +116,10 @@ mod orchestrator_mode_tests {
 
         dbg!(&err);
         let classifier = AwsErrorCodeClassifier::<CreateAliasError>::new();
-        let retry_kind = classifier.classify_error(&err);
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let err = err.into_service_error();
+        ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(err))));
+        let retry_kind = classifier.classify_retry(&ctx);
         assert_eq!(
             Some(RetryReason::Error(ErrorKind::ThrottlingError)),
             retry_kind
@@ -130,7 +138,10 @@ mod orchestrator_mode_tests {
 
         dbg!(&err);
         let classifier = AwsErrorCodeClassifier::<CreateAliasError>::new();
-        let retry_kind = classifier.classify_error(&err);
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let err = err.into_service_error();
+        ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(err))));
+        let retry_kind = classifier.classify_retry(&ctx);
         assert_eq!(
             Some(RetryReason::Error(ErrorKind::ThrottlingError)),
             retry_kind
