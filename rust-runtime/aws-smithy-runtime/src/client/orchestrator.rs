@@ -10,7 +10,7 @@ use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKin
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output, RewindResult};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, HttpResponse, LoadedRequestBody, OrchestratorError,
@@ -20,7 +20,7 @@ use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::config_bag::ConfigBag;
 use std::mem;
-use tracing::{debug_span, Instrument};
+use tracing::{debug, debug_span, Instrument};
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
@@ -142,12 +142,19 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
         }
     }
 
+    // Save a request checkpoint before we make the request. This will allow us to "rewind"
+    // the request in the case of retry attempts.
+    ctx.save_checkpoint();
     // If you need to retry something more than 255 times then the orchestrator isn't for you.
     for i in 0u8.. {
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
-        if !ctx.rewind(cfg) {
-            break;
+        match ctx.rewind(cfg) {
+            RewindResult::Impossible => {
+                break;
+            }
+            r @ RewindResult::Occurred => debug!("{r}"),
+            r @ RewindResult::Unnecessary => debug!("{r}"),
         }
         // Track which attempt we're currently on.
         cfg.put::<RequestAttempts>(i.into());

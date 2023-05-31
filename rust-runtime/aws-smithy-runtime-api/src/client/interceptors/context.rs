@@ -36,8 +36,8 @@ use crate::config_bag::ConfigBag;
 use crate::type_erasure::{TypeErasedBox, TypeErasedError};
 use aws_smithy_http::result::SdkError;
 use phase::Phase;
-use std::fmt::Debug;
-use std::mem;
+use std::fmt::{Debug, Formatter};
+use std::{fmt, mem};
 use tracing::{error, trace};
 
 pub type Input = TypeErasedBox;
@@ -228,8 +228,6 @@ where
             self.request.is_some(),
             "request must be set before calling enter_before_transmit_phase"
         );
-        self.request_checkpoint = try_clone(self.request());
-        self.tainted = true;
         self.phase = Phase::BeforeTransmit;
     }
 
@@ -285,23 +283,34 @@ where
         self.phase = Phase::AfterDeserialization;
     }
 
+    /// Set the request checkpoint. This should only be called once, right before entering the retry loop.
+    #[doc(hidden)]
+    pub fn save_checkpoint(&mut self) {
+        self.request_checkpoint = try_clone(self.request());
+    }
+
     // Returns false if rewinding isn't possible
-    pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> bool {
-        // If before transmit was never touched, then we don't need to rewind
-        if !self.tainted {
-            return true;
-        }
+    pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
         // If request_checkpoint was never set, then this is not a retryable request
         if self.request_checkpoint.is_none() {
-            return false;
+            return RewindResult::Impossible;
         }
-        // Otherwise, rewind back to the beginning of BeforeTransmit
+
+        if !self.tainted {
+            // The first call to rewind() happens before the request is ever touched, so we don't need
+            // to clone it then. However, the request must be marked as tainted so that subsequent calls
+            // to rewind() properly reload the saved request checkpoint.
+            self.tainted = true;
+            return RewindResult::Unnecessary;
+        }
+
+        // Otherwise, rewind to the saved request checkpoint
         // TODO(enableNewSmithyRuntime): Also rewind the ConfigBag
         self.phase = Phase::BeforeTransmit;
         self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
         self.response = None;
         self.output_or_error = None;
-        true
+        RewindResult::Occurred
     }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
@@ -324,6 +333,32 @@ where
             .as_ref()
             .map(Result::is_err)
             .unwrap_or_default()
+    }
+}
+
+/// The result of attempting to rewind a request.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum RewindResult {
+    /// The request couldn't be rewound because it wasn't cloneable.
+    Impossible,
+    /// The request wasn't rewound because it was unnecessary.
+    Unnecessary,
+    /// The request was rewound successfully.
+    Occurred,
+}
+
+impl fmt::Display for RewindResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RewindResult::Impossible => write!(
+                f,
+                "The request couldn't be rewound because it wasn't cloneable."
+            ),
+            RewindResult::Unnecessary => {
+                write!(f, "The request wasn't rewound because it was unnecessary.")
+            }
+            RewindResult::Occurred => write!(f, "The request was rewound successfully."),
+        }
     }
 }
 
@@ -419,7 +454,8 @@ mod tests {
                 .unwrap(),
         );
         context.enter_before_transmit_phase();
-
+        context.save_checkpoint();
+        assert_eq!(context.rewind(&mut cfg), RewindResult::Unnecessary);
         // Modify the test header post-checkpoint to simulate modifying the request for signing or a mutating interceptor
         context.request_mut().headers_mut().remove("test");
         context.request_mut().headers_mut().insert(
@@ -439,7 +475,7 @@ mod tests {
         context.enter_deserialization_phase();
         context.set_output_or_error(Err(OrchestratorError::operation(error)));
 
-        assert!(context.rewind(&mut cfg));
+        assert_eq!(context.rewind(&mut cfg), RewindResult::Occurred);
 
         // Now after rewinding, the test header should be its original value
         assert_eq!(
