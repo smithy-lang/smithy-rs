@@ -18,6 +18,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 
+// TODO(enableNewSmithyRuntime): Delete this file when cleaning up middleware.
+
 val TreeHashDependencies = listOf(
     CargoDependency.Ring,
     CargoDependency.TokioStream,

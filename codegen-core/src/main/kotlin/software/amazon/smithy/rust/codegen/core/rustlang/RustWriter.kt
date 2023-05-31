@@ -26,6 +26,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -138,6 +139,21 @@ fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
     block(this)
     if (conditional) {
         closeBlock(textAfterNewLine.trim())
+    }
+    return this
+}
+
+fun RustWriter.conditionalBlockTemplate(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
+    conditional: Boolean = true,
+    vararg args: Pair<String, Any>,
+    block: RustWriter.() -> Unit,
+): RustWriter {
+    withTemplate(textBeforeNewLine.trim(), args) { beforeNewLine ->
+        withTemplate(textAfterNewLine.trim(), args) { afterNewLine ->
+            conditionalBlock(beforeNewLine, afterNewLine, conditional = conditional, block = block)
+        }
     }
     return this
 }
@@ -608,7 +624,7 @@ class RustWriter private constructor(
         when {
             member.isOptional() -> {
                 val innerValue = ValueExpression.Reference(safeName("inner"))
-                rustBlock("if let Some(${innerValue.name}) = ${value.asRef()}") {
+                rustBlockTemplate("if let #{Some}(${innerValue.name}) = ${value.asRef()}", *preludeScope) {
                     block(innerValue)
                 }
             }

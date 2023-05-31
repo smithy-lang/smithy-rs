@@ -13,7 +13,7 @@ use std::{
 
 use futures_util::ready;
 use pin_project_lite::pin_project;
-use tower::{layer::util::Stack, Layer, Service};
+use tower::{layer::util::Stack, util::Oneshot, Layer, Service, ServiceExt};
 use tracing::error;
 
 use crate::{
@@ -25,7 +25,7 @@ use crate::{
     runtime_error::InternalFailureException,
 };
 
-use super::{Operation, OperationError, OperationShape};
+use super::{Operation, OperationShape};
 
 /// A [`Layer`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -106,7 +106,8 @@ pin_project! {
     }
 }
 
-type InnerAlias<Input, Exts, Protocol, B, Fut> = Inner<<(Input, Exts) as FromRequest<Protocol, B>>::Future, Fut>;
+type InnerAlias<Input, Exts, Protocol, B, S> =
+    Inner<<(Input, Exts) as FromRequest<Protocol, B>>::Future, Oneshot<S, (Input, Exts)>>;
 
 pin_project! {
     /// The [`Service::Future`] of [`Upgrade`].
@@ -118,11 +119,11 @@ pin_project! {
     {
         service: S,
         #[pin]
-        inner: InnerAlias<Operation::Input, Exts, Protocol, B, S::Future>
+        inner: InnerAlias<Operation::Input, Exts, Protocol, B, S>
     }
 }
 
-impl<P, Op, Exts, B, S, PollError, OpError> Future for UpgradeFuture<P, Op, Exts, B, S>
+impl<P, Op, Exts, B, S> Future for UpgradeFuture<P, Op, Exts, B, S>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -131,15 +132,15 @@ where
     // Smithy output must convert into a HTTP response
     Op::Output: IntoResponse<P>,
     // Smithy error must convert into a HTTP response
-    OpError: IntoResponse<P>,
+    Op::Error: IntoResponse<P>,
 
     // Must be able to convert extensions
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<OpError, PollError>>,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 {
-    type Output = Result<http::Response<crate::body::BoxBody>, PollError>;
+    type Output = Result<http::Response<crate::body::BoxBody>, Infallible>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
@@ -150,7 +151,7 @@ where
                 InnerProj::FromRequest { inner } => {
                     let result = ready!(inner.poll(cx));
                     match result {
-                        Ok(ok) => this.service.call(ok),
+                        Ok(ok) => this.service.clone().oneshot(ok),
                         Err(err) => return Poll::Ready(Ok(err.into_response())),
                     }
                 }
@@ -158,10 +159,7 @@ where
                     let result = ready!(call.poll(cx));
                     let output = match result {
                         Ok(ok) => ok.into_response(),
-                        Err(OperationError::Model(err)) => err.into_response(),
-                        Err(OperationError::PollReady(_)) => {
-                            unreachable!("poll error should not be raised")
-                        }
+                        Err(err) => err.into_response(),
                     };
                     return Poll::Ready(Ok(output));
                 }
@@ -172,7 +170,7 @@ where
     }
 }
 
-impl<P, Op, Exts, B, S, PollError, OpError> Service<http::Request<B>> for Upgrade<P, Op, Exts, S>
+impl<P, Op, Exts, B, S> Service<http::Request<B>> for Upgrade<P, Op, Exts, S>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -181,23 +179,20 @@ where
     // Smithy output must convert into a HTTP response
     Op::Output: IntoResponse<P>,
     // Smithy error must convert into a HTTP response
-    OpError: IntoResponse<P>,
+    Op::Error: IntoResponse<P>,
 
     // Must be able to convert extensions
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<OpError, PollError>> + Clone,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 {
     type Response = http::Response<crate::body::BoxBody>;
-    type Error = PollError;
+    type Error = Infallible;
     type Future = UpgradeFuture<P, Op, Exts, B, S>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(|err| match err {
-            OperationError::PollReady(err) => err,
-            OperationError::Model(_) => unreachable!("operation error should not be raised"),
-        })
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
@@ -223,7 +218,7 @@ pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
 type UpgradedService<Pl, P, Op, Exts, S, L> =
     <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service;
 
-impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
+impl<P, Op, Exts, B, Pl, S, L> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -239,8 +234,7 @@ where
     Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    Pl::Service:
-        Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+    Pl::Service: Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error> + Clone,
 
     // The plugin takes this operation as input
     Pl: Plugin<P, Op, S, L>,
@@ -260,7 +254,8 @@ where
     fn upgrade(self, plugin: &Pl) -> Route<B> {
         let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
-        Route::new(layer.layer(mapped.inner))
+        let svc = layer.layer(mapped.inner);
+        Route::new(svc)
     }
 }
 

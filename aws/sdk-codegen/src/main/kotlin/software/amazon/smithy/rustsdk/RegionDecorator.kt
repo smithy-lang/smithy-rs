@@ -171,7 +171,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
             )
 
             ServiceConfig.BuilderStruct ->
-                rustTemplate("region: Option<#{Region}>,", *codegenScope)
+                rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
 
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
@@ -189,6 +189,12 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                     /// ```
                     pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
                         self.region = region.into();
+                        self
+                    }
+
+                    /// Sets the AWS region to use when making requests.
+                    pub fn set_region(&mut self, region: Option<#{Region}>) -> &mut Self {
+                        self.region = region;
                         self
                     }
                     """,
