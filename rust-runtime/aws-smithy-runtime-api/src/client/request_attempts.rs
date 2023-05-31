@@ -20,9 +20,7 @@ impl RequestAttempts {
 }
 
 impl From<usize> for RequestAttempts {
-    fn from(value: usize) -> Self {
-        Self {
-            attempts: value as usize,
-        }
+    fn from(attempts: usize) -> Self {
+        Self { attempts }
     }
 }
