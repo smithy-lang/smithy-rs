@@ -13,7 +13,7 @@ use std::fmt::Debug;
 use uuid::Uuid;
 
 #[cfg(feature = "test-util")]
-pub use test_util::{DoesntMatterInvocationIdGenerator, PredefinedInvocationIdGenerator};
+pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
@@ -135,16 +135,16 @@ mod test_util {
 
     /// A "generator" that always returns `None`.
     #[derive(Debug, Default)]
-    pub struct DoesntMatterInvocationIdGenerator;
+    pub struct NoInvocationIdGenerator;
 
-    impl DoesntMatterInvocationIdGenerator {
-        /// Create a new [`DoesntMatterInvocationIdGenerator`].
+    impl NoInvocationIdGenerator {
+        /// Create a new [`NoInvocationIdGenerator`].
         pub fn new() -> Self {
             Self::default()
         }
     }
 
-    impl InvocationIdGenerator for DoesntMatterInvocationIdGenerator {
+    impl InvocationIdGenerator for NoInvocationIdGenerator {
         fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
             Ok(None)
         }

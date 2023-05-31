@@ -145,8 +145,7 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
-    // If you need to retry something more than 255 times then the orchestrator isn't for you.
-    for i in 0u8.. {
+    for i in 0usize.. {
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
         match ctx.rewind(cfg) {

@@ -176,6 +176,12 @@ impl DateTime {
         self.seconds
     }
 
+    /// Set the seconds component of this `DateTime`.
+    pub fn set_seconds(&mut self, seconds: i64) -> &mut Self {
+        self.seconds = seconds;
+        self
+    }
+
     /// Returns the sub-second nanos component of the `DateTime`.
     ///
     /// _Note: this does not include the number of seconds since the epoch._

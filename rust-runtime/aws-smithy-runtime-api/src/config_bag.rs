@@ -267,7 +267,9 @@ impl FrozenConfigBag {
 }
 
 impl ConfigBag {
-    /// Create a new config bag "base". Configuration may then be "layered" onto the base by calling
+    /// Create a new config bag "base".
+    ///
+    /// Configuration may then be "layered" onto the base by calling
     /// [`ConfigBag::store_put`], [`ConfigBag::store_or_unset`], [`ConfigBag::store_append`]. Layers
     /// of configuration may then be "frozen" (made immutable) by calling [`ConfigBag::freeze`].
     pub fn base() -> Self {
