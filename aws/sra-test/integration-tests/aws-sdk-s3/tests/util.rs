@@ -11,7 +11,7 @@ use aws_smithy_runtime_api::client::interceptors::{
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::header::USER_AGENT;
 use http::{HeaderName, HeaderValue};
 use std::time::SystemTime;
