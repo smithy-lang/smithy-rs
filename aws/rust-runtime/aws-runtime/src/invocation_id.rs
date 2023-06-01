@@ -80,7 +80,12 @@ mod tests {
     use http::HeaderValue;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a HeaderValue {
-        context.request().headers().get(header_name).unwrap()
+        context
+            .request()
+            .expect("request is set")
+            .headers()
+            .get(header_name)
+            .unwrap()
     }
 
     #[test]
