@@ -4,7 +4,6 @@
  */
 
 use super::*;
-use serde::ser::SerializeTuple;
 
 impl serde::Serialize for DateTime {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
