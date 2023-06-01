@@ -330,7 +330,7 @@ class FluentClientGenerator(
             ##[#{AwsSdkUnstableAttribute}]
             /// Creates a fluent builder from this builder.
             pub fn into_fluent_builder(self, client: &crate::Client) -> $fluentBuilderName {
-                let fluent_builder = client.$fnName();
+                let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
                 fluent_builder
             }
