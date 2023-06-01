@@ -279,7 +279,7 @@ where
     #[doc(hidden)]
     pub fn save_checkpoint(&mut self) {
         trace!("saving request checkpoint...");
-        self.request_checkpoint = self.request().and_then(|req| try_clone(req));
+        self.request_checkpoint = self.request().and_then(try_clone);
         match self.request_checkpoint.as_ref() {
             Some(_) => trace!("successfully saved request checkpoint"),
             None => trace!("failed to save request checkpoint: request body could not be cloned"),
