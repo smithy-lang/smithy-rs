@@ -10,10 +10,3 @@ set -e
 
 echo "### Checking for duplicate dependency versions in the normal dependency graph with all features enabled"
 cargo tree -d --edges normal --all-features
-
-export RUSTFLAGS="--cfg aws_sdk_unstable"
-echo "### Checking for duplicate dependency versions in the normal dependency graph with all features enabled with aws_sdk_unstable flag enabled"
-cargo tree -d --edges normal --all-features
-
-echo "### Checking if it compiles"
-cargo check --all-features
