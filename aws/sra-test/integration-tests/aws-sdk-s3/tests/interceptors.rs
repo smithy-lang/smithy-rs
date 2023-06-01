@@ -16,7 +16,7 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::header::USER_AGENT;
 use http::HeaderValue;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
