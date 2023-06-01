@@ -30,10 +30,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
@@ -319,8 +321,28 @@ class FluentClientGenerator(
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
+        // input name
+        val fluentBuilderName = operation.fluentBuilderType(symbolProvider).name
+        val fnName = clientOperationFnName(operation, symbolProvider)
+        implBlock(symbolProvider.symbolForBuilder(input)) {
+            rustTemplate(
+            """
+                ##[#{AwsSdkUnstableAttribute}]
+                /// Creates a fluent builder from this builder.
+                pub fn into_fluent_builder(self, client: &crate::Client) -> $fluentBuilderName {
+                    let fluent_builder = client.$fnName();
+                    fluent_builder.inner = self;
+                    fluent_builder
+                }
+            """,
+                
+                "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
+            )
+        }
+
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
+
 
         val builderName = operation.fluentBuilderType(symbolProvider).name
         documentShape(operation, model, autoSuppressMissingDocs = false)
@@ -352,8 +374,6 @@ class FluentClientGenerator(
         ) {
             val outputType = symbolProvider.toSymbol(operation.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operation)
-            val inputBuilderType = symbolProvider.symbolForBuilder(input)
-            val fnName = clientOperationFnName(operation, symbolProvider)
 
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
@@ -371,42 +391,6 @@ class FluentClientGenerator(
                         rustTemplate("config_override: #{None},", *preludeScope)
                     }
                 }
-            }
-
-            // this fixes this error
-            //  error[E0592]: duplicate definitions with name `set_fields`
-            //     --> sdk/connectcases/src/operation/update_case/builders.rs:115:5
-            //      |
-            //  78  | /     pub fn set_fields(
-            //  79  | |         mut self,
-            //  80  | |         data: crate::operation::update_case::builders::UpdateCaseInputBuilder,
-            //  81  | |     ) -> Self {
-            //      | |_____________- other definition for `set_fields`
-            //  ...
-            //  115 | /     pub fn set_fields(
-            //  116 | |         mut self,
-            //  117 | |         input: std::option::Option<std::vec::Vec<crate::types::FieldValue>>,
-            //  118 | |     ) -> Self {
-            //      | |_____________^ duplicate definitions for `set_fields`
-            if (inputBuilderType.toString().endsWith("Builder")) {
-                rustTemplate(
-                    """
-                    ##[#{AwsSdkUnstableAttribute}]
-                    /// This function replaces the parameter with new one.
-                    /// It is useful when you want to replace the existing data with de-serialized data.
-                    /// ```compile_fail
-                    /// let result_future = async {
-                    ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
-                    ///     client.$fnName().set_fields(&deserialized_parameters).send().await
-                    /// };
-                    /// ```
-                    pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
-                        self.inner = data;
-                        self
-                    }
-                    """,
-                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
-                )
             }
 
             if (smithyRuntimeMode.generateMiddleware) {
