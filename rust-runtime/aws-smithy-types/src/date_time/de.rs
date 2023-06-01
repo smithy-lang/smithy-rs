@@ -126,7 +126,7 @@ fn not_human_readable_datetime() {
     let datetime = DateTime::from_secs(1576540098);
 
     let mut buf1 = vec![];
-    let _ = ciborium::ser::into_writer(&datetime, &mut buf1);
-    let res = ciborium::de::from_reader(std::io::Cursor::new(buf1));
-    assert_eq!(res.ok(), Some(datetime));
+    let _ = ciborium::ser::into_writer(&cbor, &mut buf1);
+    let res = ciborium::de::from_reader(std::io::Cursor::new(buf1)).unwrap();
+    assert_eq!(res, datetime);
 }
