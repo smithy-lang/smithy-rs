@@ -3,27 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::layer::util::Stack;
-
-use crate::operation::{Operation, OperationShape};
+use crate::operation::OperationShape;
 
 use super::Plugin;
 
-/// An adapter to convert a `Fn(&'static str) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_name_fn`] for more details.
+/// An adapter to convert a `Fn(&'static str) -> Service` closure into a [`Plugin`]. See
+/// [`plugin_from_operation_name_fn`] for more details.
 pub struct OperationNameFn<F> {
     f: F,
 }
 
-impl<P, Op, S, ExistingLayer, NewLayer, F> Plugin<P, Op, S, ExistingLayer> for OperationNameFn<F>
+impl<P, Op, S, F, NewService> Plugin<P, Op, S> for OperationNameFn<F>
 where
-    F: Fn(&'static str) -> NewLayer,
+    F: Fn(&'static str, S) -> NewService,
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<ExistingLayer, NewLayer>;
+    type Service = NewService;
 
-    fn map(&self, input: Operation<S, ExistingLayer>) -> Operation<Self::Service, Self::Layer> {
-        input.layer((self.f)(Op::NAME))
+    fn apply(&self, svc: S) -> Self::Service {
+        (self.f)(Op::NAME, svc)
     }
 }
 
@@ -53,9 +51,9 @@ where
 /// // This plugin applies the `PrintService` middleware around every operation.
 /// let plugin = plugin_from_operation_name_fn(f);
 /// ```
-pub fn plugin_from_operation_name_fn<L, F>(f: F) -> OperationNameFn<F>
+pub fn plugin_from_operation_name_fn<NewService, F>(f: F) -> OperationNameFn<F>
 where
-    F: Fn(&'static str) -> L,
+    F: Fn(&'static str) -> NewService,
 {
     OperationNameFn { f }
 }
