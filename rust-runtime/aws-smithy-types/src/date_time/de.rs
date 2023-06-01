@@ -4,29 +4,10 @@
  */
 
 use super::*;
-use serde::de::Visitor;
+use serde::de::{Error, Visitor};
 use serde::Deserialize;
 
 struct DateTimeVisitor;
-
-enum VisitorState {
-    Second,
-    SubsecondNanos,
-}
-
-struct NonHumanReadableDateTimeVisitor {
-    state: VisitorState,
-    seconds: i64,
-    subsecond_nanos: u32,
-}
-
-fn fail<T, M, E>(err_message: M) -> Result<T, E>
-where
-    M: std::fmt::Display,
-    E: serde::de::Error,
-{
-    Err(E::custom(err_message))
-}
 
 impl<'de> Visitor<'de> for DateTimeVisitor {
     type Value = DateTime;
@@ -40,41 +21,7 @@ impl<'de> Visitor<'de> for DateTimeVisitor {
     {
         match DateTime::from_str(v, Format::DateTime) {
             Ok(e) => Ok(e),
-            Err(e) => fail(e),
-        }
-    }
-}
-
-impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
-    type Value = Self;
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("expected (i64, u32)")
-    }
-
-    fn visit_i64<E>(mut self, v: i64) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match self.state {
-            VisitorState::Second => {
-                self.seconds = v;
-                self.state = VisitorState::SubsecondNanos;
-                Ok(self)
-            }
-            _ => fail("`seconds` value must be i64"),
-        }
-    }
-
-    fn visit_u32<E>(mut self, v: u32) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match self.state {
-            VisitorState::SubsecondNanos => {
-                self.subsecond_nanos = v;
-                Ok(self)
-            }
-            _ => fail("`subsecond_nanos` value must be u32"),
+            Err(e) => Err(Error::custom(e)),
         }
     }
 }
@@ -84,26 +31,13 @@ impl<'de> Deserialize<'de> for DateTime {
     where
         D: serde::Deserializer<'de>,
     {
-        if deserializer.is_human_readable() {
-            deserializer.deserialize_str(DateTimeVisitor)
-        } else {
-            let visitor = NonHumanReadableDateTimeVisitor {
-                state: VisitorState::Second,
-                seconds: 0,
-                subsecond_nanos: 0,
-            };
-            let visitor = deserializer.deserialize_tuple(2, visitor)?;
-            Ok(DateTime {
-                seconds: visitor.seconds,
-                subsecond_nanos: visitor.subsecond_nanos,
-            })
-        }
+        deserializer.deserialize_str(DateTimeVisitor)
     }
 }
 
 /// check for human redable format
 #[test]
-fn human_readable_datetime() {
+fn deser() {
     use serde::{Deserialize, Serialize};
 
     let datetime = DateTime::from_secs(1576540098);
@@ -114,19 +48,4 @@ fn human_readable_datetime() {
     let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
     let test = serde_json::from_str::<Test>(&datetime_json).ok();
     assert!(test == Some(Test { datetime }));
-}
-
-/// check for non-human redable format
-#[test]
-fn not_human_readable_datetime() {
-    let cbor = ciborium::value::Value::Array(vec![
-        ciborium::value::Value::Integer(1576540098i64.into()),
-        ciborium::value::Value::Integer(0u32.into()),
-    ]);
-    let datetime = DateTime::from_secs(1576540098);
-
-    let mut buf1 = vec![];
-    let _ = ciborium::ser::into_writer(&cbor, &mut buf1);
-    let res: DateTime = ciborium::de::from_reader(std::io::Cursor::new(buf1)).unwrap();
-    assert_eq!(res, datetime);
 }
