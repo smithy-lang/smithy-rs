@@ -39,6 +39,15 @@ impl<E: Debug> OrchestratorError<E> {
         Self::Interceptor { err }
     }
 
+    /// Convert the `OrchestratorError` into `Some` operation specific error if it is one. Otherwise,
+    /// return `None`.
+    pub fn as_operation_error(&self) -> Option<&E> {
+        match self {
+            Self::Operation { err } => Some(err),
+            _ => None,
+        }
+    }
+
     /// Convert the `OrchestratorError` into an [`SdkError`].
     pub fn into_sdk_error(
         self,

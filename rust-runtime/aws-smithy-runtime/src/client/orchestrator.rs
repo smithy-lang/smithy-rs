@@ -119,9 +119,10 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     // Load the request body into memory if configured to do so
     if let LoadedRequestBody::Requested = cfg.loaded_request_body() {
         let mut body = SdkBody::taken();
-        mem::swap(&mut body, ctx.request_mut().body_mut());
+        let req = ctx.request_mut().expect("request exists");
+        mem::swap(&mut body, req.body_mut());
         let loaded_body = halt_on_err!([ctx] => ByteStream::new(body).collect().await).into_bytes();
-        *ctx.request_mut().body_mut() = SdkBody::from(loaded_body.clone());
+        *req.body_mut() = SdkBody::from(loaded_body.clone());
         cfg.set_loaded_request_body(LoadedRequestBody::Loaded(loaded_body));
     }
 
@@ -230,7 +231,9 @@ async fn try_attempt(
 
     ctx.enter_deserialization_phase();
     let output_or_error = async {
-        let response = ctx.response_mut();
+        let response = ctx
+            .response_mut()
+            .ok_or("No response was present in the InterceptorContext")?;
         let response_deserializer = cfg.response_deserializer();
         match response_deserializer.deserialize_streaming(response) {
             Some(output_or_error) => Ok(output_or_error),

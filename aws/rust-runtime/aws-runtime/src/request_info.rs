@@ -176,6 +176,7 @@ mod tests {
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .expect("request is set")
             .headers()
             .get(header_name)
             .unwrap()

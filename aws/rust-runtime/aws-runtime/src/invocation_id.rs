@@ -166,11 +166,7 @@ mod tests {
         context: &'a BeforeTransmitInterceptorContextMut<'_>,
         header_name: &str,
     ) -> &'a HeaderValue {
-        context
-            .request()
-            .headers()
-            .get(header_name)
-            .expect("header {header_name} is set")
+        context.request().headers().get(header_name).unwrap()
     }
 
     #[test]
