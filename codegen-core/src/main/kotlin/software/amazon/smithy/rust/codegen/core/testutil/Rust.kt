@@ -332,9 +332,14 @@ fun TestWriterDelegator.compileAndTest(
     println("Generated files:")
     printGeneratedFiles()
     try {
-        "cargo please-fmt".runCommand(baseDir)
+        "please-fmt".runCommand(baseDir)
     } catch (e: Exception) {
-        // cargo fmt errors are useless, ignore
+        // please-fmt will fail if not installed or on syntax errors; just briefly inform and carry on:
+        Exception(
+            "WARNING: please-fmt failed to run (be sure to install the tool with " +
+                "`cargo install --path tools/ci-build/please-fmt`)",
+            e,
+        ).fillInStackTrace().printStackTrace()
     }
     val env = mapOf("RUSTFLAGS" to "-A dead_code")
     val testOutput = "cargo test".runCommand(baseDir, env)

@@ -261,13 +261,14 @@ open class ServerCodegenVisitor(
             requireDocs = false,
         )
         try {
-            "cargo please-fmt".runCommand(
+            "please-fmt".runCommand(
                 fileManifest.baseDir,
                 timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
             )
         } catch (err: CommandFailed) {
             logger.info(
-                "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}",
+                "Failed to run please-fmt (be sure to install the tool with " +
+                    "`cargo install --path tools/ci-build/please-fmt`): [${service.id}]\n${err.output}",
             )
         }
         logger.info("[rust-server-codegen] Rust server generation complete!")

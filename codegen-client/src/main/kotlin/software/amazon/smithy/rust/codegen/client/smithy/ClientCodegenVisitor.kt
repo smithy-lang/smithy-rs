@@ -169,9 +169,12 @@ class ClientCodegenVisitor(
             ),
         )
         try {
-            "cargo please-fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+            "please-fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
         } catch (err: CommandFailed) {
-            logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
+            logger.warning(
+                "Failed to run please-fmt (be sure to install the tool with " +
+                    "`cargo install --path tools/ci-build/please-fmt`): [${service.id}]\n${err.output}",
+            )
         }
 
         logger.info("Rust Client generation complete!")
