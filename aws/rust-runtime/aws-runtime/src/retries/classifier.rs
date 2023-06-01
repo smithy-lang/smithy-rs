@@ -34,29 +34,14 @@ pub const THROTTLING_ERRORS: &[&str] = &[
 pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
-#[derive(Debug)]
-pub struct AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
+#[derive(Debug, Default)]
+pub struct AwsErrorCodeClassifier<E> {
     _inner: PhantomData<E>,
 }
 
-impl<E> AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
+impl<E> AwsErrorCodeClassifier<E> {
     /// Create a new AwsErrorCodeClassifier
     pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<E> Default for AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
-    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }
@@ -92,8 +77,15 @@ where
 
 /// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
 /// [`RetryReason::Explicit`] is returned containing the duration to wait before retrying.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AmzRetryAfterHeaderClassifier;
+
+impl AmzRetryAfterHeaderClassifier {
+    /// Create a new `AmzRetryAfterHeaderClassifier`.
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
