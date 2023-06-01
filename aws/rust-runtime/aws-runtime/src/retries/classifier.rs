@@ -5,6 +5,7 @@
 
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
@@ -33,29 +34,14 @@ pub const THROTTLING_ERRORS: &[&str] = &[
 pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
-#[derive(Debug)]
-pub struct AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
+#[derive(Debug, Default)]
+pub struct AwsErrorCodeClassifier<E> {
     _inner: PhantomData<E>,
 }
 
-impl<E> AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
+impl<E> AwsErrorCodeClassifier<E> {
     /// Create a new AwsErrorCodeClassifier
     pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<E> Default for AwsErrorCodeClassifier<E>
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
-    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }
@@ -67,31 +53,11 @@ where
     E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
 {
     fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
-        // Check for a result
-        let output_or_error = match ctx.output_or_error() {
-            Some(output) => output,
-            None => return None,
-        };
-
-        // Check for an error
-        let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
-        };
-
-        // Check that the error is an operation error
-        let error = match error.as_operation_error() {
-            Some(err) => err,
-            None => return None,
-        };
-
-        // Downcast the error
-        let error = match error.downcast_ref::<E>() {
-            Some(err) => err,
-            None => {
-                panic!("can't downcast {error:#?}, wtf is it?");
-            }
-        };
+        let error = ctx
+            .output_or_error()?
+            .err()
+            .and_then(OrchestratorError::as_operation_error)?
+            .downcast_ref::<E>()?;
 
         if let Some(error_code) = error.code() {
             if THROTTLING_ERRORS.contains(&error_code) {
@@ -111,8 +77,15 @@ where
 
 /// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
 /// [`RetryReason::Explicit`] is returned containing the duration to wait before retrying.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AmzRetryAfterHeaderClassifier;
+
+impl AmzRetryAfterHeaderClassifier {
+    /// Create a new `AmzRetryAfterHeaderClassifier`.
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
@@ -137,10 +110,10 @@ mod test {
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
-    use aws_smithy_runtime_api::type_erasure::{TypeErasedBox, TypeErasedError};
     use aws_smithy_types::error::metadata::ProvideErrorMetadata;
     use aws_smithy_types::error::ErrorMetadata;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+    use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
     use std::fmt;
     use std::time::Duration;
 
@@ -195,7 +168,7 @@ mod test {
     #[test]
     fn classify_by_error_code() {
         let policy = AwsErrorCodeClassifier::<CodedError>::new();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(
             CodedError::new("Throttling"),
         ))));
@@ -205,7 +178,7 @@ mod test {
             Some(RetryReason::Error(ErrorKind::ThrottlingError))
         );
 
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(
             CodedError::new("RequestTimeout"),
         ))));
@@ -221,7 +194,7 @@ mod test {
         let err = aws_smithy_types::Error::builder().code("SlowDown").build();
         let test_response = http::Response::new("OK").map(SdkBody::from);
 
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_response(test_response);
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(err))));
 
@@ -239,7 +212,7 @@ mod test {
             .body("retry later")
             .unwrap()
             .map(SdkBody::from);
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_response(res);
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(
             UnmodeledError,

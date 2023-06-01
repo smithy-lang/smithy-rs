@@ -9,7 +9,7 @@ pub mod error;
 use crate::client::interceptors::context::wrappers::{
     FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
 };
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 pub use context::{
     wrappers::{
@@ -612,6 +612,10 @@ impl Deref for SharedInterceptor {
 pub struct InterceptorRegistrar(Vec<SharedInterceptor>);
 
 impl InterceptorRegistrar {
+    /// Register an interceptor with this `InterceptorRegistrar`.
+    ///
+    /// When this `InterceptorRegistrar` is passed to an orchestrator, the orchestrator will run the
+    /// registered interceptor for all the "hooks" that it implements.
     pub fn register(&mut self, interceptor: SharedInterceptor) {
         self.0.push(interceptor);
     }

@@ -151,12 +151,11 @@ impl ValidateRequest {
                 let actual_header = actual
                     .headers()
                     .get(name)
-                    .unwrap_or_else(|| panic!("Request #{index} - Header {:?} is missing", name));
+                    .unwrap_or_else(|| panic!("Request #{index} - Header {name:?} is missing"));
                 assert_eq!(
                     actual_header.to_str().unwrap(),
                     value.to_str().unwrap(),
-                    "Request #{index} - Header {:?} doesn't match expected value",
-                    name
+                    "Request #{index} - Header {name:?} doesn't match expected value",
                 );
             }
         }
@@ -215,35 +214,33 @@ impl TestConnection {
             req.assert_matches(i, ignore_headers)
         }
         let remaining_requests = self.data.lock().unwrap();
+        let number_of_remaining_requests = remaining_requests.len();
         let actual_requests = self.requests().len();
         assert!(
             remaining_requests.is_empty(),
-            "Expected {} additional requests (only {} sent)",
-            remaining_requests.len(),
-            actual_requests
+            "Expected {number_of_remaining_requests} additional requests (only {actual_requests} sent)",
         );
     }
 }
 
 impl Connection for TestConnection {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
-        // TODO(orchestrator) Validate request
-
-        let simulated_latency;
-        let res = if let Some(event) = self.data.lock().unwrap().pop() {
+        // TODO(enableNewSmithyRuntime) Validate request
+        let (res, simulated_latency) = if let Some(event) = self.data.lock().unwrap().pop() {
             self.requests.lock().unwrap().push(ValidateRequest {
                 expected: event.req,
                 actual: request,
             });
-            simulated_latency = event.latency;
-            Ok(event.res.map(SdkBody::from))
+
+            (Ok(event.res.map(SdkBody::from)), event.latency)
         } else {
-            simulated_latency = Duration::from_secs(0);
-            Err(ConnectorError::other("No more data".into(), None).into())
+            (
+                Err(ConnectorError::other("No more data".into(), None).into()),
+                Duration::from_secs(0),
+            )
         };
 
         let sleep = self.sleep_impl.sleep(simulated_latency);
-
         Box::pin(async move {
             sleep.await;
             res

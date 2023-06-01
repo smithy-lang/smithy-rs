@@ -6,13 +6,12 @@
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeDeserializationInterceptorContextMut, BoxError, Interceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ServiceClockSkew {
     inner: Duration,
@@ -67,7 +66,7 @@ impl Interceptor for ServiceClockSkewInterceptor {
         ctx: &mut BeforeDeserializationInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let time_received = DateTime::from(cfg.time_source().now());
+        let time_received = DateTime::from(SystemTime::now());
         let time_sent = match extract_time_sent_from_response(ctx) {
             Ok(time_sent) => time_sent,
             Err(e) => {

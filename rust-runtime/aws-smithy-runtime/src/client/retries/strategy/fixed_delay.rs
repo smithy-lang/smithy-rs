@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::orchestrator::interceptors::RequestAttempts;
 use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::BoxError;
+use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryClassifiers, RetryReason, RetryStrategy, ShouldAttempt,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::time::Duration;
 
 // A retry policy used in tests. This relies on an error classifier already present in the config bag.
@@ -56,7 +56,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         let request_attempts: &RequestAttempts = cfg
             .get()
             .expect("at least one request attempt is made before any retry is attempted");
-        if request_attempts.attempts() >= self.max_attempts {
+        if request_attempts.attempts() >= self.max_attempts as usize {
             tracing::trace!(
                 attempts = request_attempts.attempts(),
                 max_attempts = self.max_attempts,

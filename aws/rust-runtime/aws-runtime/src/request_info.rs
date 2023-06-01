@@ -3,18 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::client::orchestrator::interceptors::{RequestAttempts, ServiceClockSkew};
+use aws_smithy_runtime::client::orchestrator::interceptors::ServiceClockSkew;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::DateTime;
 use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
@@ -44,7 +45,7 @@ impl RequestInfoInterceptor {
         let request_attempts = cfg
             .get::<RequestAttempts>()
             .map(|r_a| r_a.attempts())
-            .unwrap_or(1);
+            .unwrap_or(0);
         let request_attempts = request_attempts.to_string();
         Some((Cow::Borrowed("attempt"), Cow::Owned(request_attempts)))
     }
@@ -63,24 +64,17 @@ impl RequestInfoInterceptor {
     }
 
     fn build_ttl_pair(&self, cfg: &ConfigBag) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
-        let timeout_config = cfg.timeout_config()?;
+        let timeout_config = cfg.get::<TimeoutConfig>()?;
         let socket_read = timeout_config.read_timeout()?;
         let estimated_skew: Duration = cfg.get::<ServiceClockSkew>().cloned()?.into();
-        let current_time = cfg.time_source().now();
+        let current_time = SystemTime::now();
         let ttl = current_time.checked_add(socket_read + estimated_skew)?;
-        let timestamp = DateTime::from(ttl);
+        let mut timestamp = DateTime::from(ttl);
+        // Set subsec_nanos to 0 so that the formatted `DateTime` won't have fractional seconds.
+        timestamp.set_subsec_nanos(0);
         let mut formatted_timestamp = timestamp
             .fmt(Format::DateTime)
             .expect("the resulting DateTime will always be valid");
-
-        if let Some(start_of_fractional_secs) = formatted_timestamp.rfind('.') {
-            formatted_timestamp.truncate(start_of_fractional_secs)
-        }
-
-        // If the Z was removed when we deleted fractional seconds, re-add it
-        if !formatted_timestamp.ends_with('Z') {
-            formatted_timestamp.push('Z');
-        }
 
         // Remove dashes and colons
         formatted_timestamp = formatted_timestamp
@@ -171,12 +165,11 @@ mod tests {
     use super::RequestInfoInterceptor;
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime::client::orchestrator::interceptors::RequestAttempts;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
+    use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
     use std::time::Duration;
 
@@ -204,7 +197,6 @@ mod tests {
                 .read_timeout(Duration::from_secs(30))
                 .build(),
         );
-        config.put(RequestAttempts::new());
 
         let _ = context.take_input();
         context.enter_before_transmit_phase();

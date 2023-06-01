@@ -32,9 +32,7 @@ private class InvocationIdRuntimePluginCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
     private val codegenScope = arrayOf(
-        "InvocationIdGenerator" to awsRuntime.resolve("invocation_id::InvocationIdGenerator"),
         "InvocationIdInterceptor" to awsRuntime.resolve("invocation_id::InvocationIdInterceptor"),
-        "RandomInvocationIdGenerator" to awsRuntime.resolve("invocation_id::RandomInvocationIdGenerator"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
@@ -43,11 +41,6 @@ private class InvocationIdRuntimePluginCustomization(
                 section.registerInterceptor(codegenContext.runtimeConfig, this) {
                     rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
                 }
-
-                rustTemplate(
-                    "cfg.put::<Box<dyn #{InvocationIdGenerator}>>(Box::new(#{RandomInvocationIdGenerator}::new()));",
-                    *codegenScope,
-                )
             }
             else -> emptySection
         }

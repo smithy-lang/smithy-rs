@@ -29,7 +29,7 @@ impl<T> TypedBox<T>
 where
     T: fmt::Debug + Send + Sync + 'static,
 {
-    // Creates a new `TypedBox`.
+    /// Creates a new `TypedBox` from `inner` of type `T`
     pub fn new(inner: T) -> Self {
         Self {
             inner: TypeErasedBox::new(inner),
@@ -37,10 +37,10 @@ where
         }
     }
 
-    // Tries to create a `TypedBox<T>` from a `TypeErasedBox`.
-    //
-    // If the `TypedBox<T>` can't be created due to the `TypeErasedBox`'s value consisting
-    // of another type, then the original `TypeErasedBox` will be returned in the `Err` variant.
+    /// Tries to create a `TypedBox<T>` from a `TypeErasedBox`.
+    ///
+    /// If the `TypedBox<T>` can't be created due to the `TypeErasedBox`'s value consisting
+    /// of another type, then the original `TypeErasedBox` will be returned in the `Err` variant.
     pub fn assume_from(type_erased: TypeErasedBox) -> Result<TypedBox<T>, TypeErasedBox> {
         if type_erased.downcast_ref::<T>().is_some() {
             Ok(TypedBox {
@@ -108,6 +108,10 @@ pub struct TypeErasedBox {
 
 #[cfg(feature = "test-util")]
 impl TypeErasedBox {
+    /// Often, when testing the orchestrator or its components, it's necessary to provide a
+    /// `TypeErasedBox` to serve as an `Input` for `invoke`. In cases where the type won't actually
+    /// be accessed during testing, use this method to generate a `TypeErasedBox` that makes it
+    /// clear that "for the purpose of this test, the `Input` doesn't matter."
     pub fn doesnt_matter() -> Self {
         Self::new("doesn't matter")
     }
@@ -121,9 +125,10 @@ impl fmt::Debug for TypeErasedBox {
 }
 
 impl TypeErasedBox {
+    /// Create a new `TypeErasedBox` from `value` of type `T`
     pub fn new<T: Send + Sync + fmt::Debug + 'static>(value: T) -> Self {
         let debug = |value: &Box<dyn Any + Send + Sync>, f: &mut fmt::Formatter<'_>| {
-            fmt::Debug::fmt(value.downcast_ref::<T>().expect("typechecked"), f)
+            fmt::Debug::fmt(value.downcast_ref::<T>().expect("type-checked"), f)
         };
         Self {
             field: Box::new(value),
@@ -131,7 +136,7 @@ impl TypeErasedBox {
         }
     }
 
-    // Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
+    /// Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
     pub fn downcast<T: fmt::Debug + Send + Sync + 'static>(self) -> Result<Box<T>, Self> {
         let TypeErasedBox { field, debug } = self;
         field.downcast().map_err(|field| Self { field, debug })
@@ -188,6 +193,7 @@ impl StdError for TypeErasedError {
 }
 
 impl TypeErasedError {
+    /// Create a new `TypeErasedError` from `value` of type `T`
     pub fn new<T: StdError + Send + Sync + fmt::Debug + 'static>(value: T) -> Self {
         let debug = |value: &Box<dyn Any + Send + Sync>, f: &mut fmt::Formatter<'_>| {
             fmt::Debug::fmt(value.downcast_ref::<T>().expect("typechecked"), f)
@@ -201,7 +207,7 @@ impl TypeErasedError {
         }
     }
 
-    // Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
+    /// Downcast into a `Box<T>`, or return `Self` if it is not a `T`.
     pub fn downcast<T: StdError + fmt::Debug + Send + Sync + 'static>(
         self,
     ) -> Result<Box<T>, Self> {

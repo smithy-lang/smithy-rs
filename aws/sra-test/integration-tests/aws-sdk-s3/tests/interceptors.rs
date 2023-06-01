@@ -4,9 +4,6 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_runtime::invocation_id::{
-    InvocationId, InvocationIdGenerator, InvocationIdGeneratorForTests,
-};
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
 use aws_smithy_async::test_util::StaticTimeSource;
@@ -14,40 +11,15 @@ use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_runtime_api::client::interceptors::{
-    BeforeTransmitInterceptorContextMut, Interceptor, InterceptorRegistrar,
+    BeforeTransmitInterceptorContextMut, Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::client::orchestrator::RequestTime;
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
-use aws_smithy_runtime_test::util;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::header::USER_AGENT;
 use http::HeaderValue;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIST_BUCKETS_PATH: &str = "test-data/list-objects-v2.json";
-
-#[derive(Debug)]
-struct FixupPlugin {
-    timestamp: SystemTime,
-}
-
-impl RuntimePlugin for FixupPlugin {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        _interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
-        cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
-
-        let gen = InvocationIdGeneratorForTests::new(vec![InvocationId::from_str(
-            "00000000-0000-4000-8000-000000000000",
-        )]);
-        cfg.put::<Box<dyn InvocationIdGenerator>>(Box::new(gen));
-
-        Ok(())
-    }
-}
 
 #[tokio::test]
 async fn operation_interceptor_test() {
@@ -63,7 +35,7 @@ async fn operation_interceptor_test() {
         .http_connector(DynConnector::new(conn.clone()))
         .build();
     let client = Client::from_conf(config);
-    let fixup = FixupPlugin {
+    let fixup = util::FixupPlugin {
         timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
     };
 
@@ -128,7 +100,7 @@ async fn interceptor_priority() {
         .interceptor(RequestTimeResetInterceptor)
         .build();
     let client = Client::from_conf(config);
-    let fixup = FixupPlugin {
+    let fixup = util::FixupPlugin {
         timestamp: SystemTime::now(),
     };
 
@@ -163,7 +135,7 @@ async fn set_test_user_agent_through_request_mutation() {
         .http_connector(DynConnector::new(conn.clone()))
         .build();
     let client = Client::from_conf(config);
-    let fixup = FixupPlugin {
+    let fixup = util::FixupPlugin {
         timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
     };
 

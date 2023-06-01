@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyAsync
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -76,12 +75,13 @@ class ServiceRuntimePluginGenerator(
         val client = RuntimeType.smithyClient(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
@@ -91,17 +91,15 @@ class ServiceRuntimePluginGenerator(
             "HttpConnector" to client.resolve("http_connector::HttpConnector"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            "StandardRetryStrategy" to runtime.resolve("client::retries::strategy::StandardRetryStrategy"),
+            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
-            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "default_connector" to client.resolve("conns::default_connector"),
             "require_connector" to client.resolve("conns::require_connector"),
-            "SystemTimeSource" to smithyAsync(rc).resolve("time::SystemTimeSource"),
-            "debug" to RuntimeType.Tracing.resolve("debug"),
         )
     }
 
@@ -138,25 +136,13 @@ class ServiceRuntimePluginGenerator(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
+                    // TODO(enableNewSmithyRuntime): Use the `store_append` method of ConfigBag to insert classifiers
                     let retry_classifiers = #{RetryClassifiers}::new()
                         #{retry_classifier_customizations};
                     cfg.set_retry_classifiers(retry_classifiers);
 
-                    // TODO(RuntimePlugins): Decide if this is how we want to put the retry config into the bag
-                    if let Some(retry_config) = self.handle.conf.retry_config() {
-                        cfg.set_retry_config(retry_config.clone());
-                        cfg.set_retry_strategy(#{StandardRetryStrategy}::new(retry_config));
-                    } else {
-                        cfg.set_retry_strategy(#{StandardRetryStrategy}::default());
-                    }
-
-                    // TODO(RuntimePlugins): Decide if this is how we want to put the timeout config into the bag
-                    if let Some(timeout_config) = self.handle.conf.timeout_config() {
-                        cfg.set_timeout_config(timeout_config.clone())
-                    }
-
-                    // TODO(RuntimePlugins) Ensure this can be overridden during testing if necessary
-                    cfg.set_time_source(#{SystemTimeSource}::new());
+                    // TODO(enableNewSmithyRuntime): Wire up standard retry
+                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
 
                     let sleep_impl = self.handle.conf.sleep_impl();
                     let timeout_config = self.handle.conf.timeout_config();

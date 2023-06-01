@@ -12,29 +12,14 @@ use std::error::Error as StdError;
 use std::marker::PhantomData;
 
 /// A retry classifier for checking if an error is modeled as retryable.
-#[derive(Debug)]
-pub struct ModeledAsRetryableClassifier<E>
-where
-    E: StdError + ProvideErrorKind + Send + Sync + 'static,
-{
+#[derive(Debug, Default)]
+pub struct ModeledAsRetryableClassifier<E> {
     _inner: PhantomData<E>,
 }
 
-impl<E> ModeledAsRetryableClassifier<E>
-where
-    E: StdError + ProvideErrorKind + Send + Sync + 'static,
-{
-    /// Create a new ModeledAsRetryableClassifier
+impl<E> ModeledAsRetryableClassifier<E> {
+    /// Create a new `ModeledAsRetryableClassifier`
     pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<E> Default for ModeledAsRetryableClassifier<E>
-where
-    E: StdError + ProvideErrorKind + Send + Sync + 'static,
-{
-    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }
@@ -66,29 +51,14 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct SmithyErrorClassifier<E>
-where
-    E: StdError + Send + Sync + 'static,
-{
+#[derive(Debug, Default)]
+pub struct SmithyErrorClassifier<E> {
     _inner: PhantomData<E>,
 }
 
-impl<E> SmithyErrorClassifier<E>
-where
-    E: StdError + Send + Sync + 'static,
-{
-    /// Create a new SmithyErrorClassifier
+impl<E> SmithyErrorClassifier<E> {
+    /// Create a new `SmithyErrorClassifier`
     pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<E> Default for SmithyErrorClassifier<E>
-where
-    E: StdError + Send + Sync + 'static,
-{
-    fn default() -> Self {
         Self {
             _inner: PhantomData,
         }
@@ -135,10 +105,16 @@ pub struct HttpStatusCodeClassifier {
     retryable_status_codes: Cow<'static, [u16]>,
 }
 
+impl Default for HttpStatusCodeClassifier {
+    fn default() -> Self {
+        Self::new_from_codes(TRANSIENT_ERROR_STATUS_CODES.to_owned())
+    }
+}
+
 impl HttpStatusCodeClassifier {
-    /// Given a `Vec<u16>` where the `u16`s represent status codes, create a retry classifier that will
-    /// treat HTTP response with those status codes as retryable. The `Default` version will retry
-    /// 500, 502, 503, and 504 errors.
+    /// Given a `Vec<u16>` where the `u16`s represent status codes, create a `HttpStatusCodeClassifier`
+    /// that will treat HTTP response with those status codes as retryable. The `Default` version
+    /// will retry 500, 502, 503, and 504 errors.
     pub fn new_from_codes(retryable_status_codes: impl Into<Cow<'static, [u16]>>) -> Self {
         Self {
             retryable_status_codes: retryable_status_codes.into(),
@@ -157,12 +133,6 @@ impl ClassifyRetry for HttpStatusCodeClassifier {
 
     fn name(&self) -> &'static str {
         "HTTP Status Code"
-    }
-}
-
-impl Default for HttpStatusCodeClassifier {
-    fn default() -> Self {
-        Self::new_from_codes(TRANSIENT_ERROR_STATUS_CODES.to_owned())
     }
 }
 
@@ -187,8 +157,8 @@ mod test {
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
-    use aws_smithy_runtime_api::type_erasure::{TypeErasedBox, TypeErasedError};
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+    use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
     use std::fmt;
 
     use super::SmithyErrorClassifier;
@@ -212,7 +182,7 @@ mod test {
             .body("error!")
             .unwrap()
             .map(SdkBody::from);
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_response(res);
         assert_eq!(
             policy.classify_retry(&ctx),
@@ -228,7 +198,7 @@ mod test {
             .body("error!")
             .unwrap()
             .map(SdkBody::from);
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_response(res);
         assert_eq!(policy.classify_retry(&ctx), None);
     }
@@ -258,7 +228,7 @@ mod test {
         impl std::error::Error for RetryableError {}
 
         let policy = ModeledAsRetryableClassifier::<RetryableError>::new();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(
             RetryableError,
         ))));
@@ -275,7 +245,7 @@ mod test {
         let test_response = http::Response::new("OK").map(SdkBody::from);
         let err: SdkError<UnmodeledError> =
             SdkError::response_error(UnmodeledError, operation::Response::new(test_response));
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(err))));
         assert_eq!(
             policy.classify_retry(&ctx),
@@ -287,7 +257,7 @@ mod test {
     fn test_timeout_error() {
         let policy = SmithyErrorClassifier::<UnmodeledError>::new();
         let err: SdkError<UnmodeledError> = SdkError::timeout_error("blah");
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
         ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(err))));
         assert_eq!(
             policy.classify_retry(&ctx),

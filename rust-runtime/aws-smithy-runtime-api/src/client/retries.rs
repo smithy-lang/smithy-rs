@@ -5,7 +5,7 @@
 
 use crate::client::interceptors::InterceptorContext;
 use crate::client::orchestrator::BoxError;
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 use std::time::Duration;
 use tracing::trace;

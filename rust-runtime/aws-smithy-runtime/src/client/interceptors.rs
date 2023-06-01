@@ -3,15 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod request_attempts;
-
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
-pub use request_attempts::{RequestAttempts, RequestAttemptsInterceptor};
+use aws_smithy_types::config_bag::ConfigBag;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
