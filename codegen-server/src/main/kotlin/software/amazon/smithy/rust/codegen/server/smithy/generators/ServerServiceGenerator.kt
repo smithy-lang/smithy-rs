@@ -292,9 +292,9 @@ class ServerServiceGenerator(
                     (
                         $requestSpecsModuleName::$specBuilderFunctionName(),
                         self.$fieldName.unwrap_or_else(|| {
-                        let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::new();
-                        #{SmithyHttpServer}::routing::Route::new(svc)
-                    })
+                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                            #{SmithyHttpServer}::routing::Route::new(svc)
+                        })
                     ),
                     """,
                     "SmithyHttpServer" to smithyHttpServer,

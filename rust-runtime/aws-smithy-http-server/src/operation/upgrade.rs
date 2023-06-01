@@ -187,8 +187,8 @@ pub struct MissingFailure<P> {
     _protocol: PhantomData<fn(P)>,
 }
 
-impl<P> MissingFailure<P> {
-    pub fn new() -> Self {
+impl<P> Default for MissingFailure<P> {
+    fn default() -> Self {
         Self { _protocol: PhantomData }
     }
 }
