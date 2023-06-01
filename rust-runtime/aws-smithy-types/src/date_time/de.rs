@@ -14,10 +14,6 @@ enum VisitorState {
     SubsecondNanos,
 }
 
-impl VisitorState {
-    const UNEXPECTED_VISITOR_STATE: &'static str = "Unexpected state. This happens when visitor tries to parse something after finished parsing the `subsec_nanos`.";
-}
-
 struct NonHumanReadableDateTimeVisitor {
     state: VisitorState,
     seconds: i64,
@@ -60,7 +56,6 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
         E: serde::de::Error,
     {
         match self.state {
-            VisitorState::Unexpected => fail(VisitorState::UNEXPECTED_VISITOR_STATE),
             VisitorState::Second => {
                 self.seconds = v;
                 self.state = VisitorState::SubsecondNanos;
@@ -75,7 +70,6 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
         E: serde::de::Error,
     {
         match self.state {
-            VisitorState::Unexpected => fail(VisitorState::UNEXPECTED_VISITOR_STATE),
             VisitorState::SubsecondNanos => {
                 self.subsecond_nanos = v;
                 Ok(self)
