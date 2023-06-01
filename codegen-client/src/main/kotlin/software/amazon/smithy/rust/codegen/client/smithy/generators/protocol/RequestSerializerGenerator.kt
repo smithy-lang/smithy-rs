@@ -33,24 +33,24 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType().let { runtimeApi ->
-            val interceptorContext = runtimeApi.resolve("client::interceptors::context")
-            val orchestrator = runtimeApi.resolve("client::orchestrator")
-            arrayOf(
-                "BoxError" to orchestrator.resolve("BoxError"),
-                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
-                "HttpRequest" to orchestrator.resolve("HttpRequest"),
-                "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-                "Input" to interceptorContext.resolve("Input"),
-                "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
-                "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                "TypedBox" to runtimeApi.resolve("type_erasure::TypedBox"),
-                "config" to ClientRustModule.Config,
-                "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
-                "http" to RuntimeType.Http,
-                "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-            )
-        }
+        val runtimeApi = CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType()
+        val interceptorContext = runtimeApi.resolve("client::interceptors::context")
+        val orchestrator = runtimeApi.resolve("client::orchestrator")
+        val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
+        arrayOf(
+            "BoxError" to orchestrator.resolve("BoxError"),
+            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "HttpRequest" to orchestrator.resolve("HttpRequest"),
+            "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+            "Input" to interceptorContext.resolve("Input"),
+            "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
+            "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+            "TypedBox" to smithyTypes.resolve("type_erasure::TypedBox"),
+            "config" to ClientRustModule.Config,
+            "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
+            "http" to RuntimeType.Http,
+            "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
+        )
     }
 
     fun render(writer: RustWriter, operationShape: OperationShape) {
