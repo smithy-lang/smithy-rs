@@ -169,7 +169,7 @@ class ClientCodegenVisitor(
             ),
         )
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+            "cargo please-fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
         } catch (err: CommandFailed) {
             logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }
