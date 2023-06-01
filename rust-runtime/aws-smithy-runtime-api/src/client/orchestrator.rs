@@ -19,7 +19,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
 use bytes::Bytes;
-use http::HeaderName;
+use http::header::HeaderName;
 use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;

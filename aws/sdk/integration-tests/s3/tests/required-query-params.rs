@@ -4,8 +4,8 @@
  */
 
 use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::error::DisplayErrorContext;
 use aws_sdk_s3::Client;
-use aws_sdk_sts::error::DisplayErrorContext;
 use aws_smithy_client::test_connection::capture_request;
 use aws_smithy_http::operation::error::BuildError;
 
