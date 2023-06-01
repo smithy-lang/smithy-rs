@@ -466,6 +466,7 @@ class RustWriter private constructor(
     val devDependenciesOnly: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
+
     companion object {
         fun root() = forModule(null)
         fun forModule(module: String?): RustWriter = if (module == null) {
@@ -486,6 +487,7 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
+
                 fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
@@ -514,6 +516,8 @@ class RustWriter private constructor(
 
         return super.write(content, *args)
     }
+
+    fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
 
     /** Helper function to determine if a stack frame is relevant for debug purposes */
     private fun StackTraceElement.isRelevant(): Boolean {
@@ -711,7 +715,8 @@ class RustWriter private constructor(
     override fun toString(): String {
         val contents = super.toString()
         val preheader = if (preamble.isNotEmpty()) {
-            val prewriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+            val prewriter =
+                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             preamble.forEach { it(prewriter) }
             prewriter.toString()
         } else {
@@ -757,7 +762,8 @@ class RustWriter private constructor(
             @Suppress("UNCHECKED_CAST")
             val func =
                 t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
-            val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+            val innerWriter =
+                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependencyTestAware(it) }
             return innerWriter.toString().trimEnd()
@@ -790,7 +796,8 @@ class RustWriter private constructor(
                     @Suppress("UNCHECKED_CAST")
                     val func =
                         t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
-                    val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+                    val innerWriter =
+                        RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
                     func(innerWriter)
                     innerWriter.dependencies.forEach { addDependencyTestAware(it) }
                     return innerWriter.toString().trimEnd()

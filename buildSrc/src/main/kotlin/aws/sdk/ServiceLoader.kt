@@ -207,7 +207,7 @@ fun parseMembership(rawList: String): Membership {
     val inclusions = mutableSetOf<String>()
     val exclusions = mutableSetOf<String>()
 
-    rawList.split(",").map { it.trim() }.forEach { item ->
+    rawList.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { item ->
         when {
             item.startsWith('-') -> exclusions.add(item.substring(1))
             item.startsWith('+') -> inclusions.add(item.substring(1))
