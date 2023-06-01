@@ -74,13 +74,10 @@ mod orchestrator_mode_tests {
     use aws_smithy_client::test_connection::infallible_connection_fn;
     use aws_smithy_http::result::SdkError;
     use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-    use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
-    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-    use aws_smithy_runtime_api::client::retries::ClassifyRetry;
-    use aws_smithy_runtime_api::client::retries::RetryReason;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
-    use aws_smithy_runtime_api::type_erasure::TypeErasedError;
+    use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
+    use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
     use aws_smithy_types::retry::ErrorKind;
+    use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
     use bytes::Bytes;
     use kms::operation::create_alias::CreateAliasError;
 
