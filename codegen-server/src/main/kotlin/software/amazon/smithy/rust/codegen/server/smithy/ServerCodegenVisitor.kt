@@ -261,7 +261,7 @@ open class ServerCodegenVisitor(
             requireDocs = false,
         )
         try {
-            "cargo fmt".runCommand(
+            "cargo please-fmt".runCommand(
                 fileManifest.baseDir,
                 timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
             )

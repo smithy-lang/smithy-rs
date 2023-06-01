@@ -332,7 +332,7 @@ fun TestWriterDelegator.compileAndTest(
     println("Generated files:")
     printGeneratedFiles()
     try {
-        "cargo fmt".runCommand(baseDir)
+        "cargo please-fmt".runCommand(baseDir)
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }

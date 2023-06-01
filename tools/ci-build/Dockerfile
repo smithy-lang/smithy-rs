@@ -81,6 +81,7 @@ RUN set -eux; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/publisher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/cargo-please-fmt; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/changelogger; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/crate-hasher; \
     cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/difftags; \

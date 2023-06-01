@@ -1,0 +1,21 @@
+[package]
+name = "cargo-please-fmt"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "Cargo frontend for the dtolnay/pretty-please library"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+argh = "0.1"
+camino = "1.1"
+cargo_metadata = "0.15"
+prettyplease = "0.2.6"
+syn = { version = "2.0.18", default-features = false, features = ["parsing"] }
