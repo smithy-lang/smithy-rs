@@ -33,7 +33,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::SharedInterceptor"),
         "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
-            .toType().resolve("client::test_util::interceptor::TestParamsSetterInterceptor"),
+            .toType().resolve("client::test_util::interceptors::TestParamsSetterInterceptor"),
     )
 
     override fun section(section: CustomizableOperationSection): Writable =
