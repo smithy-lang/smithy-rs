@@ -112,8 +112,10 @@ where
             phase,
             ..
         } = self;
+        dbg!(&response, &phase);
+
         output_or_error
-            .expect("output_or_error must always beset before finalize is called.")
+            .expect("output_or_error must always be set before finalize is called.")
             .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
     }
 
@@ -206,6 +208,7 @@ where
     /// Advance to the Serialization phase.
     #[doc(hidden)]
     pub fn enter_serialization_phase(&mut self) {
+        trace!("entering \'serialization\' phase");
         debug_assert!(
             self.phase.is_before_serialization(),
             "called enter_serialization_phase but phase is not before 'serialization'"
@@ -216,6 +219,7 @@ where
     /// Advance to the BeforeTransmit phase.
     #[doc(hidden)]
     pub fn enter_before_transmit_phase(&mut self) {
+        trace!("entering \'before transmit\' phase");
         debug_assert!(
             self.phase.is_serialization(),
             "called enter_before_transmit_phase but phase is not 'serialization'"
@@ -234,6 +238,7 @@ where
     /// Advance to the Transmit phase.
     #[doc(hidden)]
     pub fn enter_transmit_phase(&mut self) {
+        trace!("entering \'transmit\' phase");
         debug_assert!(
             self.phase.is_before_transmit(),
             "called enter_transmit_phase but phase is not before transmit"
@@ -244,6 +249,7 @@ where
     /// Advance to the BeforeDeserialization phase.
     #[doc(hidden)]
     pub fn enter_before_deserialization_phase(&mut self) {
+        trace!("entering \'before deserialization\' phase");
         debug_assert!(
             self.phase.is_transmit(),
             "called enter_before_deserialization_phase but phase is not 'transmit'"
@@ -262,6 +268,7 @@ where
     /// Advance to the Deserialization phase.
     #[doc(hidden)]
     pub fn enter_deserialization_phase(&mut self) {
+        trace!("entering \'deserialization\' phase");
         debug_assert!(
             self.phase.is_before_deserialization(),
             "called enter_deserialization_phase but phase is not 'before deserialization'"
@@ -272,6 +279,7 @@ where
     /// Advance to the AfterDeserialization phase.
     #[doc(hidden)]
     pub fn enter_after_deserialization_phase(&mut self) {
+        trace!("entering \'after deserialization\' phase");
         debug_assert!(
             self.phase.is_deserialization(),
             "called enter_after_deserialization_phase but phase is not 'deserialization'"
@@ -286,14 +294,20 @@ where
     /// Set the request checkpoint. This should only be called once, right before entering the retry loop.
     #[doc(hidden)]
     pub fn save_checkpoint(&mut self) {
+        trace!("saving request checkpoint...");
         self.request_checkpoint = try_clone(self.request());
+        match self.request_checkpoint.as_ref() {
+            Some(_) => trace!("successfully saved request checkpoint"),
+            None => trace!("failed to save request checkpoint: request body could not be cloned"),
+        }
     }
 
     /// Returns false if rewinding isn't possible
     #[doc(hidden)]
     pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
-        // If request_checkpoint was never set, then this is not a retryable request
-        if self.request_checkpoint.is_none() {
+        // If request_checkpoint was never set, but we've already made one attempt,
+        // then this is not a retryable request
+        if self.request_checkpoint.is_none() && self.tainted {
             return RewindResult::Impossible;
         }
 
@@ -309,6 +323,10 @@ where
         // TODO(enableNewSmithyRuntime): Also rewind the ConfigBag
         self.phase = Phase::BeforeTransmit;
         self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
+        assert!(
+            self.request.is_some(),
+            "if the request wasn't cloneable, then we should have already return from this method."
+        );
         self.response = None;
         self.output_or_error = None;
         RewindResult::Occurred

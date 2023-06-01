@@ -20,7 +20,7 @@ use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::mem;
-use tracing::{debug, debug_span, Instrument};
+use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
@@ -30,6 +30,7 @@ pub mod interceptors;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
+        trace!("encountered orchestrator error, continuing");
         $ctx.fail($err.into());
         return;
     }};
@@ -47,6 +48,7 @@ macro_rules! halt_on_err {
 macro_rules! continue_on_err {
     ([$ctx:ident] => $expr:expr) => {
         if let Err(err) = $expr {
+            trace!("encountered orchestrator error, continuing");
             $ctx.fail(err.into());
         }
     };
@@ -83,6 +85,7 @@ pub async fn invoke(
 /// Apply configuration is responsible for apply runtime plugins to the config bag, as well as running
 /// `read_before_execution` interceptors. If a failure occurs due to config construction, `invoke`
 /// will raise it to the user. If an interceptor fails, then `invoke`
+#[instrument(skip_all)]
 fn apply_configuration(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -98,6 +101,7 @@ fn apply_configuration(
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors: &Interceptors) {
     // Before serialization
     halt_on_err!([ctx] => interceptors.read_before_serialization(ctx, cfg));
@@ -129,7 +133,7 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     let retry_strategy = cfg.retry_strategy();
     match retry_strategy.should_attempt_initial_request(cfg) {
         // Yes, let's make a request
-        Ok(ShouldAttempt::Yes) => { /* Keep going */ }
+        Ok(ShouldAttempt::Yes) => trace!("retry strategy has OKed initial request"),
         // No, this request shouldn't be sent
         Ok(ShouldAttempt::No) => {
             let err: BoxError = "The retry strategy indicates that an initial request shouldn't be made, but it didn't specify why.".into();
@@ -146,10 +150,12 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
     for i in 0usize.. {
+        trace!("beginning attempt #{i}");
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
         match ctx.rewind(cfg) {
-            RewindResult::Impossible => {
+            r @ RewindResult::Impossible => {
+                debug!("{r}");
                 break;
             }
             r @ RewindResult::Occurred => debug!("{r}"),
@@ -177,6 +183,7 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
             ShouldAttempt::Yes => continue,
             // No, this request shouldn't be retried
             ShouldAttempt::No => {
+                trace!("this error is not retryable, exiting attempt loop");
                 break;
             }
             ShouldAttempt::YesAfterDelay(delay) => {
@@ -190,6 +197,7 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
     }
 }
 
+#[instrument(skip_all)]
 async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -240,6 +248,7 @@ async fn try_attempt(
     halt_on_err!([ctx] => interceptors.read_after_deserialization(ctx, cfg));
 }
 
+#[instrument(skip_all)]
 async fn finally_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -249,6 +258,7 @@ async fn finally_attempt(
     continue_on_err!([ctx] => interceptors.read_after_attempt(ctx, cfg));
 }
 
+#[instrument(skip_all)]
 async fn finally_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,

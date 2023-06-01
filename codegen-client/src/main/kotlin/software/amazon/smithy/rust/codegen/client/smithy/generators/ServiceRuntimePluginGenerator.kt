@@ -131,7 +131,7 @@ class ServiceRuntimePluginGenerator(
 
                     let sleep_impl = self.handle.conf.sleep_impl();
                     let timeout_config = self.handle.conf.timeout_config();
-                    let connector_settings = timeout_config.map(|c| #{ConnectorSettings}::from_timeout_config(c)).unwrap_or_default();
+                    let connector_settings = timeout_config.map(#{ConnectorSettings}::from_timeout_config).unwrap_or_default();
                     let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
                         // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                         #{require_connector}(
