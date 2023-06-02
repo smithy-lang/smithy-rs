@@ -317,6 +317,9 @@ class FluentClientGenerator(
     }
 
     private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+        val errorType = symbolProvider.symbolForOperationError(operation)
+        val operationSymbol = symbolProvider.toSymbol(operation)
         val orchestratorScope = arrayOf(
             *preludeScope,
             "CustomizableOperation" to ClientRustModule.Client.customize.toType()
@@ -331,7 +334,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        val operationSymbol = symbolProvider.toSymbol(operation)
+        
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
@@ -385,9 +388,6 @@ class FluentClientGenerator(
             "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
-            val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-            val errorType = symbolProvider.symbolForOperationError(operation)
-
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
