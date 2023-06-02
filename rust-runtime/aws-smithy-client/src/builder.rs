@@ -311,13 +311,13 @@ impl<C, M> Builder<C, M> {
         self
     }
 
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    /// Set [`aws_smithy_async::rt::sleep::SharedAsyncSleep`] that the [`Client`] will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, async_sleep: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = async_sleep;
         self
     }
 
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    /// Set [`aws_smithy_async::rt::sleep::SharedAsyncSleep`] that the [`Client`] will use to create things like timeout futures.
     pub fn sleep_impl(mut self, async_sleep: SharedAsyncSleep) -> Self {
         self.set_sleep_impl(Some(async_sleep));
         self
