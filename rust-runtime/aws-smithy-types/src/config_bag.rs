@@ -274,20 +274,26 @@ impl FrozenConfigBag {
     }
 }
 
-impl ConfigBag {
-    /// Create a new config bag "base".
-    ///
-    /// Configuration may then be "layered" onto the base by calling
-    /// [`ConfigBag::store_put`], [`ConfigBag::store_or_unset`], [`ConfigBag::store_append`]. Layers
-    /// of configuration may then be "frozen" (made immutable) by calling [`ConfigBag::freeze`].
-    pub fn base() -> Self {
-        ConfigBag {
+impl Default for ConfigBag {
+    fn default() -> Self {
+        Self {
             head: Layer {
                 name: Cow::Borrowed("base"),
                 props: Default::default(),
             },
             tail: None,
         }
+    }
+}
+
+impl ConfigBag {
+    /// Create a new config bag "base"
+    ///
+    /// Configuration may then be "layered" onto the base by calling
+    /// [`ConfigBag::store_put`], [`ConfigBag::store_or_unset`], [`ConfigBag::store_append`]. Layers
+    /// of configuration may then be "frozen" (made immutable) by calling [`ConfigBag::freeze`].
+    pub fn base() -> Self {
+        Self::default()
     }
 
     /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type

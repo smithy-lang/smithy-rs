@@ -14,6 +14,7 @@ pub use lazy_caching::Builder as LazyBuilder;
 use no_caching::NoCredentialsCache;
 
 use crate::provider::{future, SharedCredentialsProvider};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::sync::Arc;
 
 /// Asynchronous Cached Credentials Provider
@@ -121,4 +122,8 @@ impl CredentialsCache {
             Inner::NoCaching => SharedCredentialsCache::new(NoCredentialsCache::new(provider)),
         }
     }
+}
+
+impl Storable for CredentialsCache {
+    type Storer = StoreReplace<CredentialsCache>;
 }

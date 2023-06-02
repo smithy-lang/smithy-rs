@@ -6,6 +6,7 @@
 //! Provides an [`AsyncSleep`] trait that returns a future that sleeps for a given duration,
 //! and implementations of `AsyncSleep` for different async runtimes.
 
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::pin::Pin;
@@ -42,6 +43,10 @@ where
 /// Wrapper type for sharable `AsyncSleep`
 #[derive(Clone, Debug)]
 pub struct SharedAsyncSleep(Arc<dyn AsyncSleep>);
+
+impl Storable for SharedAsyncSleep {
+    type Storer = StoreReplace<SharedAsyncSleep>;
+}
 
 impl SharedAsyncSleep {
     /// Create a new `SharedAsyncSleep` from `AsyncSleep`
