@@ -145,7 +145,7 @@ class RequestSerializerGenerator(
         for (header in protocol.additionalRequestHeaders(operationShape)) {
             rustTemplate(
                 """
-                builder = _serialize_default_headers.set_default_header(
+                builder = _header_serialization_settings.set_default_header(
                     builder,
                     #{http}::header::HeaderName::from_static(${header.first.dq()}),
                     ${header.second.dq()}
