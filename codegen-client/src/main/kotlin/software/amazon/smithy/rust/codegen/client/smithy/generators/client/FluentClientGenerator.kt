@@ -334,7 +334,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        
+
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
