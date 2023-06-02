@@ -11,7 +11,7 @@ use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
 use aws_runtime::invocation_id::DisableInvocationIdInterceptor;
 use aws_runtime::request_info::DisableRequestInfoInterceptor;
 use aws_runtime::user_agent::DisableUserAgentInterceptor;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
     Interceptor, InterceptorRegistrar, SharedInterceptor,
@@ -44,7 +44,9 @@ impl Interceptor for SigV4PresigningInterceptor {
                 .omit_default_content_length()
                 .omit_default_content_type(),
         );
-        cfg.set_request_time(SharedTimeSource::new(self.config.start_time()));
+        cfg.set_request_time(SharedTimeSource::new(StaticTimeSource::new(
+            self.config.start_time(),
+        )));
         Ok(())
     }
 
