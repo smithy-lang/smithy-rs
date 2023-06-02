@@ -91,6 +91,7 @@ class ServiceRuntimePluginGenerator(
             "HttpConnector" to client.resolve("http_connector::HttpConnector"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            "StandardRetryStrategy" to runtime.resolve("client::retries::strategy::StandardRetryStrategy"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "Params" to endpointTypesGenerator.paramsStruct(),
@@ -141,11 +142,16 @@ class ServiceRuntimePluginGenerator(
                         #{retry_classifier_customizations};
                     cfg.set_retry_classifiers(retry_classifiers);
 
-                    // TODO(enableNewSmithyRuntime): Wire up standard retry
-                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
-
                     let sleep_impl = self.handle.conf.sleep_impl();
                     let timeout_config = self.handle.conf.timeout_config();
+                    let retry_config = self.handle.conf.retry_config();
+
+                    if let Some(retry_config) = retry_config {
+                        cfg.set_retry_strategy(#{StandardRetryStrategy}::new(retry_config));
+                    } else if cfg.retry_strategy().is_none() {
+                        cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
+                    }
+
                     let connector_settings = timeout_config.map(#{ConnectorSettings}::from_timeout_config).unwrap_or_default();
                     let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
                         // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation

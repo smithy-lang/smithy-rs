@@ -135,7 +135,7 @@ pub trait ConfigBagAccessors {
     fn retry_classifiers(&self) -> &RetryClassifiers;
     fn set_retry_classifiers(&mut self, retry_classifier: RetryClassifiers);
 
-    fn retry_strategy(&self) -> &dyn RetryStrategy;
+    fn retry_strategy(&self) -> Option<&dyn RetryStrategy>;
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
 
     fn request_time(&self) -> Option<SharedTimeSource>;
@@ -255,10 +255,8 @@ impl ConfigBagAccessors for ConfigBag {
         self.put::<RetryClassifiers>(retry_classifiers);
     }
 
-    fn retry_strategy(&self) -> &dyn RetryStrategy {
-        &**self
-            .get::<Box<dyn RetryStrategy>>()
-            .expect("a retry strategy must be set")
+    fn retry_strategy(&self) -> Option<&dyn RetryStrategy> {
+        self.get::<Box<dyn RetryStrategy>>().map(|rs| &**rs)
     }
 
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
