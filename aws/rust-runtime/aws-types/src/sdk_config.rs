@@ -14,6 +14,7 @@ use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_client::http_connector::HttpConnector;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -44,21 +45,28 @@ these services, this setting has no effect"
     }
 }
 
+#[derive(Debug)]
+struct UseFips(bool);
+impl Storable for UseFips {
+    type Storer = StoreReplace<UseFips>;
+}
+
+#[derive(Debug)]
+struct UseDualStack(bool);
+impl Storable for UseDualStack {
+    type Storer = StoreReplace<UseDualStack>;
+}
+
+#[derive(Debug)]
+struct EndpointUrl(String);
+impl Storable for EndpointUrl {
+    type Storer = StoreReplace<EndpointUrl>;
+}
+
 /// AWS Shared Configuration
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
-    app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
-    credentials_provider: Option<SharedCredentialsProvider>,
-    region: Option<Region>,
-    endpoint_url: Option<String>,
-    retry_config: Option<RetryConfig>,
-    sleep_impl: Option<SharedAsyncSleep>,
-    time_source: Option<SharedTimeSource>,
-    timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
+    inner: FrozenConfigBag,
 }
 
 /// Builder for AWS Shared Configuration
@@ -68,18 +76,7 @@ pub struct SdkConfig {
 /// configuration values.
 #[derive(Debug, Default)]
 pub struct Builder {
-    app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
-    credentials_provider: Option<SharedCredentialsProvider>,
-    region: Option<Region>,
-    endpoint_url: Option<String>,
-    retry_config: Option<RetryConfig>,
-    sleep_impl: Option<SharedAsyncSleep>,
-    time_source: Option<SharedTimeSource>,
-    timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
+    config_bag: ConfigBag,
 }
 
 impl Builder {
@@ -113,7 +110,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_region(&mut self, region: impl Into<Option<Region>>) -> &mut Self {
-        self.region = region.into();
+        self.config_bag.store_or_unset(region.into());
         self
     }
 
@@ -130,7 +127,8 @@ impl Builder {
 
     /// Set the endpoint url to use when making requests.
     pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
-        self.endpoint_url = endpoint_url;
+        self.config_bag
+            .store_or_unset(endpoint_url.map(EndpointUrl));
         self
     }
 
@@ -171,7 +169,7 @@ impl Builder {
     /// disable_retries(&mut builder);
     /// ```
     pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
-        self.retry_config = retry_config;
+        self.config_bag.store_or_unset(retry_config);
         self
     }
 
@@ -226,7 +224,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
-        self.timeout_config = timeout_config;
+        self.config_bag.store_or_unset(timeout_config);
         self
     }
 
@@ -288,7 +286,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
-        self.sleep_impl = sleep_impl;
+        self.config_bag.store_or_unset(sleep_impl);
         self
     }
 
@@ -325,7 +323,7 @@ impl Builder {
     /// let config = builder.build();
     /// ```
     pub fn set_credentials_cache(&mut self, cache: Option<CredentialsCache>) -> &mut Self {
-        self.credentials_cache = cache;
+        self.config_bag.store_or_unset(cache);
         self
     }
 
@@ -377,7 +375,7 @@ impl Builder {
         &mut self,
         provider: Option<SharedCredentialsProvider>,
     ) -> &mut Self {
-        self.credentials_provider = provider;
+        self.config_bag.store_or_unset(provider);
         self
     }
 
@@ -395,7 +393,7 @@ impl Builder {
     /// This _optional_ name is used to identify the application in the user agent that
     /// gets sent along with requests.
     pub fn set_app_name(&mut self, app_name: Option<AppName>) -> &mut Self {
-        self.app_name = app_name;
+        self.config_bag.store_or_unset(app_name);
         self
     }
 
@@ -473,7 +471,8 @@ impl Builder {
         &mut self,
         http_connector: Option<impl Into<HttpConnector>>,
     ) -> &mut Self {
-        self.http_connector = http_connector.map(|inner| inner.into());
+        self.config_bag
+            .store_or_unset(http_connector.map(|inner| inner.into()));
         self
     }
 
@@ -485,7 +484,7 @@ impl Builder {
 
     #[doc = docs_for!(use_fips)]
     pub fn set_use_fips(&mut self, use_fips: Option<bool>) -> &mut Self {
-        self.use_fips = use_fips;
+        self.config_bag.store_or_unset(use_fips.map(UseFips));
         self
     }
 
@@ -497,7 +496,8 @@ impl Builder {
 
     #[doc = docs_for!(use_dual_stack)]
     pub fn set_use_dual_stack(&mut self, use_dual_stack: Option<bool>) -> &mut Self {
-        self.use_dual_stack = use_dual_stack;
+        self.config_bag
+            .store_or_unset(use_dual_stack.map(UseDualStack));
         self
     }
 
@@ -509,25 +509,14 @@ impl Builder {
 
     #[doc = docs_for!(time_source)]
     pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
-        self.time_source = time_source;
+        self.config_bag.store_or_unset(time_source);
         self
     }
 
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
-            app_name: self.app_name,
-            credentials_cache: self.credentials_cache,
-            credentials_provider: self.credentials_provider,
-            region: self.region,
-            endpoint_url: self.endpoint_url,
-            retry_config: self.retry_config,
-            sleep_impl: self.sleep_impl,
-            timeout_config: self.timeout_config,
-            http_connector: self.http_connector,
-            use_fips: self.use_fips,
-            use_dual_stack: self.use_dual_stack,
-            time_source: self.time_source,
+            inner: self.config_bag.freeze(),
         }
     }
 }
@@ -535,63 +524,63 @@ impl Builder {
 impl SdkConfig {
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
-        self.region.as_ref()
+        self.inner.load::<Region>()
     }
 
     /// Configured endpoint URL
     pub fn endpoint_url(&self) -> Option<&str> {
-        self.endpoint_url.as_deref()
+        self.inner.load::<EndpointUrl>().map(|e| e.0.as_ref())
     }
 
     /// Configured retry config
     pub fn retry_config(&self) -> Option<&RetryConfig> {
-        self.retry_config.as_ref()
+        self.inner.load::<RetryConfig>()
     }
 
     /// Configured timeout config
     pub fn timeout_config(&self) -> Option<&TimeoutConfig> {
-        self.timeout_config.as_ref()
+        self.inner.load::<TimeoutConfig>()
     }
 
     #[doc(hidden)]
     /// Configured sleep implementation
     pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
-        self.sleep_impl.clone()
+        self.inner.load::<SharedAsyncSleep>().cloned()
     }
 
     /// Configured credentials cache
     pub fn credentials_cache(&self) -> Option<&CredentialsCache> {
-        self.credentials_cache.as_ref()
+        self.inner.load::<CredentialsCache>()
     }
 
     /// Configured credentials provider
     pub fn credentials_provider(&self) -> Option<SharedCredentialsProvider> {
-        self.credentials_provider.clone()
+        self.inner.load::<SharedCredentialsProvider>().cloned()
     }
 
     /// Configured time source
     pub fn time_source(&self) -> Option<SharedTimeSource> {
-        self.time_source.clone()
+        self.inner.load::<SharedTimeSource>().cloned()
     }
 
     /// Configured app name
     pub fn app_name(&self) -> Option<&AppName> {
-        self.app_name.as_ref()
+        self.inner.load::<AppName>()
     }
 
     /// Configured HTTP Connector
     pub fn http_connector(&self) -> Option<&HttpConnector> {
-        self.http_connector.as_ref()
+        self.inner.load::<HttpConnector>()
     }
 
     /// Use FIPS endpoints
     pub fn use_fips(&self) -> Option<bool> {
-        self.use_fips
+        self.inner.load::<UseFips>().map(|u| u.0)
     }
 
     /// Use dual-stack endpoint
     pub fn use_dual_stack(&self) -> Option<bool> {
-        self.use_dual_stack
+        self.inner.load::<UseDualStack>().map(|u| u.0)
     }
 
     /// Config builder
