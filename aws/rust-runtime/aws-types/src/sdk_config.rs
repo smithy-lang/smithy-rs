@@ -555,8 +555,8 @@ impl SdkConfig {
 
     #[doc(hidden)]
     /// Configured sleep implementation
-    pub fn sleep_impl(&self) -> Option<&SharedAsyncSleep> {
-        self.sleep_impl.as_ref()
+    pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
+        self.sleep_impl.clone()
     }
 
     /// Configured credentials cache
@@ -565,13 +565,13 @@ impl SdkConfig {
     }
 
     /// Configured credentials provider
-    pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
-        self.credentials_provider.as_ref()
+    pub fn credentials_provider(&self) -> Option<SharedCredentialsProvider> {
+        self.credentials_provider.clone()
     }
 
     /// Configured time source
-    pub fn time_source(&self) -> Option<&SharedTimeSource> {
-        self.time_source.as_ref()
+    pub fn time_source(&self) -> Option<SharedTimeSource> {
+        self.time_source.clone()
     }
 
     /// Configured app name
