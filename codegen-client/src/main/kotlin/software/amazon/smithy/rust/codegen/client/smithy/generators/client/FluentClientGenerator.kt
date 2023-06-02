@@ -337,17 +337,16 @@ class FluentClientGenerator(
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
         // input name
-        val fluentBuilderName = operation.fluentBuilderType(symbolProvider).name
         val fnName = clientOperationFnName(operation, symbolProvider)
         implBlock(symbolProvider.symbolForBuilder(input)) {
             rustTemplate(
                 """
             /// Creates a fluent builder from this builder.
-            pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+            async pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
             #{send_bounds:W} {
                 let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
-                fluent_builder
+                fluent_builder.send().await
             }
             """,
                 *orchestratorScope,
