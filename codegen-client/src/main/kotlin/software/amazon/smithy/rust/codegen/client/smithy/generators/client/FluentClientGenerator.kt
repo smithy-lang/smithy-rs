@@ -317,6 +317,20 @@ class FluentClientGenerator(
     }
 
     private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val orchestratorScope = arrayOf(
+            *preludeScope,
+            "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                .resolve("orchestrator::CustomizableOperation"),
+            "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                .resolve("client::orchestrator::HttpResponse"),
+            "Operation" to operationSymbol,
+            "OperationError" to errorType,
+            "OperationOutput" to outputType,
+            "SendResult" to ClientRustModule.Client.customize.toType()
+                .resolve("internal::SendResult"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        )
+
         val operationSymbol = symbolProvider.toSymbol(operation)
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
@@ -327,16 +341,15 @@ class FluentClientGenerator(
         implBlock(symbolProvider.symbolForBuilder(input)) {
             rustTemplate(
             """
-            ##[#{AwsSdkUnstableAttribute}]
             /// Creates a fluent builder from this builder.
-            pub fn into_fluent_builder(self, client: &crate::Client) -> $fluentBuilderName {
+            pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+            #{send_bounds:W} {
                 let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
                 fluent_builder
             }
             """,
-
-                "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
+                *orchestratorScope
             )
         }
 
@@ -471,19 +484,6 @@ class FluentClientGenerator(
             }
 
             if (smithyRuntimeMode.generateOrchestrator) {
-                val orchestratorScope = arrayOf(
-                    *preludeScope,
-                    "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                        .resolve("orchestrator::CustomizableOperation"),
-                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::orchestrator::HttpResponse"),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "SendResult" to ClientRustModule.Client.customize.toType()
-                        .resolve("internal::SendResult"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                )
                 rustTemplate(
                     """
                     ##[doc(hidden)]
