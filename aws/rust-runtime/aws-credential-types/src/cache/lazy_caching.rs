@@ -172,7 +172,7 @@ mod builder {
             Default::default()
         }
 
-        /// Implementation of [`AsyncSleep`] to use for timeouts.
+        /// Implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep) to use for timeouts.
         ///
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
@@ -182,7 +182,7 @@ mod builder {
             self
         }
 
-        /// Implementation of [`AsyncSleep`] to use for timeouts.
+        /// Implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep) to use for timeouts.
         ///
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
