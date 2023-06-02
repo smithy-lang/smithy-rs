@@ -53,7 +53,7 @@ open class ServerRootGenerator(
         val hasErrors = operations.any { it.errors.isNotEmpty() }
         val handlers: Writable = operations
             .map { operation ->
-                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
+                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature()
             }
             .join("//!\n")
 

@@ -104,6 +104,9 @@ class ServerServiceGenerator(
     private fun builderSetters(): Writable = writable {
         for ((operationShape, structName) in operationStructNames) {
             val fieldName = builderFieldNames[operationShape]
+            val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
+            val handler = docHandler.docSignature()
+            val handlerFixed = docHandler.docFixedSignature()
             rustTemplate(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -128,7 +131,7 @@ class ServerServiceGenerator(
                 /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
                 /// ```
                 ///
-                pub fn $fieldName<HandlerType, HandlerExtractors, ServiceExtractors>(self, handler: HandlerType) -> Self
+                pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
 
@@ -137,7 +140,7 @@ class ServerServiceGenerator(
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                     >,
-                    #{SmithyHttpServer}::operation::UpgradePlugin::<ServiceExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                         #{Protocol},
                         crate::operation_shape::$structName,
                         ModelPlugin::Service
@@ -146,7 +149,7 @@ class ServerServiceGenerator(
                         #{Protocol},
                         crate::operation_shape::$structName,
                         <
-                            #{SmithyHttpServer}::operation::UpgradePlugin::<ServiceExtractors>
+                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 #{Protocol},
                                 crate::operation_shape::$structName,
@@ -163,7 +166,70 @@ class ServerServiceGenerator(
                     use #{SmithyHttpServer}::plugin::Plugin;
                     let svc = crate::operation_shape::$structName::from_handler(handler);
                     let svc = self.model_plugin.apply(svc);
-                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<ServiceExtractors>::new().apply(svc);
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                    let svc = self.http_plugin.apply(svc);
+                    self.${fieldName}_custom(svc)
+                }
+
+                /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
+                ///
+                /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
+                ///
+                /// ## Example
+                ///
+                /// ```no_run
+                /// use $crateName::$serviceName;
+                ///
+                #{HandlerImports:W}
+                ///
+                #{HandlerFixed:W}
+                ///
+                /// let svc = #{Tower}::util::service_fn(handler);
+                /// let app = $serviceName::builder_without_plugins()
+                ///     .${fieldName}_service(svc)
+                ///     /* Set other handlers */
+                ///     .build()
+                ///     .unwrap();
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ```
+                ///
+                pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
+                where
+                    S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
+
+                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
+                    >,
+                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        ModelPlugin::Service
+                    >,
+                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        <
+                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            as #{SmithyHttpServer}::plugin::Plugin<
+                                #{Protocol},
+                                crate::operation_shape::$structName,
+                                ModelPlugin::Service
+                            >
+                        >::Service
+                    >,
+
+                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+
+                {
+                    use #{SmithyHttpServer}::operation::OperationShapeExt;
+                    use #{SmithyHttpServer}::plugin::Plugin;
+                    let svc = crate::operation_shape::$structName::from_service(service);
+                    let svc = self.model_plugin.apply(svc);
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
                     let svc = self.http_plugin.apply(svc);
                     self.${fieldName}_custom(svc)
                 }
@@ -180,7 +246,8 @@ class ServerServiceGenerator(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "Handler" to DocHandlerGenerator(codegenContext, operationShape, "handler", "///")::render,
+                "Handler" to handler,
+                "HandlerFixed" to handlerFixed,
                 "HandlerImports" to handlerImports(crateName, operations),
                 *codegenScope,
             )

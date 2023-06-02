@@ -87,7 +87,7 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
             "SmithyHttpServer" to
                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///")::render,
+            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///").docSignature(),
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
         )
     }

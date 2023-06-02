@@ -6,10 +6,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -55,14 +53,21 @@ class DocHandlerGenerator(
         }
     }
 
-    fun render(writer: RustWriter) {
-        // This assumes that the `error` (if applicable) `input`, and `output` modules have been imported by the
-        // caller and hence are in scope.
-        writer.rustTemplate(
-            """
-            #{Handler:W}
-            """,
-            "Handler" to docSignature(),
-        )
+    fun docFixedSignature(): Writable {
+        val outputT = if (operation.errors.isEmpty()) {
+            "Result<${OutputModule.name}::${outputSymbol.name}, std::convert::Infallible>"
+        } else {
+            "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
+        }
+
+        return writable {
+            rust(
+                """
+                $commentToken async fn $handlerName(input: ${InputModule.name}::${inputSymbol.name}) -> $outputT {
+                $commentToken     todo!()
+                $commentToken }
+                """.trimIndent(),
+            )
+        }
     }
 }
