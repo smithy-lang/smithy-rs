@@ -319,19 +319,6 @@ class FluentClientGenerator(
         val outputType = symbolProvider.toSymbol(operation.outputShape(model))
         val errorType = symbolProvider.symbolForOperationError(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
-        val orchestratorScope = arrayOf(
-            *preludeScope,
-            "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                .resolve("orchestrator::CustomizableOperation"),
-            "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::orchestrator::HttpResponse"),
-            "Operation" to operationSymbol,
-            "OperationError" to errorType,
-            "OperationOutput" to outputType,
-            "SendResult" to ClientRustModule.Client.customize.toType()
-                .resolve("internal::SendResult"),
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        )
 
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
@@ -341,15 +328,21 @@ class FluentClientGenerator(
         implBlock(symbolProvider.symbolForBuilder(input)) {
             rustTemplate(
                 """
-            /// Creates a fluent builder from this builder.
-            async pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
-            #{send_bounds:W} {
-                let mut fluent_builder = client.$fnName();
-                fluent_builder.inner = self;
-                fluent_builder.send().await
-            }
-            """,
-                *orchestratorScope,
+                /// Creates a fluent builder from this builder.
+                async pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                #{send_bounds:W} {
+                    let mut fluent_builder = client.$fnName();
+                    fluent_builder.inner = self;
+                    fluent_builder.send().await
+                }
+                """,
+                *preludeScope,
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }
 
@@ -480,6 +473,19 @@ class FluentClientGenerator(
             }
 
             if (smithyRuntimeMode.generateOrchestrator) {
+                val orchestratorScope = arrayOf(
+                    *preludeScope,
+                    "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                        .resolve("orchestrator::CustomizableOperation"),
+                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::orchestrator::HttpResponse"),
+                    "Operation" to operationSymbol,
+                    "OperationError" to errorType,
+                    "OperationOutput" to outputType,
+                    "SendResult" to ClientRustModule.Client.customize.toType()
+                        .resolve("internal::SendResult"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                )
                 rustTemplate(
                     """
                     ##[doc(hidden)]
