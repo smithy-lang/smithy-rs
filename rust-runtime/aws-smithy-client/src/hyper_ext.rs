@@ -286,9 +286,7 @@ impl Builder {
         let read_timeout = match read_timeout {
             Some(duration) => HttpReadTimeout::new(
                 base,
-                sleep_impl
-                    .clone()
-                    .expect("a sleep impl must be provided in order to have a read timeout"),
+                sleep_impl.expect("a sleep impl must be provided in order to have a read timeout"),
                 duration,
             ),
             None => HttpReadTimeout::no_timeout(base),
