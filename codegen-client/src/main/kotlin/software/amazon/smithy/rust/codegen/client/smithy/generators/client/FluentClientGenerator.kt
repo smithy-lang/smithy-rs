@@ -325,9 +325,9 @@ class FluentClientGenerator(
         // Filter out any derive that isn't Clone. Then add a Debug derive
         // input name
         val fnName = clientOperationFnName(operation, symbolProvider)
-        rustTemplate(
-            """
-                impl #{InputPath} {
+        implBlock(symbolProvider.symbolForBuilder(input)) {
+            rustTemplate(
+                """
             /// Creates a fluent builder from this builder.
             pub async fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
             #{send_bounds:W} {
@@ -335,18 +335,17 @@ class FluentClientGenerator(
                 fluent_builder.inner = self;
                 fluent_builder.send().await
             }
-            }
             """,
-            *preludeScope,
-            "InputPath" to symbolProvider.symbolForBuilder(input),
-            "generics_decl" to generics.decl,
-            "Operation" to operationSymbol,
-            "OperationError" to errorType,
-            "OperationOutput" to outputType,
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-            "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
-        )
+                *preludeScope,
+                "generics_decl" to generics.decl,
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+            )
+        }
 
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
