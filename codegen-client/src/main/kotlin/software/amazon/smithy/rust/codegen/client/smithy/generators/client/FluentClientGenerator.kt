@@ -338,7 +338,7 @@ class FluentClientGenerator(
             }
             """,
             *preludeScope,
-            "InputPath" to symbolProvider.toSymbol(input).toBuilder(),
+            "InputPath" to symbolProvider.symbolForBuilder(input),
             "generics_decl" to generics.decl,
             "Operation" to operationSymbol,
             "OperationError" to errorType,
