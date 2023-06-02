@@ -39,23 +39,13 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
         A: serde::de::SeqAccess<'de>,
     {
         match seq.size_hint() {
-            Some(2) => match (seq.next_element()?, seq.next_element()?) {
+            Some(2) | None => match (seq.next_element()?, seq.next_element()?) {
                 (Some(seconds), Some(subsecond_nanos)) => Ok(DateTime {
                     seconds,
                     subsecond_nanos,
                 }),
                 _ => return Err(Error::custom("datatype mismatch")),
             },
-            None => {
-                let res = match (seq.next_element()?, seq.next_element()?) {
-                    (Some(seconds), Some(subsecond_nanos)) => Ok(DateTime {
-                        seconds,
-                        subsecond_nanos,
-                    }),
-                    _ => return Err(Error::custom("datatype mismatch")),
-                };
-                return res;
-            }
             _ => Err(Error::custom("Size mismatch")),
         }
     }
