@@ -19,7 +19,7 @@ pub use aws_smithy_client::conns::default_connector;
 #[cfg(all(feature = "native-tls", not(feature = "allow-compilation")))]
 compile_error!("Feature native-tls has been removed. For upgrade instructions, see: https://awslabs.github.io/smithy-rs/design/transport/connector.html");
 
-/// Given `ConnectorSettings` and an `SharedAsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
+/// Given `ConnectorSettings` and a [`SharedAsyncSleep`](aws_smithy_async::rt::sleep::SharedAsyncSleep), create a `DynConnector` from defaults depending on what cargo features are activated.
 #[cfg(not(feature = "client-hyper"))]
 pub fn default_connector(
     _settings: &aws_smithy_client::http_connector::ConnectorSettings,
