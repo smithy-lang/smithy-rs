@@ -30,6 +30,12 @@ class InvocationIdDecorator : ClientCodegenDecorator {
 private class InvocationIdRuntimePluginCustomization(
     private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
+    private val codegenScope = arrayOf(
+        "InvocationIdInterceptor" to awsRuntime.resolve("invocation_id::InvocationIdInterceptor"),
+    )
+
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.AdditionalConfig) {
             val invocationId = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig).resolve("invocation_id")
@@ -38,10 +44,7 @@ private class InvocationIdRuntimePluginCustomization(
                 "DisableInvocationIdInterceptor" to invocationId.resolve("DisableInvocationIdInterceptor"),
             ) {
                 section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    rustTemplate(
-                        "#{InvocationIdInterceptor}::new()",
-                        "InvocationIdInterceptor" to invocationId.resolve("InvocationIdInterceptor"),
-                    )
+                    rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
                 }
             }
         }

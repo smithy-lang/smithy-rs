@@ -49,14 +49,6 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
                     )
                 }
 
-                // Track the number of request attempts made.
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust(
-                        "#T::new()",
-                        smithyRuntime.resolve("client::orchestrator::interceptors::RequestAttemptsInterceptor"),
-                    )
-                }
-
                 // Add request metadata to outgoing requests. Sets a header.
                 section.registerInterceptor(runtimeConfig, this) {
                     rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))

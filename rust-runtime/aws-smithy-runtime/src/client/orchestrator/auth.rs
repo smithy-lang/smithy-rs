@@ -220,7 +220,7 @@ mod tests {
         assert_eq!(
             "success!",
             ctx.request()
-                .unwrap()
+                .expect("request is set")
                 .headers()
                 .get("Authorization")
                 .unwrap()
@@ -268,7 +268,7 @@ mod tests {
             // "YTpi" == "a:b" in base64
             "Basic YTpi",
             ctx.request()
-                .unwrap()
+                .expect("request is set")
                 .headers()
                 .get("Authorization")
                 .unwrap()
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(
             "Bearer t",
             ctx.request()
-                .unwrap()
+                .expect("request is set")
                 .headers()
                 .get("Authorization")
                 .unwrap()

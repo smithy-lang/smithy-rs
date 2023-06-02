@@ -193,6 +193,8 @@ private class HttpAuthServiceRuntimePluginCustomization(
                     rust("cfg.set_identity_resolvers(self.handle.conf.identity_resolvers().clone());")
                 }
             }
+
+            else -> emptySection
         }
     }
 }
