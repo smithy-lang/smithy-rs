@@ -13,6 +13,7 @@ use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_runtime::client::retries::strategy::FixedDelayRetryStrategy;
 use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_types::config_bag::ConfigBag;

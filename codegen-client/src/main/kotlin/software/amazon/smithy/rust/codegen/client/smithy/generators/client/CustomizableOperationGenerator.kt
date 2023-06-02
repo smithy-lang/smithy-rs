@@ -154,9 +154,9 @@ class CustomizableOperationGenerator(
             "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::interceptors::Interceptor"),
             "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptor::MapRequestInterceptor"),
+                .resolve("client::interceptors::MapRequestInterceptor"),
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptor::MutateRequestInterceptor"),
+                .resolve("client::interceptors::MutateRequestInterceptor"),
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             "SendResult" to ClientRustModule.Client.customize.toType()
                 .resolve("internal::SendResult"),

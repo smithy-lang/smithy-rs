@@ -259,7 +259,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         validationResult.shouldAbort shouldBe true
         validationResult.messages[0].message shouldContain(
             """
-            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no 
+            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
             effect. All the constraint traits used in the model are well-supported, please remove this flag.
             """.trimIndent().replace("\n", " ")
             )
