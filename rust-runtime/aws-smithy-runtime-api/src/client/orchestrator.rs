@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// Errors that can occur while running the orchestrator.
-mod error;
-
 use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, HttpAuthSchemes};
 use crate::client::identity::IdentityResolvers;
 use crate::client::interceptors::context::{Error, Input, Output};
@@ -19,13 +16,14 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
 use bytes::Bytes;
-use http::header::HeaderName;
 use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use aws_smithy_http::header::set_request_header_if_absent;
+/// Errors that can occur while running the orchestrator.
+mod error;
+
 pub use error::OrchestratorError;
 
 pub type HttpRequest = http::Request<SdkBody>;
@@ -33,62 +31,6 @@ pub type HttpResponse = http::Response<SdkBody>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
 pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
-
-/// Configuration for how default protocol headers are serialized
-#[derive(Clone, Debug, Default)]
-pub struct SerializeDefaultHeaders {
-    allow_list: Option<&'static [HeaderName]>,
-    deny_list: Option<&'static [HeaderName]>,
-}
-
-impl SerializeDefaultHeaders {
-    /// Creates new `SerializeDefaultHeaders`
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Sets a default header allow list
-    pub fn with_allow_list(self, allow_list: &'static [HeaderName]) -> Self {
-        Self {
-            allow_list: Some(allow_list),
-            deny_list: self.deny_list,
-        }
-    }
-
-    /// Sets a default header deny list
-    pub fn with_deny_list(self, deny_list: &'static [HeaderName]) -> Self {
-        Self {
-            allow_list: self.allow_list,
-            deny_list: Some(deny_list),
-        }
-    }
-
-    /// Returns true if the given default header name should be serialized
-    pub fn include_header(&self, header: &HeaderName) -> bool {
-        let allowed = self
-            .allow_list
-            .map(|list| list.contains(header))
-            .unwrap_or(true);
-        let denied = self
-            .deny_list
-            .map(|list| list.contains(header))
-            .unwrap_or(false);
-        allowed && !denied
-    }
-
-    /// Sets a default header on the given request builder if it should be serialized
-    pub fn set_default_header(
-        &self,
-        mut request: http::request::Builder,
-        header_name: HeaderName,
-        value: &str,
-    ) -> http::request::Builder {
-        if self.include_header(&header_name) {
-            request = set_request_header_if_absent(request, header_name, value);
-        }
-        request
-    }
-}
 
 pub trait RequestSerializer: Send + Sync + fmt::Debug {
     fn serialize_input(&self, input: Input, cfg: &mut ConfigBag) -> Result<HttpRequest, BoxError>;

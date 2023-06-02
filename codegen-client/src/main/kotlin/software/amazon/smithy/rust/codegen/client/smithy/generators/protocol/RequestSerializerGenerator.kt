@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -49,7 +50,11 @@ class RequestSerializerGenerator(
             "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
             "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-            "SerializeDefaultHeaders" to orchestrator.resolve("SerializeDefaultHeaders"),
+            "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
+                InlineDependency.serializationSettings(
+                    codegenContext.runtimeConfig,
+                ),
+            ).resolve("HeaderSerializationSettings"),
             "TypedBox" to smithyTypes.resolve("type_erasure::TypedBox"),
         )
     }
@@ -66,7 +71,7 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
-                    let _serialize_default_headers = _cfg.get::<#{SerializeDefaultHeaders}>().cloned().unwrap_or_default();
+                    let _header_serialization_settings = _cfg.get::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };
@@ -104,7 +109,7 @@ class RequestSerializerGenerator(
                         """
                         if let Some(content_length) = body.content_length() {
                             let content_length = content_length.to_string();
-                            request_builder = _serialize_default_headers.set_default_header(request_builder, #{http}::header::CONTENT_LENGTH, &content_length);
+                            request_builder = _header_serialization_settings.set_default_header(request_builder, #{http}::header::CONTENT_LENGTH, &content_length);
                         }
                         """,
                         *codegenScope,
@@ -133,7 +138,7 @@ class RequestSerializerGenerator(
         rustTemplate("let mut builder = update_http_builder(&input, #{HttpRequestBuilder}::new())?;", *codegenScope)
         if (contentType != null) {
             rustTemplate(
-                "builder = _serialize_default_headers.set_default_header(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
+                "builder = _header_serialization_settings.set_default_header(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
                 *codegenScope,
             )
         }
