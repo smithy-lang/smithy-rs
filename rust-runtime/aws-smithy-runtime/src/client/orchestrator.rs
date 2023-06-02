@@ -340,6 +340,8 @@ mod tests {
     use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
     use http::StatusCode;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use tracing_test::traced_test;
 
     fn new_request_serializer() -> CannedRequestSerializer {
@@ -984,5 +986,105 @@ mod tests {
         .await
         .expect("success");
         assert!(context.response().is_none());
+    }
+
+    /// The "finally" interceptors should run upon error when the StopPoint is set to BeforeTransmit
+    #[tokio::test]
+    async fn test_stop_points_error_handling() {
+        #[derive(Debug, Default)]
+        struct Inner {
+            modify_before_retry_loop_called: AtomicBool,
+            modify_before_completion_called: AtomicBool,
+            read_after_execution_called: AtomicBool,
+        }
+        #[derive(Clone, Debug, Default)]
+        struct TestInterceptor {
+            inner: Arc<Inner>,
+        }
+
+        impl Interceptor for TestInterceptor {
+            fn modify_before_retry_loop(
+                &self,
+                _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                _cfg: &mut ConfigBag,
+            ) -> Result<(), BoxError> {
+                self.inner
+                    .modify_before_retry_loop_called
+                    .store(true, Ordering::Relaxed);
+                Err("test error".into())
+            }
+
+            fn modify_before_completion(
+                &self,
+                _context: &mut FinalizerInterceptorContextMut<'_>,
+                _cfg: &mut ConfigBag,
+            ) -> Result<(), BoxError> {
+                self.inner
+                    .modify_before_completion_called
+                    .store(true, Ordering::Relaxed);
+                Ok(())
+            }
+
+            fn read_after_execution(
+                &self,
+                _context: &FinalizerInterceptorContextRef<'_>,
+                _cfg: &mut ConfigBag,
+            ) -> Result<(), BoxError> {
+                self.inner
+                    .read_after_execution_called
+                    .store(true, Ordering::Relaxed);
+                Ok(())
+            }
+        }
+
+        #[derive(Debug)]
+        struct TestInterceptorRuntimePlugin {
+            interceptor: TestInterceptor,
+        }
+        impl RuntimePlugin for TestInterceptorRuntimePlugin {
+            fn configure(
+                &self,
+                cfg: &mut ConfigBag,
+                interceptors: &mut InterceptorRegistrar,
+            ) -> Result<(), BoxError> {
+                cfg.put(self.interceptor.clone());
+
+                interceptors.register(SharedInterceptor::new(self.interceptor.clone()));
+                Ok(())
+            }
+        }
+
+        let interceptor = TestInterceptor::default();
+        let runtime_plugins = || {
+            RuntimePlugins::new()
+                .with_operation_plugin(TestOperationRuntimePlugin)
+                .with_operation_plugin(AnonymousAuthRuntimePlugin)
+                .with_operation_plugin(TestInterceptorRuntimePlugin {
+                    interceptor: interceptor.clone(),
+                })
+        };
+
+        // StopPoint::BeforeTransmit will exit right before sending the request, so there should be no response
+        let context = invoke_with_stop_point(
+            TypedBox::new(()).erase(),
+            &runtime_plugins(),
+            StopPoint::BeforeTransmit,
+        )
+        .await
+        .expect("success");
+        assert!(context.response().is_none());
+
+        assert!(interceptor
+            .inner
+            .modify_before_retry_loop_called
+            .load(Ordering::Relaxed));
+        assert!(interceptor
+            .inner
+            .modify_before_completion_called
+            .load(Ordering::Relaxed));
+        assert!(interceptor
+            .inner
+            .read_after_execution_called
+            .load(Ordering::Relaxed));
     }
 }

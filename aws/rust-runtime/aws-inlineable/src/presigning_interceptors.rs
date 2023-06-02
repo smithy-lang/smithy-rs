@@ -92,9 +92,9 @@ impl RuntimePlugin for SigV4PresigningRuntimePlugin {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         // Disable some SDK interceptors that shouldn't run for presigning
-        cfg.put(DisableInvocationIdInterceptor);
-        cfg.put(DisableRequestInfoInterceptor);
-        cfg.put(DisableUserAgentInterceptor);
+        cfg.put(DisableInvocationIdInterceptor::new("presigning"));
+        cfg.put(DisableRequestInfoInterceptor::new("presigning"));
+        cfg.put(DisableUserAgentInterceptor::new("presigning"));
 
         // Register the presigning interceptor
         interceptors.register(self.interceptor.clone());
