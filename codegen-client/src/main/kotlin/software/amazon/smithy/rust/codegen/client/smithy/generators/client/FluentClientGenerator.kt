@@ -329,7 +329,7 @@ class FluentClientGenerator(
             rustTemplate(
                 """
                 /// Creates a fluent builder from this builder.
-                pub async fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                pub async fn send_with<#{generics_decl:W}>(self, client: &crate::Client<C, M, R>>) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                 #{send_bounds:W} {
                     let mut fluent_builder = client.$fnName();
                     fluent_builder.inner = self;
@@ -337,6 +337,7 @@ class FluentClientGenerator(
                 }
                 """,
                 *preludeScope,
+                "generics_decl" to generics.decl,
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
