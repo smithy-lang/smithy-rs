@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
@@ -334,7 +333,6 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
@@ -343,7 +341,7 @@ class FluentClientGenerator(
         val fnName = clientOperationFnName(operation, symbolProvider)
         implBlock(symbolProvider.symbolForBuilder(input)) {
             rustTemplate(
-            """
+                """
             /// Creates a fluent builder from this builder.
             pub fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
             #{send_bounds:W} {
@@ -352,13 +350,12 @@ class FluentClientGenerator(
                 fluent_builder
             }
             """,
-                *orchestratorScope
+                *orchestratorScope,
             )
         }
 
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
-
 
         val builderName = operation.fluentBuilderType(symbolProvider).name
         documentShape(operation, model, autoSuppressMissingDocs = false)
