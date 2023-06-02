@@ -55,6 +55,10 @@ pub mod http_body_checksum;
 #[allow(dead_code)]
 pub mod endpoint_discovery;
 
+// This module is symlinked in from the smithy-rs rust-runtime inlineables so that
+// the `presigning_interceptors` module can refer to it.
+mod serialization_settings;
+
 // just so docs work
 #[allow(dead_code)]
 /// allow docs to work

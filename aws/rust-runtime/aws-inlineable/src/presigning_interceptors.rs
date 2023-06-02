@@ -6,6 +6,7 @@
 #![allow(dead_code)]
 
 use crate::presigning::PresigningConfig;
+use crate::serialization_settings::HeaderSerializationSettings;
 use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
 use aws_runtime::invocation_id::DisableInvocationIdInterceptor;
 use aws_runtime::request_info::DisableRequestInfoInterceptor;
@@ -15,10 +16,9 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
     Interceptor, InterceptorRegistrar, SharedInterceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, SerializeDefaultHeaders};
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::ConfigBag;
-use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 
 /// Interceptor that tells the SigV4 signer to add the signature to query params,
 /// and sets the request expiration time from the presigning config.
@@ -39,8 +39,10 @@ impl Interceptor for SigV4PresigningInterceptor {
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        cfg.put::<SerializeDefaultHeaders>(
-            SerializeDefaultHeaders::new().with_deny_list(&[CONTENT_LENGTH, CONTENT_TYPE]),
+        cfg.put::<HeaderSerializationSettings>(
+            HeaderSerializationSettings::new()
+                .omit_default_content_length()
+                .omit_default_content_type(),
         );
         cfg.set_request_time(SharedTimeSource::new(self.config.start_time()));
         Ok(())
