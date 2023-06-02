@@ -592,3 +592,53 @@ impl SdkConfig {
         Builder::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::region::Region;
+    use crate::SdkConfig;
+    use aws_credential_types::cache::CredentialsCache;
+    use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
+    use aws_smithy_types::timeout::TimeoutConfig;
+    use std::time::Duration;
+
+    #[test]
+    fn basic_configuration() {
+        #[derive(Debug)]
+        struct ForeverSleep;
+        impl AsyncSleep for ForeverSleep {
+            fn sleep(&self, _duration: std::time::Duration) -> Sleep {
+                Sleep::new(std::future::pending())
+            }
+        }
+
+        let timeout_config = TimeoutConfig::builder()
+            .operation_timeout(Duration::from_secs(1))
+            .build();
+
+        let sdk_config = SdkConfig::builder()
+            .region(Region::from_static("us-east-1"))
+            .endpoint_url("http://localhost:8000")
+            .timeout_config(timeout_config.clone())
+            .credentials_cache(CredentialsCache::no_caching())
+            .sleep_impl(SharedAsyncSleep::new(ForeverSleep))
+            .use_dual_stack(true)
+            .build();
+
+        assert_eq!(Some(&Region::from_static("us-east-1")), sdk_config.region());
+        assert_eq!(Some("http://localhost:8000"), sdk_config.endpoint_url());
+        assert_eq!(Some(&timeout_config), sdk_config.timeout_config());
+        assert!(sdk_config.credentials_cache().is_some());
+        assert!(sdk_config.sleep_impl().is_some());
+        assert!(sdk_config.use_dual_stack().unwrap());
+    }
+
+    #[test]
+    fn unset_configuration() {
+        let mut builder = SdkConfig::builder().endpoint_url("http://localhost:8000");
+        builder.set_endpoint_url(None);
+        let sdk_config = builder.build();
+
+        assert_eq!(None, sdk_config.endpoint_url());
+    }
+}
