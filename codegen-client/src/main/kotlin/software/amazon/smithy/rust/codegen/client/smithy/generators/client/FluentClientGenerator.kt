@@ -325,7 +325,7 @@ class FluentClientGenerator(
         // Filter out any derive that isn't Clone. Then add a Debug derive
         // input name
         val fnName = clientOperationFnName(operation, symbolProvider)
-        implBlock(input) {
+        implBlock(symbolProvider.toSymbol(operation.inputShape(model))) {
             rustTemplate(
                 """
                 /// Creates a fluent builder from this builder.
