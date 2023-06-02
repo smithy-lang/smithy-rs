@@ -215,6 +215,3 @@ impl From<PresignedRequest> for http::request::Builder {
         builder
     }
 }
-
-#[allow(dead_code)]
-pub(crate) mod service {}
