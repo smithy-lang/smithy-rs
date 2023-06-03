@@ -12,17 +12,13 @@ C_RESET='\033[0m'
 set -eu
 cd smithy-rs
 
-# TODO(enableNewSmithyRuntime): Move these into `services_that_compile` as more progress is made
-services_that_fail_compile=(\
-    "s3"\
-    "polly"\
-)
-
 # TODO(enableNewSmithyRuntime): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
     "aws-config"\
     "dynamodb"\
+    "polly"\
     "route53"\
+    "s3"\
     "sts"\
 )
 
