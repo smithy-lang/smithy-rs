@@ -343,7 +343,7 @@ class FluentClientGenerator(
                 } else {
                     RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
                 },
-                "generics_decl" to generics.decl,
+                "generics_decl" to generics.smithyInst,
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
