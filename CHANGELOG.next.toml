@@ -133,3 +133,15 @@ message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurren
 references = ["smithy-rs#2742"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.68.2"
+references = ["smithy-rs#2745"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.68.2"
+references = ["smithy-rs#2745"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
