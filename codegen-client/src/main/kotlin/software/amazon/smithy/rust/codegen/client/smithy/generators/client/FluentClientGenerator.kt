@@ -325,18 +325,24 @@ class FluentClientGenerator(
         // Filter out any derive that isn't Clone. Then add a Debug derive
         // input name
         val fnName = clientOperationFnName(operation, symbolProvider)
+
         implBlock(symbolProvider.symbolForBuilder(input)) {
             rustTemplate(
                 """
-            /// Creates a fluent builder from this builder.
-            pub async fn send_with(self, client: &crate::Client) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
-            #{send_bounds:W} {
+                /// Sends a request with this input using the given client.
+                pub async fn send_with<#{generics_decl:W}>(self, client: &crate::Client<#{generics_decl}>) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
+                #{send_bounds:W} {
                 let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
                 fluent_builder.send().await
-            }
-            """,
+                }
+                """,
                 *preludeScope,
+                "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                } else {
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                },
                 "generics_decl" to generics.decl,
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
