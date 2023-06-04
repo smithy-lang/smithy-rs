@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -39,17 +40,22 @@ class RequestSerializerGenerator(
         val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
         arrayOf(
             "BoxError" to orchestrator.resolve("BoxError"),
+            "config" to ClientRustModule.Config,
             "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
+            "http" to RuntimeType.Http,
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
+            "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
             "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+            "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
+                InlineDependency.serializationSettings(
+                    codegenContext.runtimeConfig,
+                ),
+            ).resolve("HeaderSerializationSettings"),
             "TypedBox" to smithyTypes.resolve("type_erasure::TypedBox"),
-            "config" to ClientRustModule.Config,
-            "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
-            "http" to RuntimeType.Http,
-            "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
         )
     }
 
@@ -65,6 +71,7 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
+                    let _header_serialization_settings = _cfg.get::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };
@@ -101,7 +108,8 @@ class RequestSerializerGenerator(
                     rustTemplate(
                         """
                         if let Some(content_length) = body.content_length() {
-                            request_builder = #{header_util}::set_request_header_if_absent(request_builder, #{http}::header::CONTENT_LENGTH, content_length);
+                            let content_length = content_length.to_string();
+                            request_builder = _header_serialization_settings.set_default_header(request_builder, #{http}::header::CONTENT_LENGTH, &content_length);
                         }
                         """,
                         *codegenScope,
@@ -127,17 +135,17 @@ class RequestSerializerGenerator(
         httpBindingGenerator.renderUpdateHttpBuilder(this)
         val contentType = httpBindingResolver.requestContentType(operationShape)
 
-        rust("let mut builder = update_http_builder(&input, #T::new())?;", RuntimeType.HttpRequestBuilder)
+        rustTemplate("let mut builder = update_http_builder(&input, #{HttpRequestBuilder}::new())?;", *codegenScope)
         if (contentType != null) {
             rustTemplate(
-                "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
+                "builder = _header_serialization_settings.set_default_header(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
                 *codegenScope,
             )
         }
         for (header in protocol.additionalRequestHeaders(operationShape)) {
             rustTemplate(
                 """
-                builder = #{header_util}::set_request_header_if_absent(
+                builder = _header_serialization_settings.set_default_header(
                     builder,
                     #{http}::header::HeaderName::from_static(${header.first.dq()}),
                     ${header.second.dq()}

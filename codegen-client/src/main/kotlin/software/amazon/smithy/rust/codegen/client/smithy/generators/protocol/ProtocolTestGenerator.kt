@@ -333,25 +333,44 @@ class DefaultProtocolTestGenerator(
             """,
             RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig),
         )
-        write(
-            "let mut op_response = #T::new(http_response);",
-            RuntimeType.operationModule(codegenContext.runtimeConfig).resolve("Response"),
-        )
-        rustTemplate(
-            """
-            use #{parse_http_response};
-            let parser = #{op}::new();
-            let parsed = parser.parse_unloaded(&mut op_response);
-            let parsed = parsed.unwrap_or_else(|| {
-                let (http_response, _) = op_response.into_parts();
-                let http_response = http_response.map(|body|#{copy_from_slice}(body.bytes().unwrap()));
-                <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
-            });
-            """,
-            "op" to operationSymbol,
-            "copy_from_slice" to RuntimeType.Bytes.resolve("copy_from_slice"),
-            "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
-        )
+        if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+            rust(
+                "let mut op_response = #T::new(http_response);",
+                RuntimeType.operationModule(codegenContext.runtimeConfig).resolve("Response"),
+            )
+            rustTemplate(
+                """
+                use #{parse_http_response};
+                let parser = #{op}::new();
+                let parsed = parser.parse_unloaded(&mut op_response);
+                let parsed = parsed.unwrap_or_else(|| {
+                    let (http_response, _) = op_response.into_parts();
+                    let http_response = http_response.map(|body|#{copy_from_slice}(body.bytes().unwrap()));
+                    <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
+                });
+                """,
+                "op" to operationSymbol,
+                "copy_from_slice" to RuntimeType.Bytes.resolve("copy_from_slice"),
+                "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
+            )
+        } else {
+            rustTemplate(
+                """
+                use #{ResponseDeserializer};
+                let de = #{OperationDeserializer};
+                let parsed = de.deserialize_streaming(&mut http_response);
+                let parsed = parsed.unwrap_or_else(|| {
+                    let http_response = http_response.map(|body|#{copy_from_slice}(body.bytes().unwrap()));
+                    de.deserialize_nonstreaming(&http_response)
+                });
+                """,
+                "OperationDeserializer" to codegenContext.symbolProvider.moduleForShape(operationShape).toType()
+                    .resolve("${operationSymbol.name}ResponseDeserializer"),
+                "copy_from_slice" to RuntimeType.Bytes.resolve("copy_from_slice"),
+                "ResponseDeserializer" to CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType()
+                    .resolve("client::orchestrator::ResponseDeserializer"),
+            )
+        }
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name

@@ -12,8 +12,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -38,13 +38,13 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
             it + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
         }
 
-    override fun operationRuntimePluginCustomizations(
+    override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
         baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthOperationRuntimePluginCustomization(codegenContext))
+            it + listOf(AuthOperationCustomization(codegenContext))
         }
 }
 
@@ -101,8 +101,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
     }
 }
 
-private class AuthOperationRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
-    OperationRuntimePluginCustomization() {
+private class AuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -120,9 +119,9 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
     }
     private val serviceIndex = ServiceIndex.of(codegenContext.model)
 
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
+    override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            is OperationRuntimePluginSection.AdditionalConfig -> {
+            is OperationSection.AdditionalRuntimePluginConfig -> {
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, section.operationShape)
                 if (authSchemes.containsKey(SigV4Trait.ID)) {
                     val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
