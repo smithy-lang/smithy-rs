@@ -145,7 +145,7 @@ mod test_serde {
         let res = ciborium::ser::into_writer(&for_test, &mut buf);
         assert!(res.is_ok());
 
-        // checks whether the bytes are deserialiezd properly
+        // checks whether the bytes are deserialized properly
         let n: HashMap<String, CString> =
             ciborium::de::from_reader(std::io::Cursor::new(buf.clone())).unwrap();
         assert!(n.get("blob").is_some());
