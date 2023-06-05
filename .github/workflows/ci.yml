@@ -305,12 +305,12 @@ jobs:
     runs-on: ${{ matrix.test.runner }}
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-      - name: compiletime-benchmark
-        run: bash tools/ci-scripts/compiletime-benchmark
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: compiletime-benchmark
+      run: bash tools/ci-scripts/compiletime-benchmark
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:

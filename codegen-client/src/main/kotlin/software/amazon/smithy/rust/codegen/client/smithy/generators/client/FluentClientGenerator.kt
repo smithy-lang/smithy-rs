@@ -400,7 +400,6 @@ class FluentClientGenerator(
                 }
             }
 
-
             if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,
