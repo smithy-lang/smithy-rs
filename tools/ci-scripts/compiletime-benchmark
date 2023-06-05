@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+set -eux
+
+export TIMEFORMAT=%R
+function compile() {
+        cd $1 &&
+        export CARGORUSTFLAG="" &&
+        cargo build  &> /dev/null && cargo clean &&
+        time cargo build  &> /dev/null && cargo clean &&
+        time cargo build --release  &> /dev/null && cargo clean &&
+        export CARGORUSTFLAG="--cfg aws_sdk_unstable" &&
+        time cargo build --all-features  &> /dev/null && cargo clean &&
+        time cargo build --all-features --release  &> /dev/null && cargo clean
+}
+
+cd smithy-rs
+
+./gradlew :aws:sdk:assemble
+DIR=$PWD
+for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
+    echo "$DIR/aws/sdk/build/aws-sdk/sdk/$variable";
+    if [[ $variable != *"aws-"* ]]; then
+        echo "$variable" &>> /tmp/compiletime-benchmark.txt
+        compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable"  &>> /tmp/compiletime-benchmark.txt
+    fi
+done
+
+python3 tools/compiletime-benchmark/format.py
