@@ -58,8 +58,8 @@ This is enabled via the `instrument` method provided by the `aws_smithy_http_ser
 ```rust
 use aws_smithy_http_server::instrumentation::InstrumentExt;
 
-let plugins = PluginPipeline::new().instrument();
-let app = PokemonService::builder_with_plugins(plugins)
+let http_plugins = PluginPipeline::new().instrument();
+let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
   .get_pokemon_species(/* handler */)
   /* ... */
   .build();

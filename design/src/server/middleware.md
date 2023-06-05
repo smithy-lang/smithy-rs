@@ -129,7 +129,7 @@ stateDiagram-v2
 
 where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP structures and the `RoutingService` is responsible for routing requests to the appropriate operation.
 
-### A) Outer Middleware
+### A. Outer Middleware
 
 The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around the entire `Service`.
 
@@ -147,7 +147,7 @@ let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
 let app = timeout_layer.layer(app);
 ```
 
-### B) Route Middleware
+### B. Route Middleware
 
 A _single_ layer can be applied to _all_ routes inside the `Router`. This exists as a method on the output of the service builder.
 
@@ -165,7 +165,7 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugi
 
 Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
 
-### C) Operation Specific HTTP Middleware
+### C. Operation Specific HTTP Middleware
 
 A "HTTP layer" can be applied to specific operations.
 
@@ -184,7 +184,7 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugi
 
 This middleware transforms the operations HTTP requests and responses.
 
-### D) Operation Specific Model Middleware
+### D. Operation Specific Model Middleware
 
 A "model layer" can be applied to specific operations.
 
@@ -237,22 +237,6 @@ where
     fn call(&mut self, req: R) -> Self::Future {
         println!("Hi {}", self.name);
         self.inner.call(req)
-    }
-}
-
-/// A [`Layer`] which constructs the [`PrintService`].
-#[derive(Debug)]
-pub struct PrintLayer {
-    name: &'static str,
-}
-impl<S> Layer<S> for PrintLayer {
-    type Service = PrintService<S>;
-
-    fn layer(&self, service: S) -> Self::Service {
-        PrintService {
-            inner: service,
-            name: self.name,
-        }
     }
 }
 ```
@@ -328,11 +312,15 @@ impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugi
 This allows for:
 
 ```rust
-let plugin_pipeline = PluginPipeline::new()
+let http_plugins = PluginPipeline::new()
     // [..other plugins..]
     // The custom method!
     .print();
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(plugin_pipeline)
+let model_plugins = PluginPipeline::new()
+    // [..other plugins..]
+    // The custom method!
+    ;
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, model_plugins)
     .get_pokemon_species_operation(layered_handler)
     /* ... */
     .build();

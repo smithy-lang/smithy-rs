@@ -81,7 +81,7 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
             /// The [plugin system](#{SmithyHttpServer}::plugin) makes use of these
             /// [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
             /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. Their traits, such as
-            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape) can be used to provide
+            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape), can be used to provide
             /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
             """.trimIndent(),
             "SmithyHttpServer" to
