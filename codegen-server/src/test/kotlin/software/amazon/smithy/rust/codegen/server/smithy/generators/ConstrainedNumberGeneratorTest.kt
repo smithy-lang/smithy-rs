@@ -127,7 +127,7 @@ class ConstrainedNumberGeneratorTest {
 
     @ParameterizedTest
     @ArgumentsSource(NoStructuralConstructorTestProvider::class)
-    fun `type should not be constructible without using a constructor`(args: Triple<String, String, String>) {
+    fun `type should not be constructable without using a constructor`(args: Triple<String, String, String>) {
         val (smithyType, shapeName, rustType) = args
         val model = """
             namespace test

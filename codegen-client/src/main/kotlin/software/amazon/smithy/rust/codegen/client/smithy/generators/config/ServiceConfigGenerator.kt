@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * [ServiceConfig] is the parent type of sections that can be overridden when generating a config for a service.
@@ -88,6 +89,11 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
     /**
+     * A section for setting up a field to be used by RuntimePlugin
+     */
+    object ToRuntimePlugin : ServiceConfig("ToRuntimePlugin")
+
+    /**
      * A section for extra functionality that needs to be defined with the config module
      */
     object Extras : ServiceConfig("Extras")
@@ -98,7 +104,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
     data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
 }
 
-data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writable?, val getterDocs: Writable? = null)
+data class ConfigParam(
+    val name: String,
+    val type: Symbol,
+    val setterDocs: Writable?,
+    val getterDocs: Writable? = null,
+    val optional: Boolean = true,
+)
 
 /**
  * Config customization for a config param with no special behavior:
@@ -111,7 +123,11 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
                 docsOrFallback(param.getterDocs)
-                rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
+                val t = when (param.optional) {
+                    true -> param.type.makeOptional()
+                    false -> param.type
+                }
+                rust("pub (crate) ${param.name}: #T,", t)
             }
 
             ServiceConfig.ConfigImpl -> emptySection
@@ -143,8 +159,11 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
             }
 
             ServiceConfig.BuilderBuild -> writable {
-                rust("${param.name}: self.${param.name},")
+                val default = "".letIf(!param.optional) { ".unwrap_or_default() " }
+                rust("${param.name}: self.${param.name}$default,")
             }
+
+            ServiceConfig.ToRuntimePlugin -> emptySection
 
             else -> emptySection
         }
@@ -197,6 +216,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
         }
+        Attribute(Attribute.derive(RuntimeType.Clone)).render(writer)
         writer.rustBlock("pub struct Config") {
             customizations.forEach {
                 it.section(ServiceConfig.ConfigStruct)(this)
@@ -288,22 +308,28 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
 
     fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
         val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         writer.rustBlockTemplate(
             "impl #{RuntimePlugin} for Builder",
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-        ) {
-            rustTemplate(
-                """
-                fn configure(&self, _cfg: &mut #{ConfigBag}, _inter: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
-                    // TODO(RuntimePlugins): Put into `cfg` the fields in `self.config_override` that are not `None`.
 
-                    Ok(())
-                }
+        ) {
+            rustBlockTemplate(
+                """
+                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
                 """,
                 "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
-                "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
-            )
+                "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            ) {
+                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
+
+                customizations.forEach {
+                    it.section(ServiceConfig.ToRuntimePlugin)(writer)
+                }
+
+                rust("Ok(())")
+            }
         }
     }
 }

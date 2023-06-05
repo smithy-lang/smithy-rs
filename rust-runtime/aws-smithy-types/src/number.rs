@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! A number type that implements Javascript / JSON semantics, modeled on serde_json:
-//! <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
+//! A number type that implements Javascript / JSON semantics.
 
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 #[cfg(all(
@@ -207,8 +206,8 @@ impl TryFrom<Number> for f32 {
 }
 
 #[cfg(test)]
-mod number {
-    use super::*;
+mod test {
+    use super::Number;
     use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 
     macro_rules! to_unsigned_converter_tests {

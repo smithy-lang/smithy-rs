@@ -12,18 +12,21 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Endpoint
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.TimeSourceOperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.timeSourceCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
 val TestUtilFeature = Feature("test-util", false, listOf())
@@ -46,13 +49,21 @@ class RequiredCustomizations : ClientCodegenDecorator {
             IdempotencyTokenGenerator(codegenContext, operation) +
             EndpointPrefixGenerator(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
-            HttpVersionListCustomization(codegenContext, operation)
+            HttpVersionListCustomization(codegenContext, operation) +
+            TimeSourceOperationCustomization()
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations + ResiliencyConfigCustomization(codegenContext)
+        // TODO(enableNewSmithyRuntime): Keep only then branch once we switch to orchestrator
+        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + InterceptorConfigCustomization(
+                codegenContext,
+            ) + timeSourceCustomization(codegenContext)
+        } else {
+            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + timeSourceCustomization(codegenContext)
+        }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,

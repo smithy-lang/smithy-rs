@@ -16,8 +16,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestRust
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
 internal class PythonServerSymbolProviderTest {
-    private val pythonBlobType = RustType.Opaque("Blob", "aws_smithy_http_server_python::types")
-    private val pythonTimestampType = RustType.Opaque("DateTime", "aws_smithy_http_server_python::types")
+    private val pythonBlobType = RustType.Opaque("Blob", "::aws_smithy_http_server_python::types")
+    private val pythonTimestampType = RustType.Opaque("DateTime", "::aws_smithy_http_server_python::types")
 
     @Test
     fun `python symbol provider rewrites timestamp shape symbol`() {

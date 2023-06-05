@@ -10,10 +10,11 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.ExpectedEndpoint
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
-import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -22,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -34,8 +34,7 @@ internal class EndpointTestGenerator(
     private val resolverType: RuntimeType,
     private val params: Parameters,
     private val endpointCustomizations: List<EndpointCustomization>,
-    codegenContext: CodegenContext,
-
+    codegenContext: ClientCodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val serviceShape = codegenContext.serviceShape
@@ -50,7 +49,7 @@ internal class EndpointTestGenerator(
         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
     )
 
-    private val instantiator = clientInstantiator(codegenContext)
+    private val instantiator = ClientInstantiator(codegenContext)
 
     private fun EndpointTestCase.docs(): Writable {
         val self = this
