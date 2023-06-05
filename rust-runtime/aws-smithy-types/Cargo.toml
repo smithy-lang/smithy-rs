@@ -19,10 +19,6 @@ ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
 base64-simd = "0.8"
 
-[target."cfg(aws_sdk_unstable)".dependencies.serde]
-version = "1"
-features = ["derive"]
-
 [dev-dependencies]
 base64 = "0.13.0"
 lazy_static = "1.4"
@@ -42,3 +38,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
+
+[target."cfg(aws_sdk_unstable)".dependencies.serde]
+version = "1"
+features = ["derive"]
