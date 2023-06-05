@@ -56,8 +56,8 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
-    seconds: i64,
-    subsecond_nanos: u32,
+    pub(crate) seconds: i64,
+    pub(crate) subsecond_nanos: u32,
 }
 
 /* ANCHOR_END: date_time */
@@ -645,51 +645,5 @@ mod test {
 
             assert_eq!(left.cmp(&right), left_str.cmp(&right_str));
         }
-    }
-
-    #[cfg(all(
-        test,
-        aws_sdk_unstable,
-        feature = "serde-deserialize",
-        feature = "serde-serialize"
-    ))]
-    #[test]
-    fn human_readable_datetime() {
-        use serde::{Deserialize, Serialize};
-
-        let datetime = DateTime::from_secs(1576540098);
-        #[derive(Serialize, Deserialize, PartialEq)]
-        struct Test {
-            datetime: DateTime,
-        }
-        let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
-        assert!(serde_json::to_string(&Test { datetime }).ok() == Some(datetime_json.to_string()));
-
-        let test = serde_json::from_str::<Test>(&datetime_json).ok();
-        assert!(test.is_some());
-        assert!(test.unwrap().datetime == datetime);
-    }
-
-    /// checks that they are serialized into tuples
-    #[cfg(all(
-        test,
-        aws_sdk_unstable,
-        feature = "serde-deserialize",
-        feature = "serde-serialize"
-    ))]
-    #[test]
-    fn not_human_readable_datetime() {
-        let cbor = ciborium::value::Value::Array(vec![
-            ciborium::value::Value::Integer(1576540098i64.into()),
-            ciborium::value::Value::Integer(0u32.into()),
-        ]);
-        let datetime = DateTime::from_secs(1576540098);
-
-        let mut buf1 = vec![];
-        let mut buf2 = vec![];
-        let res1 = ciborium::ser::into_writer(&datetime, &mut buf1);
-        let res2 = ciborium::ser::into_writer(&cbor, &mut buf2);
-        assert!(res1.is_ok() && res2.is_ok());
-        assert!(buf1 == buf2, "{:#?}", (buf1, buf2));
     }
 }

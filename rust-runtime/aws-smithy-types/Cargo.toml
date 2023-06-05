@@ -15,7 +15,6 @@ test-util = []
 serde-serialize = []
 serde-deserialize = []
 
-
 [dependencies]
 itoa = "1.0.0"
 num-integer = "0.1.44"
