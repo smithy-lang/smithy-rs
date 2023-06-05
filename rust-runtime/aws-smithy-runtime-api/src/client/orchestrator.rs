@@ -11,7 +11,7 @@ use crate::client::identity::IdentityResolvers;
 use crate::client::interceptors::context::{Error, Input, Output};
 use crate::client::retries::RetryClassifiers;
 use crate::client::retries::RetryStrategy;
-use crate::config_bag::ConfigBag;
+use crate::config_bag::{ConfigBag, Layer};
 use crate::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_async::rt::sleep::AsyncSleep;
@@ -100,73 +100,78 @@ pub enum LoadedRequestBody {
 
 pub trait ConfigBagAccessors {
     fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams;
+
+    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver;
+
+    fn endpoint_resolver_params(&self) -> &EndpointResolverParams;
+
+    fn endpoint_resolver(&self) -> &dyn EndpointResolver;
+
+    fn identity_resolvers(&self) -> &IdentityResolvers;
+
+    fn connection(&self) -> &dyn Connection;
+
+    fn http_auth_schemes(&self) -> &HttpAuthSchemes;
+
+    fn request_serializer(&self) -> Arc<dyn RequestSerializer>;
+
+    fn response_deserializer(&self) -> &dyn ResponseDeserializer;
+
+    fn retry_classifiers(&self) -> &RetryClassifiers;
+
+    fn retry_strategy(&self) -> &dyn RetryStrategy;
+
+    fn request_time(&self) -> Option<SharedTimeSource>;
+
+    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>>;
+
+    fn loaded_request_body(&self) -> &LoadedRequestBody;
+}
+
+const NOT_NEEDED: LoadedRequestBody = LoadedRequestBody::NotNeeded;
+
+pub trait ConfigBagSetters {
     fn set_auth_option_resolver_params(
         &mut self,
         auth_option_resolver_params: AuthOptionResolverParams,
     );
 
-    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver;
     fn set_auth_option_resolver(&mut self, auth_option_resolver: impl AuthOptionResolver + 'static);
 
-    fn endpoint_resolver_params(&self) -> &EndpointResolverParams;
     fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams);
 
-    fn endpoint_resolver(&self) -> &dyn EndpointResolver;
     fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static);
 
-    fn identity_resolvers(&self) -> &IdentityResolvers;
     fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers);
 
-    fn connection(&self) -> &dyn Connection;
     fn set_connection(&mut self, connection: impl Connection + 'static);
 
-    fn http_auth_schemes(&self) -> &HttpAuthSchemes;
     fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes);
 
-    fn request_serializer(&self) -> Arc<dyn RequestSerializer>;
     fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static);
 
-    fn response_deserializer(&self) -> &dyn ResponseDeserializer;
     fn set_response_deserializer(
         &mut self,
         response_serializer: impl ResponseDeserializer + 'static,
     );
 
-    fn retry_classifiers(&self) -> &RetryClassifiers;
     fn set_retry_classifiers(&mut self, retry_classifier: RetryClassifiers);
 
-    fn retry_strategy(&self) -> &dyn RetryStrategy;
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
 
-    fn request_time(&self) -> Option<SharedTimeSource>;
     fn set_request_time(&mut self, time_source: impl TimeSource + 'static);
 
-    fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>>;
     fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>);
 
-    fn loaded_request_body(&self) -> &LoadedRequestBody;
     fn set_loaded_request_body(&mut self, loaded_request_body: LoadedRequestBody);
 }
 
-const NOT_NEEDED: LoadedRequestBody = LoadedRequestBody::NotNeeded;
-
-impl ConfigBagAccessors for ConfigBag {
-    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams {
-        self.get::<AuthOptionResolverParams>()
-            .expect("auth option resolver params must be set")
-    }
-
+impl ConfigBagSetters for Layer {
     fn set_auth_option_resolver_params(
         &mut self,
         auth_option_resolver_params: AuthOptionResolverParams,
     ) {
         self.put::<AuthOptionResolverParams>(auth_option_resolver_params);
-    }
-
-    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver {
-        &**self
-            .get::<Box<dyn AuthOptionResolver>>()
-            .expect("an auth option resolver must be set")
     }
 
     fn set_auth_option_resolver(
@@ -176,13 +181,69 @@ impl ConfigBagAccessors for ConfigBag {
         self.put::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
     }
 
+    fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams) {
+        self.put::<EndpointResolverParams>(endpoint_resolver_params);
+    }
+
+    fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static) {
+        self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
+    }
+
+    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers) {
+        self.put::<IdentityResolvers>(identity_resolvers);
+    }
+
+    fn set_connection(&mut self, connection: impl Connection + 'static) {
+        self.put::<Box<dyn Connection>>(Box::new(connection));
+    }
+    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes) {
+        self.put::<HttpAuthSchemes>(http_auth_schemes);
+    }
+    fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static) {
+        self.put::<Arc<dyn RequestSerializer>>(Arc::new(request_serializer));
+    }
+    fn set_response_deserializer(
+        &mut self,
+        response_deserializer: impl ResponseDeserializer + 'static,
+    ) {
+        self.put::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
+    }
+    fn set_retry_classifiers(&mut self, retry_classifiers: RetryClassifiers) {
+        self.put::<RetryClassifiers>(retry_classifiers);
+    }
+    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
+        self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
+    }
+    fn set_request_time(&mut self, request_time: impl TimeSource + 'static) {
+        self.put::<SharedTimeSource>(SharedTimeSource::new(request_time));
+    }
+    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        if let Some(sleep_impl) = sleep_impl {
+            self.put::<Arc<dyn AsyncSleep>>(sleep_impl);
+        } else {
+            self.unset::<Arc<dyn AsyncSleep>>();
+        }
+    }
+    fn set_loaded_request_body(&mut self, loaded_request_body: LoadedRequestBody) {
+        self.put::<LoadedRequestBody>(loaded_request_body);
+    }
+}
+
+impl ConfigBagAccessors for ConfigBag {
+    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams {
+        self.get::<AuthOptionResolverParams>()
+            .expect("auth option resolver params must be set")
+    }
+
+    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver {
+        &**self
+            .get::<Box<dyn AuthOptionResolver>>()
+            .expect("an auth option resolver must be set")
+    }
+
     fn endpoint_resolver_params(&self) -> &EndpointResolverParams {
         self.get::<EndpointResolverParams>()
             .expect("endpoint resolver params must be set")
-    }
-
-    fn set_endpoint_resolver_params(&mut self, endpoint_resolver_params: EndpointResolverParams) {
-        self.put::<EndpointResolverParams>(endpoint_resolver_params);
     }
 
     fn endpoint_resolver(&self) -> &dyn EndpointResolver {
@@ -191,17 +252,9 @@ impl ConfigBagAccessors for ConfigBag {
             .expect("an endpoint resolver must be set")
     }
 
-    fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static) {
-        self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
-    }
-
     fn identity_resolvers(&self) -> &IdentityResolvers {
         self.get::<IdentityResolvers>()
             .expect("identity resolvers must be configured")
-    }
-
-    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers) {
-        self.put::<IdentityResolvers>(identity_resolvers);
     }
 
     fn connection(&self) -> &dyn Connection {
@@ -210,17 +263,9 @@ impl ConfigBagAccessors for ConfigBag {
             .expect("missing connector")
     }
 
-    fn set_connection(&mut self, connection: impl Connection + 'static) {
-        self.put::<Box<dyn Connection>>(Box::new(connection));
-    }
-
     fn http_auth_schemes(&self) -> &HttpAuthSchemes {
         self.get::<HttpAuthSchemes>()
             .expect("auth schemes must be set")
-    }
-
-    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes) {
-        self.put::<HttpAuthSchemes>(http_auth_schemes);
     }
 
     fn request_serializer(&self) -> Arc<dyn RequestSerializer> {
@@ -229,30 +274,15 @@ impl ConfigBagAccessors for ConfigBag {
             .clone()
     }
 
-    fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static) {
-        self.put::<Arc<dyn RequestSerializer>>(Arc::new(request_serializer));
-    }
-
     fn response_deserializer(&self) -> &dyn ResponseDeserializer {
         &**self
             .get::<Box<dyn ResponseDeserializer>>()
             .expect("missing response deserializer")
     }
 
-    fn set_response_deserializer(
-        &mut self,
-        response_deserializer: impl ResponseDeserializer + 'static,
-    ) {
-        self.put::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
-    }
-
     fn retry_classifiers(&self) -> &RetryClassifiers {
         self.get::<RetryClassifiers>()
             .expect("retry classifiers must be set")
-    }
-
-    fn set_retry_classifiers(&mut self, retry_classifiers: RetryClassifiers) {
-        self.put::<RetryClassifiers>(retry_classifiers);
     }
 
     fn retry_strategy(&self) -> &dyn RetryStrategy {
@@ -261,35 +291,15 @@ impl ConfigBagAccessors for ConfigBag {
             .expect("a retry strategy must be set")
     }
 
-    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
-        self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
-    }
-
     fn request_time(&self) -> Option<SharedTimeSource> {
         self.get::<SharedTimeSource>().cloned()
-    }
-
-    fn set_request_time(&mut self, request_time: impl TimeSource + 'static) {
-        self.put::<SharedTimeSource>(SharedTimeSource::new(request_time));
     }
 
     fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
         self.get::<Arc<dyn AsyncSleep>>().cloned()
     }
 
-    fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
-        if let Some(sleep_impl) = sleep_impl {
-            self.put::<Arc<dyn AsyncSleep>>(sleep_impl);
-        } else {
-            self.unset::<Arc<dyn AsyncSleep>>();
-        }
-    }
-
     fn loaded_request_body(&self) -> &LoadedRequestBody {
         self.get::<LoadedRequestBody>().unwrap_or(&NOT_NEEDED)
-    }
-
-    fn set_loaded_request_body(&mut self, loaded_request_body: LoadedRequestBody) {
-        self.put::<LoadedRequestBody>(loaded_request_body);
     }
 }

@@ -139,7 +139,8 @@ mod tests {
     };
     use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-    use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
+    use aws_smithy_runtime_api::client::orchestrator::{ConfigBagSetters, Future, HttpRequest};
+    use aws_smithy_runtime_api::config_bag::Layer;
     use aws_smithy_runtime_api::type_erasure::TypedBox;
     use std::collections::HashMap;
 
@@ -200,20 +201,22 @@ mod tests {
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
-        let mut cfg = ConfigBag::base();
-        cfg.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![TEST_SCHEME_ID]));
-        cfg.set_identity_resolvers(
+        let mut layer = Layer::new("test");
+        layer.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
+        layer.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![TEST_SCHEME_ID]));
+        layer.set_identity_resolvers(
             IdentityResolvers::builder()
                 .identity_resolver(TEST_SCHEME_ID, TestIdentityResolver)
                 .build(),
         );
-        cfg.set_http_auth_schemes(
+        layer.set_http_auth_schemes(
             HttpAuthSchemes::builder()
                 .auth_scheme(TEST_SCHEME_ID, TestAuthScheme { signer: TestSigner })
                 .build(),
         );
-        cfg.put(Endpoint::builder().url("dontcare").build());
+        layer.put(Endpoint::builder().url("dontcare").build());
+        let mut cfg = ConfigBag::base();
+        cfg.push(layer.freeze());
 
         orchestrate_auth(&mut ctx, &cfg).await.expect("success");
 
@@ -238,26 +241,28 @@ mod tests {
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
-        let mut cfg = ConfigBag::base();
-        cfg.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
+        let mut layer = Layer::new("test");
+        layer.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
+        layer.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
             HTTP_BASIC_AUTH_SCHEME_ID,
             HTTP_BEARER_AUTH_SCHEME_ID,
         ]));
-        cfg.set_http_auth_schemes(
+        layer.set_http_auth_schemes(
             HttpAuthSchemes::builder()
                 .auth_scheme(HTTP_BASIC_AUTH_SCHEME_ID, BasicAuthScheme::new())
                 .auth_scheme(HTTP_BEARER_AUTH_SCHEME_ID, BearerAuthScheme::new())
                 .build(),
         );
-        cfg.put(Endpoint::builder().url("dontcare").build());
+        layer.put(Endpoint::builder().url("dontcare").build());
 
         // First, test the presence of a basic auth login and absence of a bearer token
-        cfg.set_identity_resolvers(
+        layer.set_identity_resolvers(
             IdentityResolvers::builder()
                 .identity_resolver(HTTP_BASIC_AUTH_SCHEME_ID, Login::new("a", "b", None))
                 .build(),
         );
+        let mut cfg = ConfigBag::base();
+        cfg.push(layer.freeze());
 
         orchestrate_auth(&mut ctx, &cfg).await.expect("success");
         assert_eq!(
@@ -266,12 +271,16 @@ mod tests {
             ctx.request().headers().get("Authorization").unwrap()
         );
 
+        let mut layer = Layer::new("identity");
+
         // Next, test the presence of a bearer token and absence of basic auth
-        cfg.set_identity_resolvers(
+        layer.set_identity_resolvers(
             IdentityResolvers::builder()
                 .identity_resolver(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None))
                 .build(),
         );
+
+        cfg.push(layer);
 
         let mut ctx = InterceptorContext::new(TypedBox::new("doesnt-matter").erase());
         ctx.enter_serialization_phase();

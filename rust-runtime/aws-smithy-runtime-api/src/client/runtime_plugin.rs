@@ -4,18 +4,20 @@
  */
 
 use crate::client::interceptors::InterceptorRegistrar;
-use crate::config_bag::ConfigBag;
+use crate::config_bag::{ConfigBag, FrozenLayer};
 use std::fmt::Debug;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub type BoxRuntimePlugin = Box<dyn RuntimePlugin + Send + Sync>;
 
 pub trait RuntimePlugin: Debug {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError>;
+    fn config(&self, current: &ConfigBag) -> Option<FrozenLayer> {
+        None
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) -> Result<(), BoxError> {
+        Ok(())
+    }
 }
 
 impl RuntimePlugin for BoxRuntimePlugin {
@@ -25,6 +27,14 @@ impl RuntimePlugin for BoxRuntimePlugin {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         self.as_ref().configure(cfg, interceptors)
+    }
+
+    fn config(&self, current: &ConfigBag) -> Option<FrozenLayer> {
+        self.as_ref().config(current)
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) -> Result<(), BoxError> {
+        self.as_ref().interceptors(interceptors)
     }
 }
 
@@ -67,7 +77,10 @@ impl RuntimePlugins {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.client_plugins.iter() {
-            plugin.configure(cfg, interceptors)?;
+            if let Some(layer) = plugin.config(cfg) {
+                cfg.push(layer);
+            }
+            plugin.interceptors(interceptors)?;
         }
 
         Ok(())
@@ -79,7 +92,10 @@ impl RuntimePlugins {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.operation_plugins.iter() {
-            plugin.configure(cfg, interceptors)?;
+            if let Some(layer) = plugin.config(cfg) {
+                cfg.push(layer);
+            }
+            plugin.interceptors(interceptors)?;
         }
 
         Ok(())
@@ -90,7 +106,7 @@ impl RuntimePlugins {
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
     use crate::client::interceptors::InterceptorRegistrar;
-    use crate::config_bag::ConfigBag;
+    use crate::config_bag::{ConfigBag, FrozenLayer};
 
     #[derive(Debug)]
     struct SomeStruct;
@@ -101,6 +117,10 @@ mod tests {
             _cfg: &mut ConfigBag,
             _inters: &mut InterceptorRegistrar,
         ) -> Result<(), BoxError> {
+            todo!()
+        }
+
+        fn config(&self, current: &ConfigBag) -> Option<FrozenLayer> {
             todo!()
         }
     }

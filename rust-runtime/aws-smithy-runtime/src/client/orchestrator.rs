@@ -13,7 +13,7 @@ use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
 use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, HttpResponse, LoadedRequestBody,
+    BoxError, ConfigBagAccessors, ConfigBagSetters, HttpResponse, LoadedRequestBody,
 };
 use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
@@ -117,7 +117,8 @@ async fn try_op(ctx: &mut InterceptorContext, cfg: &mut ConfigBag, interceptors:
         mem::swap(&mut body, ctx.request_mut().body_mut());
         let loaded_body = halt_on_err!([ctx] => ByteStream::new(body).collect().await).into_bytes();
         *ctx.request_mut().body_mut() = SdkBody::from(loaded_body.clone());
-        cfg.set_loaded_request_body(LoadedRequestBody::Loaded(loaded_body));
+        cfg.scratch()
+            .set_loaded_request_body(LoadedRequestBody::Loaded(loaded_body));
     }
 
     // Before transmit
@@ -262,9 +263,11 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::{
         Interceptor, InterceptorRegistrar, SharedInterceptor,
     };
-    use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
+    use aws_smithy_runtime_api::client::orchestrator::{
+        ConfigBagAccessors, ConfigBagSetters, OrchestratorError,
+    };
     use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
+    use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenLayer, Layer};
     use aws_smithy_runtime_api::type_erasure::TypeErasedBox;
     use http::StatusCode;
     use tracing_test::traced_test;
@@ -288,22 +291,23 @@ mod tests {
     }
 
     #[derive(Debug)]
-    struct TestOperationRuntimePlugin;
+    struct TestOperationRuntimePlugin(FrozenLayer);
+    impl TestOperationRuntimePlugin {
+        fn new() -> Self {
+            let mut layer = Layer::new("TestOperation");
+            layer.set_request_serializer(new_request_serializer());
+            layer.set_response_deserializer(new_response_deserializer());
+            layer.set_retry_strategy(NeverRetryStrategy::new());
+            layer.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
+            layer.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
+            layer.set_connection(OkConnector::new());
+            Self(layer.freeze())
+        }
+    }
 
     impl RuntimePlugin for TestOperationRuntimePlugin {
-        fn configure(
-            &self,
-            cfg: &mut ConfigBag,
-            _interceptors: &mut InterceptorRegistrar,
-        ) -> Result<(), BoxError> {
-            cfg.set_request_serializer(new_request_serializer());
-            cfg.set_response_deserializer(new_response_deserializer());
-            cfg.set_retry_strategy(NeverRetryStrategy::new());
-            cfg.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
-            cfg.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
-            cfg.set_connection(OkConnector::new());
-
-            Ok(())
+        fn config(&self, current: &ConfigBag) -> Option<FrozenLayer> {
+            Some(self.0.clone())
         }
     }
 
@@ -340,9 +344,8 @@ mod tests {
             struct FailingInterceptorsClientRuntimePlugin;
 
             impl RuntimePlugin for FailingInterceptorsClientRuntimePlugin {
-                fn configure(
+                fn interceptors(
                     &self,
-                    _cfg: &mut ConfigBag,
                     interceptors: &mut InterceptorRegistrar,
                 ) -> Result<(), BoxError> {
                     interceptors.register(SharedInterceptor::new(FailingInterceptorA));
@@ -370,8 +373,8 @@ mod tests {
             let input = TypeErasedBox::new(Box::new(()));
             let runtime_plugins = RuntimePlugins::new()
                 .with_client_plugin(FailingInterceptorsClientRuntimePlugin)
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin)
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
                 .with_operation_plugin(FailingInterceptorsOperationRuntimePlugin);
             let actual = invoke(input, &runtime_plugins)
                 .await
@@ -626,9 +629,8 @@ mod tests {
             struct InterceptorsTestOperationRuntimePlugin;
 
             impl RuntimePlugin for InterceptorsTestOperationRuntimePlugin {
-                fn configure(
+                fn interceptors(
                     &self,
-                    _cfg: &mut ConfigBag,
                     interceptors: &mut InterceptorRegistrar,
                 ) -> Result<(), BoxError> {
                     interceptors.register(SharedInterceptor::new(OriginInterceptor));
@@ -640,8 +642,8 @@ mod tests {
 
             let input = TypeErasedBox::new(Box::new(()));
             let runtime_plugins = RuntimePlugins::new()
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin)
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
                 .with_operation_plugin(InterceptorsTestOperationRuntimePlugin);
             let actual = invoke(input, &runtime_plugins)
                 .await

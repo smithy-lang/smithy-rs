@@ -23,6 +23,9 @@ tokio = { version = "1.25", features = ["sync"] }
 tracing = "0.1"
 zeroize = { version = "1", optional = true }
 
+[dev-dependencies]
+aws-types = "0.55.3"
+
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]

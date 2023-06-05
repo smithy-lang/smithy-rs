@@ -184,6 +184,8 @@ mod tests {
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::future::never::Never;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_runtime_api::client::orchestrator::ConfigBagSetters;
+    use aws_smithy_runtime_api::config_bag::Layer;
 
     #[tokio::test]
     async fn test_no_timeout() {
@@ -197,9 +199,11 @@ mod tests {
         let now = tokio::time::Instant::now();
         tokio::time::pause();
 
+        let mut layer = Layer::new("timeout");
+        layer.put(TimeoutConfig::builder().build());
+        layer.set_sleep_impl(Some(sleep_impl));
         let mut cfg = ConfigBag::base();
-        cfg.put(TimeoutConfig::builder().build());
-        cfg.set_sleep_impl(Some(sleep_impl));
+        cfg.push(layer.freeze());
 
         underlying_future
             .maybe_timeout(&cfg, TimeoutKind::Operation)
@@ -222,12 +226,14 @@ mod tests {
         tokio::time::pause();
 
         let mut cfg = ConfigBag::base();
-        cfg.put(
+        let mut layer = Layer::new("test");
+        layer.put(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_millis(250))
                 .build(),
         );
-        cfg.set_sleep_impl(Some(sleep_impl));
+        layer.set_sleep_impl(Some(sleep_impl));
+        cfg.push(layer);
 
         let result = underlying_future
             .maybe_timeout(&cfg, TimeoutKind::Operation)

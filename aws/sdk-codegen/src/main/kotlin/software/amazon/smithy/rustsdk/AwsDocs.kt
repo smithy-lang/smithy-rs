@@ -29,6 +29,7 @@ object AwsDocs {
             docsTemplate(
                 """
                 #### Constructing a `Client`
+                blah
 
                 A [`Config`] is required to construct a client. For most use cases, the [`aws-config`]
                 crate should be used to automatically resolve this config using

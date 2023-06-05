@@ -6,10 +6,10 @@
 use aws_smithy_runtime_api::client::interceptors::context::Input;
 use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
 use aws_smithy_runtime_api::client::orchestrator::{
-    ConfigBagAccessors, HttpRequest, RequestSerializer,
+    ConfigBagAccessors, ConfigBagSetters, HttpRequest, RequestSerializer,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::sync::Mutex;
 
 #[derive(Default, Debug)]
@@ -52,15 +52,11 @@ impl RequestSerializer for CannedRequestSerializer {
 }
 
 impl RuntimePlugin for CannedRequestSerializer {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        _interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
-        cfg.set_request_serializer(Self {
+    fn config(&self, _current: &ConfigBag) -> Option<FrozenLayer> {
+        let mut layer = Layer::new("CannedRequest");
+        layer.set_request_serializer(Self {
             inner: Mutex::new(self.take()),
         });
-
-        Ok(())
+        Some(layer.freeze())
     }
 }

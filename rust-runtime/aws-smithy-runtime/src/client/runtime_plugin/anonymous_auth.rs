@@ -14,9 +14,11 @@ use aws_smithy_runtime_api::client::auth::{
 };
 use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
 use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};
+use aws_smithy_runtime_api::client::orchestrator::{
+    BoxError, ConfigBagAccessors, ConfigBagSetters, HttpRequest,
+};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::config_bag::{ConfigBag, FrozenLayer, Layer};
 
 const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 
@@ -30,36 +32,46 @@ const ANONYMOUS_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("anonymous");
 /// - You only need to make anonymous requests, such as when interacting with [Open Data](https://aws.amazon.com/opendata/).
 /// - You're writing orchestrator tests and don't care about authentication.
 #[non_exhaustive]
-#[derive(Debug, Default)]
-pub struct AnonymousAuthRuntimePlugin;
+#[derive(Debug)]
+pub struct AnonymousAuthRuntimePlugin(FrozenLayer);
+
+impl Default for AnonymousAuthRuntimePlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AnonymousAuthRuntimePlugin {
     pub fn new() -> Self {
-        Self
+        let mut layer = Layer::new("AnonymousAuth");
+        layer.set_auth_option_resolver_params(StaticAuthOptionResolverParams::new().into());
+        layer.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
+            ANONYMOUS_AUTH_SCHEME_ID,
+        ]));
+        layer.set_identity_resolvers(
+            IdentityResolvers::builder()
+                .identity_resolver(ANONYMOUS_AUTH_SCHEME_ID, AnonymousIdentityResolver::new())
+                .build(),
+        );
+        layer.set_http_auth_schemes(
+            HttpAuthSchemes::builder()
+                .auth_scheme(ANONYMOUS_AUTH_SCHEME_ID, AnonymousAuthScheme::new())
+                .build(),
+        );
+        Self(layer.freeze())
     }
 }
 
 impl RuntimePlugin for AnonymousAuthRuntimePlugin {
+    fn config(&self, _current: &ConfigBag) -> Option<FrozenLayer> {
+        Some(self.0.clone())
+    }
+
     fn configure(
         &self,
         cfg: &mut ConfigBag,
         _interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
-        cfg.set_auth_option_resolver_params(StaticAuthOptionResolverParams::new().into());
-        cfg.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
-            ANONYMOUS_AUTH_SCHEME_ID,
-        ]));
-        cfg.set_identity_resolvers(
-            IdentityResolvers::builder()
-                .identity_resolver(ANONYMOUS_AUTH_SCHEME_ID, AnonymousIdentityResolver::new())
-                .build(),
-        );
-        cfg.set_http_auth_schemes(
-            HttpAuthSchemes::builder()
-                .auth_scheme(ANONYMOUS_AUTH_SCHEME_ID, AnonymousAuthScheme::new())
-                .build(),
-        );
-
         Ok(())
     }
 }
