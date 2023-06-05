@@ -82,5 +82,4 @@ mod test {
             assert_eq!(buf, buf2);
         };
     }
-
 }
