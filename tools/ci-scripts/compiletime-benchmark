@@ -17,6 +17,8 @@ function compile() {
         time cargo build --all-features --release  &> /dev/null && cargo clean
 }
 
+cd smithy-rs
+
 ./gradlew :aws:sdk:assemble
 DIR=$PWD
 for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
