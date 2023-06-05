@@ -40,7 +40,7 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
                 NonHumanReadable::Value::UInt32(1000u32),
             ));
         ```"#
-        );
+        )
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
