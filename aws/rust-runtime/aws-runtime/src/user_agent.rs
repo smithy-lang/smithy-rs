@@ -49,6 +49,23 @@ impl From<InvalidHeaderValue> for UserAgentInterceptorError {
     }
 }
 
+/// Config marker that disables the user agent interceptor.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DisableUserAgentInterceptor {
+    why: &'static str,
+}
+
+impl DisableUserAgentInterceptor {
+    /// Creates a new `DisableUserAgentInterceptor`.
+    ///
+    /// Takes a human readable string for the `Debug` impl to state why it is being disabled.
+    /// This is to assist with debugging issues with requests.
+    pub fn new(why: &'static str) -> Self {
+        Self { why }
+    }
+}
+
 /// Generates and attaches the AWS SDK's user agent to a HTTP request
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -112,11 +129,12 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
     use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_smithy_types::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .expect("request is set")
             .headers()
             .get(header_name)
             .unwrap()
@@ -125,7 +143,7 @@ mod tests {
     }
 
     fn context() -> InterceptorContext {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = context.take_input();

@@ -159,3 +159,15 @@ message = "The SDK has added support for timestreamwrite and timestreamquery. Su
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 references = ["smithy-rs#2707", "aws-sdk-rust#114"]
 author = "rcoh"
+
+[[smithy-rs]]
+message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurrences of `Arc<dyn AsyncSleep>` that appear in public APIs have been replaced with it."
+references = ["smithy-rs#2742"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurrences of `Arc<dyn AsyncSleep>` that appear in public APIs have been replaced with it."
+references = ["smithy-rs#2742"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"

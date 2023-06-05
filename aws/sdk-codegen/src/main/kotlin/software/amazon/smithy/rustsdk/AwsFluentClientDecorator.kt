@@ -64,7 +64,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             reexportSmithyClientBuilder = false,
             generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(runtimeConfig),
+                AwsPresignedFluentBuilderMethod(codegenContext),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),

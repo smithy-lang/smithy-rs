@@ -93,7 +93,7 @@ pub(super) fn orchestrate_endpoint(
 ) -> Result<(), BoxError> {
     let params = cfg.endpoint_resolver_params();
     let endpoint_prefix = cfg.get::<EndpointPrefix>();
-    let request = ctx.request_mut();
+    let request = ctx.request_mut().expect("set during serialization");
 
     let endpoint_resolver = cfg.endpoint_resolver();
     let endpoint = endpoint_resolver.resolve_endpoint(params)?;

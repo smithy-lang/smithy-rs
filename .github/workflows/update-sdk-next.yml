@@ -47,7 +47,7 @@ jobs:
         git checkout origin/main -b next
 
         # Delete the old SDK
-        rm -rf sdk examples
+        rm -rf sdk examples tests
         rm -f versions.toml Cargo.toml index.md
 
         # Copy in the new SDK
