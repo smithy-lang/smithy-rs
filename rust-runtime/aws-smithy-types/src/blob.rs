@@ -79,7 +79,7 @@ mod serde_deserialize {
     impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
         type Value = Blob;
         fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            formatter.write_str("expected base64 encoded string")
+            formatter.write_str("expected bytes")
         }
 
         fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
