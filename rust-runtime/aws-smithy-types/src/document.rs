@@ -9,7 +9,7 @@ use crate::Number;
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 use serde;
-use std::collections::HashMap;
+use std::{collections::HashMap, borrow::Cow};
 /* ANCHOR: document */
 
 /// Document Type
