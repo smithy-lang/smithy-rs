@@ -33,7 +33,7 @@ mod test {
     #[test]
     fn ser_human_readable_datetime() {
         use serde::{Deserialize, Serialize};
-    
+
         let datetime = DateTime::from_secs(1576540098);
         #[derive(Serialize, Deserialize, PartialEq)]
         struct Test {
@@ -42,7 +42,7 @@ mod test {
         let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
         assert!(serde_json::to_string(&Test { datetime }).ok() == Some(datetime_json.to_string()));
     }
-    
+
     /// check for non-human redable format
     #[test]
     fn ser_not_human_readable_datetime() {
@@ -57,7 +57,7 @@ mod test {
             let _ = ciborium::ser::into_writer(&cbor, &mut buf2);
             assert_eq!(buf, buf2);
         };
-    
+
         {
             let cbor = ciborium::value::Value::Array(vec![
                 ciborium::value::Value::Integer(0i64.into()),
@@ -69,7 +69,7 @@ mod test {
             let _ = ciborium::ser::into_writer(&cbor, &mut buf2);
             assert_eq!(buf, buf2);
         };
-    
+
         {
             let cbor = ciborium::value::Value::Array(vec![
                 ciborium::value::Value::Integer(i64::MAX.into()),
@@ -82,6 +82,5 @@ mod test {
             assert_eq!(buf, buf2);
         };
     }
-    
-}
 
+}
