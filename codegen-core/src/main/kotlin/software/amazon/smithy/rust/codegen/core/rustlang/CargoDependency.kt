@@ -115,6 +115,12 @@ class InlineDependency(
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
+        fun serializationSettings(runtimeConfig: RuntimeConfig): InlineDependency = forInlineableRustFile(
+            "serialization_settings",
+            CargoDependency.Http,
+            CargoDependency.smithyHttp(runtimeConfig),
+        )
+
         fun constrained(): InlineDependency =
             InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
     }
@@ -197,7 +203,7 @@ data class CargoDependency(
     }
 
     fun toType(): RuntimeType {
-        return RuntimeType(rustName, this)
+        return RuntimeType("::$rustName", this)
     }
 
     companion object {

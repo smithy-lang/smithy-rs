@@ -26,8 +26,8 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
+        "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "Sleep" to sleepModule.resolve("Sleep"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )
@@ -38,7 +38,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                 is ServiceConfig.ConfigStruct -> rustTemplate(
                     """
                     retry_config: Option<#{RetryConfig}>,
-                    sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,
+                    sleep_impl: Option<#{SharedAsyncSleep}>,
                     timeout_config: Option<#{TimeoutConfig}>,
                     """,
                     *codegenScope,
@@ -52,8 +52,8 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                             self.retry_config.as_ref()
                         }
 
-                        /// Return a cloned Arc containing the async sleep implementation from this config, if any.
-                        pub fn sleep_impl(&self) -> Option<std::sync::Arc<dyn #{AsyncSleep}>> {
+                        /// Return a cloned shared async sleep implementation from this config, if any.
+                        pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
                             self.sleep_impl.clone()
                         }
 
@@ -70,7 +70,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                     rustTemplate(
                         """
                         retry_config: Option<#{RetryConfig}>,
-                        sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,
+                        sleep_impl: Option<#{SharedAsyncSleep}>,
                         timeout_config: Option<#{TimeoutConfig}>,
                         """,
                         *codegenScope,
@@ -120,7 +120,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         /// ## Examples
                         ///
                         /// ```no_run
-                        /// use $moduleUseName::config::{AsyncSleep, Sleep, Config};
+                        /// use $moduleUseName::config::{AsyncSleep, Config, SharedAsyncSleep, Sleep};
                         ///
                         /// ##[derive(Debug)]
                         /// pub struct ForeverSleep;
@@ -131,10 +131,10 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         ///     }
                         /// }
                         ///
-                        /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
+                        /// let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
                         /// let config = Config::builder().sleep_impl(sleep_impl).build();
                         /// ```
-                        pub fn sleep_impl(mut self, sleep_impl: std::sync::Arc<dyn #{AsyncSleep}>) -> Self {
+                        pub fn sleep_impl(mut self, sleep_impl: #{SharedAsyncSleep}) -> Self {
                             self.set_sleep_impl(Some(sleep_impl));
                             self
                         }
@@ -144,7 +144,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         /// ## Examples
                         ///
                         /// ```no_run
-                        /// use $moduleUseName::config::{AsyncSleep, Sleep, Builder, Config};
+                        /// use $moduleUseName::config::{AsyncSleep, Builder, Config, SharedAsyncSleep, Sleep};
                         ///
                         /// ##[derive(Debug)]
                         /// pub struct ForeverSleep;
@@ -156,7 +156,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         /// }
                         ///
                         /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
-                        ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
+                        ///     let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
                         ///     builder.set_sleep_impl(Some(sleep_impl));
                         /// }
                         ///
@@ -164,7 +164,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         /// set_never_ending_sleep_impl(&mut builder);
                         /// let config = builder.build();
                         /// ```
-                        pub fn set_sleep_impl(&mut self, sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>) -> &mut Self {
+                        pub fn set_sleep_impl(&mut self, sleep_impl: Option<#{SharedAsyncSleep}>) -> &mut Self {
                             self.sleep_impl = sleep_impl;
                             self
                         }
@@ -242,7 +242,7 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
         rustCrate.withModule(ClientRustModule.Config) {
             rustTemplate(
                 """
-                pub use #{sleep}::{AsyncSleep, Sleep};
+                pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};
 
                 /// Retry configuration
                 ///
@@ -276,6 +276,7 @@ class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomiz
                 if let Some(timeout_config) = self.handle.conf.timeout_config() {
                     ${section.configBagName}.put(timeout_config.clone());
                 }
+                ${section.configBagName}.put(self.handle.conf.time_source.clone());
                 """,
             )
         }

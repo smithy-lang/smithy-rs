@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 rt-tokio = ["tokio/time"]
+test-util = []
 
 [dependencies]
 pin-project-lite = "0.2"

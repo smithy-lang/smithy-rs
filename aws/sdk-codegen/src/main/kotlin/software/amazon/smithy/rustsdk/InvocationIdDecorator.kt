@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
@@ -29,14 +30,22 @@ class InvocationIdDecorator : ClientCodegenDecorator {
 private class InvocationIdRuntimePluginCustomization(
     private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
+    private val codegenScope = arrayOf(
+        "InvocationIdInterceptor" to awsRuntime.resolve("invocation_id::InvocationIdInterceptor"),
+    )
+
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust(
-                    "#T::new()",
-                    AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                        .resolve("invocation_id::InvocationIdInterceptor"),
-                )
+            val invocationId = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig).resolve("invocation_id")
+            rustBlockTemplate(
+                "if cfg.get::<#{DisableInvocationIdInterceptor}>().is_none()",
+                "DisableInvocationIdInterceptor" to invocationId.resolve("DisableInvocationIdInterceptor"),
+            ) {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
+                }
             }
         }
     }

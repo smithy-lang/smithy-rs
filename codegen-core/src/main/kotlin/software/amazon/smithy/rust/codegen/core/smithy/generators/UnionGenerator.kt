@@ -19,9 +19,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -134,7 +136,7 @@ open class UnionGenerator(
             """
             impl #{Debug} for ${unionSymbol.name} {
                 fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
-                    write!(f, $REDACTION)
+                    ::std::write!(f, $REDACTION)
                 }
             }
             """,
@@ -197,8 +199,11 @@ private fun RustWriter.renderAsVariant(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<(), &Self>") {
-            rust("if let ${unionSymbol.name}::$variantName = &self { Ok(()) } else { Err(self) }")
+        rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<(), &Self>", *preludeScope) {
+            rustTemplate(
+                "if let ${unionSymbol.name}::$variantName = &self { #{Ok}(()) } else { #{Err}(self) }",
+                *preludeScope,
+            )
         }
     } else {
         val memberSymbol = symbolProvider.toSymbol(member)
@@ -209,8 +214,11 @@ private fun RustWriter.renderAsVariant(
             targetSymbol,
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&${memberSymbol.rustType().render()}, &Self>") {
-            rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(val) } else { Err(self) }")
+        rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<&${memberSymbol.rustType().render()}, &Self>", *preludeScope) {
+            rustTemplate(
+                "if let ${unionSymbol.name}::$variantName(val) = &self { #{Ok}(val) } else { #{Err}(self) }",
+                *preludeScope,
+            )
         }
     }
 }
