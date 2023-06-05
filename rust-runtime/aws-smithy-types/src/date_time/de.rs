@@ -31,16 +31,7 @@ impl<'de> Visitor<'de> for DateTimeVisitor {
 impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
     type Value = DateTime;
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(
-        r#"DateTime type expects a tuple of i64 and u32 when deserializing from non human readable format.  
-        ```rust
-            //  Example
-            NonHumanReadable::Value::TupleWith2Values((
-                NonHumanReadable::Value::Int64(2354235i64),
-                NonHumanReadable::Value::UInt32(1000u32),
-            ));
-        ```"#
-        )
+        formatter.write_str("DateTime type expects a tuple of i64 and u32 when deserializing from non human readable format like CBOR or AVRO, i.e. (i64, u32)")
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -73,10 +64,12 @@ impl<'de> Deserialize<'de> for DateTime {
     }
 }
 
-#[test]
+#[cfg(test)]
 mod test {
+    use super::*;
 
     /// check for human redable format
+    #[test]
     fn de_human_readable_datetime() {
         use serde::{Deserialize, Serialize};
 
@@ -91,6 +84,7 @@ mod test {
     }
 
     /// check for non-human redable format
+    #[test]
     fn de_not_human_readable_datetime() {
         {
             let cbor = ciborium::value::Value::Array(vec![

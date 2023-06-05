@@ -25,10 +25,12 @@ impl serde::Serialize for DateTime {
     }
 }
 
-#[test]
+#[cfg(test)]
 mod test {
-    
+    use super::*;
+
     /// check for human redable format
+    #[test]
     fn ser_human_readable_datetime() {
         use serde::{Deserialize, Serialize};
     
@@ -42,6 +44,7 @@ mod test {
     }
     
     /// check for non-human redable format
+    #[test]
     fn ser_not_human_readable_datetime() {
         {
             let cbor = ciborium::value::Value::Array(vec![
