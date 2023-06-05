@@ -4,9 +4,6 @@
  */
 
 use crate::Number;
-use std::borrow::Cow;
-use std::collections::HashMap;
-
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
@@ -37,7 +34,6 @@ use std::collections::HashMap;
     ),
     serde(untagged)
 )]
-#[derive(Clone, Debug, PartialEq)]
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -272,5 +268,5 @@ mod test {
         assert_eq!(serde_json::to_value(&obj).unwrap(), json.unwrap());
         let doc: Result<Document, _> = serde_json::from_str(target_file);
         assert_eq!(obj, doc.unwrap());
-  }
+    }
 }

@@ -3,15 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(all(
-    aws_sdk_unstable,
-    any(feature = "serde-deserialize", feature = "serde-serialize")
-))]
-pub use crate::base64;
-#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
-pub use serde::Serialize;
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-pub use serde::{de::Visitor, Deserialize};
+#[cfg(aws_sdk_unstable)]
+use impl_serde::*;
+#[cfg(aws_sdk_unstable)]
+mod impl_serde {
+    #[cfg(any(feature = "serde-deserialize", feature = "serde-serialize"))]
+    pub(crate) use crate::base64;
+    #[cfg(feature = "serde-serialize")]
+    pub(crate) use serde::Serialize;
+    #[cfg(feature = "serde-deserialize")]
+    pub(crate) use serde::{de::Visitor, Deserialize};
+}
 
 /// Binary Blob Type
 ///
@@ -44,9 +46,6 @@ impl AsRef<[u8]> for Blob {
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;
-    use crate::base64;
-    use serde::Serialize;
-
     impl Serialize for Blob {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -64,8 +63,6 @@ mod serde_serialize {
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod serde_deserialize {
     use super::*;
-    use crate::base64;
-    use serde::{de::Visitor, Deserialize};
 
     struct HumanReadableBlobVisitor;
     impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
