@@ -587,8 +587,6 @@ mod test {
             SystemTime::try_from(date_time).unwrap()
         );
     }
-<<<<<<< HEAD
-=======
 
     #[test]
     fn ord() {
@@ -648,5 +646,4 @@ mod test {
             assert_eq!(left.cmp(&right), left_str.cmp(&right_str));
         }
     }
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16
 }

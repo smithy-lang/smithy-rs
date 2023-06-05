@@ -19,7 +19,6 @@ ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
 base64-simd = "0.8"
 
-
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
 version = "1"
 features = ["derive"]
@@ -32,11 +31,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 criterion = "0.4"
 rand = "0.8.4"
-<<<<<<< HEAD
-ciborium = "0.2.0"
-=======
 ciborium = { version = "0.2.1" }
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16
 
 [package.metadata.docs.rs]
 all-features = true
@@ -47,13 +42,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
-
-<<<<<<< HEAD
-[features]
-serde-serialize = []
-serde-deserialize = []
-=======
-[target."cfg(aws_sdk_unstable)".dependencies.serde]
-version = "1"
-features = ["derive"]
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16

@@ -4,18 +4,15 @@
  */
 
 use crate::Number;
-<<<<<<< HEAD
-=======
 use std::borrow::Cow;
 use std::collections::HashMap;
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16
 
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 use serde;
-use std::collections::HashMap;
+
 /* ANCHOR: document */
 
 /// Document Type
@@ -24,7 +21,6 @@ use std::collections::HashMap;
 /// Open content is useful for modeling unstructured data that has no schema, data that can't be
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
-<<<<<<< HEAD
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(
     all(aws_sdk_unstable, feature = "serde-serialize"),
@@ -41,9 +37,6 @@ use std::collections::HashMap;
     ),
     serde(untagged)
 )]
-=======
-#[derive(Clone, Debug, PartialEq)]
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -224,7 +217,18 @@ impl From<i32> for Document {
     }
 }
 
-<<<<<<< HEAD
+impl From<f64> for Document {
+    fn from(value: f64) -> Self {
+        Document::Number(Number::Float(value))
+    }
+}
+
+impl From<Number> for Document {
+    fn from(value: Number) -> Self {
+        Document::Number(value)
+    }
+}
+
 /* ANCHOR END: document */
 
 #[cfg(test)]
@@ -279,16 +283,5 @@ mod test {
         assert_eq!(serde_json::to_value(&obj).unwrap(), json.unwrap());
         let doc: Result<Document, _> = serde_json::from_str(target_file);
         assert_eq!(obj, doc.unwrap());
-=======
-impl From<f64> for Document {
-    fn from(value: f64) -> Self {
-        Document::Number(Number::Float(value))
-    }
-}
-
-impl From<Number> for Document {
-    fn from(value: Number) -> Self {
-        Document::Number(value)
->>>>>>> 74a7204123555ff68c841b42cbe273e08cef1c16
     }
 }
