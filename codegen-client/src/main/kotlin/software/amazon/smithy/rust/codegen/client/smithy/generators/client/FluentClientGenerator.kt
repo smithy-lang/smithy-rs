@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -315,10 +316,41 @@ class FluentClientGenerator(
     }
 
     private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+        val errorType = symbolProvider.symbolForOperationError(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
+
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
+        // input name
+        val fnName = clientOperationFnName(operation, symbolProvider)
+        implBlock(symbolProvider.symbolForBuilder(input)) {
+            rustTemplate(
+                """
+                /// Sends a request with this input using the given client.
+                pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
+                #{send_bounds:W} {
+                let mut fluent_builder = client.$fnName();
+                fluent_builder.inner = self;
+                fluent_builder.send().await
+                }
+                """,
+                *preludeScope,
+                "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                } else {
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                },
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+            )
+        }
+
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
 
@@ -350,11 +382,6 @@ class FluentClientGenerator(
             "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
-            val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-            val errorType = symbolProvider.symbolForOperationError(operation)
-            val inputBuilderType = symbolProvider.symbolForBuilder(input)
-            val fnName = clientOperationFnName(operation, symbolProvider)
-
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
@@ -373,7 +400,8 @@ class FluentClientGenerator(
                 }
             }
 
-          if (smithyRuntimeMode.generateMiddleware) {
+
+            if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,
                     "CustomizableOperation" to ClientRustModule.Client.customize.toType()
@@ -391,76 +419,7 @@ class FluentClientGenerator(
                         generics.toRustGenerics(),
                     ),
                 )
-            rustTemplate(
-                """
-                // This function will go away in the near future. Do not rely on it.
-                ##[doc(hidden)]
-                pub async fn customize_middleware(self) -> #{Result}<
-                    #{CustomizableOperation}#{customizable_op_type_params:W},
-                    #{SdkError}<#{OperationError}>
-                > #{send_bounds:W} {
-                    let handle = self.handle.clone();
-                    let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                        .make_operation(&handle.conf)
-                        .await
-                        .map_err(#{SdkError}::construction_failure)?;
-                    #{Ok}(#{CustomizableOperation} { handle, operation })
-                }
-
-                // This function will go away in the near future. Do not rely on it.
-                ##[doc(hidden)]
-                pub async fn send_middleware(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
-                #{send_bounds:W} {
-                    let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                        .make_operation(&self.handle.conf)
-                        .await
-                        .map_err(#{SdkError}::construction_failure)?;
-                    self.handle.client.call(op).await
-                }
-
-                """,
-                *middlewareScope,
-            )
-
-            // this fixes this error
-            //  error[E0592]: duplicate definitions with name `set_fields`
-            //     --> sdk/connectcases/src/operation/update_case/builders.rs:115:5
-            //      |
-            //  78  | /     pub fn set_fields(
-            //  79  | |         mut self,
-            //  80  | |         data: crate::operation::update_case::builders::UpdateCaseInputBuilder,
-            //  81  | |     ) -> Self {
-            //      | |_____________- other definition for `set_fields`
-            //  ...
-            //  115 | /     pub fn set_fields(
-            //  116 | |         mut self,
-            //  117 | |         input: std::option::Option<std::vec::Vec<crate::types::FieldValue>>,
-            //  118 | |     ) -> Self {
-            //      | |_____________^ duplicate definitions for `set_fields`
-            if (inputBuilderType.toString().endsWith("Builder")) {
                 rustTemplate(
-                    """
-                    ##[#{AwsSdkUnstableAttribute}]
-                    /// This function replaces the parameter with new one.
-                    /// It is useful when you want to replace the existing data with de-serialized data.
-                    /// ```compile_fail
-                    /// let result_future = async {
-                    ///     let deserialized_parameters: $inputBuilderType  = serde_json::from_str(&json_string).unwrap();
-                    ///     client.$fnName().set_fields(&deserialized_parameters).send().await
-                    /// };
-                    /// ```
-                    pub fn set_fields(mut self, data: $inputBuilderType) -> Self {
-                        self.inner = data;
-                        self
-                    }
-                    """,
-                    "AwsSdkUnstableAttribute" to Attribute.AwsSdkUnstableAttribute.inner,
-                )
-            }
-
-            if (smithyRuntimeMode.defaultToMiddleware) {
-
-              rustTemplate(
                     """
                     // This function will go away in the near future. Do not rely on it.
                     ##[doc(hidden)]
