@@ -7,12 +7,13 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -28,12 +29,13 @@ class IdempotencyTokenGenerator(codegenContext: CodegenContext, operationShape: 
         val memberName = symbolProvider.toMemberName(idempotencyTokenMember)
         return when (section) {
             is OperationSection.MutateInput -> writable {
-                rust(
+                rustTemplate(
                     """
                     if ${section.input}.$memberName.is_none() {
-                        ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
+                        ${section.input}.$memberName = #{Some}(${section.config}.make_token.make_idempotency_token());
                     }
                     """,
+                    *preludeScope,
                 )
             }
             else -> emptySection

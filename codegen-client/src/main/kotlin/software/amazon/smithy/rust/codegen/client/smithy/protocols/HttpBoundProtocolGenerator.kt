@@ -8,20 +8,24 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.SensitiveIndex
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolParserGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -29,12 +33,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
+// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime` (replace with ClientProtocolGenerator)
 class HttpBoundProtocolGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
-    bodyGenerator: ProtocolPayloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
-) : ClientProtocolGenerator(
+    bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+) : OperationGenerator(
     codegenContext,
     protocol,
     MakeOperationGenerator(
@@ -46,6 +50,48 @@ class HttpBoundProtocolGenerator(
     ),
     bodyGenerator,
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
+)
+
+// TODO(enableNewSmithyRuntime): Completely delete `AdditionalPayloadContext` when switching to the orchestrator
+data class ClientAdditionalPayloadContext(
+    val propertyBagAvailable: Boolean,
+) : AdditionalPayloadContext
+
+class ClientHttpBoundProtocolPayloadGenerator(
+    codegenContext: ClientCodegenContext,
+    protocol: Protocol,
+) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
+    codegenContext, protocol, HttpMessageType.REQUEST,
+    renderEventStreamBody = { writer, params ->
+        val propertyBagAvailable = (params.additionalPayloadContext as ClientAdditionalPayloadContext).propertyBagAvailable
+        writer.rustTemplate(
+            """
+            {
+                let error_marshaller = #{errorMarshallerConstructorFn}();
+                let marshaller = #{marshallerConstructorFn}();
+                let (signer, signer_sender) = #{DeferredSigner}::new();
+                #{insert_into_config}
+                let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
+                    ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
+            "hyper" to CargoDependency.HyperWithStream.toType(),
+            "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+            "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+            "DeferredSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::DeferredSigner"),
+            "marshallerConstructorFn" to params.marshallerConstructorFn,
+            "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+            "insert_into_config" to writable {
+                if (propertyBagAvailable) {
+                    rust("properties.acquire_mut().insert(signer_sender);")
+                } else {
+                    rust("_cfg.put(signer_sender);")
+                }
+            },
+        )
+    },
 )
 
 // TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
@@ -61,6 +107,7 @@ open class HttpBoundProtocolTraitImplGenerator(
     private val parserGenerator = ProtocolParserGenerator(codegenContext, protocol)
 
     private val codegenScope = arrayOf(
+        *preludeScope,
         "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
         "http" to RuntimeType.Http,
@@ -114,7 +161,7 @@ open class HttpBoundProtocolTraitImplGenerator(
         rustTemplate(
             """
             impl #{ParseStrict} for $operationName {
-                type Output = std::result::Result<#{O}, #{E}>;
+                type Output = #{Result}<#{O}, #{E}>;
                 fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                      let (success, status) = (response.status().is_success(), response.status().as_u16());
                      let headers = response.headers();
@@ -144,14 +191,14 @@ open class HttpBoundProtocolTraitImplGenerator(
         rustTemplate(
             """
             impl #{ParseResponse} for $operationName {
-                type Output = std::result::Result<#{O}, #{E}>;
-                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
+                type Output = #{Result}<#{O}, #{E}>;
+                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> #{Option}<Self::Output> {
                      #{BeforeParseResponse}
                     // This is an error, defer to the non-streaming parser
                     if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
-                        return None;
+                        return #{None};
                     }
-                    Some(#{parse_streaming_response}(response))
+                    #{Some}(#{parse_streaming_response}(response))
                 }
                 fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                     // if streaming, we only hit this case if its an error
@@ -180,7 +227,7 @@ open class HttpBoundProtocolTraitImplGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "op_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(op_response: &mut #{operation}::Response) -> #{Result}<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,

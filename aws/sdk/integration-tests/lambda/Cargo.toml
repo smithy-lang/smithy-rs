@@ -10,6 +10,7 @@ publish = false
 [dev-dependencies]
 async-stream = "0.3.0"
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }

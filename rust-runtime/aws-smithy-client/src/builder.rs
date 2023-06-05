@@ -4,12 +4,11 @@
  */
 
 use crate::{bounds, erase, retry, Client};
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::retry::ReconnectMode;
 use aws_smithy_types::timeout::{OperationTimeoutConfig, TimeoutConfig};
-use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 struct MaybeRequiresSleep<I> {
@@ -37,7 +36,7 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
     middleware: M,
     retry_policy: MaybeRequiresSleep<R>,
     operation_timeout_config: Option<OperationTimeoutConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
     reconnect_mode: Option<ReconnectMode>,
 }
 
@@ -88,21 +87,24 @@ where
     }
 }
 
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 use crate::erase::DynConnector;
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 use crate::http_connector::ConnectorSettings;
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 use crate::hyper_ext::Adapter as HyperAdapter;
+
+#[cfg(all(feature = "native-tls", not(feature = "allow-compilation")))]
+compile_error!("Feature native-tls has been removed. For upgrade instructions, see: https://awslabs.github.io/smithy-rs/design/transport/connector.html");
 
 /// Max idle connections is not standardized across SDKs. Java V1 and V2 use 50, and Go V2 uses 100.
 /// The number below was chosen arbitrarily between those two reference points, and should allow
 /// for 14 separate SDK clients in a Lambda where the max file handles is 1024.
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 70;
 
 /// Returns default HTTP client settings for hyper.
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 fn default_hyper_builder() -> hyper::client::Builder {
     let mut builder = hyper::client::Builder::default();
     builder.pool_max_idle_per_host(DEFAULT_MAX_IDLE_CONNECTIONS);
@@ -125,24 +127,7 @@ impl<M, R> Builder<(), M, R> {
     }
 }
 
-#[cfg(feature = "native-tls")]
-impl<M, R> Builder<(), M, R> {
-    /// Connect to the service over HTTPS using the native TLS library on your
-    /// platform using dynamic dispatch.
-    pub fn native_tls_connector(
-        self,
-        connector_settings: ConnectorSettings,
-    ) -> Builder<DynConnector, M, R> {
-        self.connector(DynConnector::new(
-            HyperAdapter::builder()
-                .hyper_builder(default_hyper_builder())
-                .connector_settings(connector_settings)
-                .build(crate::conns::native_tls()),
-        ))
-    }
-}
-
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 impl<M, R> Builder<(), M, R> {
     /// Create a Smithy client builder with an HTTPS connector and the [standard retry
     /// policy](crate::retry::Standard) over the default middleware implementation.
@@ -150,17 +135,13 @@ impl<M, R> Builder<(), M, R> {
     /// For convenience, this constructor type-erases the concrete TLS connector backend used using
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
-    /// [`Builder::rustls_connector`] or [`Builder::native_tls_connector`] instead.
+    /// [`Builder::rustls_connector`] instead.
+    #[cfg(feature = "rustls")]
     pub fn dyn_https_connector(
         self,
         connector_settings: ConnectorSettings,
     ) -> Builder<DynConnector, M, R> {
-        #[cfg(feature = "rustls")]
         let with_https = |b: Builder<_, M, R>| b.rustls_connector(connector_settings);
-        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
-        #[cfg(not(feature = "rustls"))]
-        let with_https = |b: Builder<_, M, R>| b.native_tls_connector(connector_settings);
-
         with_https(self)
     }
 }
@@ -330,14 +311,14 @@ impl<C, M> Builder<C, M> {
         self
     }
 
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+    /// Set [`aws_smithy_async::rt::sleep::SharedAsyncSleep`] that the [`Client`] will use to create things like timeout futures.
+    pub fn set_sleep_impl(&mut self, async_sleep: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = async_sleep;
         self
     }
 
-    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn sleep_impl(mut self, async_sleep: Arc<dyn AsyncSleep>) -> Self {
+    /// Set [`aws_smithy_async::rt::sleep::SharedAsyncSleep`] that the [`Client`] will use to create things like timeout futures.
+    pub fn sleep_impl(mut self, async_sleep: SharedAsyncSleep) -> Self {
         self.set_sleep_impl(Some(async_sleep));
         self
     }
@@ -476,7 +457,7 @@ where
 mod tests {
     use super::*;
     use crate::never::NeverConnector;
-    use aws_smithy_async::rt::sleep::Sleep;
+    use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
     use std::panic::{self, AssertUnwindSafe};
     use std::time::Duration;
 
@@ -582,8 +563,5 @@ mod tests {
         #[cfg(feature = "rustls")]
         let _builder: Builder<DynConnector, (), _> =
             Builder::new().rustls_connector(Default::default());
-        #[cfg(feature = "native-tls")]
-        let _builder: Builder<DynConnector, (), _> =
-            Builder::new().native_tls_connector(Default::default());
     }
 }

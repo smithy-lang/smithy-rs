@@ -5,7 +5,7 @@
 
 use crate::client::auth::AuthSchemeId;
 use crate::client::orchestrator::Future;
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -62,30 +62,6 @@ impl Identity {
 
     pub fn expiration(&self) -> Option<&SystemTime> {
         self.expiration.as_ref()
-    }
-}
-
-#[derive(Debug)]
-pub struct AnonymousIdentity;
-
-impl AnonymousIdentity {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[derive(Debug)]
-pub struct AnonymousIdentityResolver;
-
-impl AnonymousIdentityResolver {
-    pub fn new() -> Self {
-        AnonymousIdentityResolver
-    }
-}
-
-impl IdentityResolver for AnonymousIdentityResolver {
-    fn resolve_identity(&self, _: &ConfigBag) -> Future<Identity> {
-        Future::ready(Ok(Identity::new(AnonymousIdentity::new(), None)))
     }
 }
 

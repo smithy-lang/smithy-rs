@@ -10,7 +10,6 @@
 //! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
 //! | `rt-tokio`        | Run async code with the `tokio` runtime |
 //! | `test-util`       | Include various testing utils |
-//! | `native-tls`      | Use `native-tls` as the HTTP client's TLS implementation |
 //! | `rustls`          | Use `rustls` as the HTTP client's TLS implementation |
 //! | `client-hyper`    | Use `hyper` to handle HTTP requests |
 
@@ -52,7 +51,7 @@ pub mod hyper_ext;
 pub mod static_tests;
 
 use crate::poison::PoisonLayer;
-use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -63,7 +62,6 @@ use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::{ProvideErrorKind, ReconnectMode};
 use aws_smithy_types::timeout::OperationTimeoutConfig;
-use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 pub use timeout::TimeoutLayer;
 use tower::{Service, ServiceBuilder, ServiceExt};
@@ -85,9 +83,8 @@ use tracing::{debug_span, field, Instrument};
 /// to the inner service, and then ultimately returning the inner service's response.
 ///
 /// With the `hyper` feature enabled, you can construct a `Client` directly from a
-/// `hyper::Client` using `hyper_ext::Adapter::builder`. You can also enable the `rustls` or `native-tls`
-/// features to construct a Client against a standard HTTPS endpoint using `Builder::rustls_connector` and
-/// `Builder::native_tls_connector` respectively.
+/// `hyper::Client` using `hyper_ext::Adapter::builder`. You can also enable the `rustls`
+/// feature to construct a Client against a standard HTTPS endpoint using `Builder::rustls_connector`.
 #[derive(Debug)]
 pub struct Client<
     Connector = erase::DynConnector,
@@ -99,7 +96,7 @@ pub struct Client<
     retry_policy: RetryPolicy,
     reconnect_mode: ReconnectMode,
     operation_timeout_config: OperationTimeoutConfig,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
 }
 
 impl Client<(), (), ()> {
