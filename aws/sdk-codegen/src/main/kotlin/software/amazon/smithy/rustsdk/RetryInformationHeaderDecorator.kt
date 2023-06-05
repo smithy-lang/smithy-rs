@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -36,19 +37,22 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            // Track the latency between client and server.
-            section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::ServiceClockSkewInterceptor"))
-            }
+            rustBlockTemplate(
+                "if cfg.get::<#{DisableRequestInfoInterceptor}>().is_none()",
+                "DisableRequestInfoInterceptor" to awsRuntime.resolve("request_info::DisableRequestInfoInterceptor"),
+            ) {
+                // Track the latency between client and server.
+                section.registerInterceptor(runtimeConfig, this) {
+                    rust(
+                        "#T::new()",
+                        smithyRuntime.resolve("client::orchestrator::interceptors::ServiceClockSkewInterceptor"),
+                    )
+                }
 
-            // Track the number of request attempts made.
-            section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::RequestAttemptsInterceptor"))
-            }
-
-            // Add request metadata to outgoing requests. Sets a header.
-            section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
+                // Add request metadata to outgoing requests. Sets a header.
+                section.registerInterceptor(runtimeConfig, this) {
+                    rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
+                }
             }
         }
     }

@@ -165,6 +165,7 @@ class PaginatorGenerator private constructor(
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
+                    #{runtime_plugin_init};
                     #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
@@ -230,8 +231,24 @@ class PaginatorGenerator private constructor(
                     )
                 } else {
                     rustTemplate(
-                        "#{operation}::orchestrate(input.clone(), handle.clone(), None).await",
+                        "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
                         *codegenScope,
+                    )
+                }
+            },
+            "runtime_plugin_init" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        let runtime_plugins = #{operation}::register_runtime_plugins(
+                            #{RuntimePlugins}::new(),
+                            handle,
+                            None
+                        );
+                        """,
+                        *codegenScope,
+                        "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::runtime_plugin::RuntimePlugins"),
                     )
                 }
             },

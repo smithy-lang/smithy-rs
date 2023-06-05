@@ -10,6 +10,11 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
+[features]
+test-util = []
+serde-serialize = []
+serde-deserialize = []
+
 [dependencies]
 itoa = "1.0.0"
 num-integer = "0.1.44"
@@ -36,7 +41,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
-
 
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
 version = "1"

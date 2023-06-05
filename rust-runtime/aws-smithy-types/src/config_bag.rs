@@ -76,14 +76,17 @@ impl<T: Default> Default for Value<T> {
     }
 }
 
-pub struct Layer {
+/// A named layer comprising a config bag
+struct Layer {
     name: Cow<'static, str>,
     props: TypeIdMap<TypeErasedBox>,
 }
 
 /// Trait defining how types can be stored and loaded from the config bag
 pub trait Store: Sized + Send + Sync + 'static {
+    /// Denote the returned type when loaded from the config bag
     type ReturnedType<'a>: Send + Sync;
+    /// Denote the stored type when stored into the config bag
     type StoredType: Send + Sync + Debug;
 
     /// Create a returned type from an iterable of items
@@ -93,12 +96,24 @@ pub trait Store: Sized + Send + Sync + 'static {
 /// Store an item in the config bag by replacing the existing value
 #[non_exhaustive]
 pub struct StoreReplace<U>(PhantomData<U>);
+impl<U> Debug for StoreReplace<U> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StoreReplace")
+    }
+}
 
 /// Store an item in the config bag by effectively appending it to a list
 #[non_exhaustive]
 pub struct StoreAppend<U>(PhantomData<U>);
+impl<U> Debug for StoreAppend<U> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StoreAppend")
+    }
+}
 
+/// Trait that marks the implementing types as able to be stored in the config bag
 pub trait Storable: Send + Sync + Debug + 'static {
+    /// Specify how an item is stored in the config bag, e.g. [`StoreReplace`] and [`StoreAppend`]
     type Storer: Store;
 }
 
@@ -130,6 +145,11 @@ impl<U: Send + Sync + Debug + 'static> Store for StoreAppend<U> {
 pub struct AppendItemIter<'a, U> {
     inner: ItemIter<'a, StoreAppend<U>>,
     cur: Option<Rev<slice::Iter<'a, U>>>,
+}
+impl<'a, U> Debug for AppendItemIter<'a, U> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AppendItemIter")
+    }
 }
 
 impl<'a, U: 'a> Iterator for AppendItemIter<'a, U>
@@ -172,25 +192,30 @@ impl Debug for Layer {
 }
 
 impl Layer {
-    pub fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
+    /// Inserts `value` into the layer
+    fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
         self.props
             .insert(TypeId::of::<T>(), TypeErasedBox::new(value));
         self
     }
 
-    pub fn get<T: Send + Sync + Store + 'static>(&self) -> Option<&T::StoredType> {
+    /// Retrieves the value of type `T` from this layer if exists
+    fn get<T: Send + Sync + Store + 'static>(&self) -> Option<&T::StoredType> {
         self.props
             .get(&TypeId::of::<T>())
             .map(|t| t.downcast_ref().expect("typechecked"))
     }
 
-    pub fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
+    /// Returns a mutable reference to `T` if it is stored in this layer
+    fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
         self.props
             .get_mut(&TypeId::of::<T>())
             .map(|t| t.downcast_mut().expect("typechecked"))
     }
 
-    pub fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
+    /// Returns a mutable reference to `T` if it is stored in this layer, otherwise returns the
+    /// [`Default`] implementation of `T`
+    fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
     where
         T::StoredType: Default,
     {
@@ -200,23 +225,6 @@ impl Layer {
             .downcast_mut()
             .expect("typechecked")
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.props.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.props.len()
-    }
-}
-
-pub trait Accessor {
-    type Setter: Setter;
-    fn config(&self) -> &ConfigBag;
-}
-
-pub trait Setter {
-    fn config(&mut self) -> &mut ConfigBag;
 }
 
 fn no_op(_: &mut ConfigBag) {}
@@ -236,7 +244,7 @@ impl FrozenConfigBag {
     ///
     /// # Examples
     /// ```
-    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_types::config_bag::ConfigBag;
     /// fn add_more_config(bag: &mut ConfigBag) { /* ... */ }
     /// let bag = ConfigBag::base().with_fn("first layer", |_| { /* add a property */ });
     /// let mut bag = bag.add_layer("second layer");
@@ -267,6 +275,11 @@ impl FrozenConfigBag {
 }
 
 impl ConfigBag {
+    /// Create a new config bag "base".
+    ///
+    /// Configuration may then be "layered" onto the base by calling
+    /// [`ConfigBag::store_put`], [`ConfigBag::store_or_unset`], [`ConfigBag::store_append`]. Layers
+    /// of configuration may then be "frozen" (made immutable) by calling [`ConfigBag::freeze`].
     pub fn base() -> Self {
         ConfigBag {
             head: Layer {
@@ -277,6 +290,7 @@ impl ConfigBag {
         }
     }
 
+    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type
     pub fn store_put<T>(&mut self, item: T) -> &mut Self
     where
         T: Storable<Storer = StoreReplace<T>>,
@@ -285,6 +299,8 @@ impl ConfigBag {
         self
     }
 
+    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type,
+    /// or unsets it by passing a `None`
     pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
     where
         T: Storable<Storer = StoreReplace<T>>,
@@ -299,7 +315,7 @@ impl ConfigBag {
 
     /// This can only be used for types that use [`StoreAppend`]
     /// ```
-    /// use aws_smithy_runtime_api::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
+    /// use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
     /// let mut bag = ConfigBag::base();
     /// #[derive(Debug, PartialEq, Eq)]
     /// struct Interceptor(&'static str);
@@ -326,6 +342,10 @@ impl ConfigBag {
         self
     }
 
+    /// Clears the value of type `T` from the config bag
+    ///
+    /// This internally marks the item of type `T` as cleared as opposed to wiping it out from the
+    /// config bag.
     pub fn clear<T>(&mut self)
     where
         T: Storable<Storer = StoreAppend<T>>,
@@ -334,6 +354,7 @@ impl ConfigBag {
             .put::<StoreAppend<T>>(Value::ExplicitlyUnset(type_name::<T>()));
     }
 
+    /// Load a value (or values) of type `T` depending on how `T` implements [`Storable`]
     pub fn load<T: Storable>(&self) -> <T::Storer as Store>::ReturnedType<'_> {
         self.sourced_get::<T::Storer>()
     }
@@ -344,7 +365,7 @@ impl ConfigBag {
         out
     }
 
-    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
+    /// Return a mutable reference to `T` if it is stored in the top layer of the bag
     pub fn get_mut<T: Send + Sync + Debug + Clone + 'static>(&mut self) -> Option<&mut T>
     where
         T: Storable<Storer = StoreReplace<T>>,
@@ -433,7 +454,7 @@ impl ConfigBag {
     ///
     /// Hint: If you want to re-use this layer, call `freeze` first.
     /// ```
-    /// use aws_smithy_runtime_api::config_bag::ConfigBag;
+    /// use aws_smithy_types::config_bag::ConfigBag;
     /// let bag = ConfigBag::base();
     /// let first_layer = bag.with_fn("a", |b: &mut ConfigBag| { b.put("a"); }).freeze();
     /// let second_layer = first_layer.with_fn("other", |b: &mut ConfigBag| { b.put(1i32); });
@@ -449,10 +470,15 @@ impl ConfigBag {
         self.freeze().with_fn(name, next)
     }
 
+    /// Add a new layer with `name` after freezing the top layer so far
     pub fn add_layer(self, name: impl Into<Cow<'static, str>>) -> ConfigBag {
         self.freeze().add_layer(name)
     }
 
+    /// Return a value (or values) of type `T` depending on how it has been stored in a `ConfigBag`
+    ///
+    /// It flexibly chooses to return a single value vs. an iterator of values depending on how
+    /// `T` implements a [`Store`] trait.
     pub fn sourced_get<T: Store>(&self) -> T::ReturnedType<'_> {
         let stored_type_iter = ItemIter {
             inner: self.layers(),
@@ -471,6 +497,13 @@ pub struct ItemIter<'a, T> {
     inner: BagIter<'a>,
     t: PhantomData<T>,
 }
+
+impl<'a, T> Debug for ItemIter<'a, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ItemIter")
+    }
+}
+
 impl<'a, T: 'a> Iterator for ItemIter<'a, T>
 where
     T: Store,
@@ -506,13 +539,6 @@ impl From<ConfigBag> for FrozenConfigBag {
     fn from(bag: ConfigBag) -> Self {
         FrozenConfigBag(Arc::new(bag))
     }
-}
-
-#[derive(Debug)]
-pub enum SourceInfo {
-    Set { layer: &'static str, value: String },
-    Unset { layer: &'static str },
-    Inherit { layer: &'static str },
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
  */
 
 use crate::client::interceptors::InterceptorRegistrar;
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -37,12 +37,6 @@ pub struct RuntimePlugins {
 impl RuntimePlugins {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn for_operation(operation: Box<dyn RuntimePlugin + Send + Sync>) -> Self {
-        let mut plugins = Self::new();
-        plugins.operation_plugins.push(operation);
-        plugins
     }
 
     pub fn with_client_plugin(
@@ -90,7 +84,7 @@ impl RuntimePlugins {
 mod tests {
     use super::{BoxError, RuntimePlugin, RuntimePlugins};
     use crate::client::interceptors::InterceptorRegistrar;
-    use crate::config_bag::ConfigBag;
+    use aws_smithy_types::config_bag::ConfigBag;
 
     #[derive(Debug)]
     struct SomeStruct;
