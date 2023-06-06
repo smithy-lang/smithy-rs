@@ -49,7 +49,7 @@ The `Service` trait can be thought of as an asynchronous function from a request
 
 Middleware in `tower` typically conforms to the following pattern, a `Service` implementation of the form
 
-```rust
+```rust,ignore
 pub struct NewService<S> {
     inner: S,
     /* auxillary data */
@@ -58,7 +58,7 @@ pub struct NewService<S> {
 
 and a complementary
 
-```rust
+```rust,ignore
 pub struct NewLayer {
     /* auxiliary data */
 }
@@ -133,7 +133,7 @@ where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP s
 
 The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around the entire `Service`.
 
-```rust
+```rust,ignore
 // This is a HTTP `Service`.
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species(/* handler */)
@@ -151,7 +151,7 @@ let app = timeout_layer.layer(app);
 
 A _single_ layer can be applied to _all_ routes inside the `Router`. This exists as a method on the output of the service builder.
 
-```rust
+```rust,ignore
 // Construct `TraceLayer`.
 let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
 
@@ -169,7 +169,7 @@ Note that requests pass through this middleware immediately _after_ routing succ
 
 A "HTTP layer" can be applied to specific operations.
 
-```rust
+```rust,ignore
 // Construct `TraceLayer`.
 let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
 
@@ -188,7 +188,7 @@ This middleware transforms the operations HTTP requests and responses.
 
 A "model layer" can be applied to specific operations.
 
-```rust
+```rust,ignore
 // A handler `Service`.
 let handler_svc = service_fn(/* handler */);
 
@@ -214,7 +214,7 @@ Suppose we want to apply a different `Layer` to every operation. In this case, p
 
 Consider the following middleware:
 
-```rust
+```rust,ignore
 /// A [`Service`] that adds a print log.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
@@ -261,7 +261,7 @@ The plugin system provides a way to construct then apply `Layer`s in position [C
 
 An example of a `PrintPlugin` which applies a layer printing the operation name:
 
-```rust
+```rust,ignore
 /// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
@@ -281,7 +281,7 @@ where
 
 An alternative example which applies a layer for a given protocol:
 
-```rust
+```rust,ignore
 /// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
@@ -309,7 +309,7 @@ impl<Op, S, L> Plugin<AwsRestXml, Op, S, L> for PrintPlugin
 
 You can provide a custom method to add your plugin to a `PluginPipeline` via an extension trait:
 
-```rust
+```rust,ignore
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
 pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
@@ -327,7 +327,7 @@ impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugi
 
 This allows for:
 
-```rust
+```rust,ignore
 let plugin_pipeline = PluginPipeline::new()
     // [..other plugins..]
     // The custom method!

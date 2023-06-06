@@ -96,7 +96,7 @@ global endpoint provider that can override different services. There is a single
 is shared across all services. However, this isn't the case for `Endpoints 2.0` where the trait actually has a generic
 parameter:
 
-```rust
+```rust,ignore
 pub trait ResolveEndpoint<T>: Send + Sync {
     fn resolve_endpoint(&self, params: &T) -> Result<Endpoint, BoxError>;
 }
@@ -129,7 +129,7 @@ This RFC proposes making the following changes:
 
 **Example: overriding the endpoint URI globally**
 
-```rust
+```rust,ignore
 async fn main() {
     let sdk_conf = aws_config::from_env().endpoint_url("http://localhost:8123").load().await;
     let dynamo = aws_sdk_dynamodb::Client::new(&sdk_conf);
@@ -139,7 +139,7 @@ async fn main() {
 
 **Example: overriding the endpoint resolver for a service**
 
-```rust
+```rust,ignore
 /// Resolve to Localhost when an environment variable is set
 struct CustomDdbResolver;
 
@@ -191,7 +191,7 @@ gated with documentation warning about stability.
 
 #### The Endpoint Struct
 
-```rust
+```rust,ignore
 // module: `aws_smithy_types::endpoint`
 // potential optimization to reduce / remove allocations for keys which are almost always static
 // this can also just be `String`
@@ -221,7 +221,7 @@ pub struct Endpoint {
 To perform produce an `Endpoint` struct we have a generic `ResolveEndpoint` trait which will be both generic in terms of
 parameters and being "smithy-generic:
 
-```rust
+```rust,ignore
 // module: `smithy_types::endpoint` or `aws_smithy_client`??
 pub trait ResolveEndpoint<Params>: Send + Sync {
     /// Resolves an `Endpoint` for `Params`
@@ -242,7 +242,7 @@ the parameters are set, *not* how they are generated.
 
 **Example `Params` struct for S3:**
 
-```rust
+```rust,ignore
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 /// Configuration parameters for resolving the correct endpoint
@@ -289,7 +289,7 @@ When an endpoint ruleset is present, Smithy will code generate an endpoint resol
 resolver
 **MUST** be a struct so that it can store/cache computations (such as a partition resolver that has compiled regexes).
 
-```rust
+```rust,ignore
 pub struct DefaultEndpointResolver {
     partition_resolver: PartitionResolver
 }
@@ -539,7 +539,7 @@ An alternative design that could provide more flexibility is a context-aware end
 give context about the endpoint being returned. This would, for example, allow a customer to say explicitly "don't
 modify this endpoint":
 
-```rust
+```rust,ignore
 enum ContextualEndpoint {
     /// Just the URI please. Pass it into the default endpoint resolver as a baseline
     Uri { uri: Uri, immutable: bool },
