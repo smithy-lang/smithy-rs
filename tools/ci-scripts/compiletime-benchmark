@@ -31,4 +31,5 @@ for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
     fi
 done
 
+cd $DIR
 python3 tools/compiletime-benchmark/format.py
