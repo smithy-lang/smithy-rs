@@ -188,9 +188,19 @@ This middleware transforms the operations HTTP requests and responses.
 
 A "model layer" can be applied to specific operations.
 
-```rust,ignore
+```rust
+# extern crate tower;
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use tower::{util::service_fn, Layer};
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+# use aws_smithy_http_server::operation::OperationShapeExt;
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+# struct BufferLayer;
+# impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
+# impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
 // A handler `Service`.
-let handler_svc = service_fn(/* handler */);
+let handler_svc = service_fn(handler);
 
 // Construct `BufferLayer`.
 let buffer_layer = BufferLayer::new(3);
@@ -203,7 +213,10 @@ let layered_handler = GetPokemonSpecies::from_service(handler_svc);
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species_operation(layered_handler)
     /* ... */
-    .build();
+    .build()
+    # ;Result::<(), ()>::Ok(())
+    .unwrap();
+# let app: Result<PokemonService<aws_smithy_http_server::routing::Route>, _> = app;
 ```
 
 In contrast to [position C](#c-operation-specific-http-middleware), this middleware transforms the operations modelled inputs to modelled outputs.

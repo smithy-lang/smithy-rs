@@ -10,3 +10,6 @@ command = "mdbook-mermaid"
 
 [output.html]
 additional-js = ["static/mermaid.min.js", "static/mermaid-init.js"]
+
+[rust]
+edition = "2021"
