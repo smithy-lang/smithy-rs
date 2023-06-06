@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::iter::Rev;
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::sync::Arc;
 
@@ -77,7 +77,7 @@ impl<T: Default> Default for Value<T> {
 }
 
 /// A named layer comprising a config bag
-struct Layer {
+pub struct Layer {
     name: Cow<'static, str>,
     props: TypeIdMap<TypeErasedBox>,
 }
@@ -192,10 +192,74 @@ impl Debug for Layer {
 }
 
 impl Layer {
-    /// Inserts `value` into the layer
-    fn put<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
+    /// Inserts `value` into the layer directly
+    fn put_directly<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
         self.props
             .insert(TypeId::of::<T>(), TypeErasedBox::new(value));
+        self
+    }
+
+    /// Remove `T` from this bag
+    pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
+        self.put_directly::<StoreReplace<T>>(Value::ExplicitlyUnset(type_name::<T>()));
+        self
+    }
+
+    /// Insert `value` into the bag
+    pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
+        self.put_directly::<StoreReplace<T>>(Value::Set(value));
+        self
+    }
+
+    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type
+    pub fn store_put<T>(&mut self, item: T) -> &mut Self
+    where
+        T: Storable<Storer = StoreReplace<T>>,
+    {
+        self.put_directly::<StoreReplace<T>>(Value::Set(item));
+        self
+    }
+
+    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type,
+    /// or unsets it by passing a `None`
+    pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
+    where
+        T: Storable<Storer = StoreReplace<T>>,
+    {
+        let item = match item {
+            Some(item) => Value::Set(item),
+            None => Value::ExplicitlyUnset(type_name::<T>()),
+        };
+        self.put_directly::<StoreReplace<T>>(item);
+        self
+    }
+
+    /// This can only be used for types that use [`StoreAppend`]
+    /// ```
+    /// use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
+    /// let mut bag = ConfigBag::base();
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Interceptor(&'static str);
+    /// impl Storable for Interceptor {
+    ///     type Storer = StoreAppend<Interceptor>;
+    /// }
+    ///
+    /// bag.store_append(Interceptor("123"));
+    /// bag.store_append(Interceptor("456"));
+    ///
+    /// assert_eq!(
+    ///     bag.load::<Interceptor>().collect::<Vec<_>>(),
+    ///     vec![&Interceptor("456"), &Interceptor("123")]
+    /// );
+    /// ```
+    pub fn store_append<T>(&mut self, item: T) -> &mut Self
+    where
+        T: Storable<Storer = StoreAppend<T>>,
+    {
+        match self.get_mut_or_default::<StoreAppend<T>>() {
+            Value::Set(list) => list.push(item),
+            v @ Value::ExplicitlyUnset(_) => *v = Value::Set(vec![item]),
+        }
         self
     }
 
@@ -274,6 +338,21 @@ impl FrozenConfigBag {
     }
 }
 
+// TODO: configbag refactor: consider removing these
+impl Deref for ConfigBag {
+    type Target = Layer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.head
+    }
+}
+
+impl DerefMut for ConfigBag {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.head
+    }
+}
+
 impl ConfigBag {
     /// Create a new config bag "base".
     ///
@@ -290,58 +369,6 @@ impl ConfigBag {
         }
     }
 
-    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type
-    pub fn store_put<T>(&mut self, item: T) -> &mut Self
-    where
-        T: Storable<Storer = StoreReplace<T>>,
-    {
-        self.head.put::<StoreReplace<T>>(Value::Set(item));
-        self
-    }
-
-    /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type,
-    /// or unsets it by passing a `None`
-    pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
-    where
-        T: Storable<Storer = StoreReplace<T>>,
-    {
-        let item = match item {
-            Some(item) => Value::Set(item),
-            None => Value::ExplicitlyUnset(type_name::<T>()),
-        };
-        self.head.put::<StoreReplace<T>>(item);
-        self
-    }
-
-    /// This can only be used for types that use [`StoreAppend`]
-    /// ```
-    /// use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
-    /// let mut bag = ConfigBag::base();
-    /// #[derive(Debug, PartialEq, Eq)]
-    /// struct Interceptor(&'static str);
-    /// impl Storable for Interceptor {
-    ///     type Storer = StoreAppend<Interceptor>;
-    /// }
-    ///
-    /// bag.store_append(Interceptor("123"));
-    /// bag.store_append(Interceptor("456"));
-    ///
-    /// assert_eq!(
-    ///     bag.load::<Interceptor>().collect::<Vec<_>>(),
-    ///     vec![&Interceptor("456"), &Interceptor("123")]
-    /// );
-    /// ```
-    pub fn store_append<T>(&mut self, item: T) -> &mut Self
-    where
-        T: Storable<Storer = StoreAppend<T>>,
-    {
-        match self.head.get_mut_or_default::<StoreAppend<T>>() {
-            Value::Set(list) => list.push(item),
-            v @ Value::ExplicitlyUnset(_) => *v = Value::Set(vec![item]),
-        }
-        self
-    }
-
     /// Clears the value of type `T` from the config bag
     ///
     /// This internally marks the item of type `T` as cleared as opposed to wiping it out from the
@@ -351,7 +378,7 @@ impl ConfigBag {
         T: Storable<Storer = StoreAppend<T>>,
     {
         self.head
-            .put::<StoreAppend<T>>(Value::ExplicitlyUnset(type_name::<T>()));
+            .put_directly::<StoreAppend<T>>(Value::ExplicitlyUnset(type_name::<T>()));
     }
 
     /// Load a value (or values) of type `T` depending on how `T` implements [`Storable`]
@@ -427,19 +454,6 @@ impl ConfigBag {
         }
         // above it was None
         self.get_mut().unwrap()
-    }
-
-    /// Insert `value` into the bag
-    pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
-        self.head.put::<StoreReplace<T>>(Value::Set(value));
-        self
-    }
-
-    /// Remove `T` from this bag
-    pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
-        self.head
-            .put::<StoreReplace<T>>(Value::ExplicitlyUnset(type_name::<T>()));
-        self
     }
 
     /// Freeze this layer by wrapping it in an `Arc`
