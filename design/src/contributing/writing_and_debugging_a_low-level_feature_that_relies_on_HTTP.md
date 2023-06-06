@@ -73,7 +73,7 @@ a request body for `aws-chunked` requires us to know the length of each chunk we
 have to prefix each chunk with its size in bytes, represented by one or more [hexadecimal] digits. To close the body, we
 send a final chunk with a zero. For example, the body "Hello world" would look like this when encoded:
 
-```markdown
+```text
 B\r\n
 Hello world\r\n
 0\r\n
