@@ -24,10 +24,10 @@ DIR=$PWD
 for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
     echo "$DIR/aws/sdk/build/aws-sdk/sdk/$variable";
     if [[ $variable != *"aws-"* ]]; then
-        echo "START"
+        echo "START" &>> /tmp/compiletime-benchmark.txt
         echo "$variable" &>> /tmp/compiletime-benchmark.txt
         compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable"  &>> /tmp/compiletime-benchmark.txt
-        echo "END"
+        echo "END" &>> /tmp/compiletime-benchmark.txt
     fi
 done
 
