@@ -26,12 +26,11 @@ pub async fn get_object_multipart(
     let mut ranges = (0..part_count).map(|i| {
         if i == part_count - 1 {
             let start = i * args.part_size_bytes as i64;
-            ContentRange::new(start, start + size_of_last_part - 1, size_of_last_part)
+            ContentRange::new(start, start + size_of_last_part - 1)
         } else {
             ContentRange::new(
                 i * args.part_size_bytes as i64,
                 (i + 1) * args.part_size_bytes as i64 - 1,
-                args.part_size_bytes as i64,
             )
         }
     });
@@ -75,17 +74,16 @@ pub async fn get_object_multipart(
 struct ContentRange {
     start: i64,
     end: i64,
-    length: i64,
 }
 
 impl ContentRange {
-    fn new(start: i64, end: i64, length: i64) -> Self {
-        Self { start, end, length }
+    fn new(start: i64, end: i64) -> Self {
+        Self { start, end }
     }
 }
 
 impl fmt::Display for ContentRange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "bytes={}-{}/{}", self.start, self.end, self.length)
+        write!(f, "bytes={}-{}", self.start, self.end)
     }
 }
