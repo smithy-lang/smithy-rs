@@ -10,7 +10,7 @@ set -eux
 BENCHMARK_BUCKET="${1}"
 echo "benchmark bucket: ${BENCHMARK_BUCKET}"
 
-COMMON_ARGS="--concurrency 18 --bucket ${BENCHMARK_BUCKET} --region us-east-1"
+COMMON_ARGS="--concurrency 30 --bucket ${BENCHMARK_BUCKET} --region us-east-1"
 
 source "${HOME}/.cargo/env"
 cd benchmark
