@@ -5,4 +5,6 @@
 #
 
 set -eux
+cd smithy-rs
+
 mdbook test design -L target/debug/deps
