@@ -21,9 +21,11 @@ def main():
         print(idx)
         print(i)
         print("============")
-        if i == "\n":
-            continue
+        
         lines = i.splitlines()
+        if len(lines) > 1:
+            continue
+
         sdk_name = lines[0]
         row = "\n|" + sdk_name + \
             "|".join(map(lambda x: float(x), lines[1:])) + "|"
