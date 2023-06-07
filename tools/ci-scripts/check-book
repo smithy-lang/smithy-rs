@@ -7,4 +7,5 @@
 set -eux
 cd smithy-rs
 
+cargo b --manifest-path examples/Cargo.toml
 mdbook test design -L target/debug/deps
