@@ -113,7 +113,7 @@ data class FlexibleClientGenerics(
             C: #{client}::bounds::SmithyConnector,
             M: #{client}::bounds::SmithyMiddleware<C>,
             R: #{client}::retry::NewRequestPolicy,
-        """,
+            """,
             "client" to client,
         )
     }

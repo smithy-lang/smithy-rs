@@ -358,7 +358,7 @@ class FluentClientGenerator(
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
                 "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
-                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier)
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }
 
