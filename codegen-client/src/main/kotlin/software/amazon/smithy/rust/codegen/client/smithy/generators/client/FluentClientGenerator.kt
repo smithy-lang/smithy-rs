@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -327,47 +326,40 @@ class FluentClientGenerator(
         // input name
         val fnName = clientOperationFnName(operation, symbolProvider)
         implBlock(symbolProvider.symbolForBuilder(input)) {
-            if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                rustTemplate(
+            fun takeOutWhereClause(s: String): String {
+                val n = s.indexOf("where\n")
+                if (n == -1) {
+                    return s
+                } else {
+                    return s.removeRange(0, n)
+                }
+            }
+            rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
                 pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
-                #{send_bounds:W} {
+                #{send_bounds:W},
+                #{boundsWithoutWhereClause:W}
+                {
                 let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
                 fluent_builder.send().await
                 }
                 """,
-                    *preludeScope,
-                    "RawResponseType" to RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response"),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                    "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                    "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier)
-
-                )
-            } else {
-                rustTemplate(
-                """
-                /// Sends a request with this input using the given client.
-                pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>> {
-                let mut fluent_builder = client.$fnName();
-                fluent_builder.inner = self;
-                fluent_builder.send().await
-                }
-                """,
-                    *preludeScope,
-                    "RawResponseType" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                    "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig)
-                )
-
-            }
+                *preludeScope,
+                "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                } else {
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                },
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier)
+            )
         }
 
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug

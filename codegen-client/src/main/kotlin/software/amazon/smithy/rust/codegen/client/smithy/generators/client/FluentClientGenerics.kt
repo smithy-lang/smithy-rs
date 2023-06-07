@@ -34,6 +34,9 @@ interface FluentClientGenerics {
 
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics
+
+    /** Bounds without where clause. A clever hack to implement `fn send_with`. **/
+    val boundsWithoutWhereClause: Writable
 }
 
 class NoClientGenerics(private val runtimeConfig: RuntimeConfig) : FluentClientGenerics {
@@ -54,6 +57,8 @@ class NoClientGenerics(private val runtimeConfig: RuntimeConfig) : FluentClientG
 
     /** Trait bounds */
     override val bounds = writable { }
+
+    override val boundsWithoutWhereClause = writable {}
 
     /** Bounds for generated `send()` functions */
     override fun sendBounds(
@@ -98,6 +103,17 @@ data class FlexibleClientGenerics(
                 M: #{client}::bounds::SmithyMiddleware<C>,
                 R: #{client}::retry::NewRequestPolicy,
             """,
+            "client" to client,
+        )
+    }
+
+    override val boundsWithoutWhereClause = writable {
+        rustTemplate(
+            """
+            C: #{client}::bounds::SmithyConnector,
+            M: #{client}::bounds::SmithyMiddleware<C>,
+            R: #{client}::retry::NewRequestPolicy,
+        """,
             "client" to client,
         )
     }
