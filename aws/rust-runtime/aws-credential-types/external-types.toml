@@ -1,3 +1,6 @@
 allowed_external_types = [
     "aws_smithy_async::rt::sleep::SharedAsyncSleep",
+    "aws_smithy_types::config_bag::Storable",
+    "aws_smithy_types::config_bag::StoreReplace",
+    "aws_smithy_types::config_bag::Storer",
 ]
