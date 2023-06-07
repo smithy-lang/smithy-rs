@@ -105,6 +105,7 @@ class PaginatorGenerator private constructor(
         "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
 
         // SDK Types
+        "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "client" to RuntimeType.smithyClient(runtimeConfig),
         "fn_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::fn_stream"),
@@ -159,11 +160,12 @@ class PaginatorGenerator private constructor(
                 /// Create the pagination stream
                 ///
                 /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = #{Result}<#{Output}, #{SdkError}<#{Error}>>> + #{Unpin}
+                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
                 #{send_bounds:W} {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
+                    #{runtime_plugin_init};
                     #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
@@ -171,16 +173,7 @@ class PaginatorGenerator private constructor(
                             #{Err}(e) => { let _ = tx.send(#{Err}(e)).await; return; }
                         };
                         loop {
-                            let op = match input.make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure) {
-                                #{Ok}(op) => op,
-                                #{Err}(e) => {
-                                    let _ = tx.send(#{Err}(e)).await;
-                                    return;
-                                }
-                            };
-                            let resp = handle.client.call(op).await;
+                            let resp = #{orchestrate};
                             // If the input member is None or it was an error
                             let done = match resp {
                                 #{Ok}(ref resp) => {
@@ -210,6 +203,55 @@ class PaginatorGenerator private constructor(
             *codegenScope,
             "items_fn" to itemsFn(),
             "output_token" to outputTokenLens,
+            "item_type" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
+                } else {
+                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                }
+            },
+            "orchestrate" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    rustTemplate(
+                        """
+                        {
+                            let op = match input.make_operation(&handle.conf)
+                                .await
+                                .map_err(#{SdkError}::construction_failure) {
+                                #{Ok}(op) => op,
+                                #{Err}(e) => {
+                                    let _ = tx.send(#{Err}(e)).await;
+                                    return;
+                                }
+                            };
+                            handle.client.call(op).await
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
+                        *codegenScope,
+                    )
+                }
+            },
+            "runtime_plugin_init" to writable {
+                if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        let runtime_plugins = #{operation}::register_runtime_plugins(
+                            #{RuntimePlugins}::new(),
+                            handle,
+                            None
+                        );
+                        """,
+                        *codegenScope,
+                        "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::runtime_plugin::RuntimePlugins"),
+                    )
+                }
+            },
         )
     }
 
@@ -264,7 +306,7 @@ class PaginatorGenerator private constructor(
                     /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = #{Result}<${itemType()}, #{SdkError}<#{Error}>>> + #{Unpin}
+                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
                     #{send_bounds:W} {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
@@ -275,6 +317,13 @@ class PaginatorGenerator private constructor(
                     outputShape,
                     paginationInfo.itemsMemberPath,
                 ),
+                "item_type" to writable {
+                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}>>", *codegenScope)
+                    } else {
+                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                    }
+                },
                 *codegenScope,
             )
         }

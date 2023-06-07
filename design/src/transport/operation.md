@@ -16,7 +16,7 @@ This section details the flow of a request through the SDK until a response is r
 A customer interacts with the SDK builders to construct an input. The `build()` method on an input returns
 an `Operation<Output>`. This codifies the base HTTP request & all the configuration and middleware layers required to modify and dispatch the request.
 
-```rust
+```rust,ignore
 pub struct Operation<H, R> {
     request: Request,
     response_handler: H,
@@ -37,7 +37,7 @@ By using a property bag, we can define the `Operation` in Smithy core. AWS speci
 In order to construct an operation, the generated code injects appropriate middleware & configuration via the configuration property bag. It does this by reading the configuration properties out of the service
 config, copying them as necessary, and loading them into the `Request`:
 
-```rust
+```rust,ignore
 // This is approximately the generated code, I've cleaned a few things up for readability.
 pub fn build(self, config: &dynamodb::config::Config) -> Operation<BatchExecuteStatement> {
     let op = BatchExecuteStatement::new(BatchExecuteStatementInput {

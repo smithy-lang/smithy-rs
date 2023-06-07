@@ -62,7 +62,7 @@ Specifically, [`#[non_exhaustive]`](https://doc.rust-lang.org/reference/attribut
 following patterns:
 
 1. Direct structure instantiation:
-   ```rust
+   ```rust,ignore
    # fn foo() {
    let ip_addr = IpAddress { addr: "192.168.1.1" };
    # }
@@ -72,20 +72,20 @@ following patterns:
    our structures while maintaining backwards compatibility, all structures expose a builder, accessible
    at `SomeStruct::Builder`:
 
-   ```rust
+   ```rust,ignore
    # fn foo() {
    let ip_addr = IpAddress::builder().addr("192.168.1.1").build();
    # }
    ```
 2. Structure destructuring:
-   ```rust
+   ```rust,ignore
    # fn foo() {
    let IpAddress { addr } = some_ip_addr();
    # }
    ```
    This will also fail to compile if a new member is added, however, by adding `#[non_exhaustive]`, the `..` multifield
    wildcard MUST be added to support new fields being added in the future:
-   ```rust
+   ```rust,ignore
    # fn foo() {
    let IpAddress { addr, .. } = some_ip_addr();
    # }
@@ -110,7 +110,7 @@ because new fields cannot be added to union variants, the union variants themsel
 to be `#[non_exhaustive]`. To support new variants from services, each union contains an `Unknown` variant. By
 marking `Unknown` as non_exhaustive, we prevent customers from instantiating it directly.
 
-```rust
+```rust,ignore
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {

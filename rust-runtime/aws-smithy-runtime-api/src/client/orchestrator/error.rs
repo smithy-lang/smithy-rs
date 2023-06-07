@@ -7,13 +7,13 @@ use super::BoxError;
 use crate::client::interceptors::context::phase::Phase;
 use crate::client::interceptors::InterceptorError;
 use crate::client::orchestrator::HttpResponse;
-use crate::type_erasure::TypeErasedError;
 use aws_smithy_http::result::{ConnectorError, SdkError};
+use aws_smithy_types::type_erasure::TypeErasedError;
 use std::fmt::Debug;
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum OrchestratorError<E: Debug> {
+pub enum OrchestratorError<E> {
     /// An error occurred within an interceptor.
     Interceptor { err: InterceptorError },
     /// An error returned by a service.
@@ -24,7 +24,8 @@ pub enum OrchestratorError<E: Debug> {
 
 impl<E: Debug> OrchestratorError<E> {
     /// Create a new `OrchestratorError` from a [`BoxError`].
-    pub fn other(err: BoxError) -> Self {
+    pub fn other(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
+        let err = err.into();
         Self::Other { err }
     }
 
@@ -36,6 +37,15 @@ impl<E: Debug> OrchestratorError<E> {
     /// Create a new `OrchestratorError` from an [`InterceptorError`].
     pub fn interceptor(err: InterceptorError) -> Self {
         Self::Interceptor { err }
+    }
+
+    /// Convert the `OrchestratorError` into `Some` operation specific error if it is one. Otherwise,
+    /// return `None`.
+    pub fn as_operation_error(&self) -> Option<&E> {
+        match self {
+            Self::Operation { err } => Some(err),
+            _ => None,
+        }
     }
 
     /// Convert the `OrchestratorError` into an [`SdkError`].
@@ -113,5 +123,14 @@ where
 impl From<TypeErasedError> for OrchestratorError<TypeErasedError> {
     fn from(err: TypeErasedError) -> Self {
         Self::operation(err)
+    }
+}
+
+impl<E> From<aws_smithy_http::byte_stream::error::Error> for OrchestratorError<E>
+where
+    E: Debug + std::error::Error + 'static,
+{
+    fn from(err: aws_smithy_http::byte_stream::error::Error) -> Self {
+        Self::other(err)
     }
 }

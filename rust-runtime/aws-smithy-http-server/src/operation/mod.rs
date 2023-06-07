@@ -85,16 +85,13 @@
 //! ## [`OperationService`]
 //!
 //! Similarly, the [`OperationService`] trait is implemented by all `Service<(Op::Input, ...)>` with
-//! `Response = Op::Output`, and `Error = OperationError<Op::Error, PollError>`.
-//!
-//! We use [`OperationError`], with a `PollError` not constrained by the model, to allow the user to provide a custom
-//! [`Service::poll_ready`](tower::Service::poll_ready) implementation.
+//! `Response = Op::Output`, and `Error = Op::Error`.
 //!
 //! The following are examples of [`Service`](tower::Service)s which implement [`OperationService`]:
 //!
-//! - `Service<CartIdentifier, Response = ShoppingCart, Error = OperationError<Infallible, Infallible>>`.
-//! - `Service<(CartIdentifier, Extension<Context>), Response = ShoppingCart, Error = OperationError<GetShoppingCartError, Infallible>>`.
-//! - `Service<(CartIdentifier, Extension<Context>, Extension<ExtraContext>), Response = ShoppingCart, Error = OperationError<GetShoppingCartError, PollError>)`.
+//! - `Service<CartIdentifier, Response = ShoppingCart, Error = Infallible>`.
+//! - `Service<(CartIdentifier, Extension<Context>), Response = ShoppingCart, Error = GetShoppingCartError>`.
+//! - `Service<(CartIdentifier, Extension<Context>, Extension<ExtraContext>), Response = ShoppingCart, Error = GetShoppingCartError)`.
 //!
 //! Notice the parallels between [`OperationService`] and [`Handler`].
 //!
@@ -118,7 +115,7 @@
 //! #    type Output = ShoppingCart;
 //! #    type Error = GetShoppingError;
 //! # }
-//! # type OpFuture = std::future::Ready<Result<ShoppingCart, OperationError<GetShoppingError, PollError>>>;
+//! # type OpFuture = std::future::Ready<Result<ShoppingCart, GetShoppingError>>;
 //! // Construction of an `Operation` from a `Handler`.
 //!
 //! async fn op_handler(input: CartIdentifier) -> Result<ShoppingCart, GetShoppingError> {
@@ -129,13 +126,11 @@
 //!
 //! // Construction of an `Operation` from a `Service`.
 //!
-//! pub struct PollError;
-//!
 //! pub struct OpService;
 //!
 //! impl Service<CartIdentifier> for OpService {
 //!     type Response = ShoppingCart;
-//!     type Error = OperationError<GetShoppingError, PollError>;
+//!     type Error = GetShoppingError;
 //!     type Future = OpFuture;
 //!
 //!     fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -157,19 +152,13 @@
 //!
 //! Both [`Handler`] and [`OperationService`] accept and return Smithy model structures. After an [`Operation`] is
 //! constructed they are converted to a canonical form
-//! `Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>>`. The
+//! `Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error>`. The
 //! [`UpgradeLayer`] acts upon such services by converting them to
-//! `Service<http::Request, Response = http::Response, Error = PollError>`.
+//! `Service<http::Request, Response = http::Response, Error = Infallible>`.
 //!
-//! Note that the `PollError` is still exposed, for two reasons:
-//!
-//! - Smithy is agnostic to `PollError` and therefore we have no prescribed way to serialize it to a [`http::Response`]
-//! , unlike the operation errors.
-//! - The intention of `PollError` is to signal that the underlying service is no longer able to take requests, so
-//! should be discarded. See [`Service::poll_ready`](tower::Service::poll_ready).
 //!
 //! The [`UpgradeLayer`] and it's [`Layer::Service`](tower::Layer::Service) [`Upgrade`] are both parameterized by a
-//! protocol. This allows for upgrading to `Service<http::Request, Response = http::Response, Error = PollError>` to be
+//! protocol. This allows for upgrading to `Service<http::Request, Response = http::Response, Error = Infallible>` to be
 //! protocol dependent.
 //!
 //! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`](tower::Layer) `L`. The
@@ -210,15 +199,15 @@ impl<S, L> Operation<S, L> {
     }
 }
 
-impl<Op, S, PollError> Operation<Normalize<Op, S, PollError>> {
+impl<Op, S> Operation<Normalize<Op, S>> {
     /// Creates an [`Operation`] from a [`Service`](tower::Service).
     pub fn from_service<Exts>(inner: S) -> Self
     where
         Op: OperationShape,
-        S: OperationService<Op, Exts, PollError>,
+        S: OperationService<Op, Exts>,
     {
         Self {
-            inner: inner.canonicalize(),
+            inner: inner.normalize(),
             layer: Identity::new(),
         }
     }
@@ -236,13 +225,4 @@ impl<Op, H> Operation<IntoService<Op, H>> {
             layer: Identity::new(),
         }
     }
-}
-
-/// The operation [`Service`](tower::Service) has two classes of failure modes - those specified by the Smithy model
-/// and those associated with [`Service::poll_ready`](tower::Service::poll_ready).
-pub enum OperationError<ModelError, PollError> {
-    /// An error modelled by the Smithy model occurred.
-    Model(ModelError),
-    /// A [`Service::poll_ready`](tower::Service::poll_ready) failure occurred.
-    PollReady(PollError),
 }

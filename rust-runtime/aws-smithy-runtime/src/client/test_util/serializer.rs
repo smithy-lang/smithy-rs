@@ -9,7 +9,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
     ConfigBagAccessors, HttpRequest, RequestSerializer,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::sync::Mutex;
 
 #[derive(Default, Debug)]
@@ -39,7 +39,11 @@ impl CannedRequestSerializer {
 }
 
 impl RequestSerializer for CannedRequestSerializer {
-    fn serialize_input(&self, _input: Input) -> Result<HttpRequest, BoxError> {
+    fn serialize_input(
+        &self,
+        _input: Input,
+        _cfg: &mut ConfigBag,
+    ) -> Result<HttpRequest, BoxError> {
         let req = self
             .take()
             .ok_or("CannedRequestSerializer's inner value has already been taken.")?;

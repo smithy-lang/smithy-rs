@@ -7,13 +7,13 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
@@ -45,7 +45,7 @@ class ResponseDeserializerGenerator(
             "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
+            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
             "type_erase_result" to typeEraseResult(),
         )
@@ -99,7 +99,7 @@ class ResponseDeserializerGenerator(
                 if !response.status().is_success() && response.status().as_u16() != $successCode {
                     return None;
                 }
-                Some(#{type_erase_result}(#{parse_streaming_response}(response)).into())
+                Some(#{type_erase_result}(#{parse_streaming_response}(response)))
             }
             """,
             *codegenScope,
@@ -118,7 +118,7 @@ class ResponseDeserializerGenerator(
             """
             // For streaming operations, we only hit this case if its an error
             let body = response.body().bytes().expect("body loaded");
-            #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body)).into()
+            #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),

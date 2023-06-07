@@ -9,11 +9,10 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
-use std::sync::Arc;
-
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -40,6 +39,8 @@ If no dual-stack endpoint is available the request MAY return an error.
 **Note**: Some services do not offer dual-stack as a configurable parameter (e.g. Code Catalyst). For
 these services, this setting has no effect"
         };
+
+        (time_source) => { "The time source use to use for this client. This only needs to be required for creating deterministic tests or platforms where `SystemTime::now()` is not supported." };
     }
 }
 
@@ -52,7 +53,8 @@ pub struct SdkConfig {
     region: Option<Region>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
+    time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
@@ -72,7 +74,8 @@ pub struct Builder {
     region: Option<Region>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
+    time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
     use_fips: Option<bool>,
@@ -236,8 +239,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust
-    /// use std::sync::Arc;
-    /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+    /// use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
     /// use aws_types::SdkConfig;
     ///
     /// ##[derive(Debug)]
@@ -249,10 +251,10 @@ impl Builder {
     ///     }
     /// }
     ///
-    /// let sleep_impl = Arc::new(ForeverSleep);
+    /// let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
     /// let config = SdkConfig::builder().sleep_impl(sleep_impl).build();
     /// ```
-    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+    pub fn sleep_impl(mut self, sleep_impl: SharedAsyncSleep) -> Self {
         self.set_sleep_impl(Some(sleep_impl));
         self
     }
@@ -265,7 +267,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// # use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+    /// # use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
     /// # use aws_types::sdk_config::{Builder, SdkConfig};
     /// #[derive(Debug)]
     /// pub struct ForeverSleep;
@@ -277,7 +279,7 @@ impl Builder {
     /// }
     ///
     /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
-    ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
+    ///     let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
     ///     builder.set_sleep_impl(Some(sleep_impl));
     /// }
     ///
@@ -285,7 +287,7 @@ impl Builder {
     /// set_never_ending_sleep_impl(&mut builder);
     /// let config = builder.build();
     /// ```
-    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = sleep_impl;
         self
     }
@@ -499,6 +501,18 @@ impl Builder {
         self
     }
 
+    #[doc = docs_for!(time_source)]
+    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.set_time_source(Some(SharedTimeSource::new(time_source)));
+        self
+    }
+
+    #[doc = docs_for!(time_source)]
+    pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
+        self.time_source = time_source;
+        self
+    }
+
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -513,6 +527,7 @@ impl Builder {
             http_connector: self.http_connector,
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
+            time_source: self.time_source,
         }
     }
 }
@@ -540,7 +555,7 @@ impl SdkConfig {
 
     #[doc(hidden)]
     /// Configured sleep implementation
-    pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+    pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
         self.sleep_impl.clone()
     }
 
@@ -550,8 +565,13 @@ impl SdkConfig {
     }
 
     /// Configured credentials provider
-    pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
-        self.credentials_provider.as_ref()
+    pub fn credentials_provider(&self) -> Option<SharedCredentialsProvider> {
+        self.credentials_provider.clone()
+    }
+
+    /// Configured time source
+    pub fn time_source(&self) -> Option<SharedTimeSource> {
+        self.time_source.clone()
     }
 
     /// Configured app name

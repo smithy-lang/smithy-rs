@@ -27,9 +27,7 @@ async fn sra_test() {
         .interceptor(util::TestUserAgentInterceptor)
         .build();
     let client = Client::from_conf(config);
-    let fixup = util::FixupPlugin {
-        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
-    };
+    let fixup = util::FixupPlugin;
 
     let resp = dbg!(
         client

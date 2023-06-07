@@ -31,6 +31,15 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
 
     /**
+     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
+     *
+     * Should emit code that looks like the following:
+     ```
+     .with_classifier(AwsErrorCodeClassifier::new())
+     */
+    data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -63,28 +72,35 @@ class ServiceRuntimePluginGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val http = RuntimeType.smithyHttp(rc)
+        val client = RuntimeType.smithyClient(rc)
         val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
+            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
             "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
+            "HttpConnector" to client.resolve("http_connector::HttpConnector"),
             "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            "StandardRetryStrategy" to runtime.resolve("client::retries::strategy::StandardRetryStrategy"),
             "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
+            "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
+            "default_connector" to client.resolve("conns::default_connector"),
+            "require_connector" to client.resolve("conns::require_connector"),
         )
     }
 
@@ -121,15 +137,30 @@ class ServiceRuntimePluginGenerator(
                         #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
-                    // TODO(RuntimePlugins): Wire up standard retry
-                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
+                    // TODO(enableNewSmithyRuntime): Use the `store_append` method of ConfigBag to insert classifiers
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+                    cfg.set_retry_classifiers(retry_classifiers);
 
-                    // TODO(RuntimePlugins): Replace this with the correct long-term solution
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let connection: #{Box}<dyn #{Connection}> = self.handle.conf.http_connector()
-                            .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| #{Box}::new(#{DynConnectorAdapter}::new(c)) as _)
-                            .expect("connection set");
+                    let timeout_config = self.handle.conf.timeout_config();
+                    let retry_config = self.handle.conf.retry_config();
+
+                    if let Some(retry_config) = retry_config {
+                        cfg.set_retry_strategy(#{StandardRetryStrategy}::new(retry_config));
+                    } else if cfg.retry_strategy().is_none() {
+                        cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
+                    }
+
+                    let connector_settings = timeout_config.map(#{ConnectorSettings}::from_timeout_config).unwrap_or_default();
+                    let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
+                        // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                        #{require_connector}(
+                            self.handle.conf.http_connector()
+                                .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                                .or_else(|| #{default_connector}(&connector_settings, sleep_impl))
+                        )?
+                    )) as _;
                     cfg.set_connection(connection);
 
                     #{additional_config}
@@ -144,6 +175,9 @@ class ServiceRuntimePluginGenerator(
             *codegenScope,
             "http_auth_scheme_customizations" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
+            },
+            "retry_classifier_customizations" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RetryClassifier("cfg"))
             },
             "additional_config" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_interceptors"))

@@ -60,3 +60,18 @@ fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedCusto
         customization.section(section)(this)
     }
 }
+
+/** Convenience for rendering a list of customizations for a given section */
+fun <T : Section> RustWriter.writeCustomizationsOrElse(
+    customizations: List<NamedCustomization<T>>,
+    section: T,
+    orElse: Writable,
+) {
+    val test = RustWriter.root()
+    test.writeCustomizations(customizations, section)
+    if (test.dirty()) {
+        writeCustomizations(customizations, section)
+    } else {
+        orElse(this)
+    }
+}

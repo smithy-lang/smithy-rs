@@ -9,7 +9,10 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -21,8 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
@@ -108,7 +109,12 @@ open class MakeOperationGenerator(
             // Clippy warning to make the codegen a little simpler in that case.
             Attribute.AllowClippyUselessConversion.render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
-                bodyGenerator.generatePayload(this, "self", shape)
+                bodyGenerator.generatePayload(
+                    this,
+                    "self",
+                    shape,
+                    ClientAdditionalPayloadContext(propertyBagAvailable = true),
+                )
                 val streamingMember = shape.inputShape(model).findStreamingMember(model)
                 val isBlobStreaming = streamingMember != null && model.expectShape(streamingMember.target) is BlobShape
                 if (isBlobStreaming) {

@@ -34,9 +34,9 @@ pub trait OperationShapeExt: OperationShape {
     }
 
     /// Creates a new [`Operation`] for well-formed [`Service`](tower::Service)s.
-    fn from_service<S, Exts, PollError>(svc: S) -> Operation<Normalize<Self, S, PollError>>
+    fn from_service<S, Exts>(svc: S) -> Operation<Normalize<Self, S>>
     where
-        S: OperationService<Self, Exts, PollError>,
+        S: OperationService<Self, Exts>,
         Self: Sized,
     {
         Operation::from_service(svc)
