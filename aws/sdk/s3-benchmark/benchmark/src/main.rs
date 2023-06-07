@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::latencies::Latencies;
 use crate::multipart_get::get_object_multipart;
 use crate::multipart_put::put_object_multipart;
 use aws_sdk_s3 as s3;
@@ -15,6 +16,7 @@ use std::path::PathBuf;
 use std::process;
 use std::time;
 
+mod latencies;
 mod multipart_get;
 mod multipart_put;
 
@@ -79,50 +81,6 @@ pub struct Args {
     concurrency: usize,
 }
 
-#[derive(Debug, Default)]
-struct Latencies {
-    raw_values: Vec<f64>,
-}
-
-impl Latencies {
-    fn push(&mut self, value: time::Duration) {
-        self.raw_values.push(value.as_secs_f64());
-    }
-
-    fn print_results(&self, object_size_bytes: u64) {
-        const ONE_GIGABYTE: u64 = 1024 * 1024 * 1024;
-        let object_size_gigabits = object_size_bytes as f64 / ONE_GIGABYTE as f64 * 8f64;
-
-        let average_latency = self.raw_values.iter().sum::<f64>() / self.raw_values.len() as f64;
-        let lowest_latency = self
-            .raw_values
-            .iter()
-            .fold(std::f64::INFINITY, |acc, &x| acc.min(x));
-        let variance = Self::variance(&self.raw_values, average_latency);
-        println!("Latency values (s): {:?}", self.raw_values);
-        println!("Average latency (s): {average_latency}");
-        println!("Latency variance (s): {variance}");
-        println!("Object size (Gigabits): {object_size_gigabits}");
-        println!(
-            "Average throughput (Gbps): {}",
-            object_size_gigabits / average_latency
-        );
-        println!(
-            "Highest average throughput (Gbps): {}",
-            object_size_gigabits / lowest_latency
-        );
-    }
-
-    /// Calculates the standard deviation squared of the given values.
-    fn variance(values: &[f64], average: f64) -> f64 {
-        values
-            .iter()
-            .map(|value| (value - average).powi(2))
-            .sum::<f64>()
-            / values.len() as f64
-    }
-}
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -148,7 +106,7 @@ async fn main() {
         Ok(latencies) => {
             println!("benchmark succeeded");
             println!("=============== {:?} Result ================", args.bench);
-            latencies.print_results(args.size_bytes);
+            println!("{latencies}");
             println!("==========================================================");
         }
         Err(err) => {
@@ -163,7 +121,7 @@ macro_rules! benchmark {
         let test_file_path = generate_test_file($args)?;
         $setup($client, $args, &test_file_path).await?;
 
-        let mut latencies = Latencies::default();
+        let mut latencies = Latencies::new($args.size_bytes);
         for i in 0..$args.iterations {
             let start = time::Instant::now();
             $operation($client, $args, &test_file_path).await?;
