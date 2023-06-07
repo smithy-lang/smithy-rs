@@ -5,6 +5,7 @@
 #
 
 set -eux
+
 cd smithy-rs/examples
 make
 cargo b
