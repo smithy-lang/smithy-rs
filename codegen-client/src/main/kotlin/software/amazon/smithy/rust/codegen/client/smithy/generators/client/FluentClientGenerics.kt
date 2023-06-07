@@ -128,7 +128,7 @@ data class FlexibleClientGenerics(
                 #{OperationOutput},
                 #{OperationError},
                 #{RetryClassifier}
-            >
+            >,
             """,
             "client" to client,
             "Operation" to operation,

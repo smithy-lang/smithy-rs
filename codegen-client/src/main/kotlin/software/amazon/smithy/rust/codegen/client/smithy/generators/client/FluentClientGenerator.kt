@@ -334,11 +334,15 @@ class FluentClientGenerator(
                     return s.removeRange(0, n)
                 }
             }
+            val addThing = ""
+            if (generics.inst != generics.boundsWithoutWhereClause) {
+                addThing = ","
+            }
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
                 pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
-                #{send_bounds:W},
+                #{send_bounds:W}
                 #{boundsWithoutWhereClause:W}
                 {
                 let mut fluent_builder = client.$fnName();
