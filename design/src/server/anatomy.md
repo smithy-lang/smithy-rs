@@ -41,21 +41,24 @@ service PokemonService {
 
 Smithy Rust will use this model to produce the following API:
 
-```rust,ignore
+```rust
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonService};
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
-    /* implementation */
+    todo!()
 }
 
 // Use the service builder to create `PokemonService`.
 let pokemon_service = PokemonService::builder_without_plugins()
     // Pass the handler directly to the service builder...
     .get_pokemon_species(get_pokemon_species)
-    // ...or pass the layered handler.
-    .get_pokemon_species_operation(get_pokemon_species_op)
     /* other operation setters */
     .build()
+    # ; Result::<(), ()>::Ok(())
     .expect("failed to create an instance of the Pokémon service");
+# let pokemon_service: Result<PokemonService<aws_smithy_http_server::routing::Route>, _> = pokemon_service;
 ```
 
 ## Operations
@@ -64,7 +67,8 @@ A [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.htm
 
 We represent this in Rust using the [`OperationShape`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/trait.OperationShape.html) trait:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
 pub trait OperationShape {
     /// The name of the operation.
     const NAME: &'static str;
@@ -77,6 +81,13 @@ pub trait OperationShape {
     /// exists.
     type Error;
 }
+# use aws_smithy_http_server::operation::OperationShape as OpS;
+# impl<T: OpS> OperationShape for T {
+#   const NAME: &'static str = <T as OpS>::NAME;
+#   type Input = <T as OpS>::Input;
+#   type Output = <T as OpS>::Output;
+#   type Error = <T as OpS>::Error;
+# }
 ```
 
 For each Smithy Operation shape,
@@ -94,7 +105,11 @@ operation GetPokemonSpecies {
 
 the following implementation is generated
 
-```rust,ignore
+```rust
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::operation::OperationShape;
+# use pokemon_service_server_sdk::{input::*, output::*, error::*};
 /// Retrieve information about a Pokémon species.
 pub struct GetPokemonSpecies;
 
@@ -115,27 +130,28 @@ The following nomenclature will aid us in our survey. We describe a `tower::Serv
 
 The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely [`OperationShapeExt`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/trait.OperationShapeExt.html):
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::operation::*;
 /// An extension trait over [`OperationShape`].
 pub trait OperationShapeExt: OperationShape {
     /// Creates a new [`Service`] for well-formed [`Handler`]s.
-    fn from_handler<H>(handler: H) -> IntoService<Self, H>
+    fn from_handler<H, Exts>(handler: H) -> IntoService<Self, H>
     where
-        H: Handler<Self>,
-        Self: Sized,
-    {
-        Operation::from_handler(handler)
-    }
+        H: Handler<Self, Exts>,
+        Self: Sized;
 
     /// Creates a new [`Service`] for well-formed [`Service`](tower::Service)s.
-    fn from_service<S>(svc: S) -> Normalize<Self, S>
+    fn from_service<S, Exts>(svc: S) -> Normalize<Self, S>
     where
-        S: OperationService<Self>,
-        Self: Sized,
-    {
-        Operation::from_service(svc)
-    }
+        S: OperationService<Self, Exts>,
+        Self: Sized;
 }
+# use aws_smithy_http_server::operation::OperationShapeExt as OpS;
+# impl<T: OpS> OperationShapeExt for T {
+#   fn from_handler<H, Exts>(handler: H) -> IntoService<Self, H> where H: Handler<Self, Exts>, Self: Sized { <T as OpS>::from_handler(handler) }
+#   fn from_service<S, Exts>(svc: S) -> Normalize<Self, S> where S: OperationService<Self, Exts>, Self: Sized { <T as OpS>::from_service(svc) }
+# }
 ```
 
 Observe that there are two constructors provided: `from_handler` which takes a `H: Handler` and `from_service` which takes a `S: OperationService`. In both cases `Self` is passed as a parameter to the traits - this constrains `handler: H` and `svc: S` to the signature given by the implementation of `OperationShape` on `Self`.
@@ -147,12 +163,16 @@ The [`Handler`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_se
 
 The `from_handler` constructor is used in the following way:
 
-```rust,ignore
-async fn get_pokemon_service(input: GetPokemonServiceInput) -> Result<GetPokemonServiceOutput, GetPokemonServiceError> {
-    /* Handler logic */
+```rust
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::GetPokemonSpecies};
+# use aws_smithy_http_server::operation::*;
+async fn get_pokemon_service(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
+    todo!()
 }
 
-let operation = GetPokemonService::from_handler(get_pokemon_service);
+let operation = GetPokemonSpecies::from_handler(get_pokemon_service);
 ```
 
 Alternatively, `from_service` constructor:
@@ -390,6 +410,7 @@ You might find yourself wanting to apply _multiple_ plugins to your service.
 This can be accommodated via [`PluginPipeline`].
 
 ```rust
+# extern crate aws_smithy_http_server;
 use aws_smithy_http_server::plugin::PluginPipeline;
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
@@ -404,6 +425,7 @@ If you are vending a plugin, you can leverage `PluginPipeline` as an extension p
 For example:
 
 ```rust
+# extern crate aws_smithy_http_server;
 use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
@@ -431,7 +453,7 @@ At a high-level, the service builder takes as input a function for each Smithy O
 
 You can create an instance of a service builder by calling either `builder_without_plugins` or `builder_with_plugins` on the corresponding service struct.
 
-```rust
+```rust,ignore
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
@@ -449,7 +471,7 @@ pub struct PokemonServiceBuilder<Body, HttpPlugin, ModelPlugin> {
 
 The builder has two setter methods for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service):
 
-```rust
+```rust,ignore
     pub fn get_pokemon_species<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
     where
         HandlerType:Handler<GetPokemonSpecies, HandlerExtractors>,

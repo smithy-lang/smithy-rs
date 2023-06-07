@@ -151,16 +151,30 @@ let app = timeout_layer.layer(app);
 
 A _single_ layer can be applied to _all_ routes inside the `Router`. This exists as a method on the output of the service builder.
 
-```rust,ignore
-// Construct `TraceLayer`.
-let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
+```rust,no_run
+# extern crate tower;
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use tower::{util::service_fn, Layer};
+# use std::time::Duration;
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+# use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+# struct MetricsLayer;
+# impl MetricsLayer { pub fn new() -> Self { Self } }
+# impl<S> Layer<S> for MetricsLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+// Construct `MetricsLayer`.
+let metrics_layer = MetricsLayer::new();
 
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species(/* handler */)
+    .get_pokemon_species(handler)
     /* ... */
     .build()
+    .unwrap()
+    # ; let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
+    # app
     // Apply HTTP logging after routing.
-    .layer(&trace_layer);
+    .layer(&metrics_layer);
 ```
 
 Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
@@ -169,17 +183,29 @@ Note that requests pass through this middleware immediately _after_ routing succ
 
 A "HTTP layer" can be applied to specific operations.
 
-```rust,ignore
-// Construct `TraceLayer`.
-let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
+```rust,no_run
+# extern crate tower;
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use tower::{util::service_fn, Layer};
+# use std::time::Duration;
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+# use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+# struct LoggingLayer;
+# impl LoggingLayer { pub fn new() -> Self { Self } }
+# impl<S> Layer<S> for LoggingLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+// Construct `LoggingLayer`.
+let logging_plugin = LayerPlugin(LoggingLayer::new());
+let logging_plugin = filter_by_operation_name(logging_plugin, |name| name == GetPokemonSpecies::NAME);
+let http_plugins = PluginPipeline::new().push(logging_plugin);
 
-// Apply HTTP logging to only the `GetPokemonSpecies` operation.
-let layered_handler = GetPokemonSpecies::from_handler(/* handler */).layer(trace_layer);
-
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species_operation(layered_handler)
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+    .get_pokemon_species(handler)
     /* ... */
-    .build();
+    .build()
+    .unwrap();
+# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
 ```
 
 This middleware transforms the operations HTTP requests and responses.
@@ -188,35 +214,28 @@ This middleware transforms the operations HTTP requests and responses.
 
 A "model layer" can be applied to specific operations.
 
-```rust
+```rust,no_run
 # extern crate tower;
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
-# use aws_smithy_http_server::operation::OperationShapeExt;
+# use aws_smithy_http_server::{operation::*, plugin::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct BufferLayer;
 # impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
 # impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
-// A handler `Service`.
-let handler_svc = service_fn(handler);
-
 // Construct `BufferLayer`.
-let buffer_layer = BufferLayer::new(3);
+let buffer_plugin = LayerPlugin(BufferLayer::new(3));
+let buffer_plugin = filter_by_operation_name(buffer_plugin, |name| name != GetPokemonSpecies::NAME);
+let model_plugins = PluginPipeline::new().push(buffer_plugin);
 
-// Apply a 3 item buffer to `handler_svc`.
-let handler_svc = buffer_layer.layer(handler_svc);
-
-let layered_handler = GetPokemonSpecies::from_service(handler_svc);
-
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species_operation(layered_handler)
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
+    .get_pokemon_species(handler)
     /* ... */
     .build()
-    # ;Result::<(), ()>::Ok(())
     .unwrap();
-# let app: Result<PokemonService<aws_smithy_http_server::routing::Route>, _> = app;
+# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
 ```
 
 In contrast to [position C](#c-operation-specific-http-middleware), this middleware transforms the operations modelled inputs to modelled outputs.
