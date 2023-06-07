@@ -167,7 +167,7 @@ jobs:
         toolchain: ${{ env.rust_version }}
     - name: run benchmark
       id: run-compiletime-benchmark
-      run: bash tools/ci-scripts/compiletime-benchmark && cat /tmp/compiletime-benchmark.txt >> "$GITHUB_OUTPUT"
+      run: bash tools/ci-scripts/compiletime-benchmark && cat /tmp/compiletime-benchmark.md >> "$GITHUB_OUTPUT"
 
   post-bot-comment:
     needs:
