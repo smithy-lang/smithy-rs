@@ -61,9 +61,9 @@ pub async fn get_object_multipart(
             Result::<_, BoxError>::Ok(part.body)
         }));
     }
-    let mut file = tokio::fs::File::create(path).await?;
     for task in tasks {
         let mut body = task.await??.into_async_read();
+        let mut file = tokio::fs::File::create(path).await?;
         tokio::io::copy(&mut body, &mut file).await?;
     }
 
