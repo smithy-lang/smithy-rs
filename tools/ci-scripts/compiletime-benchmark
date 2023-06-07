@@ -18,12 +18,9 @@ function compile() {
         \time --format="%e seconds" bash -c "cargo build --all-features --release &>/dev/null" && cargo clean
 }
 
-cd smithy-rs
-
 ./gradlew :aws:sdk:assemble
 DIR=$PWD
 for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
-    echo "$DIR/aws/sdk/build/aws-sdk/sdk/$variable"
     if [[ $variable != *"aws-"* ]]; then
         echo "START" &>>/tmp/compiletime-benchmark.txt
         echo "$variable" &>>/tmp/compiletime-benchmark.txt

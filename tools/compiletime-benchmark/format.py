@@ -33,7 +33,6 @@ def main():
         markdown += row
         
     print(markdown)
-    # send markdown to somewhere
 
 
 main()
