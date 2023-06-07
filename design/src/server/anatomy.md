@@ -41,7 +41,7 @@ service PokemonService {
 
 Smithy Rust will use this model to produce the following API:
 
-```rust
+```rust,ignore
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     /* implementation */
@@ -67,7 +67,7 @@ A [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.htm
 
 We represent this in Rust using the [`OperationShape`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L8-L22) trait:
 
-```rust
+```rust,ignore
 pub trait OperationShape {
     /// The name of the operation.
     const NAME: &'static str;
@@ -97,7 +97,7 @@ operation GetPokemonSpecies {
 
 the following implementation is generated
 
-```rust
+```rust,ignore
 /// Retrieve information about a Pokémon species.
 pub struct GetPokemonSpecies;
 
@@ -118,7 +118,7 @@ The following nomenclature will aid us in our survey. We describe a `tower::Serv
 
 In contrast to the marker ZSTs above, the [`Operation<S, L>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L192-L198) structure holds the actual runtime behavior of an operation, which is specified, during construction, by the customer.
 
-```rust
+```rust,ignore
 /// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
 ///
 /// The `L` is held and applied lazily during [`Upgradable::upgrade`].
@@ -130,7 +130,7 @@ pub struct Operation<S, L = Identity> {
 
 The `S` here is a model service, this is specified during construction of the `Operation<S, L>`. The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely [`OperationShapeExt`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L24-L45):
 
-```rust
+```rust,ignore
 /// An extension trait over [`OperationShape`].
 pub trait OperationShapeExt: OperationShape {
     /// Creates a new [`Operation`] for well-formed [`Handler`]s.
@@ -162,7 +162,7 @@ The [`Handler`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693
 
 The `from_handler` constructor is used in the following way:
 
-```rust
+```rust,ignore
 async fn get_pokemon_service(input: GetPokemonServiceInput) -> Result<GetPokemonServiceOutput, GetPokemonServiceError> {
     /* Handler logic */
 }
@@ -172,7 +172,7 @@ let operation = GetPokemonService::from_handler(get_pokemon_service);
 
 Alternatively, `from_service` constructor:
 
-```rust
+```rust,ignore
 struct Svc {
     /* ... */
 }
@@ -192,7 +192,7 @@ To summarize, the `S`, in `Operation<S, L>`, is a _model service_ constructed fr
 
 Now, what about the `L` in `Operation<S, L>`? The `L` is a [`tower::Layer`](https://docs.rs/tower/latest/tower/layer/trait.Layer.html), or colloquially "middleware", that is applied to a _HTTP service_. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
 
-```rust
+```rust,ignore
 impl<S, L> Operation<S, L> {
     /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
     pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
@@ -208,7 +208,7 @@ where [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/uti
 
 A typical use of this might be:
 
-```rust
+```rust,ignore
 let operation = GetPokemonSpecies::from_handler(handler).layer(RequestBodyLimitLayer::new(500));
 ```
 
@@ -220,7 +220,7 @@ As mentioned, `L` is applied _after_ the `Operation<S, L>` has been "upgraded" t
 
 A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/request.rs#L156-L164) and [`IntoResponse`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
-```rust
+```rust,ignore
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
 /// [`Request`], in contrast to [`FromParts`].
 pub trait FromRequest<Protocol>: Sized {
@@ -240,7 +240,7 @@ pub trait IntoResponse<Protocol> {
 
 Note that both traits are parameterized by `Protocol`. These [protocols](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) exist as ZST marker structs:
 
-```rust
+```rust,ignore
 /// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
 pub struct RestJson1;
 
@@ -274,7 +274,7 @@ stateDiagram-v2
 
 This is formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L74-L82) HTTP service. The `tower::Service` implementation is approximately:
 
-```rust
+```rust,ignore
 impl<P, Op, S> Service<http::Request> for Upgrade<P, Op, S>
 where
     // `Op` is used to specify the operation shape
@@ -321,7 +321,7 @@ Note that the `S` and `L` are specified by logic written, in Rust, by the custom
 
 The procedure of taking a struct and transforming it into a HTTP service is formalized by the [`Upgradable`](https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L220-L225) trait:
 
-```rust
+```rust,ignore
 /// An interface to convert a representation of a Smithy operation into a [`Route`].
 pub trait Upgradable<Protocol, Operation> {
     /// Upgrade the representation of a Smithy operation to a [`Route`].
@@ -333,7 +333,7 @@ Why do we need a trait for this? Why not simply write an `upgrade` method on `Op
 
 Below we give an example of a ZST which can be provided to the builder, which also satisfies `Upgradable` and returns a `MissingFailure` `tower::Service`. This `MissingFailure` service simply returns a status code 500.
 
-```rust
+```rust,ignore
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 ///
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
@@ -358,7 +358,7 @@ Different protocols supported by Smithy enjoy different routing mechanisms, for 
 
 Despite their differences, all routing mechanisms satisfy a common interface. This is formalized using the `Router` trait:
 
-```rust
+```rust,ignore
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].
 pub trait Router {
     type Service;
@@ -373,7 +373,7 @@ which provides the ability to determine an inner HTTP service from a collection 
 
 Types which implement the `Router` trait are converted to a HTTP service via the `RoutingService` struct:
 
-```rust
+```rust,ignore
 /// A [`Service`] using a [`Router`] `R` to redirect messages to specific routes.
 ///
 /// The `Protocol` parameter is used to determine the serialization of errors.
@@ -432,7 +432,7 @@ You can create an instance of a service builder by calling either `builder_witho
 
 > Plugins? What plugins? Don't worry, they'll be covered in a [dedicated section](#plugins) later on!
 
-```rust
+```rust,ignore
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
@@ -449,7 +449,7 @@ pub struct PokemonServiceBuilder<Body, Plugin> {
 
 The builder has two setter methods for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service):
 
-```rust
+```rust,ignore
     /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
     ///
     /// This should be an async function satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
@@ -499,7 +499,7 @@ Both builder methods take care of:
 
 The final outcome, an instance of `PokemonService`, looks roughly like this:
 
-```rust
+```rust,ignore
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {
@@ -560,7 +560,7 @@ After the build is finalized:
 
 Although this provides a reasonably "complete" API, it can be cumbersome in some use cases. Suppose a customer wants to log the operation name when a request is routed to said operation. Writing a `Layer`, `NameLogger`, to log an operation name is simple, however with the current API the customer is forced to do the following
 
-```rust
+```rust,ignore
 let get_pokemon_species = GetPokemonSpecies::from_handler(/* handler */).layer(NameLogger::new("GetPokemonSpecies"));
 let get_storage = GetStorage::from_handler(/* handler */).layer(NameLogger::new("GetStorage"));
 let do_nothing = DoNothing::from_handler(/* handler */).layer(NameLogger::new("DoNothing"));
@@ -569,7 +569,7 @@ let do_nothing = DoNothing::from_handler(/* handler */).layer(NameLogger::new("D
 
 Note that `PokemonService::layer` cannot be used here because it applies a _single_ layer uniformly across all `Route`s stored in the `Router`.
 
-```rust
+```rust,ignore
 impl<S> PokemonService<S> {
     /// Applies a [`Layer`](tower::Layer) uniformly to all routes.
     pub fn layer<L>(self, layer: &L) -> PokemonService<L::Service>
@@ -587,7 +587,7 @@ The plugin system solves the general problem of modifying `Operation<S, L>` prio
 
 The central trait is [`Plugin`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L31-L41):
 
-```rust
+```rust,ignore
 /// A mapping from one [`Operation`] to another. Used to modify the behavior of
 /// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
 ///
@@ -603,7 +603,7 @@ pub trait Plugin<Protocol, Op, S, L> {
 
 The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [Upgrading a Model Service](#upgrading-a-model-service), is more accurately:
 
-```rust
+```rust,ignore
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
@@ -656,7 +656,7 @@ This constraint is in place to ensure that all handlers are upgraded using the s
 You might find yourself wanting to apply _multiple_ plugins to your service.
 This can be accommodated via [`PluginPipeline`].
 
-```rust
+```rust,ignore
 use aws_smithy_http_server::plugin::PluginPipeline;
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
@@ -670,7 +670,7 @@ In the example above, `LoggingPlugin` would run first, while `MetricsPlugin` is 
 If you are vending a plugin, you can leverage `PluginPipeline` as an extension point: you can add custom methods to it using an extension trait.
 For example:
 
-```rust
+```rust,ignore
 use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
@@ -695,7 +695,7 @@ let pipeline = PluginPipeline::new()
 
 An additional omitted detail is that we provide an "escape hatch" allowing `Handler`s and `OperationService`s to accept data that isn't modelled. In addition to accepting `Op::Input` they can accept additional arguments which implement the [`FromParts`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/request.rs#L114-L121) trait:
 
-```rust
+```rust,ignore
 use http::request::Parts;
 
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
@@ -711,7 +711,7 @@ pub trait FromParts<Protocol>: Sized {
 
 This differs from `FromRequest` trait, introduced in [Serialization and Deserialization](#serialization-and-deserialization), as it's synchronous and has non-consuming access to [`Parts`](https://docs.rs/http/0.2.8/http/request/struct.Parts.html), rather than the entire [Request](https://docs.rs/http/0.2.8/http/request/struct.Request.html).
 
-```rust
+```rust,ignore
 pub struct Parts {
     pub method: Method,
     pub uri: Uri,
@@ -724,7 +724,7 @@ pub struct Parts {
 
 This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware. An `Extension` struct implements `FromParts` to support this use case:
 
-```rust
+```rust,ignore
 /// Generic extension type stored in and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.

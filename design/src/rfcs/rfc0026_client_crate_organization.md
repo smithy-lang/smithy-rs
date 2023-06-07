@@ -163,7 +163,7 @@ or that are required for the most frequent config changes (such as setting crede
 or changing the region/endpoint).
 
 Previously, the following were exported in root:
-```
+```text
 .
 ├── AppName
 ├── Client
@@ -182,7 +182,7 @@ need to be at the top-level, and will be moved into `crate::config`. `ErrorExt` 
 `crate::error`, but `Error` will stay in the crate root so that customers that alias the SDK crate
 can easily reference it in their `Result`s:
 
-```rust
+```rust,ignore
 use aws_sdk_s3 as s3;
 
 fn some_function(/* ... */) -> Result<(), s3::Error> {

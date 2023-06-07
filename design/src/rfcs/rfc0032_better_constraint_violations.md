@@ -67,7 +67,7 @@ A constrained type has a fallible constructor by virtue of it implementing the
 [`TryFrom`] trait. The error type this constructor may yield is known as a
 **constraint violation**:
 
-```rust
+```rust,ignore
 impl TryFrom<UnconstrainedType> for ConstrainedType {
     type Error = ConstraintViolation;
 
@@ -90,7 +90,7 @@ structure A {
 
 Yields:
 
-```rust
+```rust,ignore
 /// See [`A`](crate::model::A).
 pub mod a {
     #[derive(std::cmp::PartialEq, std::fmt::Debug)]
@@ -107,7 +107,7 @@ variant.
 
 Constraint violations can occur in application code:
 
-```rust
+```rust,ignore
 use my_server_sdk::model
 
 let res = model::a::Builder::default().build(); // We forgot to set `member`.
@@ -148,7 +148,7 @@ string LengthString
 
 This produces:
 
-```rust
+```rust,ignore
 pub struct LengthMap(
     pub(crate) std::collections::HashMap<std::string::String, crate::model::LengthString>,
 );
@@ -206,7 +206,7 @@ the server framework uses upon deserialization. Observe how
 `LengthMapOfLengthStringsUnconstrained` is _fully unconstrained_ and how the
 `try_from` constructor can yield `ConstraintViolation::Value`.
 
-```rust
+```rust,ignore
 pub(crate) mod length_map_of_length_strings_unconstrained {
     #[derive(Debug, Clone)]
     pub(crate) struct LengthMapOfLengthStringsUnconstrained(
@@ -260,7 +260,7 @@ violation type into two types, which this RFC proposes:
 2. one for use by user application code, with `pub` visibility, named
    `ConstraintViolation`.
 
-```rust
+```rust,ignore
 pub mod length_map {
     pub enum ConstraintViolation {
         Length(usize),
@@ -362,7 +362,7 @@ string LengthPatternString
 
 Yields:
 
-```rust
+```rust,ignore
 pub struct LengthPatternString(pub(crate) std::string::String);
 
 impl LengthPatternString {
@@ -446,7 +446,7 @@ Let's consider a `ConstraintViolations` type (note the plural) that represents
 a collection of constraint violations that can occur _within user application
 code_. Roughly:
 
-```rust
+```rust,ignore
 pub ConstraintViolations<T>(pub(crate) Vec<T>);
 
 impl<T> IntoIterator<Item = T> for ConstraintViolations<T> { ... }
@@ -558,7 +558,7 @@ string LengthString
 The corresponding `ConstraintViolationException` Rust type for the `LengthMap`
 shape is:
 
-```rust
+```rust,ignore
 pub mod length_map {
     pub enum ConstraintViolation {
         Length(usize),
@@ -575,7 +575,7 @@ pub mod length_map {
 
 `ConstraintViolationExceptions` is just a container over this type:
 
-```rust
+```rust,ignore
 pub ConstraintViolationExceptions<T>(pub(crate) Vec<T>);
 
 impl<T> IntoIterator<Item = T> for ConstraintViolationExceptions<T> { ... }
@@ -604,8 +604,8 @@ string LengthPatternString
 
 This would yield:
 
-```rust
-pub ConstraintViolations<T>(pub(crate) Vec<T>);
+```rust,ignore
+pub struct ConstraintViolations<T>(pub(crate) Vec<T>);
 
 impl<T> IntoIterator<Item = T> for ConstraintViolations<T> { ... }
 
@@ -656,7 +656,7 @@ string LengthPatternString
 
 This would yield, as per the first substitution:
 
-```rust
+```rust,ignore
 pub mod length_pattern_string {
     pub struct ConstraintViolations {
         pub length: Option<constraint_violation::Length>,
@@ -693,7 +693,7 @@ map LengthMap {
 
 This gives us:
 
-```rust
+```rust,ignore
 pub mod length_map {
     pub struct ConstraintViolations {
         pub length: Option<constraint_violation::Length>,
@@ -752,7 +752,7 @@ structure A {
 And this time let's feature _both_ the resulting
 `ConstraintViolationExceptions` and `ConstraintViolations` types:
 
-```rust
+```rust,ignore
 pub mod a {
     pub struct ConstraintViolationExceptions {
         // All fields must be `Option`, despite the members being `@required`,
