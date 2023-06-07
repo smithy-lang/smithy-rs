@@ -35,7 +35,7 @@ interface FluentClientGenerics {
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics
 
-    /** Bounds without where clause. A clever hack to implement `fn send_with`. **/
+    /** bounds without where clause. If bounds does is not prefixed with `where\n`, then it gets the same value. **/
     val boundsWithoutWhereClause: Writable
 }
 
