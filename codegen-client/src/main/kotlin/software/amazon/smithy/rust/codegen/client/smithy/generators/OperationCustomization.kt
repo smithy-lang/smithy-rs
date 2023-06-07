@@ -101,10 +101,15 @@ sealed class OperationSection(name: String) : Section(name) {
      */
     data class AdditionalRuntimePluginConfig(
         override val customizations: List<OperationCustomization>,
-        val configBagName: String,
+        val newLayerName: String,
+        val operationShape: OperationShape,
+    ) : OperationSection("AdditionalConfig")
+
+    data class AdditionalInterceptors(
+        override val customizations: List<OperationCustomization>,
         val interceptorRegistrarName: String,
         val operationShape: OperationShape,
-    ) : OperationSection("AdditionalConfig") {
+    ) : OperationSection("AdditionalInterceptors") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
