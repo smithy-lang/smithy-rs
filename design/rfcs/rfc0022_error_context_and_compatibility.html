@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>RFC-0022: Error Context and Compatibility - AWS Rust SDK Design</title>
+        <title>RFC-0022: Error Context and Compatibility - Smithy Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html" class="active"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html" class="active"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -112,7 +112,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+                    <h1 class="menu-title">Smithy Rust</h1>
 
                     <div class="right-buttons">
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
@@ -167,9 +167,7 @@ for transfer over the wire. The Smithy protocols cover that aspect.</p>
 that this RFC will attempt to solve, and calls out what was done well, and what could be improved upon.</p>
 <h3 id="case-study-invalidfullurierror"><a class="header" href="#case-study-invalidfullurierror">Case study: <code>InvalidFullUriError</code></a></h3>
 <p>To start, let's examine <code>InvalidFullUriError</code> (doc comments omitted):</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Debug)]
+<pre><code class="language-rust ignore">#[derive(Debug)]
 #[non_exhaustive]
 pub enum InvalidFullUriError {
     #[non_exhaustive] InvalidUri(InvalidUri),
@@ -197,8 +195,7 @@ impl Error for InvalidFullUriError {
             _ =&gt; None,
         }
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>This error does a few things well:</p>
 <ol>
 <li>Using <code>#[non_exhaustive]</code> on the enum allows new errors to be added in the future.</li>
@@ -228,9 +225,7 @@ customer's application. <em>Note:</em> later in the RFC, I'll demonstrate why fi
 <h3 id="case-study-profileparseerror"><a class="header" href="#case-study-profileparseerror">Case study: <code>ProfileParseError</code></a></h3>
 <p>Next, let's look at a much simpler error. The <code>ProfileParseError</code> is focused purely on the parsing
 logic for the SDK config file:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Debug, Clone)]
+<pre><code class="language-rust ignore">#[derive(Debug, Clone)]
 pub struct ProfileParseError {
     location: Location,
     message: String,
@@ -246,8 +241,7 @@ impl Display for ProfileParseError {
     }
 }
 
-impl Error for ProfileParseError {}
-<span class="boring">}</span></code></pre></pre>
+impl Error for ProfileParseError {}</code></pre>
 <p>What this error does well:</p>
 <ul>
 <li>The members are private, so <code>#[non_exhaustive]</code> isn't even necessary</li>
@@ -267,9 +261,7 @@ adding an accessor method.</li>
 </ul>
 <h3 id="case-study-code-generated-client-errors"><a class="header" href="#case-study-code-generated-client-errors">Case study: code generated client errors</a></h3>
 <p>The SDK currently generates errors such as the following (from S3):</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[non_exhaustive]
+<pre><code class="language-rust ignore">#[non_exhaustive]
 pub enum Error {
     BucketAlreadyExists(BucketAlreadyExists),
     BucketAlreadyOwnedByYou(BucketAlreadyOwnedByYou),
@@ -281,8 +273,7 @@ pub enum Error {
     ObjectAlreadyInActiveTierError(ObjectAlreadyInActiveTierError),
     ObjectNotInActiveTierError(ObjectNotInActiveTierError),
     Unhandled(Box&lt;dyn Error + Send + Sync + 'static&gt;),
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Each error variant gets its own struct, which can hold error-specific contextual information.
 Except for the <code>Unhandled</code> variant, both the error enum and the details on each variant are extensible.
 The <code>Unhandled</code> variant should move the error source into a struct so that its type can be hidden.
@@ -291,7 +282,7 @@ Otherwise, the code generated errors are already aligned with the goals of this 
 <h3 id="stdioerror"><a class="header" href="#stdioerror"><code>std::io::Error</code></a></h3>
 <p>The standard library uses an <code>Error</code> struct with an accompanying <code>ErrorKind</code> enum
 for its IO error. Roughly:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(Debug)]
 #[non_exhaustive]
@@ -356,9 +347,7 @@ all errors in the public API for the Rust runtime crates and generated client cr
 <h3 id="actionable-error-pattern"><a class="header" href="#actionable-error-pattern">Actionable error pattern</a></h3>
 <p>Actionable errors are represented as enums. If an error variant has an error source or additional contextual
 information, it must use a separate context struct that is referenced via tuple in the enum. For example:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Good: new error types can be added in the future
+<pre><code class="language-rust ignore">// Good: new error types can be added in the future
 #[non_exhaustive]
 pub enum Error {
     // Good: This is exhaustive and uses a tuple, but its sole member is an extensible struct with private fields
@@ -412,15 +401,12 @@ impl VariantA {
     fn some_field(&amp;self) -&gt; u32 {
         self.some_field
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Error variants that contain a source must return it from the <code>Error::source</code> method.
 The <code>source</code> implementation <em>should not</em> use the catch all (<code>_</code>) match arm, as this makes it easy to miss
 adding a new error variant's source at a later date.</p>
 <p>The error <code>Display</code> implementation <em>must not</em> include the source in its output:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Good
+<pre><code class="language-rust ignore">// Good
 impl fmt::Display for Error {
     fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
         match self {
@@ -441,14 +427,11 @@ impl fmt::Display for Error {
             // ... and so on
         }
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h3 id="informative-error-pattern"><a class="header" href="#informative-error-pattern">Informative error pattern</a></h3>
 <p>Informative errors must be represented as structs. If error messaging changes based on an underlying cause, then a
 private error kind enum can be used internally for this purpose. For example:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Debug)]
+<pre><code class="language-rust ignore">#[derive(Debug)]
 pub struct InformativeError {
     some_additional_info: u32,
     source: AnotherError,
@@ -464,8 +447,7 @@ impl Error for InformativeError {
     fn source(&amp;self) -&gt; Option&lt;&amp;(dyn Error + 'static)&gt; {
         Some(&amp;self.source)
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>In general, informative errors should be referenced by variants in actionable errors since they cannot be converted
 to actionable errors at a later date without a breaking change. This is not a hard rule, however. Use your best judgement
 for the situation.</p>
@@ -473,14 +455,9 @@ for the situation.</p>
 <p>In code where errors are logged rather than returned to the customer, the full error source chain
 must be displayed. This will be made easy by placing a <code>DisplayErrorContext</code> struct in <code>aws-smithy-types</code> that
 is used as a wrapper to get the better error formatting:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>tracing::warn!(err = %DisplayErrorContext(err), &quot;some message&quot;);
-<span class="boring">}</span></code></pre></pre>
+<pre><code class="language-rust ignore">tracing::warn!(err = %DisplayErrorContext(err), &quot;some message&quot;);</code></pre>
 <p>This might be implemented as follows:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Debug)]
+<pre><code class="language-rust ignore">#[derive(Debug)]
 pub struct DisplayErrorContext&lt;E: Error&gt;(pub E);
 
 impl&lt;E: Error&gt; fmt::Display for DisplayErrorContext&lt;E&gt; {
@@ -498,8 +475,7 @@ fn write_err(f: &amp;mut fmt::Formatter&lt;'_&gt;, err: &amp;dyn Error) -&gt; fm
         write_err(f, source)?;
     }
     Ok(())
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>

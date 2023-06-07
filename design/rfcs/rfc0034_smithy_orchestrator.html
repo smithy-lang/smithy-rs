@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>RFC-0034: Smithy Orchestrator - AWS Rust SDK Design</title>
+        <title>RFC-0034: Smithy Orchestrator - Smithy Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html" class="active"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html" class="active"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -112,7 +112,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+                    <h1 class="menu-title">Smithy Rust</h1>
 
                     <div class="right-buttons">
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
@@ -203,9 +203,7 @@ applies-to: The smithy client</p>
 </ul>
 <h2 id="the-user-experience-if-this-rfc-is-implemented"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented">The user experience if this RFC is implemented</a></h2>
 <p>For many users, the changes described by this RFC will be invisible. Making a request with an orchestrator-based SDK client looks very similar to the way requests were made pre-RFC:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let sdk_config = aws_config::load_from_env().await;
+<pre><code class="language-rust ignore">let sdk_config = aws_config::load_from_env().await;
 let client = aws_sdk_s3::Client::new(&amp;sdk_config);
 let res = client.get_object()
     .bucket(&quot;a-bucket&quot;)
@@ -216,8 +214,7 @@ let res = client.get_object()
 match res {
     Ok(res) =&gt; println!(&quot;success: {:?}&quot;),
     Err(err) =&gt; eprintln!(&quot;failure: {:?}&quot;)
-};
-<span class="boring">}</span></code></pre></pre>
+};</code></pre>
 <p>Users may further configure clients and operations with <strong>runtime plugins</strong>, and they can modify requests and responses with <strong>interceptors</strong>. We'll examine each of these concepts in the following sections.</p>
 <h3 id="service-clients-and-operations-are-configured-with-runtime-plugins"><a class="header" href="#service-clients-and-operations-are-configured-with-runtime-plugins">Service clients and operations are configured with runtime plugins</a></h3>
 <blockquote>
@@ -259,9 +256,7 @@ marshaling the input message into a transport message.</li>
 </ol>
 <h3 id="interceptor-context"><a class="header" href="#interceptor-context">Interceptor context</a></h3>
 <p>As mentioned above, interceptors may read/write a context object that is shared between all interceptors:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct InterceptorContext&lt;ModReq, TxReq, TxRes, ModRes&gt; {
+<pre><code class="language-rust ignore">pub struct InterceptorContext&lt;ModReq, TxReq, TxRes, ModRes&gt; {
     // a.k.a. the input message
     modeled_request: ModReq,
     // a.k.a. the transport request message
@@ -272,27 +267,21 @@ marshaling the input message into a transport message.</li>
     tx_response: Option&lt;TxRes&gt;,
     // A type-keyed map
     properties: SharedPropertyBag,
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The optional request and response types in the interceptor context can only be accessed by interceptors that are run after specific points in the <em>request/response lifecycle</em>. Rather than go into depth in this RFC, I leave that to a future &quot;Interceptors RFC.&quot;</p>
 <h2 id="how-to-implement-this-rfc"><a class="header" href="#how-to-implement-this-rfc">How to implement this RFC</a></h2>
 <h3 id="integrating-with-the-orchestrator"><a class="header" href="#integrating-with-the-orchestrator">Integrating with the orchestrator</a></h3>
 <p>Imagine we have some sort of request signer. This signer doesn't refer to any orchestrator types. All it needs is a <code>HeaderMap</code> along with two strings, and will return a signature in string form.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>struct Signer;
+<pre><code class="language-rust ignore">struct Signer;
 
 impl Signer {
     fn sign(headers: &amp;http::HeaderMap, signing_name: &amp;str, signing_region: &amp;str) -&gt; String {
         todo!()
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Now imagine things from the orchestrator's point of view. It requires something that implements an <code>AuthOrchestrator</code> which will be responsible for resolving the correct auth
 scheme, identity, and signer for an operation, as well as signing the request</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub trait AuthOrchestrator&lt;Req&gt;: Send + Sync + Debug {
+<pre><code class="language-rust ignore">pub trait AuthOrchestrator&lt;Req&gt;: Send + Sync + Debug {
     fn auth_request(&amp;self, req: &amp;mut Req, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt;;
 }
 
@@ -310,12 +299,9 @@ fn invoke() {
     auth_orchestrator.auth_request(tx_req_mut, cfg)?;
 
     // code omitted for brevity
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The specific implementation of the <code>AuthOrchestrator</code> is what brings these two things together:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>struct Sigv4AuthOrchestrator;
+<pre><code class="language-rust ignore">struct Sigv4AuthOrchestrator;
 
 impl AuthOrchestrator for Sigv4AuthOrchestrator {
     fn auth_request(&amp;self, req: &amp;mut http::Request&lt;SdkBody&gt;, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt; {
@@ -333,17 +319,14 @@ impl AuthOrchestrator for Sigv4AuthOrchestrator {
 
         Ok(())
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>This intermediate code should be free from as much logic as possible. Whenever possible, we must maintain this encapsulation. Doing so will make the Orchestrator more flexible, maintainable, and understandable.</p>
 <h3 id="layered-configuration-stored-in-type-maps"><a class="header" href="#layered-configuration-stored-in-type-maps">Layered configuration, stored in type maps</a></h3>
 <blockquote>
 <p><strong>Type map</strong>: A data structure where stored values are keyed by their type. Hence, only one value can be stored for a given type.</p>
 <p><em>See <a href="https://docs.rs/typemap">typemap</a>, <a href="https://docs.rs/crate/type-map">type-map</a>, <a href="https://docs.rs/http/latest/http/struct.Extensions.html">http::Extensions</a>, and <a href="https://docs.rs/actix-http/latest/actix_http/struct.Extensions.html">actix_http::Extensions</a> for examples.</em></p>
 </blockquote>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span> let conf: ConfigBag = aws_config::from_env()
+<pre><code class="language-rust ignore"> let conf: ConfigBag = aws_config::from_env()
     // Configuration can be common to all smithy clients
     .with(RetryConfig::builder().disable_retries().build())
     // Or, protocol-specific
@@ -361,14 +344,11 @@ client.list_buckets()
     // Configuration can be set on operations as well as clients
     .with(HttpConfig::builder().conn(some_other_conn).build())
     .send()
-    .await;
-<span class="boring">}</span></code></pre></pre>
+    .await;</code></pre>
 <p>Setting configuration that will not be used wastes memory and can make debugging more difficult. Therefore, configuration defaults are only set when they're relevant. For example, if a smithy service doesn't support HTTP, then no HTTP client will be set.</p>
 <h4 id="what-is-layered-configuration"><a class="header" href="#what-is-layered-configuration">What is &quot;layered&quot; configuration?</a></h4>
 <p>Configuration has precedence. Configuration set on an operation will override configuration set on a client, and configuration set on a client will override default configuration. However, configuration with a higher precedence can also augment configuration with a lower precedence. For example:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let conf: ConfigBag = aws_config::from_env()
+<pre><code class="language-rust ignore">let conf: ConfigBag = aws_config::from_env()
     .with(
         SomeConfig::builder()
             .option_a(1)
@@ -390,8 +370,7 @@ client.list_buckets()
     )
     .build()
     .send()
-    .await;
-<span class="boring">}</span></code></pre></pre>
+    .await;</code></pre>
 <p>In the above example, when the <code>option_a</code>, <code>option_b</code>, <code>option_c</code>, values of <code>SomeConfig</code> are accessed, they'll return:</p>
 <ul>
 <li><code>option_a</code>: <code>0</code></li>
@@ -405,9 +384,7 @@ client.list_buckets()
 <li><code>Value::Inherit</code>: An explicitly unset value that will inherit a value from a lower layer.</li>
 </ul>
 <p>Builders are defined like this:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>struct SomeBuilder {
+<pre><code class="language-rust ignore">struct SomeBuilder {
     value: Value&lt;T&gt;,
 }
 
@@ -421,8 +398,7 @@ impl struct SomeBuilder&lt;T&gt; {
         self.value = value.into();
         self
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Because of <code>impl Into&lt;Value&lt;T&gt;&gt;</code>, users don't need to reference the <code>Value</code> enum unless they want to &quot;unset&quot; a value.</p>
 <h4 id="layer-separation-and-precedence"><a class="header" href="#layer-separation-and-precedence">Layer separation and precedence</a></h4>
 <p>Codegen defines default sets of interceptors and runtime plugins at various &quot;levels&quot;:</p>
@@ -448,9 +424,7 @@ impl struct SomeBuilder&lt;T&gt; {
 </ol>
 <h3 id="the-aws-smithy-orchestrator-crate"><a class="header" href="#the-aws-smithy-orchestrator-crate">The <code>aws-smithy-orchestrator</code> crate</a></h3>
 <p><em>I've omitted some of the error conversion to shorten this example and make it easier to understand. The real version will be messier.</em></p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>/// `In`: The input message e.g. `ListObjectsRequest`
+<pre><code class="language-rust ignore">/// `In`: The input message e.g. `ListObjectsRequest`
 /// `Req`: The transport request message e.g. `http::Request&lt;SmithyBody&gt;`
 /// `Res`: The transport response message e.g. `http::Response&lt;SmithyBody&gt;`
 /// `Out`: The output message. A `Result` containing either:
@@ -578,13 +552,10 @@ async fn make_an_attempt&lt;In, Req, Res, T&gt;(
     interceptors.read_after_deserialization(ctx, cfg)?;
 
     Ok(())
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h4 id="traits"><a class="header" href="#traits">Traits</a></h4>
 <p>At various points in the execution of <code>invoke</code>, trait objects are fetched from the <code>ConfigBag</code>. These are preliminary definitions of those traits:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub trait TraceProbe: Send + Sync + Debug {
+<pre><code class="language-rust ignore">pub trait TraceProbe: Send + Sync + Debug {
     fn dispatch_events(&amp;self, cfg: &amp;ConfigBag) -&gt; BoxFallibleFut&lt;()&gt;;
 }
 
@@ -611,8 +582,7 @@ pub trait AuthOrchestrator&lt;Req&gt;: Send + Sync + Debug {
 pub trait EndpointOrchestrator&lt;Req&gt;: Send + Sync + Debug {
     fn resolve_and_apply_endpoint(&amp;self, req: &amp;mut Req, cfg: &amp;ConfigBag) -&gt; Result&lt;(), BoxError&gt;;
     fn resolve_auth_schemes(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;, BoxError&gt;;
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h2 id="faq"><a class="header" href="#faq">F.A.Q.</a></h2>
 <ul>
 <li>The orchestrator is a large and complex feature, with many moving parts. How can we ensure that multiple people can contribute in parallel?

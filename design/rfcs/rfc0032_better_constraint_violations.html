@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>RFC-0032: Better Constraint Violations - AWS Rust SDK Design</title>
+        <title>RFC-0032: Better Constraint Violations - Smithy Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html" class="active"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html" class="active"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -112,7 +112,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+                    <h1 class="menu-title">Smithy Rust</h1>
 
                     <div class="right-buttons">
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
@@ -197,16 +197,13 @@ are wrapper <a href="https://doc.rust-lang.org/rust-by-example/generics/new_type
 <p>A constrained type has a fallible constructor by virtue of it implementing the
 <a href="https://doc.rust-lang.org/std/convert/trait.TryFrom.html"><code>TryFrom</code></a> trait. The error type this constructor may yield is known as a
 <strong>constraint violation</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>impl TryFrom&lt;UnconstrainedType&gt; for ConstrainedType {
+<pre><code class="language-rust ignore">impl TryFrom&lt;UnconstrainedType&gt; for ConstrainedType {
     type Error = ConstraintViolation;
 
     fn try_from(value: UnconstrainedType) -&gt; Result&lt;Self, Self::Error&gt; {
         ...
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The <code>ConstraintViolation</code> type is a Rust <code>enum</code> with one variant per way
 &quot;constraining&quot; the input value may fail. So, for example, the following Smithy
 model:</p>
@@ -216,9 +213,7 @@ model:</p>
 }
 </code></pre>
 <p>Yields:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>/// See [`A`](crate::model::A).
+<pre><code class="language-rust ignore">/// See [`A`](crate::model::A).
 pub mod a {
     #[derive(std::cmp::PartialEq, std::fmt::Debug)]
     /// Holds one variant for each of the ways the builder can fail.
@@ -226,14 +221,11 @@ pub mod a {
         /// `member` was not provided but it is required when building `A`.
         MissingMember,
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Constraint violations are always Rust <code>enum</code>s, even if they only have one
 variant.</p>
 <p>Constraint violations can occur in application code:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use my_server_sdk::model
+<pre><code class="language-rust ignore">use my_server_sdk::model
 
 let res = model::a::Builder::default().build(); // We forgot to set `member`.
 
@@ -242,8 +234,7 @@ match res {
     Err(e) =&gt; {
         assert_eq!(model::a::ConstraintViolation::MissingMember, e);
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h3 id="problem"><a class="header" href="#problem">Problem</a></h3>
 <p>Currently, the constraint violation types we generate are used by <em>both</em>:</p>
 <ol>
@@ -264,9 +255,7 @@ map LengthMap {
 string LengthString
 </code></pre>
 <p>This produces:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct LengthMap(
+<pre><code class="language-rust ignore">pub struct LengthMap(
     pub(crate) std::collections::HashMap&lt;std::string::String, crate::model::LengthString&gt;,
 );
 
@@ -302,8 +291,7 @@ pub mod length_map {
         ),
     }
     ...
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Observe how the <code>ConstraintViolation::Value</code> variant is never constructed.
 Indeed, this variant is impossible to be constructed <em>in application code</em>: a
 user has to provide a map whose values are already constrained <code>LengthString</code>s
@@ -319,9 +307,7 @@ builders</a> all the way down.</p>
 the server framework uses upon deserialization. Observe how
 <code>LengthMapOfLengthStringsUnconstrained</code> is <em>fully unconstrained</em> and how the
 <code>try_from</code> constructor can yield <code>ConstraintViolation::Value</code>.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub(crate) mod length_map_of_length_strings_unconstrained {
+<pre><code class="language-rust ignore">pub(crate) mod length_map_of_length_strings_unconstrained {
     #[derive(Debug, Clone)]
     pub(crate) struct LengthMapOfLengthStringsUnconstrained(
         pub(crate) std::collections::HashMap&lt;std::string::String, std::string::String&gt;,
@@ -348,8 +334,7 @@ the server framework uses upon deserialization. Observe how
             Self::try_from(hm)
         }
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>In conclusion, the user is currently exposed to an internal detail of how the
 framework operates that has no bearing on their application code. They
 shouldn't be exposed to impossible constraint violation variants in their Rust
@@ -367,9 +352,7 @@ violation type into two types, which this RFC proposes:</p>
 <li>one for use by user application code, with <code>pub</code> visibility, named
 <code>ConstraintViolation</code>.</li>
 </ol>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub mod length_map {
+<pre><code class="language-rust ignore">pub mod length_map {
     pub enum ConstraintViolation {
         Length(usize),
     }
@@ -380,8 +363,7 @@ violation type into two types, which this RFC proposes:</p>
             crate::model::length_string::ConstraintViolation,
         ),
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
 present</a>
 in the case of builder types when <code>publicConstrainedTypes</code> is set to <code>false</code>:</p>
@@ -453,9 +435,7 @@ example, the following shape:</p>
 string LengthPatternString
 </code></pre>
 <p>Yields:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct LengthPatternString(pub(crate) std::string::String);
+<pre><code class="language-rust ignore">pub struct LengthPatternString(pub(crate) std::string::String);
 
 impl LengthPatternString {
     fn check_length(
@@ -503,8 +483,7 @@ impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
 
         Ok(Self(value))
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Observe how a failure to adhere to the <code>@length</code> trait will short-circuit the
 evaluation of the constructor, when the value could technically also not adhere
 with the <code>@pattern</code> trait.</p>
@@ -531,9 +510,7 @@ are enforced by feeding the entire value to the <code>TryFrom</code> constructor
 <p>Let's consider a <code>ConstraintViolations</code> type (note the plural) that represents
 a collection of constraint violations that can occur <em>within user application
 code</em>. Roughly:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+<pre><code class="language-rust ignore">pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
 
 impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
 
@@ -544,8 +521,7 @@ impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
         // Check constraints and collect violations.
         ...
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <ul>
 <li>The main reason for wrapping a vector in <code>ConstraintViolations</code> as opposed to
 directly returning the vector is forwards-compatibility: we may want to
@@ -631,9 +607,7 @@ string LengthString
 </code></pre>
 <p>The corresponding <code>ConstraintViolationException</code> Rust type for the <code>LengthMap</code>
 shape is:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub mod length_map {
+<pre><code class="language-rust ignore">pub mod length_map {
     pub enum ConstraintViolation {
         Length(usize),
     }
@@ -644,15 +618,11 @@ shape is:</p>
             crate::model::length_string::ConstraintViolationException,
         ),
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p><code>ConstraintViolationExceptions</code> is just a container over this type:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub ConstraintViolationExceptions&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+<pre><code class="language-rust ignore">pub ConstraintViolationExceptions&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
 
-impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolationExceptions&lt;T&gt; { ... }
-<span class="boring">}</span></code></pre></pre>
+impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolationExceptions&lt;T&gt; { ... }</code></pre>
 <p>There might be multiple map values that fail to adhere to the constraints in
 <code>LengthString</code>, which would make the iterator yield multiple
 <code>length_map::ConstraintViolationException::Value</code>s; however, at most one
@@ -670,9 +640,7 @@ also afflicts <code>ConstraintViolations</code></strong>.</p>
 string LengthPatternString
 </code></pre>
 <p>This would yield:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
+<pre><code class="language-rust ignore">pub struct ConstraintViolations&lt;T&gt;(pub(crate) Vec&lt;T&gt;);
 
 impl&lt;T&gt; IntoIterator&lt;Item = T&gt; for ConstraintViolations&lt;T&gt; { ... }
 
@@ -690,8 +658,7 @@ impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
         // Check constraints and collect violations.
         ...
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Observe how the iterator of an instance of
 <code>ConstraintViolations&lt;crate::model::length_pattern_string::ConstraintViolation&gt;</code>,
 may, a priori, yield e.g. the
@@ -719,9 +686,7 @@ constraint violations of type <code>Members</code>.</li>
 string LengthPatternString
 </code></pre>
 <p>This would yield, as per the first substitution:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub mod length_pattern_string {
+<pre><code class="language-rust ignore">pub mod length_pattern_string {
     pub struct ConstraintViolations {
         pub length: Option&lt;constraint_violation::Length&gt;,
         pub pattern: Option&lt;constraint_violation::Pattern&gt;,
@@ -742,8 +707,7 @@ impl std::convert::TryFrom&lt;std::string::String&gt; for LengthPatternString {
         // Check constraints and collect violations.
         ...
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>We now expand the model to highlight the second step of the algorithm:</p>
 <pre><code class="language-smithy">@length(min: 1, max: 69)
 map LengthMap {
@@ -752,9 +716,7 @@ map LengthMap {
 }
 </code></pre>
 <p>This gives us:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub mod length_map {
+<pre><code class="language-rust ignore">pub mod length_map {
     pub struct ConstraintViolations {
         pub length: Option&lt;constraint_violation::Length&gt;,
 
@@ -789,8 +751,7 @@ map LengthMap {
 
         impl IntoIterator&lt;Item = Member&gt; for Members { ... }
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <hr />
 <p>The above examples have featured the tight API design with
 <code>ConstraintViolation</code>s. Of course, we will apply the same design in the case of
@@ -806,9 +767,7 @@ model yet again with a structure shape:</p>
 </code></pre>
 <p>And this time let's feature <em>both</em> the resulting
 <code>ConstraintViolationExceptions</code> and <code>ConstraintViolations</code> types:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub mod a {
+<pre><code class="language-rust ignore">pub mod a {
     pub struct ConstraintViolationExceptions {
         // All fields must be `Option`, despite the members being `@required`,
         // since no violations for their values might have occurred.
@@ -832,8 +791,7 @@ model yet again with a structure shape:</p>
         pub struct MissingMember;
         pub struct MissingLengthMap;
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>As can be intuited, the only differences are that:</p>
 <ul>
 <li><code>ConstraintViolationExceptions</code> hold transitive violations while

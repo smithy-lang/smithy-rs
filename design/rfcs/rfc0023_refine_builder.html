@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>RFC-0023: Evolving the new service builder API - AWS Rust SDK Design</title>
+        <title>RFC-0023: Evolving the new service builder API - Smithy Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">7.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html" class="active"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html" class="active"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -112,7 +112,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+                    <h1 class="menu-title">Smithy Rust</h1>
 
                     <div class="right-buttons">
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
@@ -178,7 +178,7 @@ We rely on eagerly upgrading the registered handlers and operations to <code>Rou
 <h2 id="handling-missing-operations"><a class="header" href="#handling-missing-operations">Handling missing operations</a></h2>
 <p>Let's start by reviewing the API proposed in <a href="rfc0020_service_builder.html">RFC 20</a>. We will use the <a href="https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy">Pokemon service</a> as our driving example throughout the RFC.
 This is what the startup code looks like:</p>
-<pre><pre class="playground"><code class="language-rust">#[tokio::main]
+<pre><code class="language-rust ignore">#[tokio::main]
 pub async fn main() {
     // [...]
     let app = PokemonService::builder()
@@ -198,7 +198,7 @@ pub async fn main() {
     let bind: SocketAddr = /* */;
     let server = hyper::Server::bind(&amp;bind).serve(app.into_make_service());
     // [...]
-}</code></pre></pre>
+}</code></pre>
 <p>The builder is infallible: we are able to verify at compile-time that all handlers have been provided using the <a href="https://www.greyblake.com/blog/builder-with-typestate-in-rust/">typestate builder pattern</a>.</p>
 <h3 id="compiler-errors-cannot-be-tuned"><a class="header" href="#compiler-errors-cannot-be-tuned">Compiler errors cannot be tuned</a></h3>
 <p>What happens if we stray away from the happy path? We might forget, for example, to add the <code>check_health</code> handler.
@@ -236,9 +236,7 @@ Nonetheless, it is unlikely to cause any end-user impact even if it manages to e
 <h3 id="providing-clear-feedback"><a class="header" href="#providing-clear-feedback">Providing clear feedback</a></h3>
 <p>Moving from a compile-time error to a runtime error does not require extensive refactoring.
 The definition of <code>PokemonServiceBuilder</code> goes from:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct PokemonServiceBuilder&lt;
+<pre><code class="language-rust ignore">pub struct PokemonServiceBuilder&lt;
     Op1,
     Op2,
     Op3,
@@ -262,12 +260,9 @@ The definition of <code>PokemonServiceBuilder</code> goes from:</p>
     #[allow(unused_parens)]
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>to:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct PokemonServiceBuilder&lt;
+<pre><code class="language-rust ignore">pub struct PokemonServiceBuilder&lt;
     Op1,
     Op2,
     Op3,
@@ -291,21 +286,17 @@ The definition of <code>PokemonServiceBuilder</code> goes from:</p>
     #[allow(unused_parens)]
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>All operation fields are now <code>Option</code>-wrapped.
 We introduce a new <code>MissingOperationsError</code> error to hold the names of the missing operations and their respective setter methods:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Debug)]
+<pre><code class="language-rust ignore">#[derive(Debug)]
 pub struct MissingOperationsError {
     service_name: &amp;'static str,
     operation_names2setter_methods: HashMap&lt;&amp;'static str, &amp;'static str&gt;,
 }
 
 impl Display for MissingOperationsError { /* */ }
-impl std::error::Error for MissingOperationsError {}
-<span class="boring">}</span></code></pre></pre>
+impl std::error::Error for MissingOperationsError {}</code></pre>
 <p>which is then used in <code>build</code> as error type <em>(not shown here for brevity)</em>.
 We can now try again to stray away from the happy path by forgetting to register a handler for the <code>CheckHealth</code> operation.
 The code compiles just fine this time, but the application fails when launched via <code>cargo run</code>:</p>
@@ -321,9 +312,7 @@ Understanding the error requires no familiarity with <code>smithy-rs</code>' int
 We can also provide actionable suggestions: Rust beginners should be able to easily process the information, rectify the mistake and move on quickly.</p>
 <h2 id="simplifying-pokemonservicebuilders-signature"><a class="header" href="#simplifying-pokemonservicebuilders-signature">Simplifying <code>PokemonServiceBuilder</code>'s signature</a></h2>
 <p>Let's take a second look at the (updated) definition of <code>PokemonServiceBuilder</code>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct PokemonServiceBuilder&lt;
+<pre><code class="language-rust ignore">pub struct PokemonServiceBuilder&lt;
     Op1,
     Op2,
     Op3,
@@ -347,8 +336,7 @@ We can also provide actionable suggestions: Rust beginners should be able to eas
     #[allow(unused_parens)]
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>We have 13 generic parameters:</p>
 <ul>
 <li>1 for plugins (<code>Pl</code>);</li>
@@ -366,16 +354,13 @@ We'll look at the impact of those generic parameters on two scenarios:</p>
 <p>Conditional statements appear quite often in the startup logic for an application (or in the setup code for its integration tests).
 Let's consider a toy example: if a <code>check_database</code> flag is set to <code>true</code>, we want to register a different <code>check_health</code> handler - one that takes care of pinging the database to make sure it's up.</p>
 <p>The &quot;obvious&quot; solution would look somewhat like this:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let app = if check_database {
     app.check_health(check_health)
 } else {
     app.check_health(check_health_with_database)
 };
-app.build();
-<span class="boring">}</span></code></pre></pre>
+app.build();</code></pre>
 <p>The compiler is not pleased:</p>
 <pre><code class="language-text">error[E0308]: `if` and `else` have incompatible types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:39:9
@@ -409,19 +394,14 @@ app.build();
 <li>Embed the configuration parameter (<code>check_database</code>) in the application state, retrieve it inside <code>check_health</code> and perform the branching there.</li>
 </ol>
 <p>I can't easily see a way to accomplish 1) using the current API. Pursuing 2) is straight-forward with a single conditional:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let app = if check_database {
     app.check_health(check_health).build()
 } else {
     app.check_health(check_health_with_database).build()
-};
-<span class="boring">}</span></code></pre></pre>
+};</code></pre>
 <p>It becomes more cumbersome when we have more than a single conditional:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let include_cpu_statics: bool = /* */;
 match (check_database, include_cpu_statics) {
     (true, true) =&gt; app
@@ -440,12 +420,9 @@ match (check_database, include_cpu_statics) {
         .check_health(check_health)
         .get_server_statistics(get_server_statistics)
         .build(),
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>A lot of repetition compared to the code for the &quot;obvious&quot; approach:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let include_cpu_statics: bool = /* */;
 let app = if check_database {
     app.check_health(check_health)
@@ -457,8 +434,7 @@ let app = if include_cpu_statistics {
 } else {
     app.get_server_statistics(get_server_statistics)
 };
-app.build();
-<span class="boring">}</span></code></pre></pre>
+app.build();</code></pre>
 <p>The obvious approach becomes viable if we stop embedding the handler function type in <code>PokemonServiceBuilder</code>'s overall type.</p>
 <h3 id="refactoring-into-smaller-functions---prepare-for-some-type-juggling"><a class="header" href="#refactoring-into-smaller-functions---prepare-for-some-type-juggling">Refactoring into smaller functions -&gt; Prepare for some type juggling!</a></h3>
 <p>Services with a high number of routes can lead to fairly long startup routines.
@@ -466,12 +442,9 @@ Developers might be tempted to break down the startup routine into smaller funct
 <p>What does the signature of those smaller functions look like?
 The service builder must be one of the arguments if we want to register handlers. We must also return it to allow the orchestrating function to finish the application setup (our setters take ownership of <code>self</code>).</p>
 <p>A first sketch:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup(builder: PokemonServiceBuilder) -&gt; PokemonServiceBuilder {
+<pre><code class="language-rust ignore">fn partial_setup(builder: PokemonServiceBuilder) -&gt; PokemonServiceBuilder {
     /* */
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The compiler demands to see those generic parameters in the signature:</p>
 <pre><code class="language-text">error[E0107]: missing generics for struct `PokemonServiceBuilder`
   --&gt; pokemon-service/src/bin/pokemon-service.rs:28:27
@@ -490,14 +463,11 @@ error[E0107]: missing generics for struct `PokemonServiceBuilder`
 note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op3`, `Op4`, `Op5`, `Op6`
 </code></pre>
 <p>We could try to nudge the compiler into inferring them:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup(
+<pre><code class="language-rust ignore">fn partial_setup(
     builder: PokemonServiceBuilder&lt;_, _, _, _, _, _&gt;,
 ) -&gt; PokemonServiceBuilder&lt;_, _, _, _, _, _&gt; {
     /* */
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>but that won't fly either:</p>
 <pre><code class="language-text">error[E0121]: the placeholder `_` is not allowed within types on item signatures for return types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:30:28
@@ -512,24 +482,18 @@ note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op
    |                            not allowed in type signatures
 </code></pre>
 <p>We must type it all out:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;,
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt; {
     builder
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>That compiles, at last.
 Let's try to register an operation handler now:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;,
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt; {
     builder.get_server_statistics(get_server_statistics)
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>That looks innocent, but it doesn't fly:</p>
 <pre><code class="language-text">error[E0308]: mismatched types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:31:5
@@ -551,9 +515,7 @@ Fixing this error requires some non-trivial type gymnastic - I gave up after try
 <p>The previous two examples should have convinced you that the 2N+1 generic parameters on <code>PokemonServiceBuilder</code> harm the ergonomics of our API.
 Can we get rid of them?</p>
 <p>Yes! Let's look at one possible approach:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct PokemonServiceBuilder&lt;Body, Plugin&gt; {
+<pre><code class="language-rust ignore">pub struct PokemonServiceBuilder&lt;Body, Plugin&gt; {
     check_health: Option&lt;Route&lt;Body&gt;&gt;,
     do_nothing: Option&lt;Route&lt;Body&gt;&gt;,
     get_pokemon_species: Option&lt;Route&lt;Body&gt;&gt;,
@@ -561,13 +523,10 @@ Can we get rid of them?</p>
     capture_pokemon: Option&lt;Route&lt;Body&gt;&gt;,
     get_storage: Option&lt;Route&lt;Body&gt;&gt;,
     plugin: Plugin,
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>We no longer store the raw handlers inside <code>PokemonServiceBuilder</code>.
 We eagerly upgrade the operation handlers to a <code>Route</code> instance when they are registered with the builder.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>impl&lt;Body, Plugin&gt; PokemonServiceBuilder&lt;Body, Plugin&gt; {
+<pre><code class="language-rust ignore">impl&lt;Body, Plugin&gt; PokemonServiceBuilder&lt;Body, Plugin&gt; {
     pub fn get_pokemon_species&lt;Handler, Extensions&gt;(mut self, handler: Handler) -&gt; Self
     /* Complex trait bounds */
     {
@@ -577,13 +536,10 @@ We eagerly upgrade the operation handlers to a <code>Route</code> instance when 
     }
 
     /* other setters and methods */
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The existing API performs the upgrade when <code>build</code> is called, forcing <code>PokemonServiceBuilder</code> to store the raw handlers and keep two generic parameters around (<code>OpX</code> and <code>ExtsX</code>) for each operation.
 The proposed API requires plugins to be specified upfront, when creating an instance of the builder. They cannot be modified after a <code>PokemonServiceBuilder</code> instance has been built:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>impl PokemonService&lt;()&gt; {
+<pre><code class="language-rust ignore">impl PokemonService&lt;()&gt; {
     /// Constructs a builder for [`PokemonService`].
     pub fn builder&lt;Body, Plugin&gt;(plugin: Plugin) -&gt; PokemonServiceBuilder&lt;Body, Plugin&gt; {
         PokemonServiceBuilder {
@@ -596,24 +552,20 @@ The proposed API requires plugins to be specified upfront, when creating an inst
             plugin,
         }
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>This constraint guarantees that all operation handlers are upgraded to a <code>Route</code> using the same set of plugins.</p>
 <p>Having to specify all plugins upfront is unlikely to have a negative impact on developers currently using <code>smithy-rs</code>.
 We have seen how cumbersome it is to break the startup logic into different functions using the current service builder API. Developers are most likely specifying all plugins and routes in the same function even if the current API allows them to intersperse route registrations and plugin registrations: they would simply have to re-order their registration statements to adopt the API proposed in this RFC.</p>
 <h3 id="alternatives-allow-new-plugins-to-be-registered-after-builder-creation"><a class="header" href="#alternatives-allow-new-plugins-to-be-registered-after-builder-creation">Alternatives: allow new plugins to be registered after builder creation</a></h3>
 <p>The new design prohibits the following invocation style:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let plugin = ColorPlugin::new();
+<pre><code class="language-rust ignore">let plugin = ColorPlugin::new();
 PokemonService::builder(plugin)
     // [...]
     .get_pokemon_species(get_pokemon_species)
     // Add PrintPlugin
     .print()
     .get_storage(get_storage)
-    .build()
-<span class="boring">}</span></code></pre></pre>
+    .build()</code></pre>
 <p>We could choose to remove this limitation and allow handlers to be upgraded using a different set of plugins depending on where they were registered.
 In the snippet above, for example, we would have:</p>
 <ul>
@@ -623,21 +575,16 @@ In the snippet above, for example, we would have:</p>
 <p>There are no technical obstacles preventing us from implementing this API, but I believe it could easily lead to confusion and runtime surprises due to a mismatch between what the developer might expect <code>PrintPlugin</code> to apply to (all handlers) and what it actually applies to (handlers registered after <code>.print()</code>).</p>
 <p>We can provide developers with other mechanisms to register plugins for a single operation or a subset of operations without introducing ambiguity.
 For attaching additional plugins to a single operation, we could introduce a blanket <code>Pluggable</code> implementation for all operations in <code>aws-smithy-http-server</code>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>impl&lt;P, Op, Pl, S, L&gt; Pluggable&lt;Pl&gt; for Operation&lt;S, L&gt; where Pl: Plugin&lt;P, Op, S, L&gt; {
+<pre><code class="language-rust ignore">impl&lt;P, Op, Pl, S, L&gt; Pluggable&lt;Pl&gt; for Operation&lt;S, L&gt; where Pl: Plugin&lt;P, Op, S, L&gt; {
     type Output = Operation&lt;Pl::Service, Pl::Layer&gt;;
 
     fn apply(self, new_plugin: Pl) -&gt; Self::Output {
        new_plugin.map(self)
    }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>which would allow developers to invoke <code>op.apply(MyPlugin)</code> or call extensions methods such as <code>op.print()</code> where <code>op</code> is an <code>Operation</code>.
 For attaching additional plugins to a subgroup of operations, instead, we could introduce nested builders:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let initial_plugins = ColorPlugin;
+<pre><code class="language-rust ignore">let initial_plugins = ColorPlugin;
 let mut builder = PokemonService::builder(initial_plugins)
     .get_pokemon_species(get_pokemon_species);
 let additional_plugins = PrintPlugin;
@@ -648,8 +595,7 @@ let nested_builder = builder.scoped(additional_plugins)
     // Register all the routes on the scoped builder with the parent builder.
     // API names are definitely provisional and bikesheddable.
     .attach(builder);
-let app = builder.build();
-<span class="boring">}</span></code></pre></pre>
+let app = builder.build();</code></pre>
 <p>Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.</p>
 <h3 id="alternatives-lazy-and-eager-on-demand-type-erasure"><a class="header" href="#alternatives-lazy-and-eager-on-demand-type-erasure">Alternatives: lazy and eager-on-demand type erasure</a></h3>
 <p>A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
@@ -670,17 +616,14 @@ In practice, we are going to assume that:</p>
 <p>We are going to explore both approaches under the assumption that we want to preserve compile-time verification for missing handlers. If we are willing to abandon compile-time verification, we get better ergonomics since all <code>OpX</code> and <code>ExtsX</code> generic parameters can be erased (i.e. we no longer need to worry about <code>MissingOperation</code>).</p>
 <h4 id="on-boxdyn-upgradableprotocol-operation-exts-body-plugin"><a class="header" href="#on-boxdyn-upgradableprotocol-operation-exts-body-plugin">On <code>Box&lt;dyn Upgradable&lt;Protocol, Operation, Exts, Body, Plugin&gt;&gt;</code></a></h4>
 <p>This is the current definition of the <code>Upgradable</code> trait:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
+<pre><code class="language-rust ignore">/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
 pub trait Upgradable&lt;Protocol, Operation, Exts, Body, Plugin&gt; {
     type Service: Service&lt;http::Request&lt;Body&gt;, Response = http::Response&lt;BoxBody&gt;&gt;;
 
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
     fn upgrade(self, plugin: &amp;Plugin) -&gt; Self::Service;
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>In order to perform type erasure, we need to determine:</p>
 <ul>
 <li>what type parameters we are going to pass as generic arguments to <code>Upgradable</code>;</li>
@@ -696,85 +639,62 @@ pub trait Upgradable&lt;Protocol, Operation, Exts, Body, Plugin&gt; {
 <p>The above leaves us with two unconstrained type parameters, <code>Operation</code> and <code>Exts</code>, for each operation. Those unconstrained type parameters leak into the type signature of the service builder itself. We therefore find ourselves having, again, 2N+2 type parameters.</p>
 <h4 id="branching"><a class="header" href="#branching">Branching</a></h4>
 <p>Going back to the branching example:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let builder = if check_database {
     builder.check_health(check_health)
 } else {
     builder.check_health(check_health_with_database)
 };
-let app = builder.build();
-<span class="boring">}</span></code></pre></pre>
+let app = builder.build();</code></pre>
 <p>In approach 1), we could leverage the <code>.boxed()</code> method to convert the actual <code>OpX</code> type into a <code>Box&lt;dyn Upgradable&gt;</code>, thus ensuring that both branches return the same type:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let builder = if check_database {
     builder.check_health_operation(Operation::from_handler(check_health).boxed())
 } else {
     builder.check_health_operation(Operation::from_handler(check_health_with_database).boxed())
 };
-let app = builder.build();
-<span class="boring">}</span></code></pre></pre>
+let app = builder.build();</code></pre>
 <p>The same cannot be done when conditionally registering a route, because on the <code>else</code> branch we cannot convert <code>MissingOperation</code> into a <code>Box&lt;dyn Upgradable&gt;</code> since <code>MissingOperation</code> doesn't implement <code>Upgradable</code> - the pillar on which we built all our compile-time safety story.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// This won't compile!
+<pre><code class="language-rust ignore">// This won't compile!
 let builder = if check_database {
     builder.check_health_operation(Operation::from_handler(check_health).boxed())
 } else {
     builder
-};
-<span class="boring">}</span></code></pre></pre>
+};</code></pre>
 <p>In approach 2), we can erase the whole builder in both branches when they both register a route:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let check_database: bool = /* */;
+<pre><code class="language-rust ignore">let check_database: bool = /* */;
 let boxed_builder = if check_database {
     builder.check_health(check_health).erase()
 } else {
     builder.check_health(check_health_with_database).erase()
 };
-let app = boxed_builder.build();
-<span class="boring">}</span></code></pre></pre>
+let app = boxed_builder.build();</code></pre>
 <p>but, like in approach 1), we will still get a type mismatch error if one of the two branches leaves the route unset.</p>
 <h4 id="refactoring-into-smaller-functions"><a class="header" href="#refactoring-into-smaller-functions">Refactoring into smaller functions</a></h4>
 <p>Developers would still have to spell out all generic parameters when writing a function that takes in a builder as a parameter:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin&gt;,
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin&gt; {
     builder
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>Writing the signature after having modified the builder becomes easier though.
 In approach 1), they can explicitly change the touched operation parameters to the boxed variant:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6, Exts4, Body, Plugin&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Op1, Op2, Op3, Op4, Op5, Op6, Exts4, Body, Plugin&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin, Exts4=Exts4&gt;,
 ) -&gt; PokemonServiceBuilder&lt;
         Op1, Op2, Op3, Box&lt;dyn Upgradable&lt;AwsRestJson1, GetServerStatistics, Exts4, Body, Plugin&gt;&gt;,
         Op5, Op6, Body, Plugin, Body, Plugin, Exts4=Exts
     &gt; {
     builder.get_server_statistics(get_server_statistics)
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>It becomes trickier in approach 2), since to retain compile-time safety on the builder we expect <code>erase</code> to map <code>MissingOperation</code> into <code>MissingOperation</code>. Therefore, we can't write something like this:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Body, Op1, Op2, Op3, Op4, Op5, Op6&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Body, Op1, Op2, Op3, Op4, Op5, Op6&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;,
 ) -&gt; PokemonServiceBuilder&lt;Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;&gt; {
     builder.get_server_statistics(get_server_statistics).()
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>The compiler would reject it since it can't guarantee that all other operations can be erased to a <code>Route&lt;B&gt;</code>. This is likely to require something along the lines of:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>fn partial_setup&lt;Body, Op1, Op2, Op3, Op4, Op5, Op6&gt;(
+<pre><code class="language-rust ignore">fn partial_setup&lt;Body, Op1, Op2, Op3, Op4, Op5, Op6&gt;(
     builder: PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt;,
 ) -&gt; PokemonServiceBuilder&lt;&lt;Op1 as TypeErase&gt;::Erased, &lt;Op2 as TypeErase&gt;::Erased, &lt;Op3 as TypeErase&gt;::Erased, &lt;Op4 as TypeErase&gt;::Erased, &lt;Op5 as TypeErase&gt;::Erased, &lt;Op6 as TypeErase&gt;::Erased&gt;
 where
@@ -787,16 +707,13 @@ where
     Op6: TypeErase,
 {
     builder.get_server_statistics(get_server_statistics).()
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <h4 id="summary"><a class="header" href="#summary">Summary</a></h4>
 <p>Both approaches force us to have a number of generic parameters that scales linearly with the number of operations on the service, affecting the ergonomics of the resulting API in both the branching and the refactoring scenarios.
 We believe that the ergonomics advantages of the proposal advanced by this RFC outweigh the limitation of having to specify your plugins upfront, when creating the builder instance.</p>
 <h3 id="builder-extensions-what-now"><a class="header" href="#builder-extensions-what-now">Builder extensions: what now?</a></h3>
 <p>The <code>Pluggable</code> trait was an interesting development out of <a href="rfc0020_service_builder.html">RFC 20</a>: it allows you to attach methods to a service builder using an extension trait.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>/// An extension to service builders to add the `print()` function.
+<pre><code class="language-rust ignore">/// An extension to service builders to add the `print()` function.
 pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable&lt;PrintPlugin&gt; {
     /// Causes all operations to print the operation name when called.
     ///
@@ -807,13 +724,10 @@ pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable&lt;PrintPlugin&gt;
     {
         self.apply(PrintPlugin)
     }
-}
-<span class="boring">}</span></code></pre></pre>
+}</code></pre>
 <p>This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.
 My recommendation would be to implement <code>Pluggable</code> for <code>PluginStack</code>, providing the same pattern ahead of the creation of the builder:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Currently you'd have to go for `PluginStack::new(IdentityPlugin, IdentityPlugin)`,
+<pre><code class="language-rust ignore">// Currently you'd have to go for `PluginStack::new(IdentityPlugin, IdentityPlugin)`,
 // but that can be smoothed out even if this RFC isn't approved.
 let plugin_stack = PluginStack::default()
     // Use the extension method
@@ -824,8 +738,7 @@ let app = PokemonService::builder(plugin_stack)
     .get_server_statistics(get_server_statistics)
     .capture_pokemon(capture_pokemon)
     .do_nothing(do_nothing)
-    .build()?;
-<span class="boring">}</span></code></pre></pre>
+    .build()?;</code></pre>
 <h2 id="playing-around-with-the-design"><a class="header" href="#playing-around-with-the-design">Playing around with the design</a></h2>
 <p>The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code <a href="https://github.com/LukeMathWalker/builder-experiments">here</a>.</p>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
