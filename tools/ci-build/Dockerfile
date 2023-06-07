@@ -144,7 +144,7 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
-ARG cargo_mdbook_version=0.4.3
+ARG cargo_mdbook_version=0.4.30
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook --locked --version ${cargo_mdbook_version}
 
