@@ -7,8 +7,8 @@ import itertools
 
 
 def main():
-    file = open("/tmp/compiletime-benchmark.txt", "r").read()
-    iter = map(lambda x: x.split("END"), file.split("START"))
+    f = open("/tmp/compiletime-benchmark.txt", "r").read()
+    iter = map(lambda x: x.split("END"), f.split("START"))
     iter = itertools.chain.from_iterable(iter)
     markdown = """
     | sdk name | dev | release | dev all features | release all features |
@@ -21,7 +21,7 @@ def main():
         print(idx)
         print(i)
         print("============")
-        
+
         lines = i.splitlines()
         if len(lines) > 1:
             continue
@@ -31,8 +31,10 @@ def main():
             "|".join(map(lambda x: float(x), lines[1:])) + "|"
 
         markdown += row
-        
-    print(markdown)
 
+    print(markdown)
+    with open("/tmp/compiletime-benchmark.md", "w") as f:
+        f.write(markdown)
+        f.flush()
 
 main()
