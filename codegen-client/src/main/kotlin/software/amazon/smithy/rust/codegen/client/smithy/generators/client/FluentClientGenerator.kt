@@ -334,10 +334,6 @@ class FluentClientGenerator(
                     return s.removeRange(0, n)
                 }
             }
-            val addThing = ""
-            if (generics.inst != generics.boundsWithoutWhereClause) {
-                addThing = ","
-            }
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
