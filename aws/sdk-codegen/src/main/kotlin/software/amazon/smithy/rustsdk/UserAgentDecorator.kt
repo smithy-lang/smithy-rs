@@ -10,20 +10,21 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -104,11 +105,16 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                section.putConfigValue(this) {
-                    rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
-                }
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                rustBlockTemplate(
+                    "if cfg.get::<#{DisableUserAgentInterceptor}>().is_none()",
+                    "DisableUserAgentInterceptor" to awsRuntime.resolve("user_agent::DisableUserAgentInterceptor"),
+                ) {
+                    section.putConfigValue(this) {
+                        rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                    }
+                    section.registerInterceptor(runtimeConfig, this) {
+                        rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                    }
                 }
             }
         }

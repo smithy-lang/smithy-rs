@@ -41,7 +41,7 @@ service PokemonService {
 
 Smithy Rust will use this model to produce the following API:
 
-```rust
+```rust,ignore
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     /* implementation */
@@ -64,7 +64,7 @@ A [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.htm
 
 We represent this in Rust using the [`OperationShape`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/trait.OperationShape.html) trait:
 
-```rust
+```rust,ignore
 pub trait OperationShape {
     /// The name of the operation.
     const NAME: &'static str;
@@ -94,7 +94,7 @@ operation GetPokemonSpecies {
 
 the following implementation is generated
 
-```rust
+```rust,ignore
 /// Retrieve information about a Pokémon species.
 pub struct GetPokemonSpecies;
 
@@ -115,7 +115,7 @@ The following nomenclature will aid us in our survey. We describe a `tower::Serv
 
 The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely [`OperationShapeExt`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/trait.OperationShapeExt.html):
 
-```rust
+```rust,ignore
 /// An extension trait over [`OperationShape`].
 pub trait OperationShapeExt: OperationShape {
     /// Creates a new [`Service`] for well-formed [`Handler`]s.
@@ -147,7 +147,7 @@ The [`Handler`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_se
 
 The `from_handler` constructor is used in the following way:
 
-```rust
+```rust,ignore
 async fn get_pokemon_service(input: GetPokemonServiceInput) -> Result<GetPokemonServiceOutput, GetPokemonServiceError> {
     /* Handler logic */
 }
@@ -157,7 +157,7 @@ let operation = GetPokemonService::from_handler(get_pokemon_service);
 
 Alternatively, `from_service` constructor:
 
-```rust
+```rust,ignore
 struct Svc {
     /* ... */
 }
@@ -179,7 +179,7 @@ To summarize a _model service_ constructed can be constructed from a `Handler` o
 
 A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
-```rust
+```rust,ignore
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
 /// [`Request`], in contrast to [`FromParts`].
 pub trait FromRequest<Protocol>: Sized {
@@ -199,7 +199,7 @@ pub trait IntoResponse<Protocol> {
 
 Note that both traits are parameterized by `Protocol`. These [protocols](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) exist as ZST marker structs:
 
-```rust
+```rust,ignore
 /// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
 pub struct RestJson1;
 
@@ -233,7 +233,7 @@ stateDiagram-v2
 
 This is formalized by the [`Upgrade<Protocol, Op, S>`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/struct.Upgrade.html) HTTP service. The `tower::Service` implementation is approximately:
 
-```rust
+```rust,ignore
 impl<P, Op, S> Service<http::Request> for Upgrade<P, Op, S>
 where
     Input: FromRequest<P, B>,
@@ -283,7 +283,7 @@ Different protocols supported by Smithy enjoy different routing mechanisms, for 
 
 Despite their differences, all routing mechanisms satisfy a common interface. This is formalized using the [Router](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/routing/trait.Router.html) trait:
 
-```rust
+```rust,ignore
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].
 pub trait Router {
     type Service;
@@ -298,7 +298,7 @@ which provides the ability to determine an inner HTTP service from a collection 
 
 Types which implement the `Router` trait are converted to a HTTP service via the `RoutingService` struct:
 
-```rust
+```rust,ignore
 /// A [`Service`] using a [`Router`] `R` to redirect messages to specific routes.
 ///
 /// The `Protocol` parameter is used to determine the serialization of errors.
@@ -530,7 +530,7 @@ Both builder methods take care of:
 
 The final outcome, an instance of `PokemonService`, looks roughly like this:
 
-```rust
+```rust,ignore
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {
@@ -583,7 +583,7 @@ stateDiagram-v2
 
 An additional omitted detail is that we provide an "escape hatch" allowing `Handler`s and `OperationService`s to accept data that isn't modelled. In addition to accepting `Op::Input` they can accept additional arguments which implement the [`FromParts`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) trait:
 
-```rust
+```rust,ignore
 use http::request::Parts;
 
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
@@ -599,7 +599,7 @@ pub trait FromParts<Protocol>: Sized {
 
 This differs from `FromRequest` trait, introduced in [Serialization and Deserialization](#serialization-and-deserialization), as it's synchronous and has non-consuming access to [`Parts`](https://docs.rs/http/latest/http/request/struct.Parts.html), rather than the entire [Request](https://docs.rs/http/latest/http/request/struct.Request.html).
 
-```rust
+```rust,ignore
 pub struct Parts {
     pub method: Method,
     pub uri: Uri,
@@ -612,7 +612,7 @@ pub struct Parts {
 
 This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware. An `Extension` struct implements `FromParts` to support this use case:
 
-```rust
+```rust,ignore
 /// Generic extension type stored in and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.

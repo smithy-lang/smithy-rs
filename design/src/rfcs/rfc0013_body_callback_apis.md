@@ -9,7 +9,7 @@ Adding a callback API to `ByteStream` and `SdkBody` will enable developers using
 
 *Note that comments starting with '//' are not necessarily going to be included in the actual implementation and are intended as clarifying comments for the purposes of this RFC.*
 
-```rust
+```rust,ignore
 // in aws_smithy_http::callbacks...
 
 /// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
@@ -41,7 +41,7 @@ The changes we need to make to `ByteStream`:
 
 *(The current version of `ByteStream` and `Inner` can be seen [here][ByteStream impls].)*
 
-```rust
+```rust,ignore
 // in `aws_smithy_http::byte_stream`...
 
 // We add a new method to `ByteStream` for inserting callbacks
@@ -68,7 +68,7 @@ The changes we need to make to `SdkBody`:
 
 *(The current version of `SdkBody` can be seen [here][SdkBody impls].)*
 
-```rust
+```rust,ignore
 // In aws_smithy_http::body...
 
 #[pin_project]
@@ -243,7 +243,7 @@ What follows is a simplified example of how this API could be used to introduce 
 the checksum of some data and then returns the checksum of that data when `trailers` is called. This is fine because it's
 being used to calculate the checksum of a streaming body for a request.
 
-```rust
+```rust,ignore
 #[derive(Default)]
 struct Crc32cChecksumCallback {
     state: Option<u32>,

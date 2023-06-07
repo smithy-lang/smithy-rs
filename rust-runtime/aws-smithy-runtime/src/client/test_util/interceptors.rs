@@ -8,7 +8,7 @@
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt;
 
 pub struct TestParamsSetterInterceptor<F> {
@@ -48,7 +48,7 @@ mod tests {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -61,12 +61,11 @@ mod tests {
         ctx.enter_before_transmit_phase();
         let mut ctx = Into::into(&mut ctx);
         let request_time = UNIX_EPOCH + Duration::from_secs(1624036048);
-        let interceptor = TestParamsSetterInterceptor::new({
-            let request_time = request_time.clone();
+        let interceptor = TestParamsSetterInterceptor::new(
             move |_: &mut BeforeTransmitInterceptorContextMut<'_>, cfg: &mut ConfigBag| {
                 cfg.set_request_time(request_time);
-            }
-        });
+            },
+        );
         interceptor
             .modify_before_signing(&mut ctx, &mut cfg)
             .unwrap();

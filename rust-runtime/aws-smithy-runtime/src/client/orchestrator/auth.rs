@@ -6,7 +6,7 @@
 use aws_smithy_runtime_api::client::auth::{AuthSchemeEndpointConfig, AuthSchemeId};
 use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -85,7 +85,7 @@ pub(super) async fn orchestrate_auth(
                     extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
 
                 let identity = identity_resolver.resolve_identity(cfg).await?;
-                let request = ctx.request_mut();
+                let request = ctx.request_mut().expect("set during serialization");
                 request_signer.sign_request(
                     request,
                     &identity,
@@ -140,7 +140,7 @@ mod tests {
     use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -219,7 +219,11 @@ mod tests {
 
         assert_eq!(
             "success!",
-            ctx.request().headers().get("Authorization").unwrap()
+            ctx.request()
+                .expect("request is set")
+                .headers()
+                .get("Authorization")
+                .unwrap()
         );
     }
 
@@ -263,7 +267,11 @@ mod tests {
         assert_eq!(
             // "YTpi" == "a:b" in base64
             "Basic YTpi",
-            ctx.request().headers().get("Authorization").unwrap()
+            ctx.request()
+                .expect("request is set")
+                .headers()
+                .get("Authorization")
+                .unwrap()
         );
 
         // Next, test the presence of a bearer token and absence of basic auth
@@ -281,7 +289,11 @@ mod tests {
         orchestrate_auth(&mut ctx, &cfg).await.expect("success");
         assert_eq!(
             "Bearer t",
-            ctx.request().headers().get("Authorization").unwrap()
+            ctx.request()
+                .expect("request is set")
+                .headers()
+                .get("Authorization")
+                .unwrap()
         );
     }
 
