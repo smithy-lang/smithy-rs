@@ -45,6 +45,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
             },
         )
     }
+
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val endpointDiscovery = InlineAwsDependency.forRustFile(
             "endpoint_discovery",
@@ -87,7 +88,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                             time
                         )
                         .await?;
-                        new_conf.endpoint_resolver = ::std::sync::Arc::new(resolver);
+                        new_conf.endpoint_resolver = #{SharedEndpointResolver}::new(resolver);
                         Ok((Self::from_conf(new_conf), reloader))
                     }
                 }
@@ -96,6 +97,8 @@ class TimestreamDecorator : ClientCodegenDecorator {
                 "endpoint_discovery" to endpointDiscovery.toType(),
                 "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
                 "Duration" to RuntimeType.std.resolve("time::Duration"),
+                "SharedEndpointResolver" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
+                    .resolve("endpoint::SharedEndpointResolver"),
                 "SystemTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig)
                     .resolve("time::SystemTimeSource"),
                 *Types(codegenContext.runtimeConfig).toArray(),
