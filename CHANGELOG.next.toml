@@ -133,3 +133,9 @@ message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurren
 references = ["smithy-rs#2742"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
+references = ["smithy-rs#2758"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
