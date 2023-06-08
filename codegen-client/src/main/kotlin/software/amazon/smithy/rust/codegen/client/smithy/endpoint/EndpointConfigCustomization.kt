@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 
 /**
  * Customization which injects an Endpoints 2.0 Endpoint Resolver into the service config struct
@@ -28,14 +29,17 @@ internal class EndpointConfigCustomization(
 
     override fun section(section: ServiceConfig): Writable {
         return writable {
+            val sharedEndpointResolver = "#{SharedEndpointResolver}<#{Params}>"
             val resolverTrait = "#{SmithyResolver}<#{Params}>"
             val codegenScope = arrayOf(
+                *preludeScope,
+                "SharedEndpointResolver" to types.sharedEndpointResolver,
                 "SmithyResolver" to types.resolveEndpoint,
                 "Params" to typesGenerator.paramsStruct(),
             )
             when (section) {
                 is ServiceConfig.ConfigStruct -> rustTemplate(
-                    "pub (crate) endpoint_resolver: std::sync::Arc<dyn $resolverTrait>,",
+                    "pub (crate) endpoint_resolver: $sharedEndpointResolver,",
                     *codegenScope,
                 )
 
@@ -43,7 +47,7 @@ internal class EndpointConfigCustomization(
                     rustTemplate(
                         """
                         /// Returns the endpoint resolver.
-                        pub fn endpoint_resolver(&self) -> std::sync::Arc<dyn $resolverTrait> {
+                        pub fn endpoint_resolver(&self) -> $sharedEndpointResolver {
                             self.endpoint_resolver.clone()
                         }
                         """,
@@ -52,7 +56,7 @@ internal class EndpointConfigCustomization(
 
                 is ServiceConfig.BuilderStruct ->
                     rustTemplate(
-                        "endpoint_resolver: Option<std::sync::Arc<dyn $resolverTrait>>,",
+                        "endpoint_resolver: #{Option}<$sharedEndpointResolver>,",
                         *codegenScope,
                     )
 
@@ -99,7 +103,7 @@ internal class EndpointConfigCustomization(
                         /// Sets the endpoint resolver to use when making requests.
                         $defaultResolverDocs
                         pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
-                            self.endpoint_resolver = Some(std::sync::Arc::new(endpoint_resolver) as _);
+                            self.endpoint_resolver = #{Some}(#{SharedEndpointResolver}::new(endpoint_resolver));
                             self
                         }
 
@@ -107,7 +111,7 @@ internal class EndpointConfigCustomization(
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                         /// rules for `$moduleUseName`.
-                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn $resolverTrait>>) -> &mut Self {
+                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
                             self.endpoint_resolver = endpoint_resolver;
                             self
                         }
@@ -122,7 +126,7 @@ internal class EndpointConfigCustomization(
                         rustTemplate(
                             """
                             endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                                std::sync::Arc::new(#{DefaultResolver}::new())
+                                #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
                             ),
                             """,
                             *codegenScope,
@@ -150,8 +154,9 @@ internal class EndpointConfigCustomization(
                         // always fail. In the future, this will be changed to an `expect()`
                         rustTemplate(
                             """
-                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||std::sync::Arc::new(#{FailingResolver})),
+                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})),
                             """,
+                            *codegenScope,
                             "FailingResolver" to alwaysFailsResolver,
                         )
                     }
