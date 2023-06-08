@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -38,14 +37,8 @@ private class InvocationIdRuntimePluginCustomization(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            val invocationId = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig).resolve("invocation_id")
-            rustBlockTemplate(
-                "if cfg.get::<#{DisableInvocationIdInterceptor}>().is_none()",
-                "DisableInvocationIdInterceptor" to invocationId.resolve("DisableInvocationIdInterceptor"),
-            ) {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
-                }
+            section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
             }
         }
     }
