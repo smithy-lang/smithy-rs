@@ -49,7 +49,7 @@ The `Service` trait can be thought of as an asynchronous function from a request
 
 Middleware in `tower` typically conforms to the following pattern, a `Service` implementation of the form
 
-```rust,ignore
+```rust
 pub struct NewService<S> {
     inner: S,
     /* auxillary data */
@@ -58,7 +58,11 @@ pub struct NewService<S> {
 
 and a complementary
 
-```rust,ignore
+```rust
+# extern crate tower;
+# pub struct NewService<S> { inner: S }
+use tower::{Layer, Service};
+
 pub struct NewLayer {
     /* auxiliary data */
 }
@@ -133,12 +137,26 @@ where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP s
 
 The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around the entire `Service`.
 
-```rust,ignore
+```rust,no_run
+# extern crate aws_smithy_http_server;
+# extern crate pokemon_service_server_sdk;
+# extern crate tower;
+# use std::time::Duration;
+# struct TimeoutLayer;
+# impl TimeoutLayer { fn new(t: Duration) -> Self { Self }}
+# impl<S> Layer<S> for TimeoutLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+# use pokemon_service_server_sdk::{input::*, output::*, error::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+use pokemon_service_server_sdk::PokemonService;
+use tower::Layer;
+
 // This is a HTTP `Service`.
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species(/* handler */)
+    .get_pokemon_species(handler)
     /* ... */
-    .build();
+    .build()
+    .unwrap();
+# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
 
 // Construct `TimeoutLayer`.
 let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
@@ -157,12 +175,13 @@ A _single_ layer can be applied to _all_ routes inside the `Router`. This exists
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
 # use std::time::Duration;
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
-# use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
+# use pokemon_service_server_sdk::{input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct MetricsLayer;
 # impl MetricsLayer { pub fn new() -> Self { Self } }
 # impl<S> Layer<S> for MetricsLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+use pokemon_service_server_sdk::PokemonService;
+
 // Construct `MetricsLayer`.
 let metrics_layer = MetricsLayer::new();
 
@@ -219,12 +238,14 @@ A "model layer" can be applied to specific operations.
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
-# use aws_smithy_http_server::{operation::*, plugin::*};
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+# use aws_smithy_http_server::{operation::*, plugin::*};
 # struct BufferLayer;
 # impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
 # impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+use pokemon_service_server_sdk::PokemonService;
+
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
 let buffer_plugin = filter_by_operation_name(buffer_plugin, |name| name != GetPokemonSpecies::NAME);
@@ -246,9 +267,12 @@ Suppose we want to apply a different `Layer` to every operation. In this case, p
 
 Consider the following middleware:
 
-```rust,ignore
+```rust
+# extern crate tower;
+use std::task::{Context, Poll};
+use tower::Service;
+
 /// A [`Service`] that adds a print log.
-#[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
     name: &'static str,
@@ -275,57 +299,72 @@ where
 
 The plugin system provides a way to construct then apply `Layer`s in position [C](#c-operation-specific-http-middleware) and [D](#d-operation-specific-model-middleware), using the [protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) and [operation shape](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations) as parameters.
 
-An example of a `PrintPlugin` which applies a layer printing the operation name:
+An example of a `PrintPlugin` which prints the operation name:
 
-```rust,ignore
-/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+```rust
+# extern crate aws_smithy_http_server;
+# pub struct PrintService<S> { inner: S, name: &'static str }
+use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape};
+
+/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
 where
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<L, PrintLayer>;
+    type Service = PrintService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: Op::NAME })
+    fn apply(&self, inner: S) -> Self::Service {
+        PrintService { name: Op::NAME, inner }
     }
 }
 ```
 
-An alternative example which applies a layer for a given protocol:
+An alternative example which prints the protocol name:
 
-```rust,ignore
-/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+```rust
+# extern crate aws_smithy_http_server;
+# pub struct PrintService<S> { name: &'static str, inner: S}
+use aws_smithy_http_server::{
+    plugin::Plugin,
+    proto::{
+        aws_json_10::AwsJson1_0,
+        rest_xml::RestXml,
+    }
+};
+
+/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<Op, S, L> Plugin<AwsRestJson1, Op, S, L> for PrintPlugin
+impl<Op, S> Plugin<AwsJson1_0, Op, S> for PrintPlugin
 {
-    type Service = S;
-    type Layer = Stack<L, PrintLayer>;
+    type Service = PrintService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: "AWS REST JSON v1" })
+    fn apply(&self, inner: S) -> Self::Service {
+        PrintService { name: "AWS REST JSON v1", inner }
     }
 }
 
-impl<Op, S, L> Plugin<AwsRestXml, Op, S, L> for PrintPlugin
+impl<Op, S> Plugin<RestXml, Op, S> for PrintPlugin
 {
-    type Service = S;
-    type Layer = Stack<L, PrintLayer>;
+    type Service = PrintService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: "AWS REST XML" })
+    fn apply(&self, inner: S) -> Self::Service {
+        PrintService { name: "AWS REST XML", inner }
     }
 }
 ```
 
 You can provide a custom method to add your plugin to a `PluginPipeline` via an extension trait:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# pub struct PrintPlugin;
+use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
 pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
@@ -343,19 +382,29 @@ impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugi
 
 This allows for:
 
-```rust,ignore
-let plugin_pipeline = PluginPipeline::new()
+```rust,no_run
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::plugin::{PluginStack, Plugin};
+# struct PrintPlugin;
+# impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin { type Service = S; fn apply(&self, svc: S) -> Self::Service { svc }}
+# trait PrintExt<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>>; }
+# impl<EP> PrintExt<EP> for PluginPipeline<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+use aws_smithy_http_server::plugin::{IdentityPlugin, PluginPipeline};
+use pokemon_service_server_sdk::PokemonService;
+
+let http_plugins = PluginPipeline::new()
     // [..other plugins..]
     // The custom method!
     .print();
-let model_plugins = PluginPipeline::new()
-    // [..other plugins..]
-    // The custom method!
-    ;
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, model_plugins)
-    .get_pokemon_species_operation(layered_handler)
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+    .get_pokemon_species(handler)
     /* ... */
-    .build();
+    .build()
+    .unwrap();
+# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
 ```
 
 The custom `print` method hides the details of the `Plugin` trait from the average consumer.

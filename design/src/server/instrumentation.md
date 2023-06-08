@@ -19,7 +19,11 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 
 and
 
-```rust,ignore,ignore
+```rust
+# extern crate tracing_subscriber;
+# extern crate tracing;
+# use tracing_subscriber::filter;
+# use tracing::Level;
 let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 ```
 
@@ -55,14 +59,24 @@ Smithy provides an out-the-box middleware which:
 
 This is enabled via the `instrument` method provided by the `aws_smithy_http_server::instrumentation::InstrumentExt` trait.
 
-```rust,ignore
-use aws_smithy_http_server::instrumentation::InstrumentExt;
+```rust,no_run
+# extern crate aws_smithy_http_server;
+# extern crate pokemon_service_server_sdk;
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+use aws_smithy_http_server::{
+  instrumentation::InstrumentExt,
+  plugin::{IdentityPlugin, PluginPipeline}
+};
+use pokemon_service_server_sdk::PokemonService;
 
 let http_plugins = PluginPipeline::new().instrument();
-let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
-  .get_pokemon_species(/* handler */)
+let app = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+  .get_pokemon_species(handler)
   /* ... */
-  .build();
+  .build()
+  .unwrap();
+# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
 ```
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
@@ -71,7 +85,10 @@ let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
 
 The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
-```rust,ignore,ignore
+```rust
+# extern crate tracing_subscriber;
+use tracing_subscriber::{prelude::*, EnvFilter};
+
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();

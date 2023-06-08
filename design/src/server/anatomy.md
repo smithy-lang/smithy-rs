@@ -166,8 +166,14 @@ The `from_handler` constructor is used in the following way:
 ```rust
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
-# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::GetPokemonSpecies};
-# use aws_smithy_http_server::operation::*;
+use pokemon_service_server_sdk::{
+    input::GetPokemonSpeciesInput,
+    output::GetPokemonSpeciesOutput,
+    error::GetPokemonSpeciesError,
+    operation_shape::GetPokemonSpecies
+};
+use aws_smithy_http_server::operation::OperationShapeExt;
+
 async fn get_pokemon_service(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     todo!()
 }
@@ -177,20 +183,41 @@ let operation = GetPokemonSpecies::from_handler(get_pokemon_service);
 
 Alternatively, `from_service` constructor:
 
-```rust,ignore
+```rust
+# extern crate pokemon_service_server_sdk;
+# extern crate aws_smithy_http_server;
+# extern crate tower;
+use pokemon_service_server_sdk::{
+    input::GetPokemonSpeciesInput,
+    output::GetPokemonSpeciesOutput,
+    error::GetPokemonSpeciesError,
+    operation_shape::GetPokemonSpecies
+};
+use aws_smithy_http_server::operation::OperationShapeExt;
+use std::task::{Context, Poll};
+use tower::Service;
+
 struct Svc {
     /* ... */
 }
 
-impl Service<GetPokemonServiceInput> for Svc {
-    type Response = GetPokemonServiceOutput;
-    type Error = GetPokemonServiceError;
+impl Service<GetPokemonSpeciesInput> for Svc {
+    type Response = GetPokemonSpeciesOutput;
+    type Error = GetPokemonSpeciesError;
+    type Future = /* Future<Output = Result<Self::Response, Self::Error>> */
+    # std::future::Ready<Result<Self::Response, Self::Error>>;
 
-    /* ... */
+    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        todo!()
+    }
+
+    fn call(&mut self, input: GetPokemonSpeciesInput) -> Self::Future {
+        todo!()
+    }
 }
 
-let svc: Svc = /* ... */;
-let operation = GetPokemonService::from_service(svc);
+let svc: Svc = Svc { /* ... */ };
+let operation = GetPokemonSpecies::from_service(svc);
 ```
 
 To summarize a _model service_ constructed can be constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`. More detailed information on these conversions is provided in the [Handler and OperationService section](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/index.html) Rust docs.
@@ -199,15 +226,19 @@ To summarize a _model service_ constructed can be constructed from a `Handler` o
 
 A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# extern crate http;
+# use aws_smithy_http_server::body::BoxBody;
+# use std::future::Future;
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
 /// [`Request`], in contrast to [`FromParts`].
-pub trait FromRequest<Protocol>: Sized {
+pub trait FromRequest<Protocol, B>: Sized {
     type Rejection: IntoResponse<Protocol>;
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
     /// Extracts `self` from a [`Request`] asynchronously.
-    fn from_request(request: http::Request) -> Self::Future;
+    fn from_request(request: http::Request<B>) -> Self::Future;
 }
 
 /// A protocol aware function taking `self` to [`http::Response`].
@@ -215,11 +246,30 @@ pub trait IntoResponse<Protocol> {
     /// Performs a conversion into a [`http::Response`].
     fn into_response(self) -> http::Response<BoxBody>;
 }
+# use aws_smithy_http_server::request::FromRequest as FR;
+# impl<P, B, T: FR<P, B>> FromRequest<P, B> for T {
+#   type Rejection = <T as FR<P, B>>::Rejection;
+#   type Future = <T as FR<P, B>>::Future;
+#   fn from_request(request: http::Request<B>) -> Self::Future {
+#       <T as FR<P, B>>::from_request(request)
+#   }
+# }
+# use aws_smithy_http_server::response::IntoResponse as IR;
+# impl<P, T: IR<P>> IntoResponse<P> for T {
+#   fn into_response(self) -> http::Response<BoxBody> { <T as IR<P>>::into_response(self) }
+# }
 ```
 
 Note that both traits are parameterized by `Protocol`. These [protocols](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) exist as ZST marker structs:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::proto::{
+#   aws_json_10::AwsJson1_0 as _,
+#   aws_json_11::AwsJson1_1 as _,
+#   rest_json_1::RestJson1 as _,
+#   rest_xml::RestXml as _,
+# };
 /// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
 pub struct RestJson1;
 
@@ -272,7 +322,7 @@ where
 }
 ```
 
-When we `GetPokemonService::from_handler` or `GetPokemonService::from_service`, the model service produced, `S`, will meet the constraints above.
+When we `GetPokemonSpecies::from_handler` or `GetPokemonSpecies::from_service`, the model service produced, `S`, will meet the constraints above.
 
 There is an associated `Plugin`, `UpgradePlugin` which constructs `Upgrade` from a service.
 
@@ -303,14 +353,16 @@ Different protocols supported by Smithy enjoy different routing mechanisms, for 
 
 Despite their differences, all routing mechanisms satisfy a common interface. This is formalized using the [Router](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/routing/trait.Router.html) trait:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# extern crate http;
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].
-pub trait Router {
+pub trait Router<B> {
     type Service;
     type Error;
 
     /// Matches a [`http::Request`] to a target [`Service`].
-    fn match_route(&self, request: &http::Request) -> Result<Self::Service, Self::Error>;
+    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
 }
 ```
 
@@ -376,11 +428,17 @@ A [`Plugin`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_serve
 parameterized them and change behavior depending on the context in which it's applied.
 
 ```rust
-trait Plugin<Protocol, Operation, S> {
+# extern crate aws_smithy_http_server;
+pub trait Plugin<Protocol, Operation, S> {
     type Service;
 
     fn apply(&self, svc: S) -> Self::Service;
 }
+# use aws_smithy_http_server::plugin::Plugin as Pl;
+# impl<P, Op, S, T: Pl<P, Op, S>> Plugin<P, Op, S> for T {
+#   type Service = <T as Pl<P, Op, S>>::Service;
+#   fn apply(&self, svc: S) -> Self::Service { <T as Pl<P, Op, S>>::apply(self, svc) }
+# }
 ```
 
 An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
@@ -453,7 +511,9 @@ At a high-level, the service builder takes as input a function for each Smithy O
 
 You can create an instance of a service builder by calling either `builder_without_plugins` or `builder_with_plugins` on the corresponding service struct.
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::routing::Route;
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
@@ -552,7 +612,9 @@ Both builder methods take care of:
 
 The final outcome, an instance of `PokemonService`, looks roughly like this:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::{routing::RoutingService, proto::rest_json_1::{router::RestRouter, RestJson1}};
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {
@@ -605,9 +667,11 @@ stateDiagram-v2
 
 An additional omitted detail is that we provide an "escape hatch" allowing `Handler`s and `OperationService`s to accept data that isn't modelled. In addition to accepting `Op::Input` they can accept additional arguments which implement the [`FromParts`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) trait:
 
-```rust,ignore
-use http::request::Parts;
-
+```rust
+# extern crate aws_smithy_http_server;
+# extern crate http;
+# use http::request::Parts;
+# use aws_smithy_http_server::response::IntoResponse;
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
 /// [`Parts`], in contrast to [`FromRequest`].
 pub trait FromParts<Protocol>: Sized {
@@ -617,6 +681,11 @@ pub trait FromParts<Protocol>: Sized {
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
 }
+# use aws_smithy_http_server::request::FromParts as FP;
+# impl<P, T: FP<P>> FromParts<P> for T {
+#   type Rejection = <T as FP<P>>::Rejection;
+#   fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> { <T as FP<P>>::from_parts(parts) }
+# }
 ```
 
 This differs from `FromRequest` trait, introduced in [Serialization and Deserialization](#serialization-and-deserialization), as it's synchronous and has non-consuming access to [`Parts`](https://docs.rs/http/latest/http/request/struct.Parts.html), rather than the entire [Request](https://docs.rs/http/latest/http/request/struct.Request.html).
@@ -634,7 +703,14 @@ pub struct Parts {
 
 This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware. An `Extension` struct implements `FromParts` to support this use case:
 
-```rust,ignore
+```rust
+# extern crate aws_smithy_http_server;
+# extern crate http;
+# extern crate thiserror;
+# use aws_smithy_http_server::{body::BoxBody, request::FromParts, response::IntoResponse};
+# use http::status::StatusCode;
+# use thiserror::Error;
+# fn empty() -> BoxBody { todo!() }
 /// Generic extension type stored in and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
