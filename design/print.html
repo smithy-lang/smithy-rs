@@ -878,7 +878,7 @@ here explain aspects of the client in greater detail.</p>
 <ol start="0">
 <li><strong>Building the <code>ConfigBag</code> and mounting interceptors</strong>.
 <ul>
-<li><em>This phase is infallible.</em></li>
+<li><em>This phase is fallible.</em></li>
 <li>An interceptor context is created. This will hold request and response objects, making them available to interceptors.</li>
 <li>All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
 <li>All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
