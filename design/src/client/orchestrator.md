@@ -52,7 +52,7 @@ The orchestrator's work is divided into four phases:
 *NOTE: If an interceptor fails, then the other interceptors for that lifecycle event are still run. All resulting errors are collected and emitted together.*
 
 0. **Building the `ConfigBag` and mounting interceptors**.
-    - *This phase is infallible.*
+    - *This phase is fallible.*
     - An interceptor context is created. This will hold request and response objects, making them available to interceptors.
     - All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any _"read before execution"_ interceptors that have been set get run.
     - All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new _"read before execution"_ interceptors that have been set get run.
