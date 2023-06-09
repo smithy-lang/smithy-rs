@@ -162,3 +162,9 @@ filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
 author = "82marbag"
 references = ["smithy-rs#2678"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
+references = ["smithy-rs#2758"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
