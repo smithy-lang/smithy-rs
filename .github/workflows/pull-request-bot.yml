@@ -135,45 +135,10 @@ jobs:
       run: |
         aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ inputs.head_revision }}" --recursive
 
-  compiletime-benchmark:
-    runs-on: ubuntu-latest
-    name: Run Compiletime Benchmark
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-    outputs:
-      compiletime-benchmark: ${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v3
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # JDK is needed to generate code
-    - name: Set up JDK
-      uses: actions/setup-java@v3
-      with:
-        distribution: corretto
-        java-package: jdk
-        java-version: ${{ env.java_version }}
-    - uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ env.rust_version }}
-    - name: run benchmark
-      id: run-compiletime-benchmark
-      run: bash tools/ci-scripts/compiletime-benchmark && cat /tmp/compiletime-benchmark.md >> "$GITHUB_OUTPUT"
-
   post-bot-comment:
     needs:
     - generate-diff
     - generate-doc-preview
-    - compiletime-benchmark
     runs-on: ubuntu-latest
     name: Post bot comment
     permissions:
@@ -199,8 +164,6 @@ jobs:
             issue_number: ${{ inputs.issue_number }},
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}\n\n' +
-              '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
+            body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
               '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'
-              
           })
