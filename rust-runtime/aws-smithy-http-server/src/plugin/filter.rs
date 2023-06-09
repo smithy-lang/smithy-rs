@@ -35,7 +35,7 @@ pub struct FilterByOperationId<Inner, F> {
 /// # let plugin = Pl;
 /// # let operation = Operation { inner: (), layer: () };
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_by_operation_id(plugin, |name| name != CheckHealth::NAME);
+/// let filtered_plugin = filter_by_operation_id(plugin, |id| id.name() != CheckHealth::NAME.name());
 /// let new_operation = filtered_plugin.map(operation);
 /// ```
 pub fn filter_by_operation_id<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationId<Inner, F>

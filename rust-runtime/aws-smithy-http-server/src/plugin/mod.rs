@@ -20,7 +20,7 @@
 //! let plugin = HttpLayer(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_id(plugin, |name| name == GetPokemonSpecies::NAME);
+//! let plugin = filter_by_operation_id(plugin, |id| id.name() == GetPokemonSpecies::NAME.name());
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
