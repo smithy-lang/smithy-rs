@@ -6,13 +6,14 @@
 use std::marker::PhantomData;
 
 use super::{Handler, IntoService, Normalize, OperationService};
+use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Operation shape].
 ///
 /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
 pub trait OperationShape {
-    /// The name of the operation.
-    const NAME: &'static str;
+    /// The ID of the operation.
+    const ID: ShapeId;
 
     /// The operation input.
     type Input;

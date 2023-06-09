@@ -8,6 +8,7 @@
 use aws_smithy_http_server::{
     operation::OperationShape,
     plugin::{Plugin, PluginPipeline, PluginStack},
+    shape_id::ShapeId,
 };
 use tower::Service;
 
@@ -17,7 +18,7 @@ use std::task::{Context, Poll};
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
-    name: &'static str,
+    id: ShapeId,
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -33,11 +34,10 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {}", self.name);
+        println!("Hi {}", self.id.absolute());
         self.inner.call(req)
     }
 }
-
 /// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
@@ -49,13 +49,9 @@ where
     type Service = PrintService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {
-        PrintService {
-            inner,
-            name: Op::NAME,
-        }
+        PrintService { inner, id: Op::ID }
     }
 }
-
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
 pub trait PrintExt<CurrentPlugin> {
     /// Causes all operations to print the operation name when called.

@@ -133,3 +133,32 @@ message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurren
 references = ["smithy-rs#2742"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """`ShapeId` is the new structure used to represent a shape, with its absolute name, namespace and name.
+`OperationExtension`'s members are replaced by the `ShapeId` and operations' names are now replced by a `ShapeId`.
+
+Before you had an operation and an absolute name as its `NAME` member. You could apply a plugin only to some selected operation:
+
+```
+filter_by_operation_name(plugin, |name| name != Op::ID);
+```
+
+Your new filter selects on an operation's absolute name, namespace or name.
+
+```
+filter_by_operation_id(plugin, |id| id.name() != Op::ID.name());
+```
+
+The above filter is applied to an operation's name, the one you use to specify the operation in the Smithy model.
+
+You can filter all operations in a namespace or absolute name:
+
+```
+filter_by_operation_id(plugin, |id| id.namespace() != "namespace");
+filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
+```
+"""
+author = "82marbag"
+references = ["smithy-rs#2678"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }

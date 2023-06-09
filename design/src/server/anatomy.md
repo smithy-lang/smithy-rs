@@ -69,9 +69,10 @@ We represent this in Rust using the [`OperationShape`](https://docs.rs/aws-smith
 
 ```rust
 # extern crate aws_smithy_http_server;
+# use aws_smithy_http_server::shape_id::ShapeId;
 pub trait OperationShape {
     /// The name of the operation.
-    const NAME: &'static str;
+    const ID: ShapeId;
 
     /// The operation input.
     type Input;
@@ -83,7 +84,7 @@ pub trait OperationShape {
 }
 # use aws_smithy_http_server::operation::OperationShape as OpS;
 # impl<T: OpS> OperationShape for T {
-#   const NAME: &'static str = <T as OpS>::NAME;
+#   const ID: ShapeId = <T as OpS>::ID;
 #   type Input = <T as OpS>::Input;
 #   type Output = <T as OpS>::Output;
 #   type Error = <T as OpS>::Error;
@@ -108,13 +109,13 @@ the following implementation is generated
 ```rust
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
-# use aws_smithy_http_server::operation::OperationShape;
+# use aws_smithy_http_server::{operation::OperationShape, shape_id::ShapeId};
 # use pokemon_service_server_sdk::{input::*, output::*, error::*};
 /// Retrieve information about a Pokémon species.
 pub struct GetPokemonSpecies;
 
 impl OperationShape for GetPokemonSpecies {
-    const NAME: &'static str = "com.aws.example#GetPokemonSpecies";
+    const ID: ShapeId = ShapeId::new("com.aws.example#GetPokemonSpecies", "com.aws.example", "GetPokemonSpecies");
 
     type Input = GetPokemonSpeciesInput;
     type Output = GetPokemonSpeciesOutput;

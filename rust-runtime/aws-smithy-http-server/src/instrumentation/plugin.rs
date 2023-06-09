@@ -21,7 +21,7 @@ where
     type Service = InstrumentOperation<S, Op::RequestFmt, Op::ResponseFmt>;
 
     fn apply(&self, svc: S) -> Self::Service {
-        InstrumentOperation::new(svc, Op::NAME)
+        InstrumentOperation::new(svc, Op::ID)
             .request_fmt(Op::request_fmt())
             .response_fmt(Op::response_fmt())
     }

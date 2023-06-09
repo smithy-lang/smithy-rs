@@ -4,56 +4,57 @@
  */
 
 use crate::operation::OperationShape;
+use crate::shape_id::ShapeId;
 
 use super::Plugin;
 
-/// An adapter to convert a `Fn(&'static str) -> Service` closure into a [`Plugin`]. See
-/// [`plugin_from_operation_name_fn`] for more details.
-pub struct OperationNameFn<F> {
+/// An adapter to convert a `Fn(ShapeId) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_id_fn`] for more details.
+pub struct OperationIdFn<F> {
     f: F,
 }
 
-impl<P, Op, S, F, NewService> Plugin<P, Op, S> for OperationNameFn<F>
+impl<P, Op, S, NewService, F> Plugin<P, Op, S> for OperationIdFn<F>
 where
-    F: Fn(&'static str, S) -> NewService,
+    F: Fn(ShapeId, S) -> NewService,
     Op: OperationShape,
 {
     type Service = NewService;
 
     fn apply(&self, svc: S) -> Self::Service {
-        (self.f)(Op::NAME, svc)
+        (self.f)(Op::ID, svc)
     }
 }
 
-/// Constructs a [`Plugin`] using a closure over the operation name `F: Fn(&'static str) -> L` where `L` is a HTTP
+/// Constructs a [`Plugin`] using a closure over the operation name `F: Fn(ShapeId) -> L` where `L` is a HTTP
 /// [`Layer`](tower::Layer).
 ///
 /// # Example
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::plugin_from_operation_name_fn;
+/// use aws_smithy_http_server::plugin::plugin_from_operation_id_fn;
+/// use aws_smithy_http_server::shape_id::ShapeId;
 /// use tower::layer::layer_fn;
 ///
 /// // A `Service` which prints the operation name before calling `S`.
 /// struct PrintService<S> {
-///     operation_name: &'static str,
+///     operation_name: ShapeId,
 ///     inner: S
 /// }
 ///
 /// // A `Layer` applying `PrintService`.
 /// struct PrintLayer {
-///     operation_name: &'static str
+///     operation_name: ShapeId
 /// }
 ///
 /// // Defines a closure taking the operation name to `PrintLayer`.
 /// let f = |operation_name| PrintLayer { operation_name };
 ///
 /// // This plugin applies the `PrintService` middleware around every operation.
-/// let plugin = plugin_from_operation_name_fn(f);
+/// let plugin = plugin_from_operation_id_fn(f);
 /// ```
-pub fn plugin_from_operation_name_fn<NewService, F>(f: F) -> OperationNameFn<F>
+pub fn plugin_from_operation_id_fn<NewService, F>(f: F) -> OperationIdFn<F>
 where
-    F: Fn(&'static str) -> NewService,
+    F: Fn(ShapeId) -> NewService,
 {
-    OperationNameFn { f }
+    OperationIdFn { f }
 }

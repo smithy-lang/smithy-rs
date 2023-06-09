@@ -216,7 +216,7 @@ A "HTTP layer" can be applied to specific operations.
 # impl<S> Layer<S> for LoggingLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
 // Construct `LoggingLayer`.
 let logging_plugin = LayerPlugin(LoggingLayer::new());
-let logging_plugin = filter_by_operation_name(logging_plugin, |name| name == GetPokemonSpecies::NAME);
+let logging_plugin = filter_by_operation_id(logging_plugin, |name| name == GetPokemonSpecies::ID);
 let http_plugins = PluginPipeline::new().push(logging_plugin);
 
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
@@ -248,7 +248,7 @@ use pokemon_service_server_sdk::PokemonService;
 
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
-let buffer_plugin = filter_by_operation_name(buffer_plugin, |name| name != GetPokemonSpecies::NAME);
+let buffer_plugin = filter_by_operation_id(buffer_plugin, |name| name != GetPokemonSpecies::ID);
 let model_plugins = PluginPipeline::new().push(buffer_plugin);
 
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
@@ -317,7 +317,7 @@ where
     type Service = PrintService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {
-        PrintService { name: Op::NAME, inner }
+        PrintService { name: Op::ID.name(), inner }
     }
 }
 ```
@@ -344,7 +344,7 @@ impl<Op, S> Plugin<AwsJson1_0, Op, S> for PrintPlugin
     type Service = PrintService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {
-        PrintService { name: "AWS REST JSON v1", inner }
+        PrintService { name: "AWS JSON 1.0", inner }
     }
 }
 
