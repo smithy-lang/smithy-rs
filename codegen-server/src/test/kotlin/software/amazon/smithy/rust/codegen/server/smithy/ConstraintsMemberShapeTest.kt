@@ -9,8 +9,12 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.DataTrait
+import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.SourceLocation
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.ModelSerializer
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
@@ -31,10 +35,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomVa
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import java.io.File
 import java.nio.file.Path
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class ConstraintsMemberShapeTest {
     private val outputModelOnly = """
@@ -162,6 +169,172 @@ class ConstraintsMemberShapeTest {
 
     private fun loadModel(model: Model): Model =
         ConstrainedMemberTransform.transform(OperationNormalizer.transform(model))
+
+
+    @Test
+    fun `generate code for a small struct with member shape`() {
+        val codeGenModel = """
+            namespace com.aws.example.rust
+
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+
+            /// The Pokémon Service allows you to retrieve information about Pokémon species.
+            @title("Pokémon Service")
+            @restJson1
+            service PokemonService {
+                version: "2021-12-01",
+                operations: [
+                    Dummy
+                ],
+            }
+
+            @http(uri: "/pokemon-species", method: "POST")
+            operation Dummy {
+                input : DummyInput
+                output: GetStorageOutput
+                errors: [ValidationException]
+            }
+
+            structure DummyInput {
+                degree : Comments
+            }
+            
+            /// A list of Pokémon species.
+            @length(min:0, max: 20)
+            list Comments {
+                member: CommentEntity
+            }
+            
+            structure CommentEntity {
+                comment: Comment
+            }
+            
+            @length(min: 0, max: 1024)
+            string Comment
+            
+            /// Contents of the Pokémon storage.
+            @output
+            structure GetStorageOutput {
+                comments: Comments
+            }
+
+            @length(min: 0, max:1024)
+            string Centigrade
+            """.asSmithyModel()
+
+        val env = mapOf("RUSTFLAGS" to "-A dead_code")
+        val dir ="/Users/fahadzub/workplace/baykar/smithy"
+
+        generateCode(codeGenModel, File(dir)) {
+            "cargo test".runCommand(Path.of(dir), env)
+        }
+    }
+
+    @Test
+    fun `constraint trate is failing`() {
+        val codeGenModel = """
+            namespace com.aws.example.rust
+
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+
+            /// The Pokémon Service allows you to retrieve information about Pokémon species.
+            @title("Pokémon Service")
+            @restJson1
+            service PokemonService {
+                version: "2021-12-01",
+                resources: [Storage],
+                operations: [
+                ],
+            }
+
+            /// A users current Pokémon storage.
+            resource Storage {
+                identifiers: {
+                    user: String
+                },
+                read: GetStorage,
+            }
+
+            /// Retrieve information about your Pokédex.
+            @readonly
+            @http(uri: "/pokedex/{user}", method: "GET")
+            operation GetStorage {
+                input: GetStorageInput,
+                output: GetStorageOutput,
+                errors: [ValidationException],
+            }
+
+            /// A request to access Pokémon storage.
+            @input
+            @sensitive
+            structure GetStorageInput {
+                @required
+                @httpLabel
+                user: String,
+                @required
+                @httpHeader("passcode")
+                passcode: String,
+            }
+
+            /// A list of Pokémon species.
+            @length(min:0, max: 20)
+            list Comments {
+                member: CommentEntity
+            }
+            
+            structure CommentEntity {
+                comment: Comment
+            }
+            
+            @length(min: 0, max: 1024)
+            string Comment
+            
+            /// Contents of the Pokémon storage.
+            @output
+            structure GetStorageOutput {
+                comments: Comments
+            }
+            """.asSmithyModel()
+
+        val env = mapOf("RUSTFLAGS" to "-A dead_code")
+        val dir ="/Users/fahadzub/workplace/baykar/smithy"
+
+        generateCode(codeGenModel, File(dir)) {
+            "cargo test".runCommand(Path.of(dir), env)
+        }
+    }
+
+    private fun generateCode(model: Model, dirToUse: File? = null, carryOutTest: (Path) -> Unit) {
+        val runtimeConfig =
+            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime").absolutePath))
+
+        val (context, dir) = generatePluginContext(
+            model,
+            runtimeConfig = runtimeConfig,
+            overrideTestDir = dirToUse,
+        )
+        executeWithDecorator(context)
+        carryOutTest(dir)
+    }
+
+    fun executeWithDecorator(
+        context: PluginContext,
+        vararg decorator: ServerCodegenDecorator,
+    ) {
+        val codegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(
+                context,
+                ServerRequiredCustomizations(),
+                SmithyValidationExceptionDecorator(),
+                CustomValidationExceptionWithReasonDecorator(),
+                *decorator,
+            )
+        ServerCodegenVisitor(context, codegenDecorator).execute()
+    }
+
+
 
     @Test
     fun `non constrained fields should not be changed`() {
