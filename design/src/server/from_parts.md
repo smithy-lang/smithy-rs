@@ -6,7 +6,7 @@ But what if we, the customer, want to access data in the handler which is _not_ 
 
 <!-- TODO(IntoParts): Dually, what if we want to return data from the handler which is _not_ modelled by our Smithy model? -->
 
-```rust
+```rust,ignore
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
 /// [`Parts`], in contrast to [`FromRequest`].
 pub trait FromParts<Protocol>: Sized {
@@ -22,7 +22,7 @@ Here [`Parts`](https://docs.rs/http/latest/http/request/struct.Parts.html) is th
 
 A prolific example of a `FromParts` implementation is `Extension<T>`:
 
-```rust
+```rust,ignore
 /// Generic extension type stored in and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
@@ -61,7 +61,7 @@ where
 
 This allows the service builder to accept the following handler
 
-```rust
+```rust,ignore
 async fn handler(input: ModelInput, extension: Extension<SomeStruct>) -> ModelOutput {
     /* ... */
 }
@@ -71,7 +71,7 @@ where `ModelInput` and `ModelOutput` are specified by the Smithy Operation and `
 
 Up to 32 structures implementing `FromParts` can be provided to the handler with the constraint that they _must_ be provided _after_ the `ModelInput`:
 
-```rust
+```rust,ignore
 async fn handler(input: ModelInput, ext1: Extension<SomeStruct1>, ext2: Extension<SomeStruct2>, other: Other /* : FromParts */, /* ... */) -> ModelOutput {
     /* ... */
 }
@@ -81,7 +81,7 @@ Note that the `parts.extensions.remove::<T>()` in `Extensions::from_parts` will 
 
 The `FromParts` trait is public so customers have the ability specify their own implementations:
 
-```rust
+```rust,ignore
 struct CustomerDefined {
     /* ... */
 }

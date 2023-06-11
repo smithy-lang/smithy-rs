@@ -10,7 +10,7 @@ the SDK has no easy way to accomplish this. At time of writing, the lower level 
 client has to be used to create an operation, and then the HTTP request augmented on
 that operation type. For example:
 
-```rust
+```rust,ignore
 let input = SomeOperationInput::builder().some_value(5).build()?;
 
 let operation = {
@@ -52,7 +52,7 @@ The code generated fluent builders returned by the fluent client should have a m
 similar to `send`, but that returns a customizable request. The customer experience should look as
 follows:
 
-```rust
+```rust,ignore
 let response = client.some_operation()
     .some_value(5)
     .customize()
@@ -69,7 +69,7 @@ let response = client.some_operation()
 
 This new async `customize` method would return the following:
 
-```rust
+```rust,ignore
 pub struct CustomizableOperation<O, R> {
     handle: Arc<Handle>,
     operation: Operation<O, R>,
@@ -137,7 +137,7 @@ HTTP request.
 The `CustomizableOperation` type will then mirror these functions so that the experience
 can look as follows:
 
-```rust
+```rust,ignore
 let mut operation = client.some_operation()
     .some_value(5)
     .customize()
@@ -167,7 +167,7 @@ Alternatively, the name `build` could be used, but this increases the odds that
 customers won't realize that they can call `send` directly, and then call a longer
 `build`/`send` chain when customization isn't needed:
 
-```rust
+```rust,ignore
 client.some_operation()
     .some_value()
     .build() // Oops, didn't need to do this
@@ -177,7 +177,7 @@ client.some_operation()
 
 vs.
 
-```rust
+```rust,ignore
 client.some_operation()
     .some_value()
     .send()

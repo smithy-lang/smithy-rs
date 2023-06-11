@@ -46,6 +46,9 @@ impl AsRef<[u8]> for Blob {
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;
+    use crate::base64;
+    use serde::Serialize;
+
     impl Serialize for Blob {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -63,6 +66,8 @@ mod serde_serialize {
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod serde_deserialize {
     use super::*;
+    use crate::base64;
+    use serde::{de::Visitor, Deserialize};
 
     struct HumanReadableBlobVisitor;
     impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
@@ -86,7 +91,7 @@ mod serde_deserialize {
     impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
         type Value = Blob;
         fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            formatter.write_str("expected base64 encoded string")
+            formatter.write_str("expected bytes")
         }
 
         fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
@@ -153,6 +158,7 @@ mod test_serde {
         assert!(res.is_ok());
 
         // checks whether the bytes are deserialiezd properly
+
         let n: HashMap<String, CString> =
             ciborium::de::from_reader(std::io::Cursor::new(buf.clone())).unwrap();
         assert!(n.get("blob").is_some());

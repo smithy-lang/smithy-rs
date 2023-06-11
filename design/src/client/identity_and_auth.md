@@ -85,7 +85,7 @@ unmaintainable levels if each configurable implementation in it was made generic
 
 These traits look like this:
 
-```rust
+```rust,ignore
 #[derive(Clone, Debug)]
 pub struct HttpAuthOption {
     scheme_id: &'static str,
@@ -123,7 +123,7 @@ will need to understand what the concrete data type underlying that identity is.
 uses a `Arc<dyn Any>` to represent the actual identity data so that generics are not needed in
 the traits:
 
-```rust
+```rust,ignore
 #[derive(Clone, Debug)]
 pub struct Identity {
     data: Arc<dyn Any + Send + Sync>,
@@ -136,7 +136,7 @@ rather than `Box`. This also reduces the allocations required. The signer implem
 will use downcasting to access the identity data types they understand. For example, with AWS SigV4,
 it might look like the following:
 
-```rust
+```rust,ignore
 fn sign_request(
     &self,
     request: &mut HttpRequest,
@@ -162,7 +162,7 @@ to verify that that type is that trait is lost at compile time (a `std::any::Typ
 about the concrete type).
 
 In an ideal world, it would be possible to extract the expiration like this:
-```rust
+```rust,ignore
 pub trait ExpiringIdentity {
     fn expiration(&self) -> SystemTime;
 }

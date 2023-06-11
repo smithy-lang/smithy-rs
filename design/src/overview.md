@@ -13,7 +13,7 @@ The design builds on the learnings, ideas, hard work, and GitHub issues of the 1
 The Rust SDK is "modular" meaning that each AWS service is its own crate. Each crate provides two layers to access the service:
 1. The "fluent" API. For most use cases, a high level API that ties together connection management and serialization will be the quickest path to success.
 
-```rust
+```rust,ignore
 #[tokio::main]
 async fn main() {
     let client = dynamodb::Client::from_env();
@@ -27,7 +27,7 @@ async fn main() {
 
 2. The "low-level" API: It is also possible for customers to assemble the pieces themselves. This offers more control over operation construction & dispatch semantics:
 
-```rust
+```rust,ignore
 #[tokio::main]
 async fn main() {
     let conf = dynamodb::Config::builder().build();
