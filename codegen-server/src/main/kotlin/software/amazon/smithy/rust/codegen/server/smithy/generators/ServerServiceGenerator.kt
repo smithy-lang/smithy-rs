@@ -236,7 +236,7 @@ class ServerServiceGenerator(
 
                 /// Sets the [`$structName`](crate::operation_shape::$structName) to a custom [`Service`](tower::Service).
                 /// not constrained by the Smithy contract.
-                pub fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
+                fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
                 where
                     S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
                     S::Future: Send + 'static,
