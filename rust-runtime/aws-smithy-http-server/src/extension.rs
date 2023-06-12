@@ -22,14 +22,13 @@
 use std::hash::Hash;
 use std::{fmt, fmt::Debug, future::Future, ops::Deref, pin::Pin, task::Context, task::Poll};
 
-use crate::extension;
 use futures_util::ready;
 use futures_util::TryFuture;
 use thiserror::Error;
-use tower::{layer::util::Stack, Layer, Service};
+use tower::Service;
 
-use crate::operation::{Operation, OperationShape};
-use crate::plugin::{plugin_from_operation_id_fn, OperationIdFn, Plugin, PluginPipeline, PluginStack};
+use crate::operation::OperationShape;
+use crate::plugin::{Plugin, PluginPipeline, PluginStack};
 use crate::shape_id::ShapeId;
 
 pub use crate::request::extension::{Extension, MissingExtension};
@@ -106,23 +105,8 @@ where
     }
 }
 
-/// A [`Layer`] applying the [`OperationExtensionService`] to an inner [`Service`].
-#[derive(Debug, Clone)]
-pub struct OperationExtensionLayer(OperationExtension);
-
-impl<S> Layer<S> for OperationExtensionLayer {
-    type Service = OperationExtensionService<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        OperationExtensionService {
-            inner,
-            operation_extension: self.0.clone(),
-        }
-    }
-}
-
-/// A [`Plugin`] which applies [`OperationExtensionLayer`] to every operation.
-pub struct OperationExtensionPlugin(OperationIdFn<fn(ShapeId) -> OperationExtensionLayer>);
+/// A [`Plugin`] which applies [`OperationExtensionService`] to every operation.
+pub struct OperationExtensionPlugin;
 
 impl fmt::Debug for OperationExtensionPlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -130,32 +114,31 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for OperationExtensionPlugin
+impl<P, Op, S> Plugin<P, Op, S> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<L, OperationExtensionLayer>;
+    type Service = OperationExtensionService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <OperationIdFn<fn(ShapeId) -> OperationExtensionLayer> as Plugin<P, Op, S, L>>::map(&self.0, input)
+    fn apply(&self, inner: S) -> Self::Service {
+        OperationExtensionService {
+            inner,
+            operation_extension: OperationExtension(Op::ID),
+        }
     }
 }
 
 /// An extension trait on [`PluginPipeline`] allowing the application of [`OperationExtensionPlugin`].
 ///
 /// See [`module`](crate::extension) documentation for more info.
-pub trait OperationExtensionExt<P> {
+pub trait OperationExtensionExt<CurrentPlugin> {
     /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`http::Response`].
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>>;
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, CurrentPlugin>>;
 }
 
-impl<P> OperationExtensionExt<P> for PluginPipeline<P> {
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, P>> {
-        let plugin = OperationExtensionPlugin(plugin_from_operation_id_fn(|shape_id| {
-            OperationExtensionLayer(extension::OperationExtension(shape_id))
-        }));
-        self.push(plugin)
+impl<CurrentPlugin> OperationExtensionExt<CurrentPlugin> for PluginPipeline<CurrentPlugin> {
+    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, CurrentPlugin>> {
+        self.push(OperationExtensionPlugin)
     }
 }
 
@@ -201,9 +184,9 @@ impl Deref for RuntimeErrorExtension {
 
 #[cfg(test)]
 mod tests {
-    use tower::{service_fn, ServiceExt};
+    use tower::{service_fn, Layer, ServiceExt};
 
-    use crate::{operation::OperationShapeExt, proto::rest_json_1::RestJson1};
+    use crate::{plugin::PluginLayer, proto::rest_json_1::RestJson1};
 
     use super::*;
 
@@ -226,7 +209,7 @@ mod tests {
         struct DummyOp;
 
         impl OperationShape for DummyOp {
-            const NAME: ShapeId = ShapeId::new(
+            const ID: ShapeId = ShapeId::new(
                 "com.amazonaws.ebs#CompleteSnapshot",
                 "com.amazonaws.ebs",
                 "CompleteSnapshot",
@@ -238,18 +221,16 @@ mod tests {
         }
 
         // Apply `Plugin`.
-        let operation = DummyOp::from_handler(|_| async { Ok(()) });
         let plugins = PluginPipeline::new().insert_operation_extension();
-        let op = Plugin::<RestJson1, DummyOp, _, _>::map(&plugins, operation);
 
         // Apply `Plugin`s `Layer`.
-        let layer = op.layer;
+        let layer = PluginLayer::new::<RestJson1, DummyOp>(plugins);
         let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
         let svc = layer.layer(svc);
 
         // Check for `OperationExtension`.
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
-        let expected = DummyOp::NAME;
+        let expected = DummyOp::ID;
         let actual = response.extensions().get::<OperationExtension>().unwrap();
         assert_eq!(actual.0, expected);
     }
