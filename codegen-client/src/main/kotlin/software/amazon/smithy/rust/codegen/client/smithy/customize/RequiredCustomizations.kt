@@ -16,11 +16,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Intercep
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.TimeSourceOperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.timeSourceCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
@@ -60,9 +60,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
         if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
             baseCustomizations + ResiliencyConfigCustomization(codegenContext) + InterceptorConfigCustomization(
                 codegenContext,
-            ) + timeSourceCustomization(codegenContext)
+            ) + TimeSourceCustomization(codegenContext)
         } else {
-            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + timeSourceCustomization(codegenContext)
+            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + TimeSourceCustomization(codegenContext)
         }
 
     override fun libRsCustomizations(

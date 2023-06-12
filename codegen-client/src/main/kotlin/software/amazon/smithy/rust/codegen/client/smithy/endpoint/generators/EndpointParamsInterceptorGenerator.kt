@@ -115,9 +115,9 @@ class EndpointParamsInterceptorGenerator(
             val paramName = EndpointParamsGenerator.memberName(name)
             val setterName = EndpointParamsGenerator.setterName(name)
             if (param.type == ShapeType.BOOLEAN) {
-                rust(".$setterName(_config.$paramName)")
+                rust(".$setterName(_config.$paramName())")
             } else {
-                rust(".$setterName(_config.$paramName.clone())")
+                rust(".$setterName(_config.$paramName().clone())")
             }
         }
 

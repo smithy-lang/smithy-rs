@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -15,25 +16,42 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 /**
  * Add a `make_token` field to Service config. See below for the resulting generated code.
  */
-class IdempotencyTokenProviderCustomization : NamedCustomization<ServiceConfig>() {
+class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRuntimeMode) : NamedCustomization<ServiceConfig>() {
+
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
+                if (runtimeMode.defaultToMiddleware) {
+                    rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
+                }
             }
 
             ServiceConfig.ConfigImpl -> writable {
-                rust(
-                    """
-                    /// Returns a copy of the idempotency token provider.
-                    /// If a random token provider was configured,
-                    /// a newly-randomized token provider will be returned.
-                    pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
-                        self.make_token.clone()
-                    }
-                    """,
-                    RuntimeType.IdempotencyToken,
-                )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Returns a copy of the idempotency token provider.
+                        /// If a random token provider was configured,
+                        /// a newly-randomized token provider will be returned.
+                        pub fn make_token(&self) -> #{IdempotencyTokenProvider} {
+                            self.inner.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
+                        }
+                        """,
+                        "IdempotencyTokenProvider" to RuntimeType.IdempotencyToken.resolve("IdempotencyTokenProvider"),
+                    )
+                } else {
+                    rust(
+                        """
+                        /// Returns a copy of the idempotency token provider.
+                        /// If a random token provider was configured,
+                        /// a newly-randomized token provider will be returned.
+                        pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
+                            self.make_token.clone()
+                        }
+                        """,
+                        RuntimeType.IdempotencyToken,
+                    )
+                }
             }
 
             ServiceConfig.BuilderStruct -> writable {
@@ -60,7 +78,17 @@ class IdempotencyTokenProviderCustomization : NamedCustomization<ServiceConfig>(
             }
 
             ServiceConfig.BuilderBuild -> writable {
-                rust("make_token: self.make_token.unwrap_or_else(#T::default_provider),", RuntimeType.IdempotencyToken)
+                if (runtimeMode.defaultToOrchestrator) {
+                    rust(
+                        "layer.store_put(self.make_token.unwrap_or_else(#T::default_provider));",
+                        RuntimeType.IdempotencyToken,
+                    )
+                } else {
+                    rust(
+                        "make_token: self.make_token.unwrap_or_else(#T::default_provider),",
+                        RuntimeType.IdempotencyToken,
+                    )
+                }
             }
 
             is ServiceConfig.DefaultForTests -> writable {

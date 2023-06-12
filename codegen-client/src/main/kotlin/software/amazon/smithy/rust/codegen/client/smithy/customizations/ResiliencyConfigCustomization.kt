@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
@@ -14,13 +15,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
-class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCustomization() {
+class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
     private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
@@ -35,38 +36,64 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                is ServiceConfig.ConfigStruct -> rustTemplate(
-                    """
-                    retry_config: Option<#{RetryConfig}>,
-                    sleep_impl: Option<#{SharedAsyncSleep}>,
-                    timeout_config: Option<#{TimeoutConfig}>,
-                    """,
-                    *codegenScope,
-                )
-
-                is ServiceConfig.ConfigImpl -> {
-                    rustTemplate(
-                        """
-                        /// Return a reference to the retry configuration contained in this config, if any.
-                        pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
-                            self.retry_config.as_ref()
-                        }
-
-                        /// Return a cloned shared async sleep implementation from this config, if any.
-                        pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
-                            self.sleep_impl.clone()
-                        }
-
-                        /// Return a reference to the timeout configuration contained in this config, if any.
-                        pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> {
-                            self.timeout_config.as_ref()
-                        }
-                        """,
-                        *codegenScope,
-                    )
+                is ServiceConfig.ConfigStruct -> {
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate(
+                            """
+                            retry_config: Option<#{RetryConfig}>,
+                            sleep_impl: Option<#{SharedAsyncSleep}>,
+                            timeout_config: Option<#{TimeoutConfig}>,
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
-                is ServiceConfig.BuilderStruct ->
+                is ServiceConfig.ConfigImpl -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            /// Return a reference to the retry configuration contained in this config, if any.
+                            pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
+                                self.inner.load::<#{RetryConfig}>()
+                            }
+
+                            /// Return a cloned shared async sleep implementation from this config, if any.
+                            pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
+                                self.inner.load::<#{SharedAsyncSleep}>().cloned()
+                            }
+
+                            /// Return a reference to the timeout configuration contained in this config, if any.
+                            pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> {
+                                self.inner.load::<#{TimeoutConfig}>()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            /// Return a reference to the retry configuration contained in this config, if any.
+                            pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
+                                self.retry_config.as_ref()
+                            }
+
+                            /// Return a cloned shared async sleep implementation from this config, if any.
+                            pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
+                                self.sleep_impl.clone()
+                            }
+
+                            /// Return a reference to the timeout configuration contained in this config, if any.
+                            pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> {
+                                self.timeout_config.as_ref()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
+                is ServiceConfig.BuilderStruct -> {
                     rustTemplate(
                         """
                         retry_config: Option<#{RetryConfig}>,
@@ -75,6 +102,7 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         """,
                         *codegenScope,
                     )
+                }
 
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
@@ -216,21 +244,30 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> rustTemplate(
-                    // We call clone on sleep_impl because the field is used by
-                    // initializing the credentials_cache field later in the build
-                    // method of a Config builder.
-                    // We could rearrange the order of decorators so that AwsCodegenDecorator
-                    // runs before RequiredCustomizations, which in turns renders
-                    // CredentialsCacheDecorator before this class, but that is a bigger
-                    // change than adding a call to the clone method on sleep_impl.
-                    """
-                    retry_config: self.retry_config,
-                    sleep_impl: self.sleep_impl.clone(),
-                    timeout_config: self.timeout_config,
-                    """,
-                    *codegenScope,
-                )
+                ServiceConfig.BuilderBuild -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            layer.store_or_unset(self.retry_config);
+                            layer.store_or_unset(self.sleep_impl.clone());
+                            layer.store_or_unset(self.timeout_config);
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            // We call clone on sleep_impl because the field is used by
+                            // initializing the credentials_cache field later in the build
+                            // method of a Config builder.
+                            """
+                            retry_config: self.retry_config,
+                            sleep_impl: self.sleep_impl.clone(),
+                            timeout_config: self.timeout_config,
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
 
                 else -> emptySection
             }
@@ -276,7 +313,7 @@ class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomiz
                 if let Some(timeout_config) = self.handle.conf.timeout_config() {
                     ${section.configBagName}.put(timeout_config.clone());
                 }
-                ${section.configBagName}.put(self.handle.conf.time_source.clone());
+                ${section.configBagName}.put(self.handle.conf.time_source());
                 """,
             )
         }

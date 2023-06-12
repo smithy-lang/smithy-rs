@@ -25,13 +25,6 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                ServiceConfig.ConfigStruct -> rustTemplate(
-                    """
-                    pub(crate) interceptors: Vec<#{SharedInterceptor}>,
-                    """,
-                    *codegenScope,
-                )
-
                 ServiceConfig.BuilderStruct ->
                     rustTemplate(
                         """
@@ -46,7 +39,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                     ##[doc(hidden)]
                     /// Returns interceptors currently registered by the user.
                     pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
-                        self.interceptors.iter()
+                        self.inner.load::<#{SharedInterceptor}>()
                     }
                     """,
                     *codegenScope,
@@ -171,11 +164,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> rust(
-                    """
-                    interceptors: self.interceptors,
-                    """,
-                )
+                ServiceConfig.BuilderBuild -> rust("self.interceptors.into_iter().for_each(|i| { layer.store_append(i); });")
 
                 ServiceConfig.ToRuntimePlugin -> rust(
                     """

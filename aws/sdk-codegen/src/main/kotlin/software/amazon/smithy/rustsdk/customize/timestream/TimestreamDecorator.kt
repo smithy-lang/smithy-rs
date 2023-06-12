@@ -11,8 +11,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -52,6 +54,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
             Visibility.PUBLIC,
             CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
         )
+        val runtimeMode = codegenContext.smithyRuntimeMode
         rustCrate.lib {
             // helper function to resolve an endpoint given a base client
             rustTemplate(
@@ -62,7 +65,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                             #{ResolveEndpointError}::from_source("failed to call describe_endpoints", e)
                         })?;
                     let endpoint = describe_endpoints.endpoints().unwrap().get(0).unwrap();
-                    let expiry = client.conf().time_source.now() + #{Duration}::from_secs(endpoint.cache_period_in_minutes() as u64 * 60);
+                    let expiry = client.conf().#{time_source}.now() + #{Duration}::from_secs(endpoint.cache_period_in_minutes() as u64 * 60);
                     Ok((
                         #{Endpoint}::builder()
                             .url(format!("https://{}", endpoint.address().unwrap()))
@@ -78,7 +81,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     pub async fn enable_endpoint_discovery(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{ResolveEndpointError}> {
                         let mut new_conf = self.conf().clone();
                         let sleep = self.conf().sleep_impl().expect("sleep impl must be provided");
-                        let time = self.conf().time_source.clone();
+                        let time = self.conf().#{time_source}.clone();
                         let (resolver, reloader) = #{endpoint_discovery}::create_cache(
                             move || {
                                 let client = self.clone();
@@ -92,9 +95,15 @@ class TimestreamDecorator : ClientCodegenDecorator {
                         Ok((Self::from_conf(new_conf), reloader))
                     }
                 }
-
                 """,
                 "endpoint_discovery" to endpointDiscovery.toType(),
+                "time_source" to writable {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rust("time_source()")
+                    } else {
+                        rust("time_source")
+                    }
+                },
                 "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
                 "Duration" to RuntimeType.std.resolve("time::Duration"),
                 "SharedEndpointResolver" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)

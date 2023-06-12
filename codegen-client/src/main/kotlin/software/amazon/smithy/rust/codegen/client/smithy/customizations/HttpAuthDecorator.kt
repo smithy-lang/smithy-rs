@@ -237,6 +237,7 @@ private class HttpAuthConfigCustomization(
     private val authSchemes: HttpAuthSchemes,
 ) : ConfigCustomization() {
     private val codegenScope = codegenScope(codegenContext.runtimeConfig)
+    private val runtimeMode = codegenContext.smithyRuntimeMode
 
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
@@ -324,23 +325,41 @@ private class HttpAuthConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> {
-                rust("identity_resolvers: self.identity_resolvers,")
+                if (runtimeMode.defaultToOrchestrator) {
+                    rust(" layer.store_put(self.identity_resolvers);")
+                } else {
+                    rust("identity_resolvers: self.identity_resolvers,")
+                }
             }
 
             is ServiceConfig.ConfigStruct -> {
-                rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
+                }
             }
 
             is ServiceConfig.ConfigImpl -> {
-                rustTemplate(
-                    """
-                    /// Returns the identity resolvers.
-                    pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
-                        &self.identity_resolvers
-                    }
-                    """,
-                    *codegenScope,
-                )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Returns the identity resolvers.
+                        pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
+                            self.inner.load::<#{IdentityResolvers}>().expect("Identity resolvers should be set")
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Returns the identity resolvers.
+                        pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
+                            &self.identity_resolvers
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             else -> {}
