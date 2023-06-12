@@ -56,7 +56,7 @@ class ServerOperationGenerator(
             pub struct $operationName;
 
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
-                const NAME: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()});
+                const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()});
 
                 type Input = crate::input::${operationName}Input;
                 type Output = crate::output::${operationName}Output;

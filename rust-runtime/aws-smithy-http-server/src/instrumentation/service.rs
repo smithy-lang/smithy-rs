@@ -94,12 +94,12 @@ where
 /// # use http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
 /// # let mut svc = service_fn(f);
-/// # const NAME: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
+/// # const ID: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
 /// let request_fmt = RequestFmt::new()
 ///     .label(|index| index == 1, None)
 ///     .query(|_| QueryMarker { key: false, value: true });
 /// let response_fmt = ResponseFmt::new().status_code();
-/// let mut svc = InstrumentOperation::new(svc, NAME)
+/// let mut svc = InstrumentOperation::new(svc, ID)
 ///     .request_fmt(request_fmt)
 ///     .response_fmt(response_fmt);
 /// # svc.call(Request::new(()));

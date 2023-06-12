@@ -32,7 +32,7 @@
 //! pub struct GetShopping;
 //!
 //! impl OperationShape for GetShopping {
-//!     const NAME: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
+//!     const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
 //!
 //!     type Input = CartIdentifier;
 //!     type Output = ShoppingCart;
@@ -40,11 +40,11 @@
 //! }
 //! ```
 //!
-//! The behavior of a Smithy operation is encoded by an [`Operation`]. The [`OperationShape`] types can be used to
-//! construct specific operations using [`OperationShapeExt::from_handler`] and [`OperationShapeExt::from_service`].
-//! The [from_handler](OperationShapeExt::from_handler) constructor takes a [`Handler`] whereas the
-//! [from_service](OperationShapeExt::from_service) takes a [`OperationService`]. Both traits serve a similar purpose -
-//! they provide a common interface over a class of structures.
+//! The behavior of a Smithy operation is encoded by a [`Service`](tower::Service). The [`OperationShape`] types can
+//! be used to construct specific operations using [`OperationShapeExt::from_handler`] and
+//! [`OperationShapeExt::from_service`] methods. The [from_handler](OperationShapeExt::from_handler) constructor takes
+//! a [`Handler`] whereas the [from_service](OperationShapeExt::from_service) takes a [`OperationService`]. Both traits
+//! serve a similar purpose - they provide a common interface over a class of structures.
 //!
 //! ## [`Handler`]
 //!
@@ -95,7 +95,7 @@
 //!
 //! Notice the parallels between [`OperationService`] and [`Handler`].
 //!
-//! ## Constructing an [`Operation`]
+//! ## Constructing an Operation
 //!
 //! The following is an example of using both construction approaches:
 //!
@@ -109,7 +109,7 @@
 //! # pub enum GetShoppingError {}
 //! # pub struct GetShopping;
 //! # impl OperationShape for GetShopping {
-//! #    const NAME: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
+//! #    const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
 //! #
 //! #    type Input = CartIdentifier;
 //! #    type Output = ShoppingCart;
@@ -134,12 +134,10 @@
 //!     type Future = OpFuture;
 //!
 //!     fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-//!         // NOTE: This MUST NOT return `Err(OperationError::Model(_))`.
 //!         todo!()
 //!     }
 //!
 //!     fn call(&mut self, request: CartIdentifier) -> Self::Future {
-//!         // NOTE: This MUST NOT return `Err(OperationError::Poll(_))`.
 //!         todo!()
 //!     }
 //! }
@@ -150,19 +148,15 @@
 //!
 //! ## Upgrading Smithy services to HTTP services
 //!
-//! Both [`Handler`] and [`OperationService`] accept and return Smithy model structures. After an [`Operation`] is
-//! constructed they are converted to a canonical form
-//! `Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error>`. The
-//! [`UpgradeLayer`] acts upon such services by converting them to
-//! `Service<http::Request, Response = http::Response, Error = Infallible>`.
+//! Both [`Handler`] and [`OperationService`] accept and return Smithy model structures. They are converted to a
+//! canonical form `Service<(Op::Input, Exts), Response = Op::Output, Error = Op::Error>`. The
+//! [`UpgradePlugin`] acts upon such services by converting them to
+//! `Service<http::Request, Response = http::Response, Error = Infallible>` by applying serialization/deserialization
+//! and validation specified by the Smithy contract.
 //!
 //!
-//! The [`UpgradeLayer`] and it's [`Layer::Service`](tower::Layer::Service) [`Upgrade`] are both parameterized by a
-//! protocol. This allows for upgrading to `Service<http::Request, Response = http::Response, Error = Infallible>` to be
-//! protocol dependent.
-//!
-//! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`](tower::Layer) `L`. The
-//! service builder provided to the user will perform this composition on `build`.
+//! The [`UpgradePlugin`], being a [`Plugin`](crate::plugin::Plugin), is parameterized by a protocol. This allows for
+//! upgrading to `Service<http::Request, Response = http::Response, Error = Infallible>` to be protocol dependent.
 //!
 //! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
 
@@ -171,58 +165,7 @@ mod operation_service;
 mod shape;
 mod upgrade;
 
-use tower::layer::util::{Identity, Stack};
-
 pub use handler::*;
 pub use operation_service::*;
 pub use shape::*;
 pub use upgrade::*;
-
-/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
-///
-/// The `L` is held and applied lazily during [`Upgradable::upgrade`].
-pub struct Operation<S, L = Identity> {
-    /// The inner [`Service`](tower::Service) representing the logic of the operation.
-    pub inner: S,
-    /// The [`Layer`](tower::Layer) applied to the HTTP [`Service`](tower::Service) after `S` has been wrapped in
-    /// [`Upgrade`].
-    pub layer: L,
-}
-
-impl<S, L> Operation<S, L> {
-    /// Applies a [`Layer`](tower::Layer) to the operation _after_ it has been upgraded via [`Operation::upgrade`].
-    pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
-        Operation {
-            inner: self.inner,
-            layer: Stack::new(self.layer, layer),
-        }
-    }
-}
-
-impl<Op, S> Operation<Normalize<Op, S>> {
-    /// Creates an [`Operation`] from a [`Service`](tower::Service).
-    pub fn from_service<Exts>(inner: S) -> Self
-    where
-        Op: OperationShape,
-        S: OperationService<Op, Exts>,
-    {
-        Self {
-            inner: inner.normalize(),
-            layer: Identity::new(),
-        }
-    }
-}
-
-impl<Op, H> Operation<IntoService<Op, H>> {
-    /// Creates an [`Operation`] from a [`Handler`].
-    pub fn from_handler<Exts>(handler: H) -> Self
-    where
-        Op: OperationShape,
-        H: Handler<Op, Exts>,
-    {
-        Self {
-            inner: handler.into_service(),
-            layer: Identity::new(),
-        }
-    }
-}

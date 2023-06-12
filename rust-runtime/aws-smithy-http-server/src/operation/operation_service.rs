@@ -95,8 +95,8 @@ where
 /// A [`Service`] normalizing the request type of a [`OperationService`].
 #[derive(Debug)]
 pub struct Normalize<Op, S> {
-    inner: S,
-    _operation: PhantomData<Op>,
+    pub(crate) inner: S,
+    pub(crate) _operation: PhantomData<Op>,
 }
 
 impl<Op, S> Clone for Normalize<Op, S>
