@@ -5,13 +5,13 @@
 
 use super::{either::Either, IdentityPlugin};
 
-use crate::operation::{Operation, OperationShape};
+use crate::operation::OperationShape;
 use crate::shape_id::ShapeId;
 
 use super::Plugin;
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::NAME`](crate::operation::OperationShape).
+/// [`OperationShape::ID`](crate::operation::OperationShape).
 ///
 /// See [`filter_by_operation_id`] for more details.
 pub struct FilterByOperationId<Inner, F> {
@@ -20,23 +20,22 @@ pub struct FilterByOperationId<Inner, F> {
 }
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::NAME`](crate::operation::OperationShape).
+/// [`OperationShape::ID`](crate::operation::OperationShape).
 ///
 /// # Example
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::filter_by_operation_id;
-/// use aws_smithy_http_server::shape_id::ShapeId;
-/// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
+/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId};
 /// # struct Pl;
 /// # struct CheckHealth;
-/// # impl OperationShape for CheckHealth { const NAME: ShapeId = ShapeId::new("ns#CheckHealth", "ns", "CheckHealth"); type Input = (); type Output = (); type Error = (); }
-/// # impl Plugin<(), CheckHealth, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
+/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+/// # impl Plugin<(), CheckHealth, ()> for Pl { type Service = (); fn apply(&self, input: ()) -> Self::Service { input }}
 /// # let plugin = Pl;
-/// # let operation = Operation { inner: (), layer: () };
+/// # let svc = ();
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_by_operation_id(plugin, |id| id.name() != CheckHealth::NAME.name());
-/// let new_operation = filtered_plugin.map(operation);
+/// let filtered_plugin = filter_by_operation_id(plugin, |name| name != CheckHealth::ID);
+/// let new_operation = filtered_plugin.apply(svc);
 /// ```
 pub fn filter_by_operation_id<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationId<Inner, F>
 where
@@ -52,21 +51,20 @@ impl<Inner, F> FilterByOperationId<Inner, F> {
     }
 }
 
-impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationId<Inner, F>
+impl<P, Op, S, Inner, F> Plugin<P, Op, S> for FilterByOperationId<Inner, F>
 where
     F: Fn(ShapeId) -> bool,
-    Inner: Plugin<P, Op, S, L>,
+    Inner: Plugin<P, Op, S>,
     Op: OperationShape,
 {
     type Service = Either<Inner::Service, S>;
-    type Layer = Either<Inner::Layer, L>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let either_plugin = if (self.predicate)(Op::NAME) {
+    fn apply(&self, svc: S) -> Self::Service {
+        let either_plugin = if (self.predicate)(Op::ID) {
             Either::Left { value: &self.inner }
         } else {
             Either::Right { value: IdentityPlugin }
         };
-        either_plugin.map(input)
+        either_plugin.apply(svc)
     }
 }

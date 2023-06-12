@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::layer::util::Stack;
-
-use crate::operation::{Operation, OperationShape};
+use crate::operation::OperationShape;
 use crate::shape_id::ShapeId;
 
 use super::Plugin;
@@ -15,17 +13,15 @@ pub struct OperationIdFn<F> {
     f: F,
 }
 
-impl<P, Op, S, ExistingLayer, NewLayer, F> Plugin<P, Op, S, ExistingLayer> for OperationIdFn<F>
+impl<P, Op, S, NewService, F> Plugin<P, Op, S> for OperationIdFn<F>
 where
-    F: Fn(ShapeId) -> NewLayer,
+    F: Fn(ShapeId, S) -> NewService,
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<ExistingLayer, NewLayer>;
+    type Service = NewService;
 
-    fn map(&self, input: Operation<S, ExistingLayer>) -> Operation<Self::Service, Self::Layer> {
-        let operation_id = Op::NAME;
-        input.layer((self.f)(operation_id))
+    fn apply(&self, svc: S) -> Self::Service {
+        (self.f)(Op::ID, svc)
     }
 }
 
@@ -56,9 +52,9 @@ where
 /// // This plugin applies the `PrintService` middleware around every operation.
 /// let plugin = plugin_from_operation_id_fn(f);
 /// ```
-pub fn plugin_from_operation_id_fn<L, F>(f: F) -> OperationIdFn<F>
+pub fn plugin_from_operation_id_fn<NewService, F>(f: F) -> OperationIdFn<F>
 where
-    F: Fn(ShapeId) -> L,
+    F: Fn(ShapeId) -> NewService,
 {
     OperationIdFn { f }
 }
