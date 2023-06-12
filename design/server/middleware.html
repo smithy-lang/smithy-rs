@@ -186,12 +186,21 @@ service PokemonService {
 <p>The <code>tower</code> library is centered around two main interfaces, the <a href="https://docs.rs/tower/latest/tower/trait.Service.html"><code>Service</code></a> trait and the <a href="https://docs.rs/tower/latest/tower/trait.Layer.html"><code>Layer</code></a> trait.</p>
 <p>The <code>Service</code> trait can be thought of as an asynchronous function from a request to a response, <code>async fn(Request) -&gt; Result&lt;Response, Error&gt;</code>, coupled with a mechanism to <a href="https://docs.rs/tower/latest/tower/trait.Service.html#backpressure">handle back pressure</a>, while the <code>Layer</code> trait can be thought of as a way of decorating a <code>Service</code>, transforming either the request or response.</p>
 <p>Middleware in <code>tower</code> typically conforms to the following pattern, a <code>Service</code> implementation of the form</p>
-<pre><code class="language-rust ignore">pub struct NewService&lt;S&gt; {
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct NewService&lt;S&gt; {
     inner: S,
     /* auxillary data */
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>and a complementary</p>
-<pre><code class="language-rust ignore">pub struct NewLayer {
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tower;
+</span><span class="boring">pub struct NewService&lt;S&gt; { inner: S }
+</span>use tower::{Layer, Service};
+
+pub struct NewLayer {
     /* auxiliary data */
 }
 
@@ -204,7 +213,8 @@ impl&lt;S&gt; Layer&lt;S&gt; for NewLayer {
             /* auxiliary fields */
         }
     }
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>The <code>NewService</code> modifies the behavior of the inner <code>Service</code> <code>S</code> while the <code>NewLayer</code> takes auxiliary data and constructs <code>NewService&lt;S&gt;</code> from <code>S</code>.</p>
 <p>Customers are then able to stack middleware by composing <code>Layer</code>s using combinators such as <a href="https://docs.rs/tower/latest/tower/struct.ServiceBuilder.html#method.layer"><code>ServiceBuilder::layer</code></a> and <a href="https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html"><code>Stack</code></a>.</p>
 <!-- TODO(Update documentation): There's a `Layer` implementation on tuples about to be merged, give it as an example here. -->
@@ -251,83 +261,133 @@ impl&lt;S&gt; Layer&lt;S&gt; for NewLayer {
     C4 --&gt; [*]: HTTP Response
 </pre>
 <p>where <code>UpgradeLayer</code> is the <code>Layer</code> converting Smithy model structures to HTTP structures and the <code>RoutingService</code> is responsible for routing requests to the appropriate operation.</p>
-<h3 id="a-outer-middleware"><a class="header" href="#a-outer-middleware">A) Outer Middleware</a></h3>
+<h3 id="a-outer-middleware"><a class="header" href="#a-outer-middleware">A. Outer Middleware</a></h3>
 <p>The output of the Smithy service builder provides the user with a <code>Service&lt;http::Request, Response = http::Response&gt;</code> implementation. A <code>Layer</code> can be applied around the entire <code>Service</code>.</p>
-<pre><code class="language-rust ignore">// This is a HTTP `Service`.
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species(/* handler */)
-    /* ... */
-    .build();
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">extern crate pokemon_service_server_sdk;
+</span><span class="boring">extern crate tower;
+</span><span class="boring">use std::time::Duration;
+</span><span class="boring">struct TimeoutLayer;
+</span><span class="boring">impl TimeoutLayer { fn new(t: Duration) -&gt; Self { Self }}
+</span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for TimeoutLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
+</span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*};
+</span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span>use pokemon_service_server_sdk::PokemonService;
+use tower::Layer;
 
+// This is a HTTP `Service`.
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species(handler)
+    /* ... */
+    .build()
+    .unwrap();
+<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+</span>
 // Construct `TimeoutLayer`.
 let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
 
 // Apply a 3 second timeout to all responses.
-let app = timeout_layer.layer(app);</code></pre>
-<h3 id="b-route-middleware"><a class="header" href="#b-route-middleware">B) Route Middleware</a></h3>
+let app = timeout_layer.layer(app);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="b-route-middleware"><a class="header" href="#b-route-middleware">B. Route Middleware</a></h3>
 <p>A <em>single</em> layer can be applied to <em>all</em> routes inside the <code>Router</code>. This exists as a method on the output of the service builder.</p>
-<pre><code class="language-rust ignore">// Construct `TraceLayer`.
-let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
-
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species(/* handler */)
-    /* ... */
-    .build()
-    // Apply HTTP logging after routing.
-    .layer(&amp;trace_layer);</code></pre>
-<p>Note that requests pass through this middleware immediately <em>after</em> routing succeeds and therefore will <em>not</em> be encountered if routing fails. This means that the <a href="https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html">TraceLayer</a> in the example above does <em>not</em> provide logs unless routing has completed. This contrasts to <a href="#a-outer-middleware">middleware A</a>, which <em>all</em> requests/responses pass through when entering/leaving the service.</p>
-<h3 id="c-operation-specific-http-middleware"><a class="header" href="#c-operation-specific-http-middleware">C) Operation Specific HTTP Middleware</a></h3>
-<p>A &quot;HTTP layer&quot; can be applied to specific operations.</p>
-<pre><code class="language-rust ignore">// Construct `TraceLayer`.
-let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
-
-// Apply HTTP logging to only the `GetPokemonSpecies` operation.
-let layered_handler = GetPokemonSpecies::from_handler(/* handler */).layer(trace_layer);
-
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species_operation(layered_handler)
-    /* ... */
-    .build();</code></pre>
-<p>This middleware transforms the operations HTTP requests and responses.</p>
-<h3 id="d-operation-specific-model-middleware"><a class="header" href="#d-operation-specific-model-middleware">D) Operation Specific Model Middleware</a></h3>
-<p>A &quot;model layer&quot; can be applied to specific operations.</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate tower;
 </span><span class="boring">extern crate pokemon_service_server_sdk;
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">use tower::{util::service_fn, Layer};
-</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
-</span><span class="boring">use aws_smithy_http_server::operation::OperationShapeExt;
+</span><span class="boring">use std::time::Duration;
+</span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span><span class="boring">struct MetricsLayer;
+</span><span class="boring">impl MetricsLayer { pub fn new() -&gt; Self { Self } }
+</span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for MetricsLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
+</span>use pokemon_service_server_sdk::PokemonService;
+
+// Construct `MetricsLayer`.
+let metrics_layer = MetricsLayer::new();
+
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species(handler)
+    /* ... */
+    .build()
+    .unwrap()
+<span class="boring">    ; let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+</span><span class="boring">    app
+</span>    // Apply HTTP logging after routing.
+    .layer(&amp;metrics_layer);
+<span class="boring">}</span></code></pre></pre>
+<p>Note that requests pass through this middleware immediately <em>after</em> routing succeeds and therefore will <em>not</em> be encountered if routing fails. This means that the <a href="https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html">TraceLayer</a> in the example above does <em>not</em> provide logs unless routing has completed. This contrasts to <a href="#a-outer-middleware">middleware A</a>, which <em>all</em> requests/responses pass through when entering/leaving the service.</p>
+<h3 id="c-operation-specific-http-middleware"><a class="header" href="#c-operation-specific-http-middleware">C. Operation Specific HTTP Middleware</a></h3>
+<p>A &quot;HTTP layer&quot; can be applied to specific operations.</p>
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tower;
+</span><span class="boring">extern crate pokemon_service_server_sdk;
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">use tower::{util::service_fn, Layer};
+</span><span class="boring">use std::time::Duration;
+</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+</span><span class="boring">use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
+</span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span><span class="boring">struct LoggingLayer;
+</span><span class="boring">impl LoggingLayer { pub fn new() -&gt; Self { Self } }
+</span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for LoggingLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
+</span>// Construct `LoggingLayer`.
+let logging_plugin = LayerPlugin(LoggingLayer::new());
+let logging_plugin = filter_by_operation_id(logging_plugin, |name| name == GetPokemonSpecies::ID);
+let http_plugins = PluginPipeline::new().push(logging_plugin);
+
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+    .get_pokemon_species(handler)
+    /* ... */
+    .build()
+    .unwrap();
+<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+</span><span class="boring">}</span></code></pre></pre>
+<p>This middleware transforms the operations HTTP requests and responses.</p>
+<h3 id="d-operation-specific-model-middleware"><a class="header" href="#d-operation-specific-model-middleware">D. Operation Specific Model Middleware</a></h3>
+<p>A &quot;model layer&quot; can be applied to specific operations.</p>
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tower;
+</span><span class="boring">extern crate pokemon_service_server_sdk;
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">use tower::{util::service_fn, Layer};
+</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+</span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span><span class="boring">use aws_smithy_http_server::{operation::*, plugin::*};
 </span><span class="boring">struct BufferLayer;
 </span><span class="boring">impl BufferLayer { pub fn new(size: usize) -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for BufferLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>// A handler `Service`.
-let handler_svc = service_fn(handler);
+</span>use pokemon_service_server_sdk::PokemonService;
 
 // Construct `BufferLayer`.
-let buffer_layer = BufferLayer::new(3);
+let buffer_plugin = LayerPlugin(BufferLayer::new(3));
+let buffer_plugin = filter_by_operation_id(buffer_plugin, |name| name != GetPokemonSpecies::ID);
+let model_plugins = PluginPipeline::new().push(buffer_plugin);
 
-// Apply a 3 item buffer to `handler_svc`.
-let handler_svc = buffer_layer.layer(handler_svc);
-
-let layered_handler = GetPokemonSpecies::from_service(handler_svc);
-
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
-    .get_pokemon_species_operation(layered_handler)
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
+    .get_pokemon_species(handler)
     /* ... */
     .build()
-<span class="boring">    ;Result::&lt;(), ()&gt;::Ok(())
-</span>    .unwrap();
-<span class="boring">let app: Result&lt;PokemonService&lt;aws_smithy_http_server::routing::Route&gt;, _&gt; = app;
+    .unwrap();
+<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
 </span><span class="boring">}</span></code></pre></pre>
 <p>In contrast to <a href="#c-operation-specific-http-middleware">position C</a>, this middleware transforms the operations modelled inputs to modelled outputs.</p>
 <h2 id="plugin-system"><a class="header" href="#plugin-system">Plugin System</a></h2>
 <p>Suppose we want to apply a different <code>Layer</code> to every operation. In this case, position B (<code>PokemonService::layer</code>) will not suffice because it applies a single <code>Layer</code> to all routes and while position C (<code>Operation::layer</code>) would work, it'd require the customer constructs the <code>Layer</code> by hand for every operation.</p>
 <p>Consider the following middleware:</p>
-<pre><code class="language-rust ignore">/// A [`Service`] that adds a print log.
-#[derive(Clone, Debug)]
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tower;
+</span>use std::task::{Context, Poll};
+use tower::Service;
+
+/// A [`Service`] that adds a print log.
 pub struct PrintService&lt;S&gt; {
     inner: S,
     name: &amp;'static str,
@@ -350,65 +410,73 @@ where
         self.inner.call(req)
     }
 }
-
-/// A [`Layer`] which constructs the [`PrintService`].
-#[derive(Debug)]
-pub struct PrintLayer {
-    name: &amp;'static str,
-}
-impl&lt;S&gt; Layer&lt;S&gt; for PrintLayer {
-    type Service = PrintService&lt;S&gt;;
-
-    fn layer(&amp;self, service: S) -&gt; Self::Service {
-        PrintService {
-            inner: service,
-            name: self.name,
-        }
-    }
-}</code></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The plugin system provides a way to construct then apply <code>Layer</code>s in position <a href="#c-operation-specific-http-middleware">C</a> and <a href="#d-operation-specific-model-middleware">D</a>, using the <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/index.html">protocol</a> and <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations">operation shape</a> as parameters.</p>
-<p>An example of a <code>PrintPlugin</code> which applies a layer printing the operation name:</p>
-<pre><code class="language-rust ignore">/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+<p>An example of a <code>PrintPlugin</code> which prints the operation name:</p>
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">pub struct PrintService&lt;S&gt; { inner: S, name: &amp;'static str }
+</span>use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape};
+
+/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl&lt;P, Op, S, L&gt; Plugin&lt;P, Op, S, L&gt; for PrintPlugin
+impl&lt;P, Op, S&gt; Plugin&lt;P, Op, S&gt; for PrintPlugin
 where
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack&lt;L, PrintLayer&gt;;
+    type Service = PrintService&lt;S&gt;;
 
-    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
-        input.layer(PrintLayer { name: Op::NAME })
+    fn apply(&amp;self, inner: S) -&gt; Self::Service {
+        PrintService { name: Op::ID.name(), inner }
     }
-}</code></pre>
-<p>An alternative example which applies a layer for a given protocol:</p>
-<pre><code class="language-rust ignore">/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+}
+<span class="boring">}</span></code></pre></pre>
+<p>An alternative example which prints the protocol name:</p>
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">pub struct PrintService&lt;S&gt; { name: &amp;'static str, inner: S}
+</span>use aws_smithy_http_server::{
+    plugin::Plugin,
+    proto::{
+        aws_json_10::AwsJson1_0,
+        rest_xml::RestXml,
+    }
+};
+
+/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl&lt;Op, S, L&gt; Plugin&lt;AwsRestJson1, Op, S, L&gt; for PrintPlugin
+impl&lt;Op, S&gt; Plugin&lt;AwsJson1_0, Op, S&gt; for PrintPlugin
 {
-    type Service = S;
-    type Layer = Stack&lt;L, PrintLayer&gt;;
+    type Service = PrintService&lt;S&gt;;
 
-    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
-        input.layer(PrintLayer { name: &quot;AWS REST JSON v1&quot; })
+    fn apply(&amp;self, inner: S) -&gt; Self::Service {
+        PrintService { name: &quot;AWS JSON 1.0&quot;, inner }
     }
 }
 
-impl&lt;Op, S, L&gt; Plugin&lt;AwsRestXml, Op, S, L&gt; for PrintPlugin
+impl&lt;Op, S&gt; Plugin&lt;RestXml, Op, S&gt; for PrintPlugin
 {
-    type Service = S;
-    type Layer = Stack&lt;L, PrintLayer&gt;;
+    type Service = PrintService&lt;S&gt;;
 
-    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
-        input.layer(PrintLayer { name: &quot;AWS REST XML&quot; })
+    fn apply(&amp;self, inner: S) -&gt; Self::Service {
+        PrintService { name: &quot;AWS REST XML&quot;, inner }
     }
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>You can provide a custom method to add your plugin to a <code>PluginPipeline</code> via an extension trait:</p>
-<pre><code class="language-rust ignore">/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">pub struct PrintPlugin;
+</span>use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+
+/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
 pub trait PrintExt&lt;ExistingPlugins&gt; {
     /// Causes all operations to print the operation name when called.
     ///
@@ -420,16 +488,34 @@ impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for PluginPipeline&l
     fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt; {
         self.push(PrintPlugin)
     }
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>This allows for:</p>
-<pre><code class="language-rust ignore">let plugin_pipeline = PluginPipeline::new()
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate pokemon_service_server_sdk;
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">use aws_smithy_http_server::plugin::{PluginStack, Plugin};
+</span><span class="boring">struct PrintPlugin;
+</span><span class="boring">impl&lt;P, Op, S&gt; Plugin&lt;P, Op, S&gt; for PrintPlugin { type Service = S; fn apply(&amp;self, svc: S) -&gt; Self::Service { svc }}
+</span><span class="boring">trait PrintExt&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt;; }
+</span><span class="boring">impl&lt;EP&gt; PrintExt&lt;EP&gt; for PluginPipeline&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt; { self.push(PrintPlugin) }}
+</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+</span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span>use aws_smithy_http_server::plugin::{IdentityPlugin, PluginPipeline};
+use pokemon_service_server_sdk::PokemonService;
+
+let http_plugins = PluginPipeline::new()
     // [..other plugins..]
     // The custom method!
     .print();
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(plugin_pipeline)
-    .get_pokemon_species_operation(layered_handler)
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+    .get_pokemon_species(handler)
     /* ... */
-    .build();</code></pre>
+    .build()
+    .unwrap();
+<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+</span><span class="boring">}</span></code></pre></pre>
 <p>The custom <code>print</code> method hides the details of the <code>Plugin</code> trait from the average consumer.
 They interact with the utility methods on <code>PluginPipeline</code> and enjoy the self-contained documentation.</p>
 

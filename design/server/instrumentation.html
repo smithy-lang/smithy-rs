@@ -159,7 +159,14 @@
 <pre><code class="language-bash">RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 </code></pre>
 <p>and</p>
-<pre><code class="language-rust ignore ignore">let filter = filter::Targets::new().with_target(&quot;aws_smithy_http_server&quot;, Level::DEBUG);</code></pre>
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tracing_subscriber;
+</span><span class="boring">extern crate tracing;
+</span><span class="boring">use tracing_subscriber::filter;
+</span><span class="boring">use tracing::Level;
+</span>let filter = filter::Targets::new().with_target(&quot;aws_smithy_http_server&quot;, Level::DEBUG);
+<span class="boring">}</span></code></pre></pre>
 <p>In general, Smithy Rust is conservative when using high-priority log levels:</p>
 <ul>
 <li>ERROR
@@ -203,24 +210,43 @@
 <li>Emits a DEBUG level event, after to request handling, including the response headers and status code.</li>
 </ul>
 <p>This is enabled via the <code>instrument</code> method provided by the <code>aws_smithy_http_server::instrumentation::InstrumentExt</code> trait.</p>
-<pre><code class="language-rust ignore">use aws_smithy_http_server::instrumentation::InstrumentExt;
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
+</span><span class="boring">extern crate pokemon_service_server_sdk;
+</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+</span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span>use aws_smithy_http_server::{
+  instrumentation::InstrumentExt,
+  plugin::{IdentityPlugin, PluginPipeline}
+};
+use pokemon_service_server_sdk::PokemonService;
 
-let plugins = PluginPipeline::new().instrument();
-let app = PokemonService::builder_with_plugins(plugins)
-  .get_pokemon_species(/* handler */)
+let http_plugins = PluginPipeline::new().instrument();
+let app = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+  .get_pokemon_species(handler)
   /* ... */
-  .build();</code></pre>
+  .build()
+  .unwrap();
+<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+</span><span class="boring">}</span></code></pre></pre>
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 <h3 id="example"><a class="header" href="#example">Example</a></h3>
 <p>The Pokémon service example, located at <code>/examples/pokemon-service</code>, sets up a <code>tracing</code> <code>Subscriber</code> as follows:</p>
-<pre><code class="language-rust ignore ignore">/// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
+<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate tracing_subscriber;
+</span>use tracing_subscriber::{prelude::*, EnvFilter};
+
+/// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&quot;info&quot;))
         .unwrap();
     tracing_subscriber::registry().with(format).with(filter).init();
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>Running the Pokémon service example using</p>
 <pre><code class="language-bash">RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 </code></pre>
