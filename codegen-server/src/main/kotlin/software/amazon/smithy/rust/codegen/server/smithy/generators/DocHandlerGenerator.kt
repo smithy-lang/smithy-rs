@@ -53,17 +53,21 @@ class DocHandlerGenerator(
         }
     }
 
+    /**
+     * Similarly to `docSignature`, returns the function signature of an operation handler implementation, with the
+     * difference that we don't ellide the error for use in `tower::service_fn`.
+     */
     fun docFixedSignature(): Writable {
-        val outputT = if (operation.errors.isEmpty()) {
-            "Result<${OutputModule.name}::${outputSymbol.name}, std::convert::Infallible>"
+        val errorT = if (operation.errors.isEmpty()) {
+            "std::convert::Infallible"
         } else {
-            "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
+            "${ErrorModule.name}::${errorSymbol.name}"
         }
 
         return writable {
             rust(
                 """
-                $commentToken async fn $handlerName(input: ${InputModule.name}::${inputSymbol.name}) -> $outputT {
+                $commentToken async fn $handlerName(input: ${InputModule.name}::${inputSymbol.name}) -> Result<${OutputModule.name}::${outputSymbol.name}, $errorT> {
                 $commentToken     todo!()
                 $commentToken }
                 """.trimIndent(),
