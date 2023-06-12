@@ -274,6 +274,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val String = std.resolve("string::String")
         val Sync = std.resolve("marker::Sync")
         val TryFrom = stdConvert.resolve("TryFrom")
+        val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
         // external cargo dependency types
