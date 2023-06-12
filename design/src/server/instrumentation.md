@@ -19,7 +19,7 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 
 and
 
-```rust
+```rust,ignore,ignore
 let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 ```
 
@@ -55,7 +55,7 @@ Smithy provides an out-the-box middleware which:
 
 This is enabled via the `instrument` method provided by the `aws_smithy_http_server::instrumentation::InstrumentExt` trait.
 
-```rust
+```rust,ignore
 use aws_smithy_http_server::instrumentation::InstrumentExt;
 
 let plugins = PluginPipeline::new().instrument();
@@ -71,7 +71,7 @@ let app = PokemonService::builder_with_plugins(plugins)
 
 The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
-```rust
+```rust,ignore,ignore
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();

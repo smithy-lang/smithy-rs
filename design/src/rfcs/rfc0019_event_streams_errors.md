@@ -16,7 +16,7 @@ The user experience if this RFC is implemented
 ----------------------------------------------
 
 In the current version of smithy-rs, customers who want to use errors in event streams need to use them as so:
-```rust
+```rust,ignore
 stream! {
     yield Ok(EventStreamUnion::ErrorVariant ...)
 }
@@ -27,7 +27,7 @@ it does not signal termination and thus does not complete the stream.
 This RFC proposes to make changes to:
 * terminate the stream upon receiving a modeled error
 * change the API so that customers will write their business logic in a more Rust-like experience:
-```rust
+```rust,ignore
 stream! {
     yield Err(EventStreamUnionError::ErrorKind ...)
 }
@@ -130,7 +130,7 @@ Wherever irrelevant, documentation and other lines are stripped out from the cod
 The error in `AttemptCapturingPokemonEvent` is modeled as follows.
 
 On the client,
-```rust
+```rust,ignore
 pub struct AttemptCapturingPokemonEventError {
     pub kind: AttemptCapturingPokemonEventErrorKind,
     pub(crate) meta: aws_smithy_types::Error,
@@ -142,7 +142,7 @@ pub enum AttemptCapturingPokemonEventErrorKind {
 ```
 
 On the server,
-```rust
+```rust,ignore
 pub enum AttemptCapturingPokemonEventError {
     MasterBallUnsuccessful(crate::error::MasterBallUnsuccessful),
 }
@@ -160,7 +160,7 @@ On the other side, the `Receiver<>` needs to terminate the stream upon [receivin
 A terminated stream has [no more data](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L38) and will always be a [bug](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L54) to use it.
 
 An example of how errors can be used on clients, extracted from [this test](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs#L100):
-```rust
+```rust,ignore
 yield Err(AttemptCapturingPokemonEventError::new(
     AttemptCapturingPokemonEventErrorKind::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()),
     Default::default()

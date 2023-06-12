@@ -132,7 +132,19 @@ RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.20.0
-RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
+
+FROM install_rust AS cargo_mdbook
+ARG cargo_mdbook_version=0.4.30
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook --locked --version ${cargo_mdbook_version}
+
+FROM install_rust AS cargo_mdbook_mermaid
+ARG cargo_mdbook_mermaid_version=0.12.6
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+
 #
 # Final image
 #
@@ -170,6 +182,8 @@ COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
 COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
+COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
+COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
 # TODO(Rust 1.70): The sparse registry config (`CARGO_REGISTRIES_CRATES_IO_PROTOCOL`) can be removed when upgrading to Rust 1.70

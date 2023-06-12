@@ -8,13 +8,14 @@
 use crate::presigning::PresigningConfig;
 use crate::serialization_settings::HeaderSerializationSettings;
 use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
-use aws_runtime::invocation_id::DisableInvocationIdInterceptor;
-use aws_runtime::request_info::DisableRequestInfoInterceptor;
-use aws_runtime::user_agent::DisableUserAgentInterceptor;
+use aws_runtime::invocation_id::InvocationIdInterceptor;
+use aws_runtime::request_info::RequestInfoInterceptor;
+use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime_api::client::interceptors::{
-    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
-    Interceptor, InterceptorRegistrar, SharedInterceptor,
+    disable_interceptor, BeforeSerializationInterceptorContextMut,
+    BeforeTransmitInterceptorContextMut, BoxError, Interceptor, InterceptorRegistrar,
+    SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
@@ -92,9 +93,9 @@ impl RuntimePlugin for SigV4PresigningRuntimePlugin {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         // Disable some SDK interceptors that shouldn't run for presigning
-        cfg.put(DisableInvocationIdInterceptor::new("presigning"));
-        cfg.put(DisableRequestInfoInterceptor::new("presigning"));
-        cfg.put(DisableUserAgentInterceptor::new("presigning"));
+        cfg.put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
+        cfg.put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
+        cfg.put(disable_interceptor::<UserAgentInterceptor>("presigning"));
 
         // Register the presigning interceptor
         interceptors.register(self.interceptor.clone());
