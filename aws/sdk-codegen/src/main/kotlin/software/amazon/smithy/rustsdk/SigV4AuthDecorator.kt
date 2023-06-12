@@ -131,8 +131,6 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                     val signingOptional = section.operationShape.hasTrait<OptionalAuthTrait>()
                     rustTemplate(
                         """
-                        let signing_region = cfg.get::<#{SigningRegion}>().cloned();
-                        let signing_service = cfg.get::<#{SigningService}>().cloned();
                         let mut signing_options = #{SigningOptions}::default();
                         signing_options.double_uri_encode = $doubleUriEncode;
                         signing_options.content_sha256_header = $contentSha256Header;
@@ -141,8 +139,8 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         signing_options.payload_override = #{payload_override};
 
                         ${section.configBagName}.put(#{SigV4OperationSigningConfig} {
-                            region: signing_region,
-                            service: signing_service,
+                            region: None,
+                            service: None,
                             signing_options,
                         });
                         // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
