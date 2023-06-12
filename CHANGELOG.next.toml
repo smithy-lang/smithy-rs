@@ -164,6 +164,12 @@ references = ["smithy-rs#2678"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 
 [[smithy-rs]]
+message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
+references = ["smithy-rs#2758"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
 message = """
 The `Plugin` trait has now been simplified and the `Operation` struct has been removed.
 

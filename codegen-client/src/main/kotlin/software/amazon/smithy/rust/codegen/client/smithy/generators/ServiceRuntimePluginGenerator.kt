@@ -97,7 +97,6 @@ class ServiceRuntimePluginGenerator(
             "Params" to endpointTypesGenerator.paramsStruct(),
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "default_connector" to client.resolve("conns::default_connector"),
             "require_connector" to client.resolve("conns::require_connector"),
@@ -134,7 +133,7 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(#{Vec}::new()));
 
                     let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                        #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
+                        self.handle.conf.endpoint_resolver());
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
                     // TODO(enableNewSmithyRuntime): Use the `store_append` method of ConfigBag to insert classifiers
