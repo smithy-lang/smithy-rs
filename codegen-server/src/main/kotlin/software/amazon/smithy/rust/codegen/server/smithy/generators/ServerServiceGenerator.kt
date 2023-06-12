@@ -478,13 +478,13 @@ class ServerServiceGenerator(
     }
 
     private fun missingOperationsError(): Writable = writable {
-        rust(
+        rustTemplate(
             """
             /// The error encountered when calling the [`$builderName::build`] method if one or more operation handlers are not
             /// specified.
             ##[derive(Debug)]
             pub struct MissingOperationsError {
-                operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
+                operation_names2setter_methods: std::collections::HashMap<#{SmithyHttpServer}::shape_id::ShapeId, &'static str>,
             }
 
             impl std::fmt::Display for MissingOperationsError {
@@ -495,7 +495,7 @@ class ServerServiceGenerator(
                         We are missing handlers for the following operations:\n",
                     )?;
                     for operation_name in self.operation_names2setter_methods.keys() {
-                        writeln!(f, "- {}", operation_name)?;
+                        writeln!(f, "- {}", operation_name.absolute())?;
                     }
 
                     writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
@@ -508,6 +508,7 @@ class ServerServiceGenerator(
 
             impl std::error::Error for MissingOperationsError {}
             """,
+            *codegenScope,
         )
     }
 

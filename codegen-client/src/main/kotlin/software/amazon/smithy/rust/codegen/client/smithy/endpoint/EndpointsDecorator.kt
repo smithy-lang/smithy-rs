@@ -169,12 +169,14 @@ class EndpointsDecorator : ClientCodegenDecorator {
             val codegenScope = arrayOf(
                 *RuntimeType.preludeScope,
                 "Params" to typesGenerator.paramsStruct(),
+                "ResolveEndpoint" to types.resolveEndpoint,
                 "ResolveEndpointError" to types.resolveEndpointError,
             )
             return when (section) {
                 is OperationSection.MutateInput -> writable {
                     rustTemplate(
                         """
+                        use #{ResolveEndpoint};
                         let params_result = #{Params}::builder()#{builderFields:W}.build()
                             .map_err(|err| #{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
                         let (endpoint_result, params) = match params_result {
