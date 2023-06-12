@@ -182,7 +182,7 @@ async fn try_op(
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
-    for i in 0usize.. {
+    for i in 1usize.. {
         debug!("beginning attempt #{i}");
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
