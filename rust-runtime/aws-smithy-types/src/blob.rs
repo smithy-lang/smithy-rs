@@ -3,16 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(all(
-    aws_sdk_unstable,
-    any(feature = "serde-deserialize", feature = "serde-serialize")
-))]
-use crate::base64;
-#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
-use serde::Serialize;
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-use serde::{de::Visitor, Deserialize};
-
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
