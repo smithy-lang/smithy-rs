@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin};
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -28,14 +27,11 @@ impl StandardTokenBucketRuntimePlugin {
 }
 
 impl RuntimePlugin for StandardTokenBucketRuntimePlugin {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        _interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut cfg = Layer::new("standard token bucket");
         cfg.store_put(self.token_bucket.clone());
 
-        Ok(())
+        Some(cfg.freeze())
     }
 }
 
