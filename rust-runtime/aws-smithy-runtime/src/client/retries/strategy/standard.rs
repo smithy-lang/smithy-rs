@@ -476,6 +476,54 @@ mod tests {
 
     #[cfg(feature = "test-util")]
     #[test]
+    fn quota_replenishes_on_first_try_success() {
+        const PERMIT_COUNT: usize = 20;
+        let (mut cfg, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::TransientError)]);
+        let strategy = StandardRetryStrategy::default()
+            .with_base(|| 1.0)
+            .with_max_attempts(usize::MAX);
+        cfg.put(StandardTokenBucket::new(PERMIT_COUNT));
+        let token_bucket = cfg.get::<StandardTokenBucket>().unwrap().clone();
+
+        let mut attempt = 1;
+
+        // Drain all available permits with failed attempts
+        while token_bucket.available_permits() > 0 {
+            // Draining should complete in 2 attempts
+            if attempt > 2 {
+                panic!("This test should have completed by now (drain)");
+            }
+
+            cfg.put(RequestAttempts::new(attempt));
+            let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+            assert!(matches!(should_retry, ShouldAttempt::YesAfterDelay(_)));
+            attempt += 1;
+        }
+
+        // Forget the permit so that we can only refill by "success on first try".
+        let permit = strategy.retry_permit.lock().unwrap().take().unwrap();
+        permit.forget();
+
+        ctx.set_output_or_error(Ok(TypeErasedBox::doesnt_matter()));
+
+        // Replenish permits until we get back to `PERMIT_COUNT`
+        while token_bucket.available_permits() < PERMIT_COUNT {
+            if attempt > 23 {
+                panic!("This test should have completed by now (fillup)");
+            }
+
+            cfg.put(RequestAttempts::new(attempt));
+            let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+            assert_eq!(no_retry, ShouldAttempt::No);
+            attempt += 1;
+        }
+
+        assert_eq!(attempt, 23);
+        assert_eq!(token_bucket.available_permits(), PERMIT_COUNT);
+    }
+
+    #[cfg(feature = "test-util")]
+    #[test]
     fn backoff_timing() {
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()

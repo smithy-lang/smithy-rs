@@ -9,6 +9,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tracing::trace;
 
 /// A [RuntimePlugin] to provide a standard token bucket, usable by the
 /// [`StandardRetryStrategy`](crate::client::retries::strategy::standard::StandardRetryStrategy).
@@ -90,7 +91,8 @@ impl StandardTokenBucket {
     }
 
     pub(crate) fn regenerate_a_token(&self) {
-        if self.semaphore.available_permits() < (self.max_permits - 1) {
+        if self.semaphore.available_permits() < (self.max_permits) {
+            trace!("adding {PERMIT_REGENERATION_AMOUNT} back into the bucket");
             self.semaphore.add_permits(PERMIT_REGENERATION_AMOUNT)
         }
     }

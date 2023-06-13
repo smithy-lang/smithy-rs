@@ -82,10 +82,10 @@ impl RetryClassifiers {
 }
 
 impl ClassifyRetry for RetryClassifiers {
-    fn classify_retry(&self, error: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
         // return the first non-None result
         self.inner.iter().find_map(|cr| {
-            let maybe_reason = cr.classify_retry(error);
+            let maybe_reason = cr.classify_retry(ctx);
 
             match maybe_reason.as_ref() {
                 Some(reason) => trace!(

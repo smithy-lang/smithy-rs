@@ -31,15 +31,6 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
 
     /**
-     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
-     *
-     * Should emit code that looks like the following:
-     ```
-     .with_classifier(AwsErrorCodeClassifier::new())
-     */
-    data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
-
-    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val configBagName: String, val interceptorRegistrarName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -100,6 +91,8 @@ class ServiceRuntimePluginGenerator(
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "default_connector" to client.resolve("conns::default_connector"),
             "require_connector" to client.resolve("conns::require_connector"),
+            "TimeoutConfig" to smithyTypes.resolve("timeout::TimeoutConfig"),
+            "RetryConfig" to smithyTypes.resolve("retry::RetryConfig"),
         )
     }
 
@@ -136,22 +129,17 @@ class ServiceRuntimePluginGenerator(
                         self.handle.conf.endpoint_resolver());
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
-                    // TODO(enableNewSmithyRuntime): Use the `store_append` method of ConfigBag to insert classifiers
-                    let retry_classifiers = #{RetryClassifiers}::new()
-                        #{retry_classifier_customizations};
-                    cfg.set_retry_classifiers(retry_classifiers);
+                    // TODO(enableNewSmithyRuntime): Make it possible to set retry classifiers at the service level.
+                    //     Retry classifiers can also be set at the operation level and those should be added to the
+                    //     list of classifiers defined here, rather than replacing them.
 
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let timeout_config = self.handle.conf.timeout_config();
-                    let retry_config = self.handle.conf.retry_config();
+                    let timeout_config = self.handle.conf.timeout_config().cloned().unwrap_or_else(|| #{TimeoutConfig}::disabled());
+                    let retry_config = self.handle.conf.retry_config().cloned().unwrap_or_else(|| #{RetryConfig}::disabled());
 
-                    if let Some(retry_config) = retry_config {
-                        cfg.set_retry_strategy(#{StandardRetryStrategy}::new(retry_config));
-                    } else if cfg.retry_strategy().is_none() {
-                        cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
-                    }
+                    cfg.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
 
-                    let connector_settings = timeout_config.map(#{ConnectorSettings}::from_timeout_config).unwrap_or_default();
+                    let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
                     let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
                         // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                         #{require_connector}(
@@ -174,9 +162,6 @@ class ServiceRuntimePluginGenerator(
             *codegenScope,
             "http_auth_scheme_customizations" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
-            },
-            "retry_classifier_customizations" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.RetryClassifier("cfg"))
             },
             "additional_config" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_interceptors"))
