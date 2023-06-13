@@ -295,7 +295,6 @@ impl Git for GitCLI {
         let (stdout, _) = output_text(&output);
         Ok(stdout
             .split_ascii_whitespace()
-            .into_iter()
             .map(CommitHash::from)
             .collect())
     }
