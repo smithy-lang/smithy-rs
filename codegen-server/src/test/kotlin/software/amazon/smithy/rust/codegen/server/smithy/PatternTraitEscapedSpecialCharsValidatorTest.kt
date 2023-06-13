@@ -81,6 +81,28 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
     }
 
     @Test
+    fun `should report errors on string members`() {
+        val exception = shouldThrow<ValidatedResultException> {
+            """
+            namespace test
+    
+            @pattern("\t")
+            string MyString
+            
+            structure MyStructure {
+                @pattern("\b")
+                field: String
+            }
+            """.asSmithyModel(smithyVersion = "2")
+        }
+        val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
+
+        events shouldHaveSize 2
+        events[0].shapeId.get() shouldBe ShapeId.from("test#MyString")
+        events[1].shapeId.get() shouldBe ShapeId.from("test#MyStructure\$field")
+    }
+
+    @Test
     fun `shouldn't error out if special chars are properly escaped`() {
         """
         namespace test

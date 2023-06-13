@@ -25,7 +25,9 @@ class PatternTraitEscapedSpecialCharsValidator : AbstractValidator() {
     private val specialChars = specialCharsWithEscapes.keys
 
     override fun validate(model: Model): List<ValidationEvent> {
-        return model.getStringShapesWithTrait(PatternTrait::class.java)
+        val shapes = model.getStringShapesWithTrait(PatternTrait::class.java) +
+            model.getMemberShapesWithTrait(PatternTrait::class.java)
+        return shapes
             .filter { shape -> checkMisuse(shape) }
             .map { shape -> makeError(shape) }
             .toList()
@@ -46,7 +48,7 @@ class PatternTraitEscapedSpecialCharsValidator : AbstractValidator() {
         return error(shape, pattern, message)
     }
 
-    private fun checkMisuse(shape: StringShape): Boolean {
+    private fun checkMisuse(shape: Shape): Boolean {
         val pattern = shape.expectTrait<PatternTrait>().pattern.pattern()
         return pattern.any(specialChars::contains)
     }
