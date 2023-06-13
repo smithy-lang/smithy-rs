@@ -2,3 +2,7 @@
 # Tools shouldn't share `target` with the rest of the project to
 # avoid thrash from differing compiler flags
 target-dir = "target"
+
+# TODO(Rust 1.70): The sparse registry config can be removed when upgrading to Rust 1.70
+[registries.crates-io]
+protocol = "sparse"
