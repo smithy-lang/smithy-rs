@@ -25,7 +25,6 @@ impl AsyncSleep for InstantSleep {
 
 #[tokio::test]
 async fn api_call_timeout_retries() {
-    tracing_subscriber::fmt::init();
     let conn = NeverConnector::new();
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
