@@ -16,3 +16,9 @@ message = "Invert `seen_${var}` to `${var}_seen`, preventing compilation errors 
 references = ["smithy-rs#2789"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
 author = "hlbarber"
+
+[[smithy-rs]]
+message = "Fix server SDK bug with directly constrained list/map shapes in operation output."
+references = ["smithy-rs#2761"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
