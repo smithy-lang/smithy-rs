@@ -205,7 +205,6 @@ fn calculate_exponential_backoff(base: f64, initial_backoff: f64, retry_attempts
 #[cfg(test)]
 mod tests {
     use super::{calculate_exponential_backoff, ShouldAttempt, StandardRetryStrategy};
-    use crate::client::runtime_plugin::standard_token_bucket::StandardTokenBucket;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
     use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
@@ -218,6 +217,9 @@ mod tests {
     use std::fmt;
     use std::sync::Mutex;
     use std::time::Duration;
+
+    #[cfg(feature = "test-util")]
+    use crate::client::runtime_plugin::standard_token_bucket::StandardTokenBucket;
 
     #[test]
     fn no_retry_necessary_for_ok_result() {
@@ -314,6 +316,7 @@ mod tests {
         retry_reasons: Mutex<Vec<RetryReason>>,
     }
 
+    #[cfg(feature = "test-util")]
     impl PresetReasonRetryClassifier {
         fn new(mut retry_reasons: Vec<RetryReason>) -> Self {
             // We'll pop the retry_reasons in reverse order so we reverse the list to fix that.
@@ -343,6 +346,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "test-util")]
     fn setup_test(retry_reasons: Vec<RetryReason>) -> (ConfigBag, InterceptorContext) {
         let mut cfg = ConfigBag::base();
         cfg.set_retry_classifiers(
@@ -356,6 +360,7 @@ mod tests {
         (cfg, ctx)
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
         let (mut cfg, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
@@ -385,6 +390,7 @@ mod tests {
         assert_eq!(token_bucket.available_permits(), 495);
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
@@ -412,6 +418,7 @@ mod tests {
         assert_eq!(token_bucket.available_permits(), 490);
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
@@ -433,6 +440,7 @@ mod tests {
         assert_eq!(token_bucket.available_permits(), 0);
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn quota_replenishes_on_success() {
         let (mut cfg, mut ctx) = setup_test(vec![
@@ -466,6 +474,7 @@ mod tests {
         assert_eq!(token_bucket.available_permits(), 100);
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
@@ -505,6 +514,7 @@ mod tests {
         assert_eq!(token_bucket.available_permits(), 480);
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
