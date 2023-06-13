@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 fun testClientRustSettings(
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
@@ -73,7 +74,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
     )
 
 fun testClientCodegenContext(
-    model: Model,
+    model: Model = "namespace empty".asSmithyModel(),
     symbolProvider: RustSymbolProvider? = null,
     serviceShape: ServiceShape? = null,
     settings: ClientRustSettings = testClientRustSettings(),

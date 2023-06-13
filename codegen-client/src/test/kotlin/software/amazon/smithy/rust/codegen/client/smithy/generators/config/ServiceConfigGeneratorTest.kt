@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.withSmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -152,7 +151,7 @@ internal class ServiceConfigGeneratorTest {
         val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         val codegenContext = testClientCodegenContext(model).withSmithyRuntimeMode(smithyRuntimeMode)
         val sut = ServiceConfigGenerator(codegenContext, listOf(ServiceCustomizer(codegenContext)))
-        val symbolProvider = testSymbolProvider(model)
+        val symbolProvider = codegenContext.symbolProvider
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ClientRustModule.Config) {
             sut.render(this)

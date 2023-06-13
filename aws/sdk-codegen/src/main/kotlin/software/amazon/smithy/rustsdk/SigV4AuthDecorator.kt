@@ -138,7 +138,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
 
-                        ${section.configBagName}.put(#{SigV4OperationSigningConfig} {
+                        ${section.newLayerName}.put(#{SigV4OperationSigningConfig} {
                             region: None,
                             service: None,
                             signing_options,
@@ -147,7 +147,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         let auth_option_resolver = #{StaticAuthOptionResolver}::new(
                             vec![#{SIGV4_SCHEME_ID}]
                         );
-                        ${section.configBagName}.set_auth_option_resolver(auth_option_resolver);
+                        ${section.newLayerName}.set_auth_option_resolver(auth_option_resolver);
                         """,
                         *codegenScope,
                         "payload_override" to writable {

@@ -166,9 +166,9 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
 
                 ServiceConfig.BuilderBuild -> rust("self.interceptors.into_iter().for_each(|i| { layer.store_append(i); });")
 
-                ServiceConfig.ToRuntimePlugin -> rust(
+                is ServiceConfig.RuntimePluginInterceptors -> rust(
                     """
-                    interceptors.extend(self.interceptors.iter().cloned());
+                    ${section.interceptors}.extend(self.interceptors.iter().cloned());
                     """,
                 )
 

@@ -308,12 +308,12 @@ class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomiz
             rust(
                 """
                 if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
-                    ${section.configBagName}.put(sleep_impl);
+                    ${section.newLayerName}.put(sleep_impl);
                 }
                 if let Some(timeout_config) = self.handle.conf.timeout_config() {
-                    ${section.configBagName}.put(timeout_config.clone());
+                    ${section.newLayerName}.put(timeout_config.clone());
                 }
-                ${section.configBagName}.put(self.handle.conf.time_source());
+                ${section.newLayerName}.put(self.handle.conf.time_source().clone());
                 """,
             )
         }

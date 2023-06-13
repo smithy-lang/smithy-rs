@@ -103,13 +103,19 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-            if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                section.putConfigValue(this) {
-                    rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+            when (section) {
+                is ServiceRuntimePluginSection.AdditionalConfig -> {
+                    section.putConfigValue(this) {
+                        rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                    }
                 }
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+
+                is ServiceRuntimePluginSection.RegisterInterceptor -> {
+                    section.registerInterceptor(runtimeConfig, this) {
+                        rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                    }
                 }
+                else -> emptySection
             }
         }
     }

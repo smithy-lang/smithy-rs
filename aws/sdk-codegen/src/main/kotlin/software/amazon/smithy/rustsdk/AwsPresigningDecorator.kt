@@ -229,7 +229,7 @@ class AwsInputPresignedMethod(
                 }
                 rustTemplate(
                     """
-                    let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
+                    let config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
                     config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
                     config.expires_in = Some(presigning_config.expires());

@@ -144,7 +144,7 @@ mod tests {
     use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
     use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
     use aws_smithy_runtime_api::client::retries::{AlwaysRetry, RetryClassifiers, RetryStrategy};
-    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::ErrorKind;
     use aws_smithy_types::type_erasure::TypeErasedBox;
     use std::time::Duration;
@@ -167,9 +167,12 @@ mod tests {
     ) -> (InterceptorContext, ConfigBag) {
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
-        let mut cfg = ConfigBag::base();
-        cfg.set_retry_classifiers(RetryClassifiers::new().with_classifier(AlwaysRetry(error_kind)));
-        cfg.put(RequestAttempts::new(current_request_attempts));
+        let mut layer = Layer::new("test");
+        layer.set_retry_classifiers(
+            RetryClassifiers::new().with_classifier(AlwaysRetry(error_kind)),
+        );
+        layer.put(RequestAttempts::new(current_request_attempts));
+        let cfg = ConfigBag::of_layers(vec![layer]);
 
         (ctx, cfg)
     }
