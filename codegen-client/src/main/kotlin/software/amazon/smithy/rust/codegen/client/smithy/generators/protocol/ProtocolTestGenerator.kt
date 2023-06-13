@@ -321,7 +321,7 @@ class DefaultProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -360,7 +360,9 @@ class DefaultProtocolTestGenerator(
                 let de = #{OperationDeserializer};
                 let parsed = de.deserialize_streaming(&mut http_response);
                 let parsed = parsed.unwrap_or_else(|| {
-                    let http_response = http_response.map(|body|#{copy_from_slice}(body.bytes().unwrap()));
+                    let http_response = http_response.map(|body| {
+                        #{SdkBody}::from(#{copy_from_slice}(body.bytes().unwrap()))
+                    });
                     de.deserialize_nonstreaming(&http_response)
                 });
                 """,
@@ -369,12 +371,19 @@ class DefaultProtocolTestGenerator(
                 "copy_from_slice" to RuntimeType.Bytes.resolve("copy_from_slice"),
                 "ResponseDeserializer" to CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType()
                     .resolve("client::orchestrator::ResponseDeserializer"),
+                "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             )
         }
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
+            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                rustTemplate(
+                    """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
+                    "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
+                )
+            }
             rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
                 compareMembers(expectedShape)
             }
@@ -382,7 +391,14 @@ class DefaultProtocolTestGenerator(
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
-            rust("let parsed = parsed.unwrap();")
+            if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                rust("let parsed = parsed.unwrap();")
+            } else {
+                rustTemplate(
+                    """let parsed: #{Output} = *parsed.expect("should be successful response").downcast().unwrap();""",
+                    "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
+                )
+            }
             compareMembers(outputShape)
         }
     }
