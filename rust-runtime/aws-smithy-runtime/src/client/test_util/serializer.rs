@@ -44,10 +44,8 @@ impl RequestSerializer for CannedRequestSerializer {
         _input: Input,
         _cfg: &mut ConfigBag,
     ) -> Result<HttpRequest, BoxError> {
-        let req = self
-            .take()
-            .ok_or("CannedRequestSerializer's inner value has already been taken.")?;
-        req
+        self.take()
+            .ok_or("CannedRequestSerializer's inner value has already been taken.")?
     }
 }
 

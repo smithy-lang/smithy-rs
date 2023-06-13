@@ -134,6 +134,18 @@ references = ["smithy-rs#2742"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.68.2"
+references = ["smithy-rs#2745"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.68.2"
+references = ["smithy-rs#2745"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
+
 [[smithy-rs]]
 message = """`ShapeId` is the new structure used to represent a shape, with its absolute name, namespace and name.
 `OperationExtension`'s members are replaced by the `ShapeId` and operations' names are now replced by a `ShapeId`.
