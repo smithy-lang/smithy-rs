@@ -1,9 +1,12 @@
 [book]
+title = "Smithy Rust"
 authors = ["Russell Cohen", "aws-sdk-rust@amazon.com"]
 language = "en"
 multilingual = false
 src = "src"
-title = "AWS Rust SDK Design"
+
+[rust]
+edition = "2021"
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"

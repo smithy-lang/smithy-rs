@@ -53,7 +53,7 @@ open class ServerRootGenerator(
         val hasErrors = operations.any { it.errors.isNotEmpty() }
         val handlers: Writable = operations
             .map { operation ->
-                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
+                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature()
             }
             .join("//!\n")
 
@@ -110,6 +110,7 @@ open class ServerRootGenerator(
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
             //! ```rust
+            //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
@@ -119,7 +120,7 @@ open class ServerRootGenerator(
             //! let plugins = PluginPipeline::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let builder: $builderName<Body, _> = $serviceName::builder_with_plugins(plugins);
+            //! let builder: $builderName<Body, _, _> = $serviceName::builder_with_plugins(plugins, IdentityPlugin);
             //! ```
             //!
             //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.

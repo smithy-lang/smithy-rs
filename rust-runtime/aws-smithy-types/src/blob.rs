@@ -42,68 +42,74 @@ impl AsRef<[u8]> for Blob {
 }
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
-impl Serialize for Blob {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&crate::base64::encode(&self.inner))
-        } else {
-            serializer.serialize_bytes(&self.inner)
+mod serde_serialize {
+    use super::*;
+    use crate::base64;
+    use serde::Serialize;
+
+    impl Serialize for Blob {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            if serializer.is_human_readable() {
+                serializer.serialize_str(&crate::base64::encode(&self.inner))
+            } else {
+                serializer.serialize_bytes(&self.inner)
+            }
         }
     }
 }
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-struct HumanReadableBlobVisitor;
+mod serde_deserialize {
+    use super::*;
+    use crate::base64;
+    use serde::{de::Visitor, Deserialize};
 
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
-    type Value = Blob;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("expected base64 encoded string")
-    }
+    struct HumanReadableBlobVisitor;
+    impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
+        type Value = Blob;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("expected base64 encoded string")
+        }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match base64::decode(v) {
-            Ok(inner) => Ok(Blob { inner }),
-            Err(e) => Err(E::custom(e)),
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match base64::decode(v) {
+                Ok(inner) => Ok(Blob { inner }),
+                Err(e) => Err(E::custom(e)),
+            }
         }
     }
-}
 
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-struct NotHumanReadableBlobVisitor;
+    struct NotHumanReadableBlobVisitor;
+    impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
+        type Value = Blob;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("expected bytes")
+        }
 
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
-    type Value = Blob;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("expected base64 encoded string")
+        fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Blob { inner: v })
+        }
     }
 
-    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        Ok(Blob { inner: v })
-    }
-}
-
-#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
-impl<'de> Deserialize<'de> for Blob {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            deserializer.deserialize_str(HumanReadableBlobVisitor)
-        } else {
-            deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
+    impl<'de> Deserialize<'de> for Blob {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            if deserializer.is_human_readable() {
+                deserializer.deserialize_str(HumanReadableBlobVisitor)
+            } else {
+                deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
+            }
         }
     }
 }
@@ -114,7 +120,7 @@ impl<'de> Deserialize<'de> for Blob {
     feature = "serde-serialize",
     feature = "serde-deserialize"
 ))]
-mod test {
+mod test_serde {
     use crate::Blob;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
@@ -149,7 +155,7 @@ mod test {
         let res = ciborium::ser::into_writer(&for_test, &mut buf);
         assert!(res.is_ok());
 
-        // checks whether the bytes are deserialiezd properly
+        // checks whether the bytes are deserialized properly
         let n: HashMap<String, CString> =
             ciborium::de::from_reader(std::io::Cursor::new(buf.clone())).unwrap();
         assert!(n.get("blob").is_some());

@@ -13,7 +13,7 @@
 //! # use hyper::{Body, Response, StatusCode};
 //! let plugins = PluginPipeline::new()
 //!     // Handle all `/ping` health check requests by returning a `200 OK`.
-//!     .http_layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+//!     .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
 //!         StatusCode::OK
 //!     }));
 //!
@@ -92,7 +92,7 @@ pub struct AlbHealthCheckService<H, S> {
 impl<H, S> Service<Request<Body>> for AlbHealthCheckService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
-    S::Future: std::marker::Send + 'static,
+    S::Future: Send + 'static,
     H: Service<Request<Body>, Response = StatusCode, Error = Infallible> + Clone,
 {
     type Response = S::Response;

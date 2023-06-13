@@ -133,3 +133,233 @@ message = "A newtype wrapper `SharedAsyncSleep` has been introduced and occurren
 references = ["smithy-rs#2742"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """`ShapeId` is the new structure used to represent a shape, with its absolute name, namespace and name.
+`OperationExtension`'s members are replaced by the `ShapeId` and operations' names are now replced by a `ShapeId`.
+
+Before you had an operation and an absolute name as its `NAME` member. You could apply a plugin only to some selected operation:
+
+```
+filter_by_operation_name(plugin, |name| name != Op::ID);
+```
+
+Your new filter selects on an operation's absolute name, namespace or name.
+
+```
+filter_by_operation_id(plugin, |id| id.name() != Op::ID.name());
+```
+
+The above filter is applied to an operation's name, the one you use to specify the operation in the Smithy model.
+
+You can filter all operations in a namespace or absolute name:
+
+```
+filter_by_operation_id(plugin, |id| id.namespace() != "namespace");
+filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
+```
+"""
+author = "82marbag"
+references = ["smithy-rs#2678"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
+references = ["smithy-rs#2758"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+The `Plugin` trait has now been simplified and the `Operation` struct has been removed.
+
+## Simplication of the `Plugin` trait
+
+Previously,
+
+```rust
+trait Plugin<P, Op, S, L> {
+    type Service;
+    type Layer;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+}
+```
+
+modified an `Operation`.
+
+Now,
+
+```rust
+trait Plugin<Protocol, Operation, S> {
+    type Service;
+
+    fn apply(&self, svc: S) -> Self::Service;
+}
+```
+
+maps a `tower::Service` to a `tower::Service`. This is equivalent to `tower::Layer` with two extra type parameters: `Protocol` and `Operation`.
+
+The following middleware setup
+
+```rust
+pub struct PrintService<S> {
+    inner: S,
+    name: &'static str,
+}
+
+impl<R, S> Service<R> for PrintService<S>
+where
+    S: Service<R>,
+{
+    async fn call(&mut self, req: R) -> Self::Future {
+        println!("Hi {}", self.name);
+        self.inner.call(req)
+    }
+}
+
+pub struct PrintLayer {
+    name: &'static str,
+}
+
+impl<S> Layer<S> for PrintLayer {
+    type Service = PrintService<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        PrintService {
+            inner: service,
+            name: self.name,
+        }
+    }
+}
+
+pub struct PrintPlugin;
+
+impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+where
+    Op: OperationShape,
+{
+    type Service = S;
+    type Layer = Stack<L, PrintLayer>;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        input.layer(PrintLayer { name: Op::NAME })
+    }
+}
+```
+
+now becomes
+
+```rust
+pub struct PrintService<S> {
+    inner: S,
+    name: &'static str,
+}
+
+impl<R, S> Service<R> for PrintService<S>
+where
+    S: Service<R>,
+{
+    async fn call(&mut self, req: R) -> Self::Future {
+        println!("Hi {}", self.name);
+        self.inner.call(req)
+    }
+}
+
+pub struct PrintPlugin;
+
+impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+where
+    Op: OperationShape,
+{
+    type Service = PrintService<S>;
+
+    fn apply(&self, svc: S) -> Self::Service {
+        PrintService { inner, name: Op::ID.name() }
+    }
+}
+```
+
+A single `Plugin` can no longer apply a `tower::Layer` on HTTP requests/responses _and_ modelled structures at the same time (see middleware positions [C](https://awslabs.github.io/smithy-rs/design/server/middleware.html#c-operation-specific-http-middleware) and [D](https://awslabs.github.io/smithy-rs/design/server/middleware.html#d-operation-specific-model-middleware). Instead one `Plugin` must be specified for each and passed to the service builder constructor separately:
+
+```rust
+let app = PokemonService::builder_with_plugins(/* HTTP plugins */, /* model plugins */)
+    /* setters */
+    .build()
+    .unwrap();
+```
+
+The motivation behind this change is to simplify the job of middleware authors, separate concerns, accomodate common cases better, and to improve composition internally.
+
+Because `Plugin` is now closer to `tower::Layer` we have two canonical converters:
+
+```rust
+use aws_smithy_http_server::plugin::{PluginLayer, LayerPlugin};
+
+// Convert from `Layer` to `Plugin` which applies uniformly across all operations
+let layer = /* some layer */;
+let plugin = PluginLayer(layer);
+
+// Convert from `Plugin` to `Layer` for some fixed protocol and operation
+let plugin = /* some plugin */;
+let layer = LayerPlugin::new::<SomeProtocol, SomeOperation>(plugin);
+```
+
+## Remove `Operation`
+
+The `aws_smithy_http_server::operation::Operation` structure has now been removed. Previously, there existed a `{operation_name}_operation` setter on the service builder, which accepted an `Operation`. This allowed users to
+
+```rust
+let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_service(/* tower::Service */);
+
+let app = PokemonService::builder_without_plugins()
+    .get_pokemon_species_operation(operation)
+    /* other setters */
+    .build()
+    .unwrap();
+```
+
+to set an operation with a `tower::Service`, and
+
+```rust
+let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_service(/* tower::Service */).layer(/* layer */);
+let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_handler(/* closure */).layer(/* layer */);
+
+let app = PokemonService::builder_without_plugins()
+    .get_pokemon_species_operation(operation)
+    /* other setters */
+    .build()
+    .unwrap();
+```
+
+to add a `tower::Layer` (acting on HTTP requests/responses post-routing) to a single operation.
+
+We have seen little adoption of this API and for this reason we have opted instead to introduce a new setter, accepting a `tower::Service`, on the service builder:
+
+```rust
+let app = PokemonService::builder_without_plugins()
+    .get_pokemon_species_service(/* tower::Service */)
+    /* other setters */
+    .build()
+    .unwrap();
+```
+
+Applying a `tower::Layer` to a _single_ operation is now done through the `Plugin` API:
+
+```rust
+use aws_smithy_http_server::plugin::{PluginLayer, filter_by_operation_name, IdentityPlugin};
+
+let plugin = PluginLayer(/* layer */);
+let scoped_plugin = filter_by_operation_name(plugin, |id| id == GetPokemonSpecies::ID);
+
+let app = PokemonService::builder_with_plugins(scoped_plugin, IdentityPlugin)
+    .get_pokemon_species(/* handler */)
+    /* other setters */
+    .build()
+    .unwrap();
+```
+
+"""
+references = ["smithy-rs#2740"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "hlbarber"

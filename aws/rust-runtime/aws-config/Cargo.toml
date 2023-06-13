@@ -29,7 +29,7 @@ aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-to
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
-hyper = { version = "0.14.25", default-features = false }
+hyper = { version = "0.14.26", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
@@ -65,7 +65,7 @@ aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-type
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
 
 # used for a usage example
-hyper-rustls = { version = "0.23.0", features = ["webpki-tokio", "http2", "http1"] }
+hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
 
 [package.metadata.docs.rs]
 all-features = true

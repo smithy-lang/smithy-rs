@@ -52,7 +52,6 @@ class ServerServiceGenerator(
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
-    private val builderPluginGenericTypeName = "Plugin"
     private val builderBodyGenericTypeName = "Body"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
@@ -105,6 +104,9 @@ class ServerServiceGenerator(
     private fun builderSetters(): Writable = writable {
         for ((operationShape, structName) in operationStructNames) {
             val fieldName = builderFieldNames[operationShape]
+            val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
+            val handler = docHandler.docSignature()
+            val handlerFixed = docHandler.docFixedSignature()
             rustTemplate(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -129,44 +131,123 @@ class ServerServiceGenerator(
                 /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
                 /// ```
                 ///
-                pub fn $fieldName<HandlerType, HandlerExtractors, ServiceExtractors>(self, handler: HandlerType) -> Self
+                pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
-                    #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>>:
-                        #{SmithyHttpServer}::operation::Upgradable<
-                            #{Protocol},
-                            crate::operation_shape::$structName,
-                            ServiceExtractors,
-                            $builderBodyGenericTypeName,
-                            $builderPluginGenericTypeName,
-                        >
+
+                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
+                    >,
+                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        ModelPlugin::Service
+                    >,
+                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        <
+                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            as #{SmithyHttpServer}::plugin::Plugin<
+                                #{Protocol},
+                                crate::operation_shape::$structName,
+                                ModelPlugin::Service
+                            >
+                        >::Service
+                    >,
+
+                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
-                    self.${fieldName}_operation(crate::operation_shape::$structName::from_handler(handler))
+                    use #{SmithyHttpServer}::plugin::Plugin;
+                    let svc = crate::operation_shape::$structName::from_handler(handler);
+                    let svc = self.model_plugin.apply(svc);
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                    let svc = self.http_plugin.apply(svc);
+                    self.${fieldName}_custom(svc)
                 }
 
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
-                /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
-                /// [`$structName`](crate::operation_shape::$structName) using either
-                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
-                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<Operation, Extractors>(mut self, operation: Operation) -> Self
+                /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
+                ///
+                /// ## Example
+                ///
+                /// ```no_run
+                /// use $crateName::$serviceName;
+                ///
+                #{HandlerImports:W}
+                ///
+                #{HandlerFixed:W}
+                ///
+                /// let svc = #{Tower}::util::service_fn(handler);
+                /// let app = $serviceName::builder_without_plugins()
+                ///     .${fieldName}_service(svc)
+                ///     /* Set other handlers */
+                ///     .build()
+                ///     .unwrap();
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ```
+                ///
+                pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
                 where
-                    Operation: #{SmithyHttpServer}::operation::Upgradable<
+                    S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
+
+                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
                         #{Protocol},
                         crate::operation_shape::$structName,
-                        Extractors,
-                        $builderBodyGenericTypeName,
-                        $builderPluginGenericTypeName,
-                    >
+                        #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
+                    >,
+                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        ModelPlugin::Service
+                    >,
+                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        <
+                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            as #{SmithyHttpServer}::plugin::Plugin<
+                                #{Protocol},
+                                crate::operation_shape::$structName,
+                                ModelPlugin::Service
+                            >
+                        >::Service
+                    >,
+
+                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+
                 {
-                    self.$fieldName = Some(operation.upgrade(&self.plugin));
+                    use #{SmithyHttpServer}::operation::OperationShapeExt;
+                    use #{SmithyHttpServer}::plugin::Plugin;
+                    let svc = crate::operation_shape::$structName::from_service(service);
+                    let svc = self.model_plugin.apply(svc);
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                    let svc = self.http_plugin.apply(svc);
+                    self.${fieldName}_custom(svc)
+                }
+
+                /// Sets the [`$structName`](crate::operation_shape::$structName) to a custom [`Service`](tower::Service).
+                /// not constrained by the Smithy contract.
+                fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
+                where
+                    S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    S::Future: Send + 'static,
+                {
+                    self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
                     self
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "Handler" to DocHandlerGenerator(codegenContext, operationShape, "handler", "///")::render,
+                "Handler" to handler,
+                "HandlerFixed" to handlerFixed,
                 "HandlerImports" to handlerImports(crateName, operations),
                 *codegenScope,
             )
@@ -187,7 +268,7 @@ class ServerServiceGenerator(
                 rust(
                     """
                     if self.$fieldName.is_none() {
-                        $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
+                        $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::ID, ".$fieldName()");
                     }
                     """,
                 )
@@ -278,13 +359,8 @@ class ServerServiceGenerator(
                     (
                         $requestSpecsModuleName::$specBuilderFunctionName(),
                         self.$fieldName.unwrap_or_else(|| {
-                            #{SmithyHttpServer}::routing::Route::new(<#{SmithyHttpServer}::operation::FailOnMissingOperation as #{SmithyHttpServer}::operation::Upgradable<
-                                #{Protocol},
-                                crate::operation_shape::$operationZstTypeName,
-                                (),
-                                _,
-                                _,
-                            >>::upgrade(#{SmithyHttpServer}::operation::FailOnMissingOperation, &self.plugin))
+                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                            #{SmithyHttpServer}::routing::Route::new(svc)
                         })
                     ),
                     """,
@@ -318,7 +394,7 @@ class ServerServiceGenerator(
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
+        val builderGenerics = listOf(builderBodyGenericTypeName, "HttpPlugin", "ModelPlugin").joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
@@ -326,7 +402,8 @@ class ServerServiceGenerator(
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
             pub struct $builderName<$builderGenerics> {
                 ${builderFields.joinToString(", ")},
-                plugin: $builderPluginGenericTypeName,
+                http_plugin: HttpPlugin,
+                model_plugin: ModelPlugin
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -398,18 +475,19 @@ class ServerServiceGenerator(
                 ///
                 /// Check out [`PluginPipeline`](#{SmithyHttpServer}::plugin::PluginPipeline) if you need to apply
                 /// multiple plugins.
-                pub fn builder_with_plugins<Body, Plugin>(plugin: Plugin) -> $builderName<Body, Plugin> {
+                pub fn builder_with_plugins<Body, HttpPlugin, ModelPlugin>(http_plugin: HttpPlugin, model_plugin: ModelPlugin) -> $builderName<Body, HttpPlugin, ModelPlugin> {
                     $builderName {
                         #{NotSetFields:W},
-                        plugin
+                        http_plugin,
+                        model_plugin
                     }
                 }
 
                 /// Constructs a builder for [`$serviceName`].
                 ///
                 /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
-                pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin> {
-                    Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin)
+                pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin> {
+                    Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin)
                 }
             }
 
@@ -478,13 +556,13 @@ class ServerServiceGenerator(
     }
 
     private fun missingOperationsError(): Writable = writable {
-        rust(
+        rustTemplate(
             """
             /// The error encountered when calling the [`$builderName::build`] method if one or more operation handlers are not
             /// specified.
             ##[derive(Debug)]
             pub struct MissingOperationsError {
-                operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
+                operation_names2setter_methods: std::collections::HashMap<#{SmithyHttpServer}::shape_id::ShapeId, &'static str>,
             }
 
             impl std::fmt::Display for MissingOperationsError {
@@ -495,7 +573,7 @@ class ServerServiceGenerator(
                         We are missing handlers for the following operations:\n",
                     )?;
                     for operation_name in self.operation_names2setter_methods.keys() {
-                        writeln!(f, "- {}", operation_name)?;
+                        writeln!(f, "- {}", operation_name.absolute())?;
                     }
 
                     writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
@@ -508,6 +586,7 @@ class ServerServiceGenerator(
 
             impl std::error::Error for MissingOperationsError {}
             """,
+            *codegenScope,
         )
     }
 

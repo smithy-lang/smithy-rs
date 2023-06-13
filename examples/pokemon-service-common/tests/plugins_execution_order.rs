@@ -11,11 +11,7 @@ use std::{
 };
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http_server::{
-    operation::Operation,
-    plugin::{Plugin, PluginPipeline},
-};
-use tower::layer::util::Stack;
+use aws_smithy_http_server::plugin::{IdentityPlugin, Plugin, PluginPipeline};
 use tower::{Layer, Service};
 
 use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
@@ -41,9 +37,10 @@ async fn plugin_layers_are_executed_in_registration_order() {
     let pipeline = PluginPipeline::new()
         .push(SentinelPlugin::new("first", output.clone()))
         .push(SentinelPlugin::new("second", output.clone()));
-    let mut app = pokemon_service_server_sdk::PokemonService::builder_with_plugins(pipeline)
-        .do_nothing(do_nothing)
-        .build_unchecked();
+    let mut app =
+        pokemon_service_server_sdk::PokemonService::builder_with_plugins(pipeline, IdentityPlugin)
+            .do_nothing(do_nothing)
+            .build_unchecked();
     let request = DoNothingInput::builder()
         .build()
         .unwrap()
@@ -68,15 +65,15 @@ impl SentinelPlugin {
     }
 }
 
-impl<Protocol, Op, S, L> Plugin<Protocol, Op, S, L> for SentinelPlugin {
-    type Service = S;
-    type Layer = Stack<L, SentinelLayer>;
+impl<Protocol, Op, S> Plugin<Protocol, Op, S> for SentinelPlugin {
+    type Service = SentinelService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(SentinelLayer {
+    fn apply(&self, inner: S) -> Self::Service {
+        SentinelService {
+            inner,
             name: self.name,
             output: self.output.clone(),
-        })
+        }
     }
 }
 

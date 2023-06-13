@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.DocHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.handlerImports
@@ -73,49 +72,22 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
         val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
         val firstOperation = operations.first() ?: return@writable
-        val firstOperationSymbol = codegenContext.symbolProvider.toSymbol(firstOperation)
-        val firstOperationName = firstOperationSymbol.name.toPascalCase()
         val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
         rustTemplate(
             """
             /// A collection of types representing each operation defined in the service closure.
             ///
-            /// ## Constructing an [`Operation`](#{SmithyHttpServer}::operation::OperationShapeExt)
-            ///
-            /// To apply middleware to specific operations the [`Operation`](#{SmithyHttpServer}::operation::Operation)
-            /// API must be used.
-            ///
-            /// Using the [`OperationShapeExt`](#{SmithyHttpServer}::operation::OperationShapeExt) trait
-            /// implemented on each ZST we can construct an [`Operation`](#{SmithyHttpServer}::operation::Operation)
-            /// with appropriate constraints given by Smithy.
-            ///
-            /// #### Example
-            ///
-            /// ```no_run
-            /// use $crateName::operation_shape::$firstOperationName;
-            /// use #{SmithyHttpServer}::operation::OperationShapeExt;
-            ///
-            #{HandlerImports:W}
-            ///
-            #{Handler:W}
-            ///
-            /// let operation = $firstOperationName::from_handler(handler)
-            ///     .layer(todo!("Provide a layer implementation"));
-            /// ```
-            ///
-            /// ## Use as Marker Structs
-            ///
-            /// The [plugin system](#{SmithyHttpServer}::plugin) also makes use of these
+            /// The [plugin system](#{SmithyHttpServer}::plugin) makes use of these
             /// [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
-            /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. The traits, such as
-            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape) can be used to provide
+            /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. Their traits, such as
+            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape), can be used to provide
             /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
             """.trimIndent(),
             "SmithyHttpServer" to
                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///")::render,
+            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///").docSignature(),
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
         )
     }
