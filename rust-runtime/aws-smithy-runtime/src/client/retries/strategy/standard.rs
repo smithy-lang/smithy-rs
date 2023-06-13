@@ -468,7 +468,6 @@ mod tests {
 
     #[test]
     fn backoff_timing() {
-        tracing_subscriber::fmt::init();
         let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
