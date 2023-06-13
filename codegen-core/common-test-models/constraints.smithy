@@ -11,6 +11,9 @@ use smithy.framework#ValidationException
 service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
+        // See https://github.com/awslabs/smithy-rs/issues/2760 for why testing operations reaching
+        // constrained shapes that only lie in the output is important.
+        ConstrainedShapesOnlyInOutputOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
@@ -49,6 +52,11 @@ operation ConstrainedShapesOperation {
     input: ConstrainedShapesOperationInputOutput,
     output: ConstrainedShapesOperationInputOutput,
     errors: [ValidationException]
+}
+
+@http(uri: "/constrained-shapes-only-in-output-operation", method: "POST")
+operation ConstrainedShapesOnlyInOutputOperation {
+    output: ConstrainedShapesOnlyInOutputOperationOutput,
 }
 
 @http(
@@ -934,4 +942,32 @@ map MapOfMapOfListOfListOfConB {
 map MapOfListOfListOfConB {
     key: String,
     value: ConBList
+}
+
+structure ConstrainedShapesOnlyInOutputOperationOutput {
+    list: ConstrainedListInOutput
+    map: ConstrainedMapInOutput
+    // Unions were not affected by
+    // https://github.com/awslabs/smithy-rs/issues/2760, but testing anyway for
+    // good measure.
+    union: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+list ConstrainedListInOutput {
+    member: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+map ConstrainedMapInOutput {
+    key: String
+    value: TransitivelyConstrainedStructureInOutput
+}
+
+union ConstrainedUnionInOutput {
+    structure: TransitivelyConstrainedStructureInOutput
+}
+
+structure TransitivelyConstrainedStructureInOutput {
+    lengthString: LengthString
 }
