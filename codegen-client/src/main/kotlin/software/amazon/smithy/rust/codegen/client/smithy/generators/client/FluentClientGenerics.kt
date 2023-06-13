@@ -99,9 +99,9 @@ data class FlexibleClientGenerics(
         rustTemplate(
             """
             where
-                #{client}
+                #{bounds}
             """,
-            "client" to boundsWithoutWhereClause,
+            "bounds" to boundsWithoutWhereClause,
         )
     }
 
