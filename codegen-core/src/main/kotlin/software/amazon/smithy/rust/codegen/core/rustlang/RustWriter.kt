@@ -180,7 +180,11 @@ fun RustWriter.rustInline(
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
-    check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
+    check(
+        scope.distinctBy {
+            it.first.lowercase()
+        }.size == scope.distinctBy { it.first }.size,
+    ) { "Duplicate cased keys not supported" }
     val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }

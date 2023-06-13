@@ -14,7 +14,7 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
     Interceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
+use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, LoadedRequestBody};
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
 use http::header::{HeaderName, HeaderValue};
@@ -119,7 +119,8 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
     ) -> Result<(), BoxError> {
         // Request the request body to be loaded into memory immediately after serialization
         // so that it can be checksummed before signing and transmit
-        cfg.put(LoadedRequestBody::Requested);
+        cfg.interceptor_state()
+            .set_loaded_request_body(LoadedRequestBody::Requested);
         Ok(())
     }
 
@@ -139,7 +140,7 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
                 .clone();
             signing_config.signing_options.payload_override =
                 Some(SignableBody::Precomputed(content_sha256));
-            cfg.put(signing_config);
+            cfg.interceptor_state().put(signing_config);
         } else {
             return Err(
                 "the request body wasn't loaded into memory before the retry loop, \
