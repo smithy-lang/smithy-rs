@@ -103,7 +103,7 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val newLayerName: String,
         val operationShape: OperationShape,
-    ) : OperationSection("AdditionalConfig")
+    ) : OperationSection("AdditionalRuntimePluginConfig")
 
     data class AdditionalInterceptors(
         override val customizations: List<OperationCustomization>,
