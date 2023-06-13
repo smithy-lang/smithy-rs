@@ -132,9 +132,7 @@ internal class ServiceConfigGeneratorTest {
                     ServiceConfig.BuilderBuild -> writable {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
-                                """
-                                layer.store_or_unset(self.config_field.map(#{T}));
-                                """,
+                                "layer.store_or_unset(self.config_field.map(#{T}));",
                                 "T" to configParamNewtype(
                                     "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
                                     codegenContext.runtimeConfig,
