@@ -326,14 +326,6 @@ class FluentClientGenerator(
         // input name
         val fnName = clientOperationFnName(operation, symbolProvider)
         implBlock(symbolProvider.symbolForBuilder(input)) {
-            fun takeOutWhereClause(s: String): String {
-                val n = s.indexOf("where\n")
-                if (n == -1) {
-                    return s
-                } else {
-                    return s.removeRange(0, n)
-                }
-            }
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
