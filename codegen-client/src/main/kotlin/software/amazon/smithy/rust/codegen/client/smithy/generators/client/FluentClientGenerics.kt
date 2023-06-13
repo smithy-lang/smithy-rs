@@ -99,11 +99,9 @@ data class FlexibleClientGenerics(
         rustTemplate(
             """
             where
-                C: #{client}::bounds::SmithyConnector,
-                M: #{client}::bounds::SmithyMiddleware<C>,
-                R: #{client}::retry::NewRequestPolicy,
+                #{client}
             """,
-            "client" to client,
+            "client" to boundsWithoutWhereClause,
         )
     }
 
