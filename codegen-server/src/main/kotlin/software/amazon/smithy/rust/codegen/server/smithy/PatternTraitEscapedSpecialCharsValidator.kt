@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.validation.AbstractValidator
 import software.amazon.smithy.model.validation.ValidationEvent
