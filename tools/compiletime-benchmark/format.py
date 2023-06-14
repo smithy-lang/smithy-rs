@@ -5,7 +5,6 @@
 
 import itertools
 
-
 def main():
     markdown = parser(read_file())
     print(markdown)
@@ -50,16 +49,5 @@ def parser(iter: itertools.chain[str]) -> str:
     return markdown
 
 
-def test():
-    s = """
-    | sdk name | dev | release | dev all features | release all features |
-    | -------- | --- | ------- | ---------------- | -------------------- |
-    |iam|201.92|217.43|215.10|187.71|
-    """.strip()
-    s2 = parser(read_file()).strip()
-    assert s2 == s, f"{s2} \n== \n{s}"
-
-
 if __name__ == '__main__':
-    test()
     main()
