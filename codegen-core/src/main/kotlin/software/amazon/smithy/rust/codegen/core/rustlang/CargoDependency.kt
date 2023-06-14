@@ -16,6 +16,7 @@ import java.nio.file.Path
 sealed class DependencyScope {
     object Dev : DependencyScope()
     object Compile : DependencyScope()
+    object CfgUnstable : DependencyScope()
     object Build : DependencyScope()
 }
 
@@ -215,7 +216,7 @@ data class CargoDependency(
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
-        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
+        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
@@ -283,5 +284,8 @@ data class CargoDependency(
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
+
+        // behind feature-gate
+        val Serde = CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)
     }
 }

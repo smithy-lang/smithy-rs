@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -104,18 +103,19 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-            if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                rustBlockTemplate(
-                    "if cfg.get::<#{DisableUserAgentInterceptor}>().is_none()",
-                    "DisableUserAgentInterceptor" to awsRuntime.resolve("user_agent::DisableUserAgentInterceptor"),
-                ) {
+            when (section) {
+                is ServiceRuntimePluginSection.AdditionalConfig -> {
                     section.putConfigValue(this) {
                         rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     }
+                }
+
+                is ServiceRuntimePluginSection.RegisterInterceptor -> {
                     section.registerInterceptor(runtimeConfig, this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
                 }
+                else -> emptySection
             }
         }
     }

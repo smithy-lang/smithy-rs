@@ -11,7 +11,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
  * Generates operation-level runtime plugins
@@ -25,6 +27,8 @@ class OperationRuntimePluginGenerator(
         arrayOf(
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
+            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
@@ -43,7 +47,8 @@ class OperationRuntimePluginGenerator(
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}> {
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
                     use #{ConfigBagAccessors} as _;
                     cfg.set_request_serializer(${operationStructName}RequestSerializer);
                     cfg.set_response_deserializer(${operationStructName}ResponseDeserializer);
@@ -57,26 +62,44 @@ class OperationRuntimePluginGenerator(
                     cfg.set_retry_classifiers(retry_classifiers);
 
                     #{additional_config}
-                    Ok(())
+                    Some(cfg.freeze())
+                }
+
+                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
+                    #{interceptors}
                 }
             }
 
             #{runtime_plugin_supporting_types}
             """,
             *codegenScope,
+            *preludeScope,
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationSection.AdditionalRuntimePluginConfig(customizations, "cfg", "_interceptors", operationShape),
+                    OperationSection.AdditionalRuntimePluginConfig(
+                        customizations,
+                        newLayerName = "cfg",
+                        operationShape,
+                    ),
                 )
             },
             "retry_classifier_customizations" to writable {
-                writeCustomizations(customizations, OperationSection.RetryClassifier(customizations, "cfg", operationShape))
+                writeCustomizations(
+                    customizations,
+                    OperationSection.RetryClassifier(customizations, "cfg", operationShape),
+                )
             },
             "runtime_plugin_supporting_types" to writable {
                 writeCustomizations(
                     customizations,
                     OperationSection.RuntimePluginSupportingTypes(customizations, "cfg", operationShape),
+                )
+            },
+            "interceptors" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationSection.AdditionalInterceptors(customizations, "_interceptors", operationShape),
                 )
             },
         )

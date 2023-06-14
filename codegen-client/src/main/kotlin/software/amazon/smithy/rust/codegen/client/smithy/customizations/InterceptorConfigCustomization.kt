@@ -177,9 +177,9 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                     """,
                 )
 
-                ServiceConfig.ToRuntimePlugin -> rust(
+                is ServiceConfig.RuntimePluginInterceptors -> rust(
                     """
-                    interceptors.extend(self.interceptors.iter().cloned());
+                    ${section.interceptors}.extend(self.interceptors.iter().cloned());
                     """,
                 )
 

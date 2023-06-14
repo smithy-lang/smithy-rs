@@ -118,8 +118,8 @@ where
 
 /// A [`Service`] provided for every [`Handler`].
 pub struct IntoService<Op, H> {
-    handler: H,
-    _operation: PhantomData<Op>,
+    pub(crate) handler: H,
+    pub(crate) _operation: PhantomData<Op>,
 }
 
 impl<Op, H> Clone for IntoService<Op, H>

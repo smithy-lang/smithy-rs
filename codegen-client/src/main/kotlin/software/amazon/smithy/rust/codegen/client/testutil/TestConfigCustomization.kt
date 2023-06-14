@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
@@ -73,7 +74,7 @@ fun validateConfigCustomizations(
 
 fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDelegator): TestWriterDelegator {
     val customizations = listOf(stubConfigCustomization("a")) + customization + stubConfigCustomization("b")
-    val generator = ServiceConfigGenerator(customizations = customizations.toList())
+    val generator = ServiceConfigGenerator(testClientCodegenContext("namespace test".asSmithyModel()), customizations = customizations.toList())
     project.withModule(ClientRustModule.Config) {
         generator.render(this)
         unitTest(

@@ -20,23 +20,6 @@ use std::time::{Duration, SystemTime};
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
 
-/// Config marker that disables the invocation ID interceptor.
-#[doc(hidden)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DisableRequestInfoInterceptor {
-    why: &'static str,
-}
-
-impl DisableRequestInfoInterceptor {
-    /// Creates a new `DisableRequestInfoInterceptor`.
-    ///
-    /// Takes a human readable string for the `Debug` impl to state why it is being disabled.
-    /// This is to assist with debugging issues with requests.
-    pub fn new(why: &'static str) -> Self {
-        Self { why }
-    }
-}
-
 /// Generates and attaches a request header that communicates request-related metadata.
 /// Examples include:
 ///
@@ -183,7 +166,7 @@ mod tests {
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_smithy_types::type_erasure::TypeErasedBox;
@@ -207,13 +190,14 @@ mod tests {
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 
-        let mut config = ConfigBag::base();
-        config.put(RetryConfig::standard());
-        config.put(
+        let mut layer = Layer::new("test");
+        layer.put(RetryConfig::standard());
+        layer.put(
             TimeoutConfig::builder()
                 .read_timeout(Duration::from_secs(30))
                 .build(),
         );
+        let mut config = ConfigBag::of_layers(vec![layer]);
 
         let _ = context.take_input();
         context.enter_before_transmit_phase();

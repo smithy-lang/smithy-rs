@@ -54,7 +54,7 @@ class ServiceGenerator(
                 ServiceRuntimePluginGenerator(codegenContext)
                     .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
 
-                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this, codegenContext)
+                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this)
             }
         }
 
