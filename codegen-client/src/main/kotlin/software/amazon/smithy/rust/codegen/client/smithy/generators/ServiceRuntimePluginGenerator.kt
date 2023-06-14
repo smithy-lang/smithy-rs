@@ -144,7 +144,7 @@ class ServiceRuntimePluginGenerator(
                         self.handle.conf.endpoint_resolver());
                     cfg.set_endpoint_resolver(endpoint_resolver);
 
-                    // TODO(enableNewSmithyRuntime): Make it possible to set retry classifiers at the service level.
+                    // TODO(enableNewSmithyRuntimeLaunch): Make it possible to set retry classifiers at the service level.
                     //     Retry classifiers can also be set at the operation level and those should be added to the
                     //     list of classifiers defined here, rather than replacing them.
 
@@ -159,7 +159,7 @@ class ServiceRuntimePluginGenerator(
                             .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
                             .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
                         let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
-                            // TODO(enableNewSmithyRuntime): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                            // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                             connection
                         )) as _;
                         cfg.set_connection(connection);

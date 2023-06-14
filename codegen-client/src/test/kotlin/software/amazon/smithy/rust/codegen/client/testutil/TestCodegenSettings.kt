@@ -10,7 +10,7 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 
 object TestCodegenSettings {
-    // TODO(enableNewSmithyRuntime): Delete this when removing `enableNewSmithyRuntime` feature gate
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when removing `enableNewSmithyRuntime` feature gate
     fun middlewareMode(): ObjectNode = ObjectNode.objectNodeBuilder()
         .withMember(
             "codegen",
@@ -19,7 +19,7 @@ object TestCodegenSettings {
         )
         .build()
 
-    // TODO(enableNewSmithyRuntime): Delete this when removing `enableNewSmithyRuntime` feature gate
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when removing `enableNewSmithyRuntime` feature gate
     fun orchestratorMode(): ObjectNode = ObjectNode.objectNodeBuilder()
         .withMember(
             "codegen",
@@ -28,11 +28,11 @@ object TestCodegenSettings {
         )
         .build()
 
-    // TODO(enableNewSmithyRuntime): Delete this when removing `enableNewSmithyRuntime` feature gate
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when removing `enableNewSmithyRuntime` feature gate
     val middlewareModeTestParams get(): IntegrationTestParams =
         IntegrationTestParams(additionalSettings = middlewareMode())
 
-    // TODO(enableNewSmithyRuntime): Delete this when removing `enableNewSmithyRuntime` feature gate
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when removing `enableNewSmithyRuntime` feature gate
     val orchestratorModeTestParams get(): IntegrationTestParams =
         IntegrationTestParams(additionalSettings = orchestratorMode())
 }

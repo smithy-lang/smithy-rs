@@ -25,7 +25,7 @@ class ApiGatewayDecorator : ClientCodegenDecorator {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Delete when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete when cleaning up middleware
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
@@ -44,7 +44,7 @@ class ApiGatewayDecorator : ClientCodegenDecorator {
         }
 }
 
-// TODO(enableNewSmithyRuntime): Delete when cleaning up middleware
+// TODO(enableNewSmithyRuntimeCleanup): Delete when cleaning up middleware
 private class ApiGatewayAddAcceptHeader : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.FinalizeOperation -> emptySection
