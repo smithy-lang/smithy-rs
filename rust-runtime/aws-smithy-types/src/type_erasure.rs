@@ -241,6 +241,7 @@ impl TypeErasedError {
 /// derived is cloneable.
 pub struct TypeErasedCloneableBox {
     pub(crate) type_erased: TypeErasedBox,
+    #[allow(clippy::type_complexity)]
     clone: Arc<dyn Fn(&Box<dyn Any + Send + Sync>) -> TypeErasedBox + Send + Sync>,
 }
 
