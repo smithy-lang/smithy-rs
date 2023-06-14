@@ -34,6 +34,7 @@ impl AsRef<[u8]> for Blob {
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;
+    use crate::base64;
     use serde::Serialize;
 
     impl Serialize for Blob {
