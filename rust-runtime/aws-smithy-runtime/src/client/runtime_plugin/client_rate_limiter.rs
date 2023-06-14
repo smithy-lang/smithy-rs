@@ -273,44 +273,44 @@ mod tests {
 
         struct Attempt {
             throttled: bool,
-            total_duration: Duration,
+            time_since_start: Duration,
             expected_calculated_rate: f64,
         }
 
         let attempts = [
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(5),
+                time_since_start: Duration::from_secs(5),
                 expected_calculated_rate: 7.0,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(6),
+                time_since_start: Duration::from_secs(6),
                 expected_calculated_rate: 9.64893600966,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(7),
+                time_since_start: Duration::from_secs(7),
                 expected_calculated_rate: 10.000030849917364,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(8),
+                time_since_start: Duration::from_secs(8),
                 expected_calculated_rate: 10.453284520772092,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(9),
+                time_since_start: Duration::from_secs(9),
                 expected_calculated_rate: 13.408697022224185,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(10),
+                time_since_start: Duration::from_secs(10),
                 expected_calculated_rate: 21.26626835427364,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(11),
+                time_since_start: Duration::from_secs(11),
                 expected_calculated_rate: 36.425998516920465,
             },
         ];
@@ -321,7 +321,7 @@ mod tests {
                 attempt.expected_calculated_rate,
                 rate_limiter.calculated_rate
             );
-            assert_eq!(attempt.total_duration, sleep_impl.total_duration());
+            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
             sleep_impl.sleep(ONE_SECOND).await;
         }
     }
@@ -345,49 +345,49 @@ mod tests {
 
         struct Attempt {
             throttled: bool,
-            total_duration: Duration,
+            time_since_start: Duration,
             expected_calculated_rate: f64,
         }
 
         let attempts = [
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(5),
+                time_since_start: Duration::from_secs(5),
                 expected_calculated_rate: 7.0,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(6),
+                time_since_start: Duration::from_secs(6),
                 expected_calculated_rate: 9.64893600966,
             },
             Attempt {
                 throttled: true,
-                total_duration: Duration::from_secs(7),
+                time_since_start: Duration::from_secs(7),
                 expected_calculated_rate: 6.754255206761999,
             },
             Attempt {
                 throttled: true,
-                total_duration: Duration::from_secs(8),
+                time_since_start: Duration::from_secs(8),
                 expected_calculated_rate: 4.727978644733399,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(9),
+                time_since_start: Duration::from_secs(9),
                 expected_calculated_rate: 6.606547753887045,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(10),
+                time_since_start: Duration::from_secs(10),
                 expected_calculated_rate: 6.763279816944947,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(11),
+                time_since_start: Duration::from_secs(11),
                 expected_calculated_rate: 7.598174833907107,
             },
             Attempt {
                 throttled: false,
-                total_duration: Duration::from_secs(12),
+                time_since_start: Duration::from_secs(12),
                 expected_calculated_rate: 11.511232804773524,
             },
         ];
@@ -398,7 +398,7 @@ mod tests {
                 attempt.expected_calculated_rate,
                 rate_limiter.calculated_rate
             );
-            assert_eq!(attempt.total_duration, sleep_impl.total_duration());
+            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
             sleep_impl.sleep(ONE_SECOND).await;
         }
     }
@@ -418,113 +418,113 @@ mod tests {
 
         struct Attempt {
             throttled: bool,
-            timestamp: Duration,
+            time_since_start: Duration,
             expected_measured_tx_rate: f64,
-            expected_new_token_bucket_rate: f64,
+            expected_fill_rate: f64,
         }
 
         let attempts = [
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(0.2),
+                time_since_start: Duration::from_secs_f64(0.2),
                 expected_measured_tx_rate: 0.000000,
-                expected_new_token_bucket_rate: 0.500000,
+                expected_fill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(0.4),
+                time_since_start: Duration::from_secs_f64(0.4),
                 expected_measured_tx_rate: 0.000000,
-                expected_new_token_bucket_rate: 0.500000,
+                expected_fill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(0.6),
+                time_since_start: Duration::from_secs_f64(0.6),
                 expected_measured_tx_rate: 4.800000,
-                expected_new_token_bucket_rate: 0.500000,
+                expected_fill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(0.8),
+                time_since_start: Duration::from_secs_f64(0.8),
                 expected_measured_tx_rate: 4.800000,
-                expected_new_token_bucket_rate: 0.500000,
+                expected_fill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(1.0),
+                time_since_start: Duration::from_secs_f64(1.0),
                 expected_measured_tx_rate: 4.160000,
-                expected_new_token_bucket_rate: 0.500000,
+                expected_fill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(1.2),
+                time_since_start: Duration::from_secs_f64(1.2),
                 expected_measured_tx_rate: 4.160000,
-                expected_new_token_bucket_rate: 0.691200,
+                expected_fill_rate: 0.691200,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(1.4),
+                time_since_start: Duration::from_secs_f64(1.4),
                 expected_measured_tx_rate: 4.160000,
-                expected_new_token_bucket_rate: 1.097600,
+                expected_fill_rate: 1.097600,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(1.6),
+                time_since_start: Duration::from_secs_f64(1.6),
                 expected_measured_tx_rate: 5.632000,
-                expected_new_token_bucket_rate: 1.638400,
+                expected_fill_rate: 1.638400,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(1.8),
+                time_since_start: Duration::from_secs_f64(1.8),
                 expected_measured_tx_rate: 5.632000,
-                expected_new_token_bucket_rate: 2.332800,
+                expected_fill_rate: 2.332800,
             },
             Attempt {
                 throttled: true,
-                timestamp: Duration::from_secs_f64(2.0),
+                time_since_start: Duration::from_secs_f64(2.0),
                 expected_measured_tx_rate: 4.326400,
-                expected_new_token_bucket_rate: 3.028480,
+                expected_fill_rate: 3.028480,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(2.2),
+                time_since_start: Duration::from_secs_f64(2.2),
                 expected_measured_tx_rate: 4.326400,
-                expected_new_token_bucket_rate: 3.486639,
+                expected_fill_rate: 3.486639,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(2.4),
+                time_since_start: Duration::from_secs_f64(2.4),
                 expected_measured_tx_rate: 4.326400,
-                expected_new_token_bucket_rate: 3.821874,
+                expected_fill_rate: 3.821874,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(2.6),
+                time_since_start: Duration::from_secs_f64(2.6),
                 expected_measured_tx_rate: 5.665280,
-                expected_new_token_bucket_rate: 4.053386,
+                expected_fill_rate: 4.053386,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(2.8),
+                time_since_start: Duration::from_secs_f64(2.8),
                 expected_measured_tx_rate: 5.665280,
-                expected_new_token_bucket_rate: 4.200373,
+                expected_fill_rate: 4.200373,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(3.0),
+                time_since_start: Duration::from_secs_f64(3.0),
                 expected_measured_tx_rate: 4.333056,
-                expected_new_token_bucket_rate: 4.282037,
+                expected_fill_rate: 4.282037,
             },
             Attempt {
                 throttled: true,
-                timestamp: Duration::from_secs_f64(3.2),
+                time_since_start: Duration::from_secs_f64(3.2),
                 expected_measured_tx_rate: 4.333056,
-                expected_new_token_bucket_rate: 2.997426,
+                expected_fill_rate: 2.997426,
             },
             Attempt {
                 throttled: false,
-                timestamp: Duration::from_secs_f64(3.4),
+                time_since_start: Duration::from_secs_f64(3.4),
                 expected_measured_tx_rate: 4.333056,
-                expected_new_token_bucket_rate: 3.452226,
+                expected_fill_rate: 3.452226,
             },
         ];
 
@@ -536,151 +536,7 @@ mod tests {
                 attempt.expected_measured_tx_rate,
                 rate_limiter.measured_tx_rate,
             );
-            assert_eq!(attempt.timestamp, sleep_impl.total_duration());
-            assert_eq!(
-                attempt.expected_new_token_bucket_rate,
-                rate_limiter.fill_rate
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn test_client_sending_rates_with_throttles() {
-        use std::default::Default;
-
-        #[derive(Default)]
-        struct Attempt {
-            throttled: bool,
-            timestamp: f64,
-            expected_measured_tx_rate: f64,
-            expected_fill_rate: f64,
-        }
-
-        let attempts = [
-            Attempt {
-                timestamp: Duration::from_millis(200).as_secs_f64(),
-                expected_fill_rate: 0.5,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(400).as_secs_f64(),
-                expected_fill_rate: 0.5,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(600).as_secs_f64(),
-                expected_measured_tx_rate: 4.8,
-                expected_fill_rate: 0.5,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(800).as_secs_f64(),
-                expected_measured_tx_rate: 4.8,
-                expected_fill_rate: 0.5,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(1000).as_secs_f64(),
-                expected_measured_tx_rate: 4.16,
-                expected_fill_rate: 0.5,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(1200).as_secs_f64(),
-                expected_measured_tx_rate: 4.16,
-                expected_fill_rate: 0.6912,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(1400).as_secs_f64(),
-                expected_measured_tx_rate: 4.16,
-                expected_fill_rate: 1.0976,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(1600).as_secs_f64(),
-                expected_measured_tx_rate: 5.632,
-                expected_fill_rate: 1.6384,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(1800).as_secs_f64(),
-                expected_measured_tx_rate: 5.632,
-                expected_fill_rate: 2.3328,
-                ..Default::default()
-            },
-            Attempt {
-                throttled: true,
-                timestamp: Duration::from_millis(2000).as_secs_f64(),
-                expected_measured_tx_rate: 4.3264,
-                expected_fill_rate: 3.02848,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(2200).as_secs_f64(),
-                expected_measured_tx_rate: 4.3264,
-                expected_fill_rate: 3.4866391734702598,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(2400).as_secs_f64(),
-                expected_measured_tx_rate: 4.3264,
-                expected_fill_rate: 3.8218744160402554,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(2600).as_secs_f64(),
-                expected_measured_tx_rate: 5.665280,
-                expected_fill_rate: 4.053385727709987,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(2800).as_secs_f64(),
-                expected_measured_tx_rate: 5.665280,
-                expected_fill_rate: 4.200373108479455,
-                ..Default::default()
-            },
-            Attempt {
-                timestamp: Duration::from_millis(3000).as_secs_f64(),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 4.282036558348658,
-                ..Default::default()
-            },
-            Attempt {
-                throttled: true,
-                timestamp: Duration::from_millis(3200).as_secs_f64(),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 2.99742559084406,
-            },
-            Attempt {
-                timestamp: Duration::from_millis(3400).as_secs_f64(),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 3.4522263943863463,
-                ..Default::default()
-            },
-        ];
-
-        let mut cfg = ConfigBag::base();
-        let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(time_source));
-        cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
-        let now = get_unix_timestamp(&cfg);
-        let mut rate_limiter = ClientRateLimiter::builder()
-            .last_tx_rate_bucket(now.floor())
-            .last_throttle_time(now)
-            .build();
-
-        for attempt in attempts {
-            sleep_impl
-                .sleep(Duration::from_secs_f64(attempt.timestamp))
-                .await;
-            rate_limiter.update_sending_rate(&cfg, attempt.throttled);
-            assert_eq!(
-                attempt.expected_measured_tx_rate,
-                rate_limiter.measured_tx_rate
-            );
+            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
             assert_eq!(attempt.expected_fill_rate, rate_limiter.fill_rate);
         }
     }
