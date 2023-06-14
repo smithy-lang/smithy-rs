@@ -614,12 +614,25 @@ class ServerServiceGenerator(
         rustTemplate(
             """
             /// An enumeration of all operations in $serviceName.
+            ##[derive(Debug, PartialEq, Eq, Clone, Copy)]
             pub enum Operation {
                 $operations
             }
+
             """,
             *codegenScope,
         )
+
+        for ((_, value) in operationStructNames) {
+            rustTemplate(
+                """
+                impl #{SmithyHttpServer}::service::ServiceShapeMember<crate::operation_shape::$value> for $serviceName {
+                    const ENUM_VALUE: Operation = Operation::$value;
+                }
+                """,
+                *codegenScope,
+            )
+        }
     }
 
     fun render(writer: RustWriter) {

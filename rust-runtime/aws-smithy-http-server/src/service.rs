@@ -20,3 +20,7 @@ pub trait ServiceShape {
     /// An enumeration of all operations contained in this service.
     type Operations;
 }
+
+pub trait ServiceShapeMember<Op>: ServiceShape {
+    const ENUM_VALUE: Self::Operations;
+}
