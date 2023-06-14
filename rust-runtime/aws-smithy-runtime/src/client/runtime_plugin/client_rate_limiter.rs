@@ -96,7 +96,7 @@ impl ClientRateLimiter {
         if let Some(last_timestamp) = self.last_timestamp {
             let fill_amount = (timestamp - last_timestamp) * self.fill_rate;
             self.current_capacity =
-                f64::min(self.current_capacity + fill_amount, self.max_capacity);
+                f64::min(self.max_capacity, self.current_capacity + fill_amount);
         }
         self.last_timestamp = Some(timestamp);
     }
@@ -136,9 +136,8 @@ impl ClientRateLimiter {
     }
 
     fn cubic_success(&self, timestamp: f64) -> f64 {
-        let dt = timestamp - self.last_throttle_time;
-        let dt_sub_time_window = dt - self.time_window;
-        (SCALE_CONSTANT * dt_sub_time_window.powi(3)) + self.last_max_rate
+        let dt = timestamp - self.last_throttle_time - self.time_window;
+        (SCALE_CONSTANT * dt.powi(3)) + self.last_max_rate
     }
 }
 
@@ -195,7 +194,7 @@ mod tests {
     use crate::client::runtime_plugin::client_rate_limiter::cubic_throttle;
     use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::test_util::instant_time_and_sleep;
-    use aws_smithy_async::time::SharedTimeSource;
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
     use aws_smithy_types::config_bag::ConfigBag;
     use std::time::{Duration, SystemTime};
@@ -411,7 +410,7 @@ mod tests {
             .set_request_time(SharedTimeSource::new(time_source));
         cfg.interceptor_state()
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
-        let mut rate_limiter = ClientRateLimiter::builder().build();
+        let mut rate_limiter = ClientRateLimiter::builder().last_timestamp(0.0).build();
 
         struct Attempt {
             throttled: bool,
