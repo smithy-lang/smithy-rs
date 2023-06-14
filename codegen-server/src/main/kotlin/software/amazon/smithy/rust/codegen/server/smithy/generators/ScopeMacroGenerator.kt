@@ -34,9 +34,11 @@ class ScopeMacroGenerator(
             codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
         }
 
+        // When writing `macro_rules!` we add whitespace between `$` and the arguments to avoid Kotlin templating.
+
         // To acheive the desired API we need to calculate the set theoretic complement `B \ A`.
         // The macro below, for rules prefixed with `@`, encodes a state machine which performs this.
-        // The initial state is `(A) () (B)`, where `A` and `B` are lists of elements of `B` and `A`.
+        // The initial state is `(A) () (B)`, where `A` and `B` are lists of elements of `A` and `B`.
         // The rules, in order:
         // - Terminate on pattern `() (t0, t1, ...) (b0, b1, ...)`, the complement has been calculated as
         // `{ t0, t1, ..., b0, b1, ...}`.
