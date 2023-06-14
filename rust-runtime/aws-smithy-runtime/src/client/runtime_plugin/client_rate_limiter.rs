@@ -93,15 +93,12 @@ impl ClientRateLimiter {
 
     fn refill(&mut self, cfg: &ConfigBag) {
         let timestamp = get_unix_timestamp(cfg);
-        match self.last_timestamp {
-            None => self.last_timestamp = Some(timestamp),
-            Some(last_timestamp) => {
-                let fill_amount = (timestamp - last_timestamp) * self.fill_rate;
-                self.current_capacity =
-                    f64::min(self.current_capacity + fill_amount, self.max_capacity);
-                self.last_timestamp = Some(timestamp);
-            }
+        if let Some(last_timestamp) = self.last_timestamp {
+            let fill_amount = (timestamp - last_timestamp) * self.fill_rate;
+            self.current_capacity =
+                f64::min(self.current_capacity + fill_amount, self.max_capacity);
         }
+        self.last_timestamp = Some(timestamp);
     }
 
     fn token_bucket_update_rate(&mut self, cfg: &ConfigBag, new_fill_rate: f64) {
@@ -125,10 +122,9 @@ impl ClientRateLimiter {
 
         if time_bucket > self.last_tx_rate_bucket {
             let current_rate = self.request_count as f64 / (time_bucket - self.last_tx_rate_bucket);
-            self.measured_tx_rate =
-                (current_rate * SMOOTH) + (self.measured_tx_rate * (1.0 - SMOOTH));
+            self.measured_tx_rate = current_rate * SMOOTH + self.measured_tx_rate * (1.0 - SMOOTH);
             self.request_count = 0;
-            self.last_tx_rate_bucket = time_bucket.floor();
+            self.last_tx_rate_bucket = time_bucket;
         }
     }
 
@@ -265,9 +261,7 @@ mod tests {
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let now = get_unix_timestamp(&cfg);
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_tx_rate_bucket((now).floor())
             .last_throttle_time(now)
-            .enabled(true)
             .last_max_rate(10.0)
             .build();
 
@@ -337,10 +331,8 @@ mod tests {
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let now = get_unix_timestamp(&cfg);
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_tx_rate_bucket((now).floor())
-            .last_throttle_time(now)
-            .enabled(true)
             .last_max_rate(10.0)
+            .last_throttle_time(now)
             .build();
 
         struct Attempt {
@@ -373,33 +365,41 @@ mod tests {
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs(9),
-                expected_calculated_rate: 6.606547753887045,
+                expected_calculated_rate: 4.670125557970046,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs(10),
-                expected_calculated_rate: 6.763279816944947,
+                expected_calculated_rate: 4.770870456867401,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs(11),
-                expected_calculated_rate: 7.598174833907107,
+                expected_calculated_rate: 6.011819748005445,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs(12),
-                expected_calculated_rate: 11.511232804773524,
+                expected_calculated_rate: 10.792973431384178,
             },
         ];
 
+        // Think this test is a little strange? I ported the test from Go v2, and this is how it
+        // was implemented. See for yourself:
+        // https://github.com/aws/aws-sdk-go-v2/blob/844ff45cdc76182229ad098c95bf3f5ab8c20e9f/aws/retry/adaptive_ratelimit_test.go#L97
+        let mut calculated_rate = 0.0;
         for attempt in attempts {
-            rate_limiter.update_sending_rate(&cfg, attempt.throttled);
-            assert_eq!(
-                attempt.expected_calculated_rate,
-                rate_limiter.calculated_rate
-            );
-            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
-            sleep_impl.sleep(ONE_SECOND).await;
+            rate_limiter.calculate_time_window();
+            if attempt.throttled {
+                calculated_rate = cubic_throttle(calculated_rate);
+                rate_limiter.last_throttle_time = attempt.time_since_start.as_secs_f64();
+                rate_limiter.last_max_rate = calculated_rate;
+            } else {
+                calculated_rate =
+                    rate_limiter.cubic_success(attempt.time_since_start.as_secs_f64());
+            };
+
+            assert_eq!(attempt.expected_calculated_rate, calculated_rate);
         }
     }
 
@@ -411,10 +411,7 @@ mod tests {
             .set_request_time(SharedTimeSource::new(time_source));
         cfg.interceptor_state()
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
-        let now = get_unix_timestamp(&cfg);
-        let mut rate_limiter = ClientRateLimiter::builder()
-            .last_tx_rate_bucket(now.floor())
-            .build();
+        let mut rate_limiter = ClientRateLimiter::builder().build();
 
         struct Attempt {
             throttled: bool,
@@ -464,13 +461,13 @@ mod tests {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.4),
                 expected_measured_tx_rate: 4.160000,
-                expected_fill_rate: 1.097600,
+                expected_fill_rate: 1.0975999999999997,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.6),
                 expected_measured_tx_rate: 5.632000,
-                expected_fill_rate: 1.638400,
+                expected_fill_rate: 1.6384000000000005,
             },
             Attempt {
                 throttled: false,
@@ -529,15 +526,23 @@ mod tests {
         ];
 
         let two_hundred_milliseconds = Duration::from_millis(200);
-        for attempt in attempts {
+        for (i, attempt) in attempts.into_iter().enumerate() {
             sleep_impl.sleep(two_hundred_milliseconds).await;
+            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
+
             rate_limiter.update_sending_rate(&cfg, attempt.throttled);
             assert_eq!(
                 attempt.expected_measured_tx_rate,
                 rate_limiter.measured_tx_rate,
+                "attempt #{} measured_tx_rate was wrong",
+                i + 1
             );
-            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
-            assert_eq!(attempt.expected_fill_rate, rate_limiter.fill_rate);
+            assert_eq!(
+                attempt.expected_fill_rate,
+                rate_limiter.fill_rate,
+                "attempt #{} fill_rate was wrong",
+                i + 1
+            );
         }
     }
 }
