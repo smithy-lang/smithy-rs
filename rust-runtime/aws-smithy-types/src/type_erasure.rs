@@ -8,6 +8,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 /// A [`TypeErasedBox`] with type information tracked via generics at compile-time
 ///
@@ -236,9 +237,58 @@ impl TypeErasedError {
     }
 }
 
+/// A `TypeErasedBox` that can be cloned, given the original type from which the `TypeErasedBox` is
+/// derived is cloneable.
+pub struct TypeErasedCloneableBox {
+    pub(crate) type_erased: TypeErasedBox,
+    clone: Arc<dyn Fn(&Box<dyn Any + Send + Sync>) -> TypeErasedBox + Send + Sync>,
+}
+
+impl Clone for TypeErasedCloneableBox {
+    fn clone(&self) -> Self {
+        Self {
+            type_erased: (self.clone)(&self.type_erased.field),
+            clone: self.clone.clone(),
+        }
+    }
+}
+
+impl fmt::Debug for TypeErasedCloneableBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TypeErasedCloneableBox:")?;
+        (self.debug)(&self.field, f)
+    }
+}
+
+impl Deref for TypeErasedCloneableBox {
+    type Target = TypeErasedBox;
+    fn deref(&self) -> &Self::Target {
+        &self.type_erased
+    }
+}
+
+impl DerefMut for TypeErasedCloneableBox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.type_erased
+    }
+}
+
+impl TypeErasedCloneableBox {
+    pub fn new<T: Send + Sync + Clone + fmt::Debug + 'static>(value: T) -> Self {
+        let clone = |value: &Box<dyn Any + Send + Sync>| {
+            TypeErasedBox::new(value.downcast_ref::<T>().expect("typechecked").clone())
+        };
+        Self {
+            type_erased: TypeErasedBox::new(value),
+            clone: Arc::new(clone),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{TypeErasedError, TypedBox};
+    use crate::type_erasure::TypeErasedCloneableBox;
     use std::fmt;
 
     #[derive(Debug)]
@@ -319,5 +369,17 @@ mod tests {
             .expect("type erased error can be downcast into original type")
             .unwrap();
         assert_eq!(test_err, actual);
+    }
+
+    #[test]
+    fn test_typed_cloneable_boxes() {
+        let expected_str = "I can be cloned";
+        let cloneable = TypeErasedCloneableBox::new(expected_str.to_owned());
+        // ensure it can be cloned
+        let cloned = cloneable.clone();
+        let actual_str = cloned.downcast_ref::<String>().unwrap();
+        assert_eq!(expected_str, actual_str);
+        // they should point to different addresses
+        assert_ne!(format!("{expected_str:p}"), format! {"{actual_str:p}"});
     }
 }
