@@ -82,6 +82,8 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
+        - action: check-compiletime-benchmark
+          runner: ubuntu-latest
         - action: check-aws-sdk-adhoc-tests
           runner: ubuntu-latest
         # TODO(enableNewSmithyRuntime): Remove `check-aws-sdk-orchestrator-impl` when cleaning up middleware
