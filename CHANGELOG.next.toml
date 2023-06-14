@@ -377,9 +377,9 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "hlbarber"
 
 [[smithy-rs]]
-message = "Implements serde support to `Number`, `Blob`, `Document`, `DateTime`"
+message = "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives"
 author = "thomas-k-cameron"
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+meta = { "breaking" = false, "tada" = true, "bug" = false, target = "all" }
 references = [
     "smithy-rs#2647",
     "smithy-rs#2645",
@@ -388,9 +388,9 @@ references = [
 ]
 
 [[aws-sdk-rust]]
-message = "Implements serde support to `Number`, `Blob`, `Document`, `DateTime`"
+message = "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives"
 author = "thomas-k-cameron"
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 references = [
     "smithy-rs#2647",
     "smithy-rs#2645",
@@ -398,8 +398,14 @@ references = [
     "smithy-rs#2616",
 ]
 
-[[aws-sdk-rust]]
-message = "Add a function on `Input` types for sending requests"
+[[smithy-rs]]
+message = "Add a `send_with` function on `-Input` types for sending requests without fluent builders"
 author = "thomas-k-cameron"
 references = ["smithy-rs#2652"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = true, "bug" = false, target = "client" }
+
+[[aws-sdk-rust]]
+message = "Add a `send_with` function on `-Input` types for sending requests without fluent builders"
+author = "thomas-k-cameron"
+references = ["smithy-rs#2652"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
