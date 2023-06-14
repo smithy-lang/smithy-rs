@@ -375,3 +375,30 @@ let app = PokemonService::builder_with_plugins(scoped_plugin, IdentityPlugin)
 references = ["smithy-rs#2740"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "hlbarber"
+
+[[smithy-rs]]
+message = """
+- rust runtime
+  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
+- Core codegen code
+  - Add a function on `Input` types for sending requests
+- Client codegen code
+  - add `serde` as dependency behind feature gate
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2652", "smithy-rs#2646", "smithy-rs#2645", "smithy-rs#2647", "smithy-rs#2638", "smithy-rs#2614"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
+message = """
+- rust runtime
+  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
+- Core codegen code
+  - Add a function on `Input` types for sending requests
+- Client codegen code
+  - add `serde` as dependency behind feature gate
+"""
+author = "thomas-k-cameron"
+references = ["smithy-rs#2652", "smithy-rs#2646", "smithy-rs#2645", "smithy-rs#2647", "smithy-rs#2638", "smithy-rs#2614"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
