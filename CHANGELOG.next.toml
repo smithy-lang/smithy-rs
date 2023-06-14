@@ -379,7 +379,7 @@ author = "hlbarber"
 [[smithy-rs]]
 message = "Implements serde support to `Number`, `Blob`, `Document`, `DateTime`"
 author = "thomas-k-cameron"
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
 references = [
     "smithy-rs#2647",
     "smithy-rs#2645",
@@ -390,7 +390,7 @@ references = [
 [[aws-sdk-rust]]
 message = "Implements serde support to `Number`, `Blob`, `Document`, `DateTime`"
 author = "thomas-k-cameron"
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 references = [
     "smithy-rs#2647",
     "smithy-rs#2645",
@@ -402,4 +402,4 @@ references = [
 message = "Add a function on `Input` types for sending requests"
 author = "thomas-k-cameron"
 references = ["smithy-rs#2652"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
+meta = { "breaking" = false, "tada" = false, "bug" = false }
