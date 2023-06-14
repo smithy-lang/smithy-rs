@@ -15,7 +15,7 @@
 message = "Fix bug in AWS JSON 1.x routers where, if a service had more than 14 operations, the router was created without the route for the 15th operation."
 author = "thor-bjorgvinsson"
 references = ["smithy-rs#2733"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" ="server" }
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 
 [[aws-sdk-rust]]
 message = "Remove native-tls and add a migration guide."
@@ -66,7 +66,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "For event stream operations, the `EventStreamSender` in inputs/outputs now requires the passed in `Stream` impl to implement `Sync`."
 references = ["smithy-rs#2673"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -143,7 +143,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "Update MSRV to Rust 1.68.2"
 references = ["smithy-rs#2745"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "jdisanti"
 
 [[smithy-rs]]
@@ -183,6 +183,12 @@ author = "ysaito1001"
 
 [[smithy-rs]]
 message = """
+The middleware system has been reworked as we push for a unified, simple, and consistent API. The following changes have been made in service of this goal:
+
+- The `Plugin` trait has been simplified.
+- The `Operation` structure has been removed.
+- A `Scoped` `Plugin` has been added.
+
 The `Plugin` trait has now been simplified and the `Operation` struct has been removed.
 
 ## Simplication of the `Plugin` trait
@@ -317,7 +323,7 @@ let plugin = /* some plugin */;
 let layer = LayerPlugin::new::<SomeProtocol, SomeOperation>(plugin);
 ```
 
-## Remove `Operation`
+## Removal of `Operation`
 
 The `aws_smithy_http_server::operation::Operation` structure has now been removed. Previously, there existed a `{operation_name}_operation` setter on the service builder, which accepted an `Operation`. This allowed users to
 
@@ -356,7 +362,7 @@ let app = PokemonService::builder_without_plugins()
     .unwrap();
 ```
 
-Applying a `tower::Layer` to a _single_ operation is now done through the `Plugin` API:
+Applying a `tower::Layer` to a _subset_ of operations is should now be done through the `Plugin` API via `filter_by_operation_id`
 
 ```rust
 use aws_smithy_http_server::plugin::{PluginLayer, filter_by_operation_name, IdentityPlugin};
@@ -371,7 +377,68 @@ let app = PokemonService::builder_with_plugins(scoped_plugin, IdentityPlugin)
     .unwrap();
 ```
 
+or the new `Scoped` `Plugin` introduced below.
+
+# Addition of `Scoped`
+
+Currently, users can selectively apply a `Plugin` via the `filter_by_operation_id` function
+
+```rust
+use aws_smithy_http_server::plugin::filter_by_operation_id;
+// Only apply `plugin` to `CheckHealth` and `GetStorage` operation
+let filtered_plugin = filter_by_operation_id(plugin, |name| name == CheckHealth::ID || name == GetStorage::ID);
+```
+
+In addition to this, we now provide `Scoped`, which selectively applies a `Plugin` at _compiletime_. Users should prefer this to `filter_by_operation_id` when applicable.
+
+```rust
+use aws_smithy_http_server::plugin::Scoped;
+use pokemon_service_server_sdk::scoped;
+
+scope! {
+    /// Includes only the `CheckHealth` and `GetStorage` operation.
+    struct SomeScope {
+        includes: [CheckHealth, GetStorage]
+    }
+}
+let scoped_plugin = Scoped::new::<SomeScope>(plugin);
+```
+
 """
-references = ["smithy-rs#2740"]
+references = ["smithy-rs#2740", "smithy-rs#2759"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "hlbarber"
+
+[[smithy-rs]]
+message = "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives"
+author = "thomas-k-cameron"
+meta = { "breaking" = false, "tada" = true, "bug" = false, target = "all" }
+references = [
+    "smithy-rs#2647",
+    "smithy-rs#2645",
+    "smithy-rs#2646",
+    "smithy-rs#2616",
+]
+
+[[aws-sdk-rust]]
+message = "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives"
+author = "thomas-k-cameron"
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+references = [
+    "smithy-rs#2647",
+    "smithy-rs#2645",
+    "smithy-rs#2646",
+    "smithy-rs#2616",
+]
+
+[[smithy-rs]]
+message = "Add a `send_with` function on `-Input` types for sending requests without fluent builders"
+author = "thomas-k-cameron"
+references = ["smithy-rs#2652"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, target = "client" }
+
+[[aws-sdk-rust]]
+message = "Add a `send_with` function on `-Input` types for sending requests without fluent builders"
+author = "thomas-k-cameron"
+references = ["smithy-rs#2652"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }

@@ -118,6 +118,8 @@ mod filter;
 mod identity;
 mod layer;
 mod pipeline;
+#[doc(hidden)]
+pub mod scoped;
 mod stack;
 
 pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
@@ -126,6 +128,7 @@ pub use filter::{filter_by_operation, filter_by_operation_id, FilterByOperation,
 pub use identity::IdentityPlugin;
 pub use layer::{LayerPlugin, PluginLayer};
 pub use pipeline::PluginPipeline;
+pub use scoped::Scoped;
 pub use stack::PluginStack;
 
 /// A mapping from one [`Service`](tower::Service) to another. This should be viewed as a

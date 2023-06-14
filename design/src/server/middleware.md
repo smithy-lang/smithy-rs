@@ -208,15 +208,24 @@ A "HTTP layer" can be applied to specific operations.
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
 # use std::time::Duration;
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 # use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct LoggingLayer;
 # impl LoggingLayer { pub fn new() -> Self { Self } }
 # impl<S> Layer<S> for LoggingLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
+use pokemon_service_server_sdk::{PokemonService, scope};
+
+scope! {
+    /// Only log on `GetPokemonSpecies` and `GetStorage`
+    struct LoggingScope {
+        includes: [GetPokemonSpecies, GetStorage]
+    }
+}
+
 // Construct `LoggingLayer`.
 let logging_plugin = LayerPlugin(LoggingLayer::new());
-let logging_plugin = filter_by_operation_id(logging_plugin, |name| name == GetPokemonSpecies::ID);
+let logging_plugin = Scoped::new::<LoggingScope>(logging_plugin);
 let http_plugins = PluginPipeline::new().push(logging_plugin);
 
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
@@ -244,11 +253,18 @@ A "model layer" can be applied to specific operations.
 # struct BufferLayer;
 # impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
 # impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{PokemonService, scope};
+
+scope! {
+    /// Only buffer on `GetPokemonSpecies` and `GetStorage`
+    struct BufferScope {
+        includes: [GetPokemonSpecies, GetStorage]
+    }
+}
 
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
-let buffer_plugin = filter_by_operation_id(buffer_plugin, |name| name != GetPokemonSpecies::ID);
+let buffer_plugin = Scoped::new::<BufferScope>(buffer_plugin);
 let model_plugins = PluginPipeline::new().push(buffer_plugin);
 
 let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
