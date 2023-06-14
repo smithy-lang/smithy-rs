@@ -10,7 +10,7 @@ use std::{net::SocketAddr, sync::Arc};
 use aws_smithy_http_server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
-    plugin::{alb_health_check::AlbHealthCheckLayer, IdentityPlugin, PluginPipeline},
+    plugin::{alb_health_check::AlbHealthCheckLayer, IdentityPlugin, PluginPipeline, Scoped},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -26,7 +26,7 @@ use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing,
     stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{scope, PokemonService};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -44,9 +44,18 @@ pub async fn main() {
     let args = Args::parse();
     setup_tracing();
 
+    scope! {
+        /// A scope containing `GetPokemonSpecies` and `GetStorage`
+        struct PrintScope {
+            includes: [GetPokemonSpecies, GetStorage]
+        }
+    }
+    // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`
+    let print_plugin = Scoped::new::<PrintScope>(PluginPipeline::new().print());
+
     let plugins = PluginPipeline::new()
-        // Apply the `PrintPlugin` defined in `plugin.rs`
-        .print()
+        // Apply the scoped `PrintPlugin`
+        .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
         // plugins or tests to access a `aws_smithy_http_server::extension::OperationExtension` from
         // `Response::extensions`, or infer routing failure when it's missing.
