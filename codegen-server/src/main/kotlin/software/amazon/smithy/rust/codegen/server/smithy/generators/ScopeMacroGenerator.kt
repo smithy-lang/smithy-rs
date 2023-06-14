@@ -26,16 +26,13 @@ class ScopeMacroGenerator(
     private val index = TopDownIndex.of(codegenContext.model)
     private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
-    fun macro(): Writable = writable {
+    private fun macro(): Writable = writable {
         val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name
-        val operationNames = operations
-            .map { codegenContext.symbolProvider.toSymbol(it).name }
-            .joinToString(" ")
+                val operationNames = operations.joinToString(" ") { codegenContext.symbolProvider.toSymbol(it).name }
         val operationBranches = operations
-            .map { codegenContext.symbolProvider.toSymbol(it).name }
-            .map {
+            .map { codegenContext.symbolProvider.toSymbol(it).name }.joinToString("") {
                 """
-                // $it Match found, pop from both `member` and `not_member`
+                // $it match found, pop from both `member` and `not_member`
                 (@ $ name: ident, $ predicate: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
                     scope! { @ $ name, $ predicate ($($ member)*) ($($ temp)*) ($($ not_member)*) }
                 };
@@ -57,14 +54,14 @@ class ScopeMacroGenerator(
             ///
             /// ```rust
             /// scope! {
-            ///     /// Includes [`$firstOperationName`], excluding all other operations
+            ///     /// Includes [`$firstOperationName`], excluding all other operations.
             ///     struct ScopeA {
             ///         includes: [$firstOperationName],
             ///     }
             /// }
             ///
             /// scope! {
-            ///     /// Excludes [`$firstOperationName`], excluding all other operations
+            ///     /// Excludes [`$firstOperationName`], excluding all other operations.
             ///     struct ScopeB {
             ///         excludes: [$firstOperationName]
             ///     }
