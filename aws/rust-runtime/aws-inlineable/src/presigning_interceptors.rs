@@ -13,6 +13,7 @@ use aws_runtime::request_info::RequestInfoInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
+use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
 use aws_smithy_runtime_api::client::interceptors::{
     disable_interceptor, BeforeSerializationInterceptorContextMut,
     BeforeTransmitInterceptorContextMut, BoxError, Interceptor, InterceptorRegistrar,
@@ -98,6 +99,7 @@ impl SigV4PresigningRuntimePlugin {
 impl RuntimePlugin for SigV4PresigningRuntimePlugin {
     fn config(&self) -> Option<FrozenLayer> {
         let mut layer = Layer::new("Presigning");
+        layer.set_retry_strategy(NeverRetryStrategy::new());
         layer.put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
         layer.put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
         layer.put(disable_interceptor::<UserAgentInterceptor>("presigning"));
