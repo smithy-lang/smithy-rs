@@ -31,4 +31,4 @@ iam
 + cargo clean
 END" >> /tmp/compiletime-benchmark.txt
 
-python3.9 tools/compiletime-benchmark/format.py
+python3 tools/compiletime-benchmark/format.py
