@@ -325,41 +325,29 @@ private class HttpAuthConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> {
-                if (runtimeMode.defaultToOrchestrator) {
-                    rust(" layer.store_put(self.identity_resolvers);")
-                } else {
+                if (runtimeMode.defaultToMiddleware) {
                     rust("identity_resolvers: self.identity_resolvers,")
                 }
             }
 
             is ServiceConfig.ConfigStruct -> {
-                if (runtimeMode.defaultToMiddleware) {
-                    rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
-                }
+                rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
             }
 
             is ServiceConfig.ConfigImpl -> {
-                if (runtimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        /// Returns the identity resolvers.
-                        pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
-                            self.inner.load::<#{IdentityResolvers}>().expect("Identity resolvers should be set")
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        /// Returns the identity resolvers.
-                        pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
-                            &self.identity_resolvers
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    """
+                    /// Returns the identity resolvers.
+                    pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
+                        &self.identity_resolvers
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+
+            is ServiceConfig.BuilderBuildExtras -> {
+                rust("identity_resolvers: self.identity_resolvers,")
             }
 
             else -> {}

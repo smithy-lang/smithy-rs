@@ -92,6 +92,14 @@ sealed class ServiceConfig(name: String) : Section(name) {
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
+    // TODO(enableNewSmithyRuntime): This is temporary until config builder is backed by a CloneableLayer.
+    //  It is needed because certain config fields appear explicitly regardless of the smithy runtime mode, e.g.
+    //  interceptors. The [BuilderBuild] section is bifurcated depending on the runtime mode (in the orchestrator mode,
+    //  storing a field into a frozen layer and in the middleware moving it into a corresponding service config field)
+    //  so we need a different temporary section to always move a field from a builder to service config within the
+    //  build method.
+    object BuilderBuildExtras : ServiceConfig("BuilderBuildExtras")
+
     /**
      * A section for setting up a field to be used by RuntimePlugin
      */
@@ -409,13 +417,12 @@ class ServiceConfigGenerator(
                     customizations.forEach {
                         it.section(ServiceConfig.BuilderBuild)(this)
                     }
-                    rustTemplate(
-                        """
-                        Config {
-                            inner: layer.freeze(),
+                    rustBlock("Config") {
+                        customizations.forEach {
+                            it.section(ServiceConfig.BuilderBuildExtras)(this)
                         }
-                        """,
-                    )
+                        rust("inner: layer.freeze(),")
+                    }
                 } else {
                     rustBlock("Config") {
                         customizations.forEach {
