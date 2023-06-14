@@ -33,6 +33,18 @@ class ScopeMacroGenerator(
         val operationNames = operations.joinToString(" ") {
             codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
         }
+
+        // To acheive the desired API we need to calculate the set theoretic complement `B \ A`.
+        // The macro below, for rules prefixed with `@`, encodes a state machine which performs this.
+        // The initial state is `(A) () (B)`, where `A` and `B` are lists of elements of `B` and `A`.
+        // The rules, in order:
+        // - Terminate on pattern `() (t0, t1, ...) (b0, b1, ...)`, the complement has been calculated as
+        // `{ t0, t1, ..., b0, b1, ...}`.
+        // - Send pattern `(x, a0, a1, ...) (t0, t1, ...) (x, b0, b1, ...)` to
+        // `(a0, a1, ...) (t0, t1, ...) (b0, b1, ...)`, eliminating a matching `x` from `A` and `B`.
+        // - Send pattern `(a0, a1, ...) (t0, t1, ...) ()` to `(a0, a1, ...) () (t0, t1, ...)`, restarting the search.
+        // - Send pattern `(a0, a1, ...) (t0, t1, ...) (b0, b1, ...)` to `(a0, a1, ...) (b0, t0, t1, ...) (b1, ...)`,
+        // iterating through the `B`.
         val operationBranches = operations
             .map { codegenContext.symbolProvider.toSymbol(it).name.toPascalCase() }.joinToString("") {
                 """
