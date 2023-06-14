@@ -47,6 +47,9 @@ impl<P, Op, S, Pl> ConditionalApply<P, Op, S, Pl> for False {
 
 /// A [`Plugin`] which scopes the application of an inner [`Plugin`].
 ///
+/// In cases where operation selection must be performed at runtime [`filter_by_operation_id`](crate::plugin::filter_by_operation_id)
+/// can be used.
+///
 /// Operations within the scope will have the inner [`Plugin`] applied.
 ///
 /// # Example
