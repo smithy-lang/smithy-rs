@@ -6,25 +6,15 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.BooleanNode
-import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
-
-private fun additionalSettings(): ObjectNode = ObjectNode.objectNodeBuilder()
-    .withMember(
-        "codegen",
-        ObjectNode.objectNodeBuilder()
-            .withMember("enableNewSmithyRuntime", BooleanNode.from(true)).build(),
-    )
-    .build()
 
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
@@ -38,7 +28,7 @@ class HttpAuthDecoratorTest {
     fun multipleAuthSchemesSchemeSelection() {
         clientIntegrationTest(
             TestModels.allSchemes,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("tests") {
                 val moduleName = codegenContext.moduleUseName()
@@ -67,7 +57,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -101,7 +91,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -117,7 +107,7 @@ class HttpAuthDecoratorTest {
     fun apiKeyInQueryString() {
         clientIntegrationTest(
             TestModels.apiKeyInQueryString,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_query_string") {
                 val moduleName = codegenContext.moduleUseName()
@@ -146,7 +136,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -162,7 +152,7 @@ class HttpAuthDecoratorTest {
     fun apiKeyInHeaders() {
         clientIntegrationTest(
             TestModels.apiKeyInHeaders,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_headers") {
                 val moduleName = codegenContext.moduleUseName()
@@ -192,7 +182,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -208,7 +198,7 @@ class HttpAuthDecoratorTest {
     fun basicAuth() {
         clientIntegrationTest(
             TestModels.basicAuth,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("basic_auth") {
                 val moduleName = codegenContext.moduleUseName()
@@ -238,7 +228,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -254,7 +244,7 @@ class HttpAuthDecoratorTest {
     fun bearerAuth() {
         clientIntegrationTest(
             TestModels.bearerAuth,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("bearer_auth") {
                 val moduleName = codegenContext.moduleUseName()
@@ -284,7 +274,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_v2()
+                            .send_orchestrator()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);

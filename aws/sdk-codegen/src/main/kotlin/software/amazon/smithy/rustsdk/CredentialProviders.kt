@@ -32,7 +32,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(CredentialsIdentityResolverRegistration(codegenContext))
         }
 
@@ -46,7 +46,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf(
             adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
+                rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
             },
         )
 

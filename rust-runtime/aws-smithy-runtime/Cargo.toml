@@ -11,9 +11,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
+anonymous-auth = []
 test-util = ["dep:aws-smithy-protocol-test"]
 
 [dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-client = { path = "../aws-smithy-client" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
@@ -22,12 +24,19 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 http = "0.2.8"
 http-body = "0.4.5"
+pin-project-lite = "0.2.7"
 pin-utils = "0.1.0"
 tokio = { version = "1.25", features = [] }
-tracing = "0.1"
+tracing = "0.1.37"
+fastrand = "1.4"
 
 [dev-dependencies]
-tokio = { version = "1.25", features = ["macros", "rt"] }
+aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
+tokio = { version = "1.25", features = ["macros", "rt", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
 all-features = true

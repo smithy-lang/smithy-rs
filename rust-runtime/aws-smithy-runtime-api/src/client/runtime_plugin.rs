@@ -3,24 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::config_bag::ConfigBag;
+use crate::client::interceptors::InterceptorRegistrar;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
+use std::fmt::Debug;
 
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub type BoxRuntimePlugin = Box<dyn RuntimePlugin + Send + Sync>;
 
-pub trait RuntimePlugin {
-    fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError>;
+/// RuntimePlugin Trait
+///
+/// A RuntimePlugin is the unit of configuration for augmenting the SDK with new behavior
+///
+/// Runtime plugins can set configuration and register interceptors.
+pub trait RuntimePlugin: Debug {
+    fn config(&self) -> Option<FrozenLayer> {
+        None
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
+        let _ = interceptors;
+    }
 }
 
-impl RuntimePlugin for Box<dyn RuntimePlugin> {
-    fn configure(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
-        self.as_ref().configure(cfg)
+impl RuntimePlugin for BoxRuntimePlugin {
+    fn config(&self) -> Option<FrozenLayer> {
+        self.as_ref().config()
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
+        self.as_ref().interceptors(interceptors)
     }
 }
 
 #[derive(Default)]
 pub struct RuntimePlugins {
-    client_plugins: Vec<Box<dyn RuntimePlugin>>,
-    operation_plugins: Vec<Box<dyn RuntimePlugin>>,
+    client_plugins: Vec<BoxRuntimePlugin>,
+    operation_plugins: Vec<BoxRuntimePlugin>,
 }
 
 impl RuntimePlugins {
@@ -28,27 +46,47 @@ impl RuntimePlugins {
         Default::default()
     }
 
-    pub fn with_client_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
+    pub fn with_client_plugin(
+        mut self,
+        plugin: impl RuntimePlugin + Send + Sync + 'static,
+    ) -> Self {
         self.client_plugins.push(Box::new(plugin));
         self
     }
 
-    pub fn with_operation_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
+    pub fn with_operation_plugin(
+        mut self,
+        plugin: impl RuntimePlugin + Send + Sync + 'static,
+    ) -> Self {
         self.operation_plugins.push(Box::new(plugin));
         self
     }
 
-    pub fn apply_client_configuration(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    pub fn apply_client_configuration(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError> {
         for plugin in self.client_plugins.iter() {
-            plugin.configure(cfg)?;
+            if let Some(layer) = plugin.config() {
+                cfg.push_shared_layer(layer);
+            }
+            plugin.interceptors(interceptors);
         }
 
         Ok(())
     }
 
-    pub fn apply_operation_configuration(&self, cfg: &mut ConfigBag) -> Result<(), BoxError> {
+    pub fn apply_operation_configuration(
+        &self,
+        cfg: &mut ConfigBag,
+        interceptors: &mut InterceptorRegistrar,
+    ) -> Result<(), BoxError> {
         for plugin in self.operation_plugins.iter() {
-            plugin.configure(cfg)?;
+            if let Some(layer) = plugin.config() {
+                cfg.push_shared_layer(layer);
+            }
+            plugin.interceptors(interceptors);
         }
 
         Ok(())
@@ -57,16 +95,12 @@ impl RuntimePlugins {
 
 #[cfg(test)]
 mod tests {
-    use super::{BoxError, RuntimePlugin, RuntimePlugins};
-    use crate::config_bag::ConfigBag;
+    use super::{RuntimePlugin, RuntimePlugins};
 
+    #[derive(Debug)]
     struct SomeStruct;
 
-    impl RuntimePlugin for SomeStruct {
-        fn configure(&self, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
-            todo!()
-        }
-    }
+    impl RuntimePlugin for SomeStruct {}
 
     #[test]
     fn can_add_runtime_plugin_implementors_to_runtime_plugins() {

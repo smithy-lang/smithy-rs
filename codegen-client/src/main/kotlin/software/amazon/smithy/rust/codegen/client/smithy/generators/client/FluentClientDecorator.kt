@@ -36,7 +36,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
             return
         }
 
-        val generics = if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        val generics = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
             NoClientGenerics(codegenContext.runtimeConfig)
         } else {
             FlexibleClientGenerics(
@@ -53,11 +53,10 @@ class FluentClientDecorator : ClientCodegenDecorator {
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
         rustCrate.withModule(ClientRustModule.Client.customize) {
-            renderCustomizableOperationSend(codegenContext.runtimeConfig, generics, this)
+            renderCustomizableOperationSend(codegenContext, generics, this)
         }
 
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(

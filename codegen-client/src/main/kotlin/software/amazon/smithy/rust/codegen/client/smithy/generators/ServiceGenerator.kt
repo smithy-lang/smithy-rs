@@ -47,14 +47,14 @@ class ServiceGenerator(
             )
             serviceConfigGenerator.render(this)
 
-            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 // Enable users to opt in to the test-utils in the runtime crate
                 rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
 
                 ServiceRuntimePluginGenerator(codegenContext)
                     .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
 
-                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this, codegenContext)
+                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this)
             }
         }
 

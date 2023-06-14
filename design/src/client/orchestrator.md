@@ -52,7 +52,7 @@ The orchestrator's work is divided into four phases:
 *NOTE: If an interceptor fails, then the other interceptors for that lifecycle event are still run. All resulting errors are collected and emitted together.*
 
 0. **Building the `ConfigBag` and mounting interceptors**.
-    - *This phase is infallible.*
+    - *This phase is fallible.*
     - An interceptor context is created. This will hold request and response objects, making them available to interceptors.
     - All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any _"read before execution"_ interceptors that have been set get run.
     - All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new _"read before execution"_ interceptors that have been set get run.
@@ -90,7 +90,7 @@ In designing the orchestrator, we sought to solve the problems we had with the o
 
 *The type signatures for the old client and its `call` method:*
 
-```rust
+```rust,ignore
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
@@ -136,7 +136,7 @@ where
 
 *The type signature for the new `orchestrate` method:*
 
-```rust
+```rust,ignore
 pub async fn orchestrate(
     input: Input,
     runtime_plugins: &RuntimePlugins,
@@ -153,7 +153,7 @@ I'm glad you asked. Generally, when you need traits, but you aren't willing to u
 
 So, what are `Input` and `Output`? They're our own special flavor of a boxed trait object.
 
-```rust
+```rust,ignore
 pub type Input = TypeErasedBox;
 pub type Output = TypeErasedBox;
 pub type Error = TypeErasedBox;

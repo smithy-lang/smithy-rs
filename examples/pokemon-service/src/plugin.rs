@@ -6,10 +6,11 @@
 //! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
 
 use aws_smithy_http_server::{
-    operation::{Operation, OperationShape},
+    operation::OperationShape,
     plugin::{Plugin, PluginPipeline, PluginStack},
+    shape_id::ShapeId,
 };
-use tower::{layer::util::Stack, Layer, Service};
+use tower::Service;
 
 use std::task::{Context, Poll};
 
@@ -17,7 +18,7 @@ use std::task::{Context, Poll};
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
-    name: &'static str,
+    id: ShapeId,
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -33,53 +34,34 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {}", self.name);
+        println!("Hi {}", self.id.absolute());
         self.inner.call(req)
     }
 }
-
-/// A [`Layer`] which constructs the [`PrintService`].
-#[derive(Debug)]
-pub struct PrintLayer {
-    name: &'static str,
-}
-impl<S> Layer<S> for PrintLayer {
-    type Service = PrintService<S>;
-
-    fn layer(&self, service: S) -> Self::Service {
-        PrintService {
-            inner: service,
-            name: self.name,
-        }
-    }
-}
-
 /// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
 where
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<L, PrintLayer>;
+    type Service = PrintService<S>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: Op::NAME })
+    fn apply(&self, inner: S) -> Self::Service {
+        PrintService { inner, id: Op::ID }
     }
 }
-
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
-pub trait PrintExt<ExistingPlugins> {
+pub trait PrintExt<CurrentPlugin> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>>;
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, CurrentPlugin>>;
 }
 
-impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugins> {
-    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>> {
+impl<CurrentPlugin> PrintExt<CurrentPlugin> for PluginPipeline<CurrentPlugin> {
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, CurrentPlugin>> {
         self.push(PrintPlugin)
     }
 }

@@ -25,7 +25,7 @@ TLDR; This refactor of aws-smithy-checksums:
 - **Adds `fn checksum_header_name_to_checksum_algorithm`:** a function that's used in generated code when creating a checksum-validating response body.
 - **Add new checksum-related "body wrapping" HTTP body types**: These are defined in the `body` module and will be shown later in this RFC.
 
-```rust
+```rust,ignore
 // In aws-smithy-checksums/src/lib.rs
 //! Checksum calculation and verification callbacks
 
@@ -489,7 +489,7 @@ When creating a checksum-validated request with an in-memory request body, we ca
 
 We will accomplish this by wrapping the `SdkBody` that requires validation within a `ChecksumBody`. Afterwards, we'll need to wrap the `ChecksumBody` in yet another layer which we'll discuss in the [`AwsChunkedBody` and `AwsChunkedBodyOptions`](#awschunkedbody-and-awschunkedbodyoptions) section.
 
-```rust
+```rust,ignore
 // In aws-smithy-checksums/src/body.rs
 use crate::{new_checksum, Checksum};
 
@@ -654,7 +654,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
 
 Users may request checksum validation for response bodies. That capability is provided by `ChecksumValidatedBody`, which will calculate a checksum as the response body is being read. Once all data has been read, the calculated checksum is compared to a precalculated checksum set during body creation. If the checksums don't match, then the body will emit an error.
 
-```rust
+```rust,ignore
 // In aws-smithy-checksums/src/body.rs
 /// A response body that will calculate a checksum as it is read. If all data is read and the
 /// calculated checksum doesn't match a precalculated checksum, this body will emit an
@@ -838,7 +838,7 @@ _**NOTES:**_
 
 This encoding scheme is performed by `AwsChunkedBody` and configured with `AwsChunkedBodyOptions`.
 
-```rust
+```rust,ignore
 // In aws-http/src/content_encoding.rs
 use aws_smithy_checksums::body::ChecksumBody;
 use aws_smithy_http::body::SdkBody;
@@ -1264,7 +1264,7 @@ Setting `STREAMING-UNSIGNED-PAYLOAD-TRAILER` tells the signer that we're sending
 
 We can achieve this by:
 - Adding a new variant to `SignableBody`:
-  ```rust
+  ```rust,ignore
   /// A signable HTTP request body
   #[derive(Debug, Clone, Eq, PartialEq)]
   #[non_exhaustive]
@@ -1279,7 +1279,7 @@ We can achieve this by:
   }
   ```
 - Updating the `CanonicalRequest::payload_hash` method to include the new `SignableBody` variant:
-  ```rust
+  ```rust,ignore
   fn payload_hash<'b>(body: &'b SignableBody<'b>) -> Cow<'b, str> {
       // Payload hash computation
       //
@@ -1300,7 +1300,7 @@ We can achieve this by:
   }
   ```
 - *(in generated code)* Inserting the `SignableBody` into the request property bag when making a checksum-verified streaming request:
-  ```rust
+  ```rust,ignore
   if self.checksum_algorithm.is_some() {
       request
           .properties_mut()
@@ -1315,7 +1315,7 @@ It's possible to send `aws-chunked` requests where each chunk is signed individu
 In order to avoid writing lots of Rust in Kotlin, I have implemented request and response building functions as inlineables:
 
 - Building checksum-validated requests with in-memory request bodies:
-  ```rust
+  ```rust,ignore
   // In aws/rust-runtime/aws-inlineable/src/streaming_body_with_checksum.rs
   /// Given a `&mut http::request::Request`, and checksum algorithm name, calculate a checksum and
   /// then modify the request to include the checksum as a header.
@@ -1344,7 +1344,7 @@ In order to avoid writing lots of Rust in Kotlin, I have implemented request and
   }
   ```
 - Building checksum-validated requests with streaming request bodies:
-  ```rust
+  ```rust,ignore
   /// Given an `http::request::Builder`, `SdkBody`, and a checksum algorithm name, return a
   /// `Request<SdkBody>` with checksum trailers where the content is `aws-chunked` encoded.
   pub fn build_checksum_validated_request_with_streaming_body(
@@ -1395,7 +1395,7 @@ In order to avoid writing lots of Rust in Kotlin, I have implemented request and
   }
   ```
 - Building checksum-validated responses:
-  ```rust
+  ```rust,ignore
   /// Given a `Response<SdkBody>`, checksum algorithm name, and pre-calculated checksum, return a
   /// `Response<SdkBody>` where the body will processed with the checksum algorithm and checked
   /// against the pre-calculated checksum.

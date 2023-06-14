@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::{BoxError, Interceptor, InterceptorContext};
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::interceptors::{
+    BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
+};
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::os_shim_internal::Env;
 use http::HeaderValue;
 use percent_encoding::{percent_encode, CONTROLS};
@@ -37,13 +38,13 @@ impl RecursionDetectionInterceptor {
     }
 }
 
-impl Interceptor<HttpRequest, HttpResponse> for RecursionDetectionInterceptor {
+impl Interceptor for RecursionDetectionInterceptor {
     fn modify_before_signing(
         &self,
-        context: &mut InterceptorContext<HttpRequest, HttpResponse>,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let request = context.request_mut()?;
+        let request = context.request_mut();
         if request.headers().contains_key(TRACE_ID_HEADER) {
             return Ok(());
         }
@@ -73,7 +74,8 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_protocol_test::{assert_ok, validate_headers};
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
     use aws_types::os_shim_internal::Env;
     use http::HeaderValue;
     use proptest::{prelude::*, proptest};
@@ -146,14 +148,18 @@ mod tests {
             request = request.header(name, value);
         }
         let request = request.body(SdkBody::empty()).expect("must be valid");
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        context.enter_serialization_phase();
         context.set_request(request);
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
         let mut config = ConfigBag::base();
 
+        let mut ctx = Into::into(&mut context);
         RecursionDetectionInterceptor { env }
-            .modify_before_signing(&mut context, &mut config)
+            .modify_before_signing(&mut ctx, &mut config)
             .expect("interceptor must succeed");
-        let mutated_request = context.request().expect("request is still set");
+        let mutated_request = context.request().expect("request is set");
         for name in mutated_request.headers().keys() {
             assert_eq!(
                 mutated_request.headers().get_all(name).iter().count(),

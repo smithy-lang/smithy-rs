@@ -48,8 +48,11 @@ class Types(runtimeConfig: RuntimeConfig) {
     private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
     val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
     val resolveEndpoint = smithyHttpEndpointModule.resolve("ResolveEndpoint")
+    val sharedEndpointResolver = smithyHttpEndpointModule.resolve("SharedEndpointResolver")
     val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
+
+    fun toArray() = arrayOf("ResolveEndpointError" to resolveEndpointError, "Endpoint" to smithyEndpoint)
 }
 
 /**

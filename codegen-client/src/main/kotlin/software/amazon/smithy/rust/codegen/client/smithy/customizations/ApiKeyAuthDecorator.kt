@@ -14,6 +14,8 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -24,8 +26,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 // TODO(enableNewSmithyRuntime): Delete this decorator when switching to the orchestrator
@@ -38,7 +38,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
     override val order: Byte = 10
 
     private fun applies(codegenContext: ClientCodegenContext) =
-        !codegenContext.settings.codegenConfig.enableNewSmithyRuntime &&
+        codegenContext.smithyRuntimeMode.generateMiddleware &&
             isSupportedApiKeyAuth(codegenContext)
 
     override fun configCustomizations(

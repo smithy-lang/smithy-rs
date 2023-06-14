@@ -77,7 +77,10 @@ class IntegrationTestDependencies(
             if (hasTests) {
                 val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
+                addDependency(smithyAsync)
                 addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
@@ -126,7 +129,7 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
 
             // TODO(enableNewSmithyRuntime): These additional dependencies may not be needed anymore when removing this flag
             // depending on if the sra-test is kept around or not.
-            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 addDependency(CargoDependency.smithyRuntime(codegenContext.runtimeConfig).toDevDependency())
                 addDependency(CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toDevDependency())
             }

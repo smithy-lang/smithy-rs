@@ -26,6 +26,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -142,6 +143,21 @@ fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
     return this
 }
 
+fun RustWriter.conditionalBlockTemplate(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
+    conditional: Boolean = true,
+    vararg args: Pair<String, Any>,
+    block: RustWriter.() -> Unit,
+): RustWriter {
+    withTemplate(textBeforeNewLine.trim(), args) { beforeNewLine ->
+        withTemplate(textAfterNewLine.trim(), args) { afterNewLine ->
+            conditionalBlock(beforeNewLine, afterNewLine, conditional = conditional, block = block)
+        }
+    }
+    return this
+}
+
 /**
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
@@ -164,7 +180,11 @@ fun RustWriter.rustInline(
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
-    check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
+    check(
+        scope.distinctBy {
+            it.first.lowercase()
+        }.size == scope.distinctBy { it.first }.size,
+    ) { "Duplicate cased keys not supported" }
     val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
@@ -450,6 +470,7 @@ class RustWriter private constructor(
     val devDependenciesOnly: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
+
     companion object {
         fun root() = forModule(null)
         fun forModule(module: String?): RustWriter = if (module == null) {
@@ -470,6 +491,7 @@ class RustWriter private constructor(
                     debugMode = debugMode,
                     devDependenciesOnly = true,
                 )
+
                 fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
                 fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
                 else -> RustWriter(fileName, namespace, debugMode = debugMode)
@@ -498,6 +520,8 @@ class RustWriter private constructor(
 
         return super.write(content, *args)
     }
+
+    fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
 
     /** Helper function to determine if a stack frame is relevant for debug purposes */
     private fun StackTraceElement.isRelevant(): Boolean {
@@ -608,7 +632,7 @@ class RustWriter private constructor(
         when {
             member.isOptional() -> {
                 val innerValue = ValueExpression.Reference(safeName("inner"))
-                rustBlock("if let Some(${innerValue.name}) = ${value.asRef()}") {
+                rustBlockTemplate("if let #{Some}(${innerValue.name}) = ${value.asRef()}", *preludeScope) {
                     block(innerValue)
                 }
             }
@@ -695,7 +719,8 @@ class RustWriter private constructor(
     override fun toString(): String {
         val contents = super.toString()
         val preheader = if (preamble.isNotEmpty()) {
-            val prewriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+            val prewriter =
+                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             preamble.forEach { it(prewriter) }
             prewriter.toString()
         } else {
@@ -741,7 +766,8 @@ class RustWriter private constructor(
             @Suppress("UNCHECKED_CAST")
             val func =
                 t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
-            val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+            val innerWriter =
+                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependencyTestAware(it) }
             return innerWriter.toString().trimEnd()
@@ -774,7 +800,8 @@ class RustWriter private constructor(
                     @Suppress("UNCHECKED_CAST")
                     val func =
                         t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
-                    val innerWriter = RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+                    val innerWriter =
+                        RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
                     func(innerWriter)
                     innerWriter.dependencies.forEach { addDependencyTestAware(it) }
                     return innerWriter.toString().trimEnd()

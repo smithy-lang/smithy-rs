@@ -3,22 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_http::user_agent::AwsUserAgent;
-use aws_runtime::invocation_id::InvocationId;
+mod util;
+
 use aws_sdk_s3::config::{Credentials, Region};
-use aws_sdk_s3::endpoint::Params;
-
 use aws_sdk_s3::Client;
-
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-
-use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, RequestTime};
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
-
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 
 const LIST_BUCKETS_PATH: &str = "test-data/list-objects-v2.json";
 
@@ -32,46 +24,22 @@ async fn sra_test() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .http_connector(DynConnector::new(conn.clone()))
+        .interceptor(util::TestUserAgentInterceptor)
         .build();
     let client = Client::from_conf(config);
-    let fixup = FixupPlugin {
-        client: client.clone(),
-        timestamp: UNIX_EPOCH + Duration::from_secs(1624036048),
-    };
+    let fixup = util::FixupPlugin;
 
     let resp = dbg!(
         client
             .list_objects_v2()
-            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
             .bucket("test-bucket")
             .prefix("prefix~")
-            .send_v2_with_plugin(Some(fixup))
+            .send_orchestrator_with_plugin(Some(fixup))
             .await
     );
     // To regenerate the test:
     // conn.dump_to_file("test-data/list-objects-v2.json").unwrap();
     let resp = resp.expect("valid e2e test");
     assert_eq!(resp.name(), Some("test-bucket"));
-    conn.full_validate(MediaType::Xml).await.expect("failed")
-}
-
-struct FixupPlugin {
-    client: Client,
-    timestamp: SystemTime,
-}
-impl RuntimePlugin for FixupPlugin {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-    ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
-        let params_builder = Params::builder()
-            .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()))
-            .bucket("test-bucket");
-
-        cfg.put(params_builder);
-        cfg.set_request_time(RequestTime::new(self.timestamp.clone()));
-        cfg.put(AwsUserAgent::for_tests());
-        cfg.put(InvocationId::for_tests());
-        Ok(())
-    }
+    conn.full_validate(MediaType::Xml).await.expect("success")
 }

@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::operation::Operation;
 use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 
-use super::HttpLayer;
+use super::LayerPlugin;
 
 /// A wrapper struct for composing [`Plugin`]s.
 /// It is used as input for the `builder_with_plugins` method on the generate service struct
@@ -35,23 +34,24 @@ use super::HttpLayer;
 ///
 /// `PluginPipeline` is itself a [`Plugin`]: you can apply any transformation that expects a
 /// [`Plugin`] to an entire pipeline. In this case, we want to use
-/// [`filter_by_operation_name`](crate::plugin::filter_by_operation_name) to limit the scope of
+/// [`filter_by_operation_id`](crate::plugin::filter_by_operation_id) to limit the scope of
 /// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{filter_by_operation_name, PluginPipeline};
+/// use aws_smithy_http_server::plugin::{filter_by_operation_id, PluginPipeline};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
+/// use aws_smithy_http_server::shape_id::ShapeId;
 /// # struct CheckHealth;
-/// # impl CheckHealth { const NAME: &'static str = "MyName"; }
+/// # impl CheckHealth { const ID: ShapeId = ShapeId::new("namespace#MyName", "namespace", "MyName"); }
 ///
 /// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
-/// let operation_specific_pipeline = filter_by_operation_name(
+/// let operation_specific_pipeline = filter_by_operation_id(
 ///     PluginPipeline::new()
 ///         .push(LoggingPlugin)
 ///         .push(MetricsPlugin),
-///     |name| name == CheckHealth::NAME
+///     |name| name == CheckHealth::ID
 /// );
 /// let pipeline = PluginPipeline::new()
 ///     .push(operation_specific_pipeline)
@@ -108,7 +108,7 @@ use super::HttpLayer;
 ///     // Our custom method!
 ///     .with_auth();
 /// ```
-pub struct PluginPipeline<P>(P);
+pub struct PluginPipeline<P>(pub(crate) P);
 
 impl Default for PluginPipeline<IdentityPlugin> {
     fn default() -> Self {
@@ -141,50 +141,42 @@ impl<P> PluginPipeline<P> {
     ///
     /// ## Implementation notes
     ///
-    /// Plugins are applied to the underlying [`Operation`] in opposite order compared
+    /// Plugins are applied to the underlying [`Service`](tower::Service) in opposite order compared
     /// to their registration order.
-    /// But most [`Plugin::map`] implementations desugar to appending a layer to [`Operation`],
-    /// usually via [`Operation::layer`].
+    ///
     /// As an example:
     ///
     /// ```rust,compile_fail
     /// #[derive(Debug)]
     /// pub struct PrintPlugin;
     ///
-    /// impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+    /// impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
     /// // [...]
     /// {
     ///     // [...]
-    ///     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-    ///         input.layer(PrintLayer { name: Op::NAME })
+    ///     fn apply(&self, inner: S) -> Self::Service {
+    ///         PrintService { inner, name: Op::ID }
     ///     }
     /// }
     /// ```
     ///
-    /// The layer that is registered **last** via [`Operation::layer`] is the one that gets executed
-    /// **first** at runtime when a new request comes in, since it _wraps_ the underlying service.
-    ///
-    /// This is why plugins in [`PluginPipeline`] are applied in opposite order compared to their
-    /// registration order: this ensures that, _at runtime_, their logic is executed
-    /// in registration order.
     pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<NewPlugin, P>> {
         PluginPipeline(PluginStack::new(new_plugin, self.0))
     }
 
     /// Applies a single [`tower::Layer`] to all operations _before_ they are deserialized.
-    pub fn http_layer<L>(self, layer: L) -> PluginPipeline<PluginStack<HttpLayer<L>, P>> {
-        PluginPipeline(PluginStack::new(HttpLayer(layer), self.0))
+    pub fn layer<L>(self, layer: L) -> PluginPipeline<PluginStack<LayerPlugin<L>, P>> {
+        PluginPipeline(PluginStack::new(LayerPlugin(layer), self.0))
     }
 }
 
-impl<P, Op, S, L, InnerPlugin> Plugin<P, Op, S, L> for PluginPipeline<InnerPlugin>
+impl<P, Op, S, InnerPlugin> Plugin<P, Op, S> for PluginPipeline<InnerPlugin>
 where
-    InnerPlugin: Plugin<P, Op, S, L>,
+    InnerPlugin: Plugin<P, Op, S>,
 {
     type Service = InnerPlugin::Service;
-    type Layer = InnerPlugin::Layer;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        self.0.map(input)
+    fn apply(&self, svc: S) -> Self::Service {
+        self.0.apply(svc)
     }
 }

@@ -22,7 +22,7 @@ class RecursionDetectionDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(RecursionDetectionRuntimePluginCustomization(codegenContext))
         }
 }
@@ -31,7 +31,7 @@ private class RecursionDetectionRuntimePluginCustomization(
     private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rust(
                     "#T::new()",
