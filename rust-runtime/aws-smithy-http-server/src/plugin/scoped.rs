@@ -83,7 +83,7 @@ impl<Pl> Scoped<(), Pl> {
     }
 }
 
-/// A trait marking which operations are in scope via the associated type [`Scoped::Contains`].
+/// A trait marking which operations are in scope via the associated type [`Membership::Contains`].
 pub trait Membership<Op> {
     type Contains;
 }
@@ -107,6 +107,8 @@ where
 ///
 /// # Example
 ///
+/// For a service with three operations: `OperationA`, `OperationB`, `OperationC`.
+///
 /// ```rust
 /// scope! {
 ///     struct OnlyAB {
@@ -128,12 +130,12 @@ macro_rules! scope {
         $vis struct $name;
 
         $(
-            impl $crate::plugin::Membership<$include> for $name {
+            impl $crate::plugin::scoped::Membership<$include> for $name {
                 type Contains = $crate::plugin::scoped::True;
             }
         )*
         $(
-            impl $crate::plugin::Membership<$exclude> for $name {
+            impl $crate::plugin::scoped::Membership<$exclude> for $name {
                 type Contains = $crate::plugin::scoped::False;
             }
         )*

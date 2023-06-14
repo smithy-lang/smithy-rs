@@ -121,7 +121,7 @@ pub use filter::{filter_by_operation_id, FilterByOperationId};
 pub use identity::IdentityPlugin;
 pub use layer::{LayerPlugin, PluginLayer};
 pub use pipeline::PluginPipeline;
-pub use scoped::{Membership, Scoped};
+pub use scoped::Scoped;
 pub use stack::PluginStack;
 
 /// A mapping from one [`Service`](tower::Service) to another. This should be viewed as a
