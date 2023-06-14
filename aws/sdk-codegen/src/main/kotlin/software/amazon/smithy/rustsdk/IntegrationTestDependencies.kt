@@ -77,7 +77,10 @@ class IntegrationTestDependencies(
             if (hasTests) {
                 val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
+                addDependency(smithyAsync)
                 addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)

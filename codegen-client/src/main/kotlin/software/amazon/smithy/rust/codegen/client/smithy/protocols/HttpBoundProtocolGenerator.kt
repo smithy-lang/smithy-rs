@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.SensitiveIndex
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolParserGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -21,8 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
@@ -38,7 +38,7 @@ class HttpBoundProtocolGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
     bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
-) : ClientProtocolGenerator(
+) : OperationGenerator(
     codegenContext,
     protocol,
     MakeOperationGenerator(
@@ -87,7 +87,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 if (propertyBagAvailable) {
                     rust("properties.acquire_mut().insert(signer_sender);")
                 } else {
-                    rust("_cfg.put(signer_sender);")
+                    rust("_cfg.interceptor_state().put(signer_sender);")
                 }
             },
         )

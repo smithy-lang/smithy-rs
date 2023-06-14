@@ -22,7 +22,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
             .resolve("user_agent::AwsUserAgent"),
         "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
-        "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
+        "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
         "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::orchestrator::ConfigBagAccessors"),
         "http" to CargoDependency.Http.toType(),
@@ -33,7 +33,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
             .resolve("client::interceptors::SharedInterceptor"),
         "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
-            .toType().resolve("client::test_util::interceptor::TestParamsSetterInterceptor"),
+            .toType().resolve("client::test_util::interceptors::TestParamsSetterInterceptor"),
     )
 
     override fun section(section: CustomizableOperationSection): Writable =
@@ -47,7 +47,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
                             use #{ConfigBagAccessors};
                             let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.set_request_time(#{SharedTimeSource}::new(request_time));
+                                cfg.interceptor_state().set_request_time(#{SharedTimeSource}::new(request_time));
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self

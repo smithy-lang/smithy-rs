@@ -115,6 +115,12 @@ class InlineDependency(
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
+        fun serializationSettings(runtimeConfig: RuntimeConfig): InlineDependency = forInlineableRustFile(
+            "serialization_settings",
+            CargoDependency.Http,
+            CargoDependency.smithyHttp(runtimeConfig),
+        )
+
         fun constrained(): InlineDependency =
             InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
     }
@@ -209,7 +215,7 @@ data class CargoDependency(
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
-        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
+        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")

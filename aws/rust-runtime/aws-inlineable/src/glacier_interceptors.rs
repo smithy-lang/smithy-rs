@@ -14,8 +14,8 @@ use aws_smithy_runtime_api::client::interceptors::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
     Interceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, LoadedRequestBody};
+use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
 use http::header::{HeaderName, HeaderValue};
 use http::Request;
@@ -119,7 +119,8 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
     ) -> Result<(), BoxError> {
         // Request the request body to be loaded into memory immediately after serialization
         // so that it can be checksummed before signing and transmit
-        cfg.put(LoadedRequestBody::Requested);
+        cfg.interceptor_state()
+            .set_loaded_request_body(LoadedRequestBody::Requested);
         Ok(())
     }
 
@@ -139,7 +140,7 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
                 .clone();
             signing_config.signing_options.payload_override =
                 Some(SignableBody::Precomputed(content_sha256));
-            cfg.put(signing_config);
+            cfg.interceptor_state().put(signing_config);
         } else {
             return Err(
                 "the request body wasn't loaded into memory before the retry loop, \
@@ -215,7 +216,7 @@ fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
         "even an empty file will produce a digest. this function assumes that hashes is non-empty"
     );
     while hashes.len() > 1 {
-        let next = hashes.chunks(2).into_iter().map(|chunk| match *chunk {
+        let next = hashes.chunks(2).map(|chunk| match *chunk {
             [left, right] => {
                 let mut ctx = Context::new(&SHA256);
                 ctx.update(left.as_ref());
@@ -234,7 +235,7 @@ fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
 mod account_id_autofill_tests {
     use super::*;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
     fn autofill_account_id() {
@@ -273,7 +274,7 @@ mod account_id_autofill_tests {
 mod api_version_tests {
     use super::*;
     use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
     fn api_version_interceptor() {

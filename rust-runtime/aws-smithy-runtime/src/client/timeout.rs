@@ -4,15 +4,14 @@
  */
 
 use aws_smithy_async::future::timeout::Timeout;
-use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
 use aws_smithy_client::SdkError;
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, HttpResponse};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::timeout::TimeoutConfig;
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -104,7 +103,7 @@ pub(super) enum TimeoutKind {
 
 #[derive(Clone, Debug)]
 pub(super) struct MaybeTimeoutConfig {
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
     timeout: Option<Duration>,
     timeout_kind: TimeoutKind,
 }
@@ -184,10 +183,11 @@ mod tests {
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::future::never::Never;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_types::config_bag::Layer;
 
     #[tokio::test]
     async fn test_no_timeout() {
-        let sleep_impl: Arc<dyn AsyncSleep> = Arc::new(TokioSleep::new());
+        let sleep_impl = SharedAsyncSleep::new(TokioSleep::new());
         let sleep_future = sleep_impl.sleep(Duration::from_millis(250));
         let underlying_future = async {
             sleep_future.await;
@@ -198,8 +198,10 @@ mod tests {
         tokio::time::pause();
 
         let mut cfg = ConfigBag::base();
-        cfg.put(TimeoutConfig::builder().build());
-        cfg.set_sleep_impl(Some(sleep_impl));
+        let mut timeout_config = Layer::new("timeout");
+        timeout_config.put(TimeoutConfig::builder().build());
+        timeout_config.set_sleep_impl(Some(sleep_impl));
+        cfg.push_layer(timeout_config);
 
         underlying_future
             .maybe_timeout(&cfg, TimeoutKind::Operation)
@@ -211,7 +213,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_operation_timeout() {
-        let sleep_impl: Arc<dyn AsyncSleep> = Arc::new(TokioSleep::new());
+        let sleep_impl = SharedAsyncSleep::new(TokioSleep::new());
         let never = Never::new();
         let underlying_future = async {
             never.await;
@@ -222,12 +224,14 @@ mod tests {
         tokio::time::pause();
 
         let mut cfg = ConfigBag::base();
-        cfg.put(
+        let mut timeout_config = Layer::new("timeout");
+        timeout_config.put(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_millis(250))
                 .build(),
         );
-        cfg.set_sleep_impl(Some(sleep_impl));
+        timeout_config.set_sleep_impl(Some(sleep_impl));
+        cfg.push_layer(timeout_config);
 
         let result = underlying_future
             .maybe_timeout(&cfg, TimeoutKind::Operation)

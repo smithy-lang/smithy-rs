@@ -8,7 +8,7 @@ use aws_smithy_runtime_api::client::interceptors::error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::{
     BeforeTransmitInterceptorContextMut, Interceptor,
 };
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
 use http::header::{InvalidHeaderValue, USER_AGENT};
@@ -110,13 +110,14 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
-    use aws_smithy_runtime_api::config_bag::ConfigBag;
-    use aws_smithy_runtime_api::type_erasure::TypedBox;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::error::display::DisplayErrorContext;
+    use aws_smithy_types::type_erasure::TypeErasedBox;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
             .request()
+            .expect("request is set")
             .headers()
             .get(header_name)
             .unwrap()
@@ -125,7 +126,7 @@ mod tests {
     }
 
     fn context() -> InterceptorContext {
-        let mut context = InterceptorContext::new(TypedBox::new("doesntmatter").erase());
+        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = context.take_input();
@@ -137,14 +138,15 @@ mod tests {
     fn test_overridden_ua() {
         let mut context = context();
 
-        let mut config = ConfigBag::base();
-        config.put(AwsUserAgent::for_tests());
-        config.put(ApiMetadata::new("unused", "unused"));
+        let mut layer = Layer::new("test");
+        layer.put(AwsUserAgent::for_tests());
+        layer.put(ApiMetadata::new("unused", "unused"));
+        let mut cfg = ConfigBag::of_layers(vec![layer]);
 
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut ctx, &mut config)
+            .modify_before_signing(&mut ctx, &mut cfg)
             .unwrap();
 
         let header = expect_header(&context, "user-agent");
@@ -162,8 +164,9 @@ mod tests {
         let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
-        let mut config = ConfigBag::base();
-        config.put(api_metadata.clone());
+        let mut layer = Layer::new("test");
+        layer.put(api_metadata.clone());
+        let mut config = ConfigBag::of_layers(vec![layer]);
 
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);
@@ -191,9 +194,10 @@ mod tests {
         let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
-        let mut config = ConfigBag::base();
-        config.put(api_metadata);
-        config.put(AppName::new("my_awesome_app").unwrap());
+        let mut layer = Layer::new("test");
+        layer.put(api_metadata);
+        layer.put(AppName::new("my_awesome_app").unwrap());
+        let mut config = ConfigBag::of_layers(vec![layer]);
 
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);

@@ -8,6 +8,8 @@ package software.amazon.smithy.rustsdk.customize.apigateway
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -16,8 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 
@@ -66,7 +66,7 @@ private class ApiGatewayAddAcceptHeader : OperationCustomization() {
 private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rustTemplate(
                     "#{Interceptor}::default()",

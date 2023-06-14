@@ -35,15 +35,13 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
             // Track the latency between client and server.
             section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::ServiceClockSkewInterceptor"))
-            }
-
-            // Track the number of request attempts made.
-            section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::RequestAttemptsInterceptor"))
+                rust(
+                    "#T::new()",
+                    smithyRuntime.resolve("client::orchestrator::interceptors::ServiceClockSkewInterceptor"),
+                )
             }
 
             // Add request metadata to outgoing requests. Sets a header.

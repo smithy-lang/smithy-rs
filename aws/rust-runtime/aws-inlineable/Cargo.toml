@@ -24,6 +24,7 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-types = { path = "../aws-types" }
 bytes = "1"
 bytes-utils = "0.1.1"
@@ -42,8 +43,8 @@ aws-credential-types = { path = "../aws-credential-types", features = ["test-uti
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime" }
-tempfile = "3.2.0"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tempfile = "3.6.0"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 
 [package.metadata.docs.rs]

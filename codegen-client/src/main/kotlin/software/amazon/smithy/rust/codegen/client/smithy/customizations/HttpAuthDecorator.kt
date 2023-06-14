@@ -15,8 +15,8 @@ import software.amazon.smithy.model.traits.HttpDigestAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -107,14 +107,14 @@ class HttpAuthDecorator : ClientCodegenDecorator {
             }
         }
 
-    override fun operationRuntimePluginCustomizations(
+    override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
         HttpAuthSchemes.from(codegenContext).let { authSchemes ->
             baseCustomizations.letIf(authSchemes.anyEnabled()) {
-                it + HttpAuthOperationRuntimePluginCustomization(codegenContext)
+                it + HttpAuthOperationCustomization(codegenContext)
             }
         }
 
@@ -193,19 +193,19 @@ private class HttpAuthServiceRuntimePluginCustomization(
                     rust("cfg.set_identity_resolvers(self.handle.conf.identity_resolvers().clone());")
                 }
             }
+
+            else -> emptySection
         }
     }
 }
 
-private class HttpAuthOperationRuntimePluginCustomization(
-    codegenContext: ClientCodegenContext,
-) : OperationRuntimePluginCustomization() {
+private class HttpAuthOperationCustomization(codegenContext: ClientCodegenContext) : OperationCustomization() {
     private val serviceShape = codegenContext.serviceShape
     private val codegenScope = codegenScope(codegenContext.runtimeConfig)
 
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
+    override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            is OperationRuntimePluginSection.AdditionalConfig -> {
+            is OperationSection.AdditionalRuntimePluginConfig -> {
                 withBlockTemplate(
                     "let auth_option_resolver = #{StaticAuthOptionResolver}::new(vec![",
                     "]);",
@@ -224,7 +224,7 @@ private class HttpAuthOperationRuntimePluginCustomization(
                 }
 
                 // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
-                rustTemplate("${section.configBagName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
+                rustTemplate("${section.newLayerName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
             }
 
             else -> emptySection

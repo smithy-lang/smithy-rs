@@ -4,27 +4,34 @@
  */
 
 use crate::client::interceptors::InterceptorRegistrar;
-use crate::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
 use std::fmt::Debug;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub type BoxRuntimePlugin = Box<dyn RuntimePlugin + Send + Sync>;
 
+/// RuntimePlugin Trait
+///
+/// A RuntimePlugin is the unit of configuration for augmenting the SDK with new behavior
+///
+/// Runtime plugins can set configuration and register interceptors.
 pub trait RuntimePlugin: Debug {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError>;
+    fn config(&self) -> Option<FrozenLayer> {
+        None
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
+        let _ = interceptors;
+    }
 }
 
 impl RuntimePlugin for BoxRuntimePlugin {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
-        self.as_ref().configure(cfg, interceptors)
+    fn config(&self) -> Option<FrozenLayer> {
+        self.as_ref().config()
+    }
+
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
+        self.as_ref().interceptors(interceptors)
     }
 }
 
@@ -37,12 +44,6 @@ pub struct RuntimePlugins {
 impl RuntimePlugins {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn for_operation(operation: Box<dyn RuntimePlugin + Send + Sync>) -> Self {
-        let mut plugins = Self::new();
-        plugins.operation_plugins.push(operation);
-        plugins
     }
 
     pub fn with_client_plugin(
@@ -67,7 +68,10 @@ impl RuntimePlugins {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.client_plugins.iter() {
-            plugin.configure(cfg, interceptors)?;
+            if let Some(layer) = plugin.config() {
+                cfg.push_shared_layer(layer);
+            }
+            plugin.interceptors(interceptors);
         }
 
         Ok(())
@@ -79,7 +83,10 @@ impl RuntimePlugins {
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
         for plugin in self.operation_plugins.iter() {
-            plugin.configure(cfg, interceptors)?;
+            if let Some(layer) = plugin.config() {
+                cfg.push_shared_layer(layer);
+            }
+            plugin.interceptors(interceptors);
         }
 
         Ok(())
@@ -88,22 +95,12 @@ impl RuntimePlugins {
 
 #[cfg(test)]
 mod tests {
-    use super::{BoxError, RuntimePlugin, RuntimePlugins};
-    use crate::client::interceptors::InterceptorRegistrar;
-    use crate::config_bag::ConfigBag;
+    use super::{RuntimePlugin, RuntimePlugins};
 
     #[derive(Debug)]
     struct SomeStruct;
 
-    impl RuntimePlugin for SomeStruct {
-        fn configure(
-            &self,
-            _cfg: &mut ConfigBag,
-            _inters: &mut InterceptorRegistrar,
-        ) -> Result<(), BoxError> {
-            todo!()
-        }
-    }
+    impl RuntimePlugin for SomeStruct {}
 
     #[test]
     fn can_add_runtime_plugin_implementors_to_runtime_plugins() {

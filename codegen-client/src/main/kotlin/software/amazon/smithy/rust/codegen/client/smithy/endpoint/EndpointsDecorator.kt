@@ -20,6 +20,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.Cus
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -27,8 +29,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -169,12 +169,14 @@ class EndpointsDecorator : ClientCodegenDecorator {
             val codegenScope = arrayOf(
                 *RuntimeType.preludeScope,
                 "Params" to typesGenerator.paramsStruct(),
+                "ResolveEndpoint" to types.resolveEndpoint,
                 "ResolveEndpointError" to types.resolveEndpointError,
             )
             return when (section) {
                 is OperationSection.MutateInput -> writable {
                     rustTemplate(
                         """
+                        use #{ResolveEndpoint};
                         let params_result = #{Params}::builder()#{builderFields:W}.build()
                             .map_err(|err| #{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
                         let (endpoint_result, params) = match params_result {

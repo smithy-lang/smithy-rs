@@ -17,7 +17,12 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+mod de;
 mod format;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+mod ser;
+
 pub use self::format::DateTimeFormatError;
 pub use self::format::DateTimeParseError;
 
@@ -51,8 +56,8 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
-    seconds: i64,
-    subsecond_nanos: u32,
+    pub(crate) seconds: i64,
+    pub(crate) subsecond_nanos: u32,
 }
 
 /* ANCHOR_END: date_time */
@@ -176,11 +181,23 @@ impl DateTime {
         self.seconds
     }
 
+    /// Set the seconds component of this `DateTime`.
+    pub fn set_seconds(&mut self, seconds: i64) -> &mut Self {
+        self.seconds = seconds;
+        self
+    }
+
     /// Returns the sub-second nanos component of the `DateTime`.
     ///
     /// _Note: this does not include the number of seconds since the epoch._
     pub fn subsec_nanos(&self) -> u32 {
         self.subsecond_nanos
+    }
+
+    /// Set the "sub-second" nanoseconds of this `DateTime`.
+    pub fn set_subsec_nanos(&mut self, subsec_nanos: u32) -> &mut Self {
+        self.subsecond_nanos = subsec_nanos;
+        self
     }
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.

@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -22,8 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -103,13 +103,19 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-            if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                section.putConfigValue(this) {
-                    rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+            when (section) {
+                is ServiceRuntimePluginSection.AdditionalConfig -> {
+                    section.putConfigValue(this) {
+                        rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                    }
                 }
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+
+                is ServiceRuntimePluginSection.RegisterInterceptor -> {
+                    section.registerInterceptor(runtimeConfig, this) {
+                        rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                    }
                 }
+                else -> emptySection
             }
         }
     }

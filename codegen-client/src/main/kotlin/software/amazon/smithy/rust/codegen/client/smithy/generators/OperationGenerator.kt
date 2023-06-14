@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
+package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ResponseDeserializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
@@ -19,18 +21,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-open class ClientProtocolGenerator(
+open class OperationGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
     /**
@@ -42,16 +43,42 @@ open class ClientProtocolGenerator(
     private val bodyGenerator: ProtocolPayloadGenerator,
     // TODO(enableNewSmithyRuntime): Remove the `traitGenerator`
     private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol) {
+) {
+    companion object {
+        fun registerDefaultRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType.forInlineFun("register_default_runtime_plugins", ClientRustModule.Operation) {
+                rustTemplate(
+                    """
+                    pub(crate) fn register_default_runtime_plugins(
+                        runtime_plugins: #{RuntimePlugins},
+                        operation: #{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>,
+                        handle: #{Arc}<crate::client::Handle>,
+                        config_override: #{Option}<crate::config::Builder>,
+                    ) -> #{RuntimePlugins} {
+                        let mut runtime_plugins = runtime_plugins
+                            .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
+                            .with_operation_plugin(operation);
+                        if let Some(config_override) = config_override {
+                            runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
+                        }
+                        runtime_plugins
+                    }
+                    """,
+                    *preludeScope,
+                    "Arc" to RuntimeType.Arc,
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        .resolve("client::runtime_plugin::RuntimePlugins"),
+                )
+            }
+    }
+
+    private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
 
     /**
-     * Render all code required for serializing requests and deserializing responses for the operation
-     *
-     * This primarily relies on two components:
-     * 1. [traitGenerator]: Generate implementations of the `ParseHttpResponse` trait for the operations
-     * 2. [makeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
-     *    to HTTP requests
+     * Render the operation struct and its supporting code.
      */
     fun renderOperation(
         operationWriter: RustWriter,
@@ -78,7 +105,6 @@ open class ClientProtocolGenerator(
             operationWriter,
             operationShape,
             operationCustomizations,
-            codegenDecorator,
         )
     }
 
@@ -86,7 +112,6 @@ open class ClientProtocolGenerator(
         operationWriter: RustWriter,
         operationShape: OperationShape,
         operationCustomizations: List<OperationCustomization>,
-        codegenDecorator: ClientCodegenDecorator,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -116,57 +141,68 @@ open class ClientProtocolGenerator(
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
-                "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::runtime_plugin::RuntimePlugins"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                val setupRuntimePluginsFn =
-                    RuntimeType.forInlineFun("setup_runtime_plugins", ClientRustModule.Operation) {
-                        rustTemplate(
-                            """
-                            pub(crate) fn setup_runtime_plugins(
-                                operation: #{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>,
-                                handle: #{Arc}<crate::client::Handle>,
-                                config_override: #{Option}<crate::config::Builder>,
-                            ) -> #{RuntimePlugins} {
-                                let mut runtime_plugins = #{RuntimePlugins}::for_operation(operation)
-                                    .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle));
-                                if let Some(config_override) = config_override {
-                                    runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
-                                }
-                                runtime_plugins
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
                 rustTemplate(
                     """
                     pub(crate) async fn orchestrate(
+                        runtime_plugins: &#{RuntimePlugins},
                         input: #{Input},
+                    ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                        let map_err = |err: #{SdkError}<#{Error}, #{HttpResponse}>| {
+                            err.map_service_error(|err| {
+                                #{TypedBox}::<#{OperationError}>::assume_from(err.into())
+                                    .expect("correct error type")
+                                    .unwrap()
+                            })
+                        };
+                        let context = Self::orchestrate_with_stop_point(&runtime_plugins, input, #{StopPoint}::None)
+                            .await
+                            .map_err(map_err)?;
+                        let output = context.finalize().map_err(map_err)?;
+                        #{Ok}(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
+                    }
+
+                    pub(crate) async fn orchestrate_with_stop_point(
+                        runtime_plugins: &#{RuntimePlugins},
+                        input: #{Input},
+                        stop_point: #{StopPoint},
+                    ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
+                        let input = #{TypedBox}::new(input).erase();
+                        #{invoke_with_stop_point}(input, runtime_plugins, stop_point).await
+                    }
+
+                    pub(crate) fn register_runtime_plugins(
+                        runtime_plugins: #{RuntimePlugins},
                         handle: #{Arc}<crate::client::Handle>,
                         config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                        let runtime_plugins = #{setup_runtime_plugins}(#{Box}::new(#{Operation}::new()) as _, handle, config_override);
-                        let input = #{TypedBox}::new(input).erase();
-                        let output = #{invoke}(input, &runtime_plugins)
-                            .await
-                            .map_err(|err| {
-                                err.map_service_error(|err| {
-                                    #{TypedBox}::<#{OperationError}>::assume_from(err.into())
-                                        .expect("correct error type")
-                                        .unwrap()
-                                })
-                            })?;
-                        #{Ok}(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
+                    ) -> #{RuntimePlugins} {
+                        #{register_default_runtime_plugins}(
+                            runtime_plugins,
+                            #{Box}::new(Self::new()) as _,
+                            handle,
+                            config_override
+                        )
+                        #{additional_runtime_plugins}
                     }
                     """,
                     *codegenScope,
-                    "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "invoke" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke"),
-                    "setup_runtime_plugins" to setupRuntimePluginsFn,
+                    "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
+                    "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
+                    "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::InterceptorContext"),
+                    "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),
+                    "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
+                    "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke_with_stop_point"),
+                    "register_default_runtime_plugins" to registerDefaultRuntimePluginsFn(runtimeConfig),
+                    "additional_runtime_plugins" to writable {
+                        writeCustomizations(
+                            operationCustomizations,
+                            OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+                        )
+                    },
                 )
             }
 
@@ -182,7 +218,7 @@ open class ClientProtocolGenerator(
                 operationWriter,
                 operationShape,
                 operationName,
-                codegenDecorator.operationRuntimePluginCustomizations(codegenContext, operationShape, emptyList()),
+                operationCustomizations,
             )
 
             ResponseDeserializerGenerator(codegenContext, protocol)

@@ -94,7 +94,7 @@ Conditionally compiling code when a feature is **not** activated can make it har
 
 One case where using `not` is acceptable is when providing a fallback when no features are set:
 
-```rust
+```rust,ignore
 #[cfg(feature = "rt-tokio")]
 pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
     Some(sleep_tokio())
