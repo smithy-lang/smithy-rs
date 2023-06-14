@@ -115,7 +115,7 @@ mod stack;
 
 pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
 pub use either::Either;
-pub use filter::{filter_by_operation_id, FilterByOperationId};
+pub use filter::{filter_by_operation, filter_by_operation_id, FilterByOperation, FilterByOperationId};
 pub use identity::IdentityPlugin;
 pub use layer::{LayerPlugin, PluginLayer};
 pub use pipeline::PluginPipeline;
