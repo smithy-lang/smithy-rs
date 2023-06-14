@@ -50,7 +50,8 @@ class ServerServiceGenerator(
     private val crateName = codegenContext.moduleUseName()
 
     private val service = codegenContext.serviceShape
-    private val serviceName = service.id.name.toPascalCase()
+    private val serviceId = service.id
+    private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
     private val builderBodyGenericTypeName = "Body"
 
@@ -353,7 +354,6 @@ class ServerServiceGenerator(
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                val operationZstTypeName = operationStructNames[operationShape]!!
                 rustTemplate(
                     """
                     (
@@ -590,6 +590,38 @@ class ServerServiceGenerator(
         )
     }
 
+    private fun serviceShapeImpl(): Writable = writable {
+        val namespace = serviceId.namespace
+        val name = serviceId.name
+        val absolute = serviceId.toString().replace("#", "##")
+        rustTemplate(
+            """
+            impl #{SmithyHttpServer}::service::ServiceShape for $serviceName {
+                const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name");
+
+                type Protocol = #{Protocol};
+
+                type Operations = Operation;
+            }
+            """,
+            "Protocol" to protocol.markerStruct(),
+            *codegenScope,
+        )
+    }
+
+    private fun operationEnum(): Writable = writable {
+        val operations = operationStructNames.values.joinToString(",")
+        rustTemplate(
+            """
+            /// An enumeration of all operations in $serviceName.
+            pub enum Operation {
+                $operations
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -600,11 +632,17 @@ class ServerServiceGenerator(
             #{RequestSpecs:W}
 
             #{Struct:W}
+
+            #{Operations}
+
+            #{ServiceImpl}
             """,
             "Builder" to builder(),
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
             "Struct" to serviceStruct(),
+            "Operations" to operationEnum(),
+            "ServiceImpl" to serviceShapeImpl(),
             *codegenScope,
         )
     }
