@@ -137,22 +137,22 @@ class ServerServiceGenerator(
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
 
                     ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         ModelPlugin::Service
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                #{Protocol},
+                                $serviceName,
                                 crate::operation_shape::$structName,
                                 ModelPlugin::Service
                             >
@@ -200,22 +200,22 @@ class ServerServiceGenerator(
                     S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
 
                     ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         ModelPlugin::Service
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation_shape::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                #{Protocol},
+                                $serviceName,
                                 crate::operation_shape::$structName,
                                 ModelPlugin::Service
                             >

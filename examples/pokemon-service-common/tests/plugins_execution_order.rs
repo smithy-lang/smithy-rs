@@ -65,7 +65,7 @@ impl SentinelPlugin {
     }
 }
 
-impl<Protocol, Op, S> Plugin<Protocol, Op, S> for SentinelPlugin {
+impl<Ser, Op, S> Plugin<Ser, Op, S> for SentinelPlugin {
     type Service = SentinelService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {

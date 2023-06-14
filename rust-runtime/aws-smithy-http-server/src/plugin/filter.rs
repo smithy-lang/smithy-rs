@@ -51,10 +51,10 @@ impl<Inner, F> FilterByOperationId<Inner, F> {
     }
 }
 
-impl<P, Op, S, Inner, F> Plugin<P, Op, S> for FilterByOperationId<Inner, F>
+impl<Ser, Op, S, Inner, F> Plugin<Ser, Op, S> for FilterByOperationId<Inner, F>
 where
     F: Fn(ShapeId) -> bool,
-    Inner: Plugin<P, Op, S>,
+    Inner: Plugin<Ser, Op, S>,
     Op: OperationShape,
 {
     type Service = Either<Inner::Service, S>;

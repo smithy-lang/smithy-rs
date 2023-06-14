@@ -91,7 +91,7 @@
 //! #[derive(Debug)]
 //! pub struct PrintPlugin;
 //!
-//! impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
+//! impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
 //! where
 //!     Op: OperationShape,
 //! {
@@ -127,7 +127,7 @@ pub use stack::PluginStack;
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
 ///
 /// See [module](crate::plugin) documentation for more information.
-pub trait Plugin<Protocol, Op, S> {
+pub trait Plugin<Ser, Op, S> {
     /// The type of the new [`Service`](tower::Service).
     type Service;
 
@@ -135,13 +135,13 @@ pub trait Plugin<Protocol, Op, S> {
     fn apply(&self, svc: S) -> Self::Service;
 }
 
-impl<'a, P, Op, S, Pl> Plugin<P, Op, S> for &'a Pl
+impl<'a, Ser, Op, S, Pl> Plugin<Ser, Op, S> for &'a Pl
 where
-    Pl: Plugin<P, Op, S>,
+    Pl: Plugin<Ser, Op, S>,
 {
     type Service = Pl::Service;
 
     fn apply(&self, inner: S) -> Self::Service {
-        <Pl as Plugin<P, Op, S>>::apply(self, inner)
+        <Pl as Plugin<Ser, Op, S>>::apply(self, inner)
     }
 }

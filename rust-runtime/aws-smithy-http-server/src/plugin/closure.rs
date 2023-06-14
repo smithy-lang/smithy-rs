@@ -13,7 +13,7 @@ pub struct OperationIdFn<F> {
     f: F,
 }
 
-impl<P, Op, S, NewService, F> Plugin<P, Op, S> for OperationIdFn<F>
+impl<Ser, Op, S, NewService, F> Plugin<Ser, Op, S> for OperationIdFn<F>
 where
     F: Fn(ShapeId, S) -> NewService,
     Op: OperationShape,

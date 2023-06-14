@@ -8,7 +8,7 @@ use super::Plugin;
 /// A [`Plugin`] that maps a service to itself.
 pub struct IdentityPlugin;
 
-impl<P, Op, S> Plugin<P, Op, S> for IdentityPlugin {
+impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
     type Service = S;
 
     fn apply(&self, svc: S) -> S {

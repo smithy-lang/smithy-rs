@@ -275,7 +275,8 @@ use tower::Service;
 /// A [`Service`] that adds a print log.
 pub struct PrintService<S> {
     inner: S,
-    name: &'static str,
+    op_name: &'static str,
+    ser_name: &'static str
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -291,7 +292,7 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {}", self.name);
+        println!("Hi {} in {}", self.op_name, self.ser_name);
         self.inner.call(req)
     }
 }
@@ -304,56 +305,21 @@ An example of a `PrintPlugin` which prints the operation name:
 ```rust
 # extern crate aws_smithy_http_server;
 # pub struct PrintService<S> { inner: S, name: &'static str }
-use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape};
+use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, service::ServiceShape};
 
 /// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
+impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
 where
+    Ser: ServiceShape,
     Op: OperationShape,
 {
     type Service = PrintService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {
-        PrintService { name: Op::ID.name(), inner }
-    }
-}
-```
-
-An alternative example which prints the protocol name:
-
-```rust
-# extern crate aws_smithy_http_server;
-# pub struct PrintService<S> { name: &'static str, inner: S}
-use aws_smithy_http_server::{
-    plugin::Plugin,
-    proto::{
-        aws_json_10::AwsJson1_0,
-        rest_xml::RestXml,
-    }
-};
-
-/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
-#[derive(Debug)]
-pub struct PrintPlugin;
-
-impl<Op, S> Plugin<AwsJson1_0, Op, S> for PrintPlugin
-{
-    type Service = PrintService<S>;
-
-    fn apply(&self, inner: S) -> Self::Service {
-        PrintService { name: "AWS JSON 1.0", inner }
-    }
-}
-
-impl<Op, S> Plugin<RestXml, Op, S> for PrintPlugin
-{
-    type Service = PrintService<S>;
-
-    fn apply(&self, inner: S) -> Self::Service {
-        PrintService { name: "AWS REST XML", inner }
+        PrintService { op_name: Op::ID.name(), ser_name: Ser::ID.name() inner }
     }
 }
 ```
@@ -387,7 +353,7 @@ This allows for:
 # extern crate aws_smithy_http_server;
 # use aws_smithy_http_server::plugin::{PluginStack, Plugin};
 # struct PrintPlugin;
-# impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin { type Service = S; fn apply(&self, svc: S) -> Self::Service { svc }}
+# impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin { type Service = S; fn apply(&self, svc: S) -> Self::Service { svc }}
 # trait PrintExt<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>>; }
 # impl<EP> PrintExt<EP> for PluginPipeline<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};

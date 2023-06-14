@@ -150,7 +150,7 @@ impl<P> PluginPipeline<P> {
     /// #[derive(Debug)]
     /// pub struct PrintPlugin;
     ///
-    /// impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
+    /// impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
     /// // [...]
     /// {
     ///     // [...]
@@ -170,9 +170,9 @@ impl<P> PluginPipeline<P> {
     }
 }
 
-impl<P, Op, S, InnerPlugin> Plugin<P, Op, S> for PluginPipeline<InnerPlugin>
+impl<Ser, Op, S, InnerPlugin> Plugin<Ser, Op, S> for PluginPipeline<InnerPlugin>
 where
-    InnerPlugin: Plugin<P, Op, S>,
+    InnerPlugin: Plugin<Ser, Op, S>,
 {
     type Service = InnerPlugin::Service;
 

@@ -102,10 +102,10 @@ where
     }
 }
 
-impl<P, Op, S, Le, Ri> Plugin<P, Op, S> for Either<Le, Ri>
+impl<Ser, Op, S, Le, Ri> Plugin<Ser, Op, S> for Either<Le, Ri>
 where
-    Le: Plugin<P, Op, S>,
-    Ri: Plugin<P, Op, S>,
+    Le: Plugin<Ser, Op, S>,
+    Ri: Plugin<Ser, Op, S>,
 {
     type Service = Either<Le::Service, Ri::Service>;
 

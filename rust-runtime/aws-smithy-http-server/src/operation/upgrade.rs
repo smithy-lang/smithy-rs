@@ -18,7 +18,7 @@ use tracing::error;
 
 use crate::{
     body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,
-    runtime_error::InternalFailureException,
+    runtime_error::InternalFailureException, service::ServiceShape,
 };
 
 use super::OperationShape;
@@ -47,11 +47,12 @@ impl<Extractors> UpgradePlugin<Extractors> {
     }
 }
 
-impl<S, P, Op, Extractors> Plugin<P, Op, S> for UpgradePlugin<Extractors>
+impl<S, Ser, Op, Extractors> Plugin<Ser, Op, S> for UpgradePlugin<Extractors>
 where
+    Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Service = Upgrade<P, (Op::Input, Extractors), S>;
+    type Service = Upgrade<Ser::Protocol, (Op::Input, Extractors), S>;
 
     fn apply(&self, inner: S) -> Self::Service {
         Upgrade {

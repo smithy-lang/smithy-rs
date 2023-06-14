@@ -13,7 +13,7 @@ use super::InstrumentOperation;
 #[derive(Debug)]
 pub struct InstrumentPlugin;
 
-impl<P, Op, S> Plugin<P, Op, S> for InstrumentPlugin
+impl<Ser, Op, S> Plugin<Ser, Op, S> for InstrumentPlugin
 where
     Op: OperationShape,
     Op: Sensitivity,

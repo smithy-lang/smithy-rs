@@ -114,7 +114,7 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<P, Op, S> Plugin<P, Op, S> for OperationExtensionPlugin
+impl<Ser, Op, S> Plugin<Ser, Op, S> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {

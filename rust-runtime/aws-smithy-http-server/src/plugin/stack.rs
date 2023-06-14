@@ -22,10 +22,10 @@ impl<Inner, Outer> PluginStack<Inner, Outer> {
     }
 }
 
-impl<P, Op, S, Inner, Outer> Plugin<P, Op, S> for PluginStack<Inner, Outer>
+impl<Ser, Op, S, Inner, Outer> Plugin<Ser, Op, S> for PluginStack<Inner, Outer>
 where
-    Inner: Plugin<P, Op, S>,
-    Outer: Plugin<P, Op, Inner::Service>,
+    Inner: Plugin<Ser, Op, S>,
+    Outer: Plugin<Ser, Op, Inner::Service>,
 {
     type Service = Outer::Service;
 
