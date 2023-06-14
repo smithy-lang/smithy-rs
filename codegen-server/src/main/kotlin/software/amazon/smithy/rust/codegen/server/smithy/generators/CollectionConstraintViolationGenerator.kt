@@ -48,7 +48,7 @@ class CollectionConstraintViolationGenerator(
 
         inlineModuleCreator(constraintViolationSymbol) {
             val constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }.toMutableList()
-            if (isMemberConstrained) {
+            if (shape.isReachableFromOperationInput() && isMemberConstrained) {
                 constraintViolationVariants += {
                     val memberConstraintViolationSymbol =
                         constraintViolationSymbolProvider.toSymbol(targetShape).letIf(
