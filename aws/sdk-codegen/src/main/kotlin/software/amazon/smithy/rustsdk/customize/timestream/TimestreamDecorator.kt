@@ -79,7 +79,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     pub async fn enable_endpoint_discovery(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{ResolveEndpointError}> {
                         let mut new_conf = self.conf().clone();
                         let sleep = self.conf().sleep_impl().expect("sleep impl must be provided");
-                        let time = self.conf().time_source().clone();
+                        let time = self.conf().time_source();
                         let (resolver, reloader) = #{endpoint_discovery}::create_cache(
                             move || {
                                 let client = self.clone();
