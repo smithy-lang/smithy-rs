@@ -42,14 +42,14 @@ cd aws/sdk/build/aws-sdk/sdk
 for service in "${services_that_compile[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo check --all-features' on '${service}'${C_RESET}"
-    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo check --all-features
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo check --all-features --all-targets
     popd
 done
 
 for service in "${services_that_pass_tests[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo test --all-features' on '${service}'${C_RESET}"
-    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo test --all-features --no-fail-fast
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo test --all-features --all-targets --no-fail-fast
     popd
 done
 

@@ -15,12 +15,12 @@
 //! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # let layer = ();
 //! # struct GetPokemonSpecies;
-//! # impl GetPokemonSpecies { const NAME: ShapeId = ShapeId::new("namespace#name", "namespace", "name"); };
+//! # impl GetPokemonSpecies { const ID: ShapeId = ShapeId::new("namespace#name", "namespace", "name"); };
 //! // Create a `Plugin` from a HTTP `Layer`
-//! let plugin = HttpLayer(layer);
+//! let plugin = LayerPlugin(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_id(plugin, |id| id.name() == GetPokemonSpecies::NAME.name());
+//! let plugin = filter_by_operation_id(plugin, |id| id.name() == GetPokemonSpecies::ID.name());
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
@@ -55,7 +55,7 @@
 //!
 //! ```rust
 //! use aws_smithy_http_server::{
-//!     operation::{Operation, OperationShape},
+//!     operation::{OperationShape},
 //!     plugin::{Plugin, PluginPipeline, PluginStack},
 //!     shape_id::ShapeId,
 //! };
@@ -87,35 +87,18 @@
 //!     }
 //! }
 //!
-//! /// A [`Layer`] which constructs the [`PrintService`].
-//! #[derive(Debug)]
-//! pub struct PrintLayer {
-//!     id: ShapeId,
-//! }
-//! impl<S> Layer<S> for PrintLayer {
-//!     type Service = PrintService<S>;
-//!
-//!     fn layer(&self, service: S) -> Self::Service {
-//!         PrintService {
-//!             inner: service,
-//!             id: self.id.clone(),
-//!         }
-//!     }
-//! }
-//!
 //! /// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 //! #[derive(Debug)]
 //! pub struct PrintPlugin;
 //!
-//! impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+//! impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
 //! where
 //!     Op: OperationShape,
 //! {
-//!     type Service = S;
-//!     type Layer = Stack<L, PrintLayer>;
+//!     type Service = PrintService<S>;
 //!
-//!     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-//!         input.layer(PrintLayer { id: Op::NAME })
+//!     fn apply(&self, inner: S) -> Self::Service {
+//!         PrintService { inner, id: Op::ID }
 //!     }
 //! }
 //! ```
@@ -128,42 +111,40 @@ mod filter;
 mod identity;
 mod layer;
 mod pipeline;
+#[doc(hidden)]
+pub mod scoped;
 mod stack;
-
-use crate::operation::Operation;
 
 pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
 pub use either::Either;
 pub use filter::{filter_by_operation_id, FilterByOperationId};
 pub use identity::IdentityPlugin;
-pub use layer::HttpLayer;
+pub use layer::{LayerPlugin, PluginLayer};
 pub use pipeline::PluginPipeline;
+pub use scoped::Scoped;
 pub use stack::PluginStack;
 
-/// A mapping from one [`Operation`] to another. Used to modify the behavior of
-/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
+/// A mapping from one [`Service`](tower::Service) to another. This should be viewed as a
+/// [`Layer`](tower::Layer) parameterized by the protocol and operation.
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
 ///
 /// See [module](crate::plugin) documentation for more information.
-pub trait Plugin<Protocol, Op, S, L> {
+pub trait Plugin<Protocol, Op, S> {
     /// The type of the new [`Service`](tower::Service).
     type Service;
-    /// The type of the new [`Layer`](tower::Layer).
-    type Layer;
 
-    /// Maps an [`Operation`] to another.
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+    /// Maps a [`Service`](tower::Service) to another.
+    fn apply(&self, svc: S) -> Self::Service;
 }
 
-impl<'a, P, Op, S, L, Pl> Plugin<P, Op, S, L> for &'a Pl
+impl<'a, P, Op, S, Pl> Plugin<P, Op, S> for &'a Pl
 where
-    Pl: Plugin<P, Op, S, L>,
+    Pl: Plugin<P, Op, S>,
 {
     type Service = Pl::Service;
-    type Layer = Pl::Layer;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        <Pl as Plugin<P, Op, S, L>>::map(*self, input)
+    fn apply(&self, inner: S) -> Self::Service {
+        <Pl as Plugin<P, Op, S>>::apply(self, inner)
     }
 }

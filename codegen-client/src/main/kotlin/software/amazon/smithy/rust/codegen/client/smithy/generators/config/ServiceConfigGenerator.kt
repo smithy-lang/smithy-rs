@@ -20,13 +20,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -91,7 +92,9 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /**
      * A section for setting up a field to be used by RuntimePlugin
      */
-    object ToRuntimePlugin : ServiceConfig("ToRuntimePlugin")
+    data class RuntimePluginConfig(val cfg: String) : ServiceConfig("ToRuntimePlugin")
+
+    data class RuntimePluginInterceptors(val interceptors: String) : ServiceConfig("ToRuntimePluginInterceptors")
 
     /**
      * A section for extra functionality that needs to be defined with the config module
@@ -163,7 +166,7 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
                 rust("${param.name}: self.${param.name}$default,")
             }
 
-            ServiceConfig.ToRuntimePlugin -> emptySection
+            is ServiceConfig.RuntimePluginConfig -> emptySection
 
             else -> emptySection
         }
@@ -196,7 +199,10 @@ typealias ConfigCustomization = NamedCustomization<ServiceConfig>
  *    // builder implementation
  * }
  */
-class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
+class ServiceConfigGenerator(
+    private val codegenContext: CodegenContext,
+    private val customizations: List<ConfigCustomization> = listOf(),
+) {
 
     companion object {
         fun withBaseBehavior(
@@ -207,9 +213,21 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
                 baseFeatures.add(IdempotencyTokenProviderCustomization())
             }
-            return ServiceConfigGenerator(baseFeatures + extraCustomizations)
+            return ServiceConfigGenerator(codegenContext, baseFeatures + extraCustomizations)
         }
     }
+
+    private val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+    private val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+    val codegenScope = arrayOf(
+        "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+        "Layer" to smithyTypes.resolve("config_bag::Layer"),
+        "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+        "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+        "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+        "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+        *preludeScope,
+    )
 
     fun render(writer: RustWriter) {
         writer.docs("Service config.\n")
@@ -306,30 +324,29 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
     }
 
-    fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
-        writer.rustBlockTemplate(
-            "impl #{RuntimePlugin} for Builder",
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-
-        ) {
-            rustBlockTemplate(
-                """
-                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
-                """,
-                "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-                "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
-                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            ) {
-                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
-
-                customizations.forEach {
-                    it.section(ServiceConfig.ToRuntimePlugin)(writer)
+    fun renderRuntimePluginImplForBuilder(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl #{RuntimePlugin} for Builder {
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    // TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`
+                    ##[allow(unused_mut)]
+                    let mut cfg = #{Layer}::new("service config");
+                    #{config}
+                    Some(cfg.freeze())
                 }
 
-                rust("Ok(())")
+                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
+                    #{interceptors}
+                }
             }
-        }
+
+            """,
+            *codegenScope,
+            "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+            "interceptors" to writable {
+                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors"))
+            },
+        )
     }
 }

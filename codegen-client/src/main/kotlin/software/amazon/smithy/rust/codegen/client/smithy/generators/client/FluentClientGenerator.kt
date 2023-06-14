@@ -330,7 +330,9 @@ class FluentClientGenerator(
                 """
                 /// Sends a request with this input using the given client.
                 pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
-                #{send_bounds:W} {
+                #{send_bounds:W}
+                #{boundsWithoutWhereClause:W}
+                {
                 let mut fluent_builder = client.$fnName();
                 fluent_builder.inner = self;
                 fluent_builder.send().await
@@ -347,6 +349,7 @@ class FluentClientGenerator(
                 "OperationOutput" to outputType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
                 "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }

@@ -146,20 +146,6 @@ open class OperationGenerator(
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
-                    pub(crate) fn register_runtime_plugins(
-                        runtime_plugins: #{RuntimePlugins},
-                        handle: #{Arc}<crate::client::Handle>,
-                        config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{RuntimePlugins} {
-                        #{register_default_runtime_plugins}(
-                            runtime_plugins,
-                            #{Box}::new(Self::new()) as _,
-                            handle,
-                            config_override
-                        )
-                        #{additional_runtime_plugins}
-                    }
-
                     pub(crate) async fn orchestrate(
                         runtime_plugins: &#{RuntimePlugins},
                         input: #{Input},
@@ -185,6 +171,20 @@ open class OperationGenerator(
                     ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
                         let input = #{TypedBox}::new(input).erase();
                         #{invoke_with_stop_point}(input, runtime_plugins, stop_point).await
+                    }
+
+                    pub(crate) fn register_runtime_plugins(
+                        runtime_plugins: #{RuntimePlugins},
+                        handle: #{Arc}<crate::client::Handle>,
+                        config_override: #{Option}<crate::config::Builder>,
+                    ) -> #{RuntimePlugins} {
+                        #{register_default_runtime_plugins}(
+                            runtime_plugins,
+                            #{Box}::new(Self::new()) as _,
+                            handle,
+                            config_override
+                        )
+                        #{additional_runtime_plugins}
                     }
                     """,
                     *codegenScope,
