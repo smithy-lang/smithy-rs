@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::operation::Operation;
-
 use super::Plugin;
 
 /// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
@@ -24,16 +22,15 @@ impl<Inner, Outer> PluginStack<Inner, Outer> {
     }
 }
 
-impl<P, Op, S, L, Inner, Outer> Plugin<P, Op, S, L> for PluginStack<Inner, Outer>
+impl<P, Op, S, Inner, Outer> Plugin<P, Op, S> for PluginStack<Inner, Outer>
 where
-    Inner: Plugin<P, Op, S, L>,
-    Outer: Plugin<P, Op, Inner::Service, Inner::Layer>,
+    Inner: Plugin<P, Op, S>,
+    Outer: Plugin<P, Op, Inner::Service>,
 {
     type Service = Outer::Service;
-    type Layer = Outer::Layer;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let inner = self.inner.map(input);
-        self.outer.map(inner)
+    fn apply(&self, svc: S) -> Self::Service {
+        let svc = self.inner.apply(svc);
+        self.outer.apply(svc)
     }
 }

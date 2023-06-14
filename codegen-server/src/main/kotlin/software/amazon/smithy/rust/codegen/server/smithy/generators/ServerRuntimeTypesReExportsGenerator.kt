@@ -28,7 +28,6 @@ class ServerRuntimeTypesReExportsGenerator(
             }
             pub mod operation {
                 pub use #{SmithyHttpServer}::operation::OperationShape;
-                pub use #{SmithyHttpServer}::operation::Operation;
             }
             pub mod plugin {
                 pub use #{SmithyHttpServer}::plugin::Plugin;

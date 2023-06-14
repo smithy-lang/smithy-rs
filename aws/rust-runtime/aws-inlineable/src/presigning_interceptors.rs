@@ -8,17 +8,18 @@
 use crate::presigning::PresigningConfig;
 use crate::serialization_settings::HeaderSerializationSettings;
 use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
-use aws_runtime::invocation_id::DisableInvocationIdInterceptor;
-use aws_runtime::request_info::DisableRequestInfoInterceptor;
-use aws_runtime::user_agent::DisableUserAgentInterceptor;
+use aws_runtime::invocation_id::InvocationIdInterceptor;
+use aws_runtime::request_info::RequestInfoInterceptor;
+use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime_api::client::interceptors::{
-    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
-    Interceptor, InterceptorRegistrar, SharedInterceptor,
+    disable_interceptor, BeforeSerializationInterceptorContextMut,
+    BeforeTransmitInterceptorContextMut, BoxError, Interceptor, InterceptorRegistrar,
+    SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 
 /// Interceptor that tells the SigV4 signer to add the signature to query params,
 /// and sets the request expiration time from the presigning config.
@@ -39,14 +40,15 @@ impl Interceptor for SigV4PresigningInterceptor {
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        cfg.put::<HeaderSerializationSettings>(
+        cfg.interceptor_state().put::<HeaderSerializationSettings>(
             HeaderSerializationSettings::new()
                 .omit_default_content_length()
                 .omit_default_content_type(),
         );
-        cfg.set_request_time(SharedTimeSource::new(StaticTimeSource::new(
-            self.config.start_time(),
-        )));
+        cfg.interceptor_state()
+            .set_request_time(SharedTimeSource::new(StaticTimeSource::new(
+                self.config.start_time(),
+            )));
         Ok(())
     }
 
@@ -60,7 +62,8 @@ impl Interceptor for SigV4PresigningInterceptor {
             config.signing_options.signature_type = HttpSignatureType::HttpRequestQueryParams;
             config.signing_options.payload_override =
                 Some(aws_sigv4::http_request::SignableBody::UnsignedPayload);
-            cfg.put::<SigV4OperationSigningConfig>(config);
+            cfg.interceptor_state()
+                .put::<SigV4OperationSigningConfig>(config);
             Ok(())
         } else {
             Err(
@@ -86,18 +89,15 @@ impl SigV4PresigningRuntimePlugin {
 }
 
 impl RuntimePlugin for SigV4PresigningRuntimePlugin {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
-        // Disable some SDK interceptors that shouldn't run for presigning
-        cfg.put(DisableInvocationIdInterceptor::new("presigning"));
-        cfg.put(DisableRequestInfoInterceptor::new("presigning"));
-        cfg.put(DisableUserAgentInterceptor::new("presigning"));
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut layer = Layer::new("Presigning");
+        layer.put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
+        layer.put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
+        layer.put(disable_interceptor::<UserAgentInterceptor>("presigning"));
+        Some(layer.freeze())
+    }
 
-        // Register the presigning interceptor
+    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
         interceptors.register(self.interceptor.clone());
-        Ok(())
     }
 }
