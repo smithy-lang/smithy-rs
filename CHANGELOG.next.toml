@@ -388,6 +388,17 @@ references = [
 ]
 
 [[aws-sdk-rust]]
+message = "Implements serde support to `Number`, `Blob`, `Document`, `DateTime`"
+author = "thomas-k-cameron"
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+references = [
+    "smithy-rs#2647",
+    "smithy-rs#2645",
+    "smithy-rs#2646",
+    "smithy-rs#2616",
+]
+
+[[aws-sdk-rust]]
 message = "Add a function on `Input` types for sending requests"
 author = "thomas-k-cameron"
 references = ["smithy-rs#2652"]
