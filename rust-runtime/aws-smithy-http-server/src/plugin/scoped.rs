@@ -52,9 +52,8 @@ impl<P, Op, S, Pl> ConditionalApply<P, Op, S, Pl> for False {
 /// # Example
 ///
 /// ```rust
-/// # struct OperationA;
-/// # struct OperationB;
-/// # struct OperationC;
+/// # use aws_smithy_http_server::{scope, plugin::Scoped};
+/// # struct OperationA; struct OperationB; struct OperationC;
 /// # let plugin = ();
 ///
 /// // Define a scope over a service with 3 operations
@@ -114,6 +113,8 @@ where
 /// For a service with three operations: `OperationA`, `OperationB`, `OperationC`.
 ///
 /// ```rust
+/// # use aws_smithy_http_server::scope;
+/// # struct OperationA; struct OperationB; struct OperationC;
 /// scope! {
 ///     struct OnlyAB {
 ///         includes: [OperationA, OperationB],
