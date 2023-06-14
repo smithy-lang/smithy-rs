@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
@@ -28,24 +29,44 @@ class ScopeMacroGenerator(
 
     private fun macro(): Writable = writable {
         val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name
-                val operationNames = operations.joinToString(" ") { codegenContext.symbolProvider.toSymbol(it).name }
+        val operationNames = operations.joinToString(" ") { codegenContext.symbolProvider.toSymbol(it).name }
         val operationBranches = operations
             .map { codegenContext.symbolProvider.toSymbol(it).name }.joinToString("") {
                 """
                 // $it match found, pop from both `member` and `not_member`
-                (@ $ name: ident, $ predicate: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
-                    scope! { @ $ name, $ predicate ($($ member)*) ($($ temp)*) ($($ not_member)*) }
+                (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
+                    scope! { @ $ name, $ contains ($($ member)*) ($($ temp)*) ($($ not_member)*) }
                 };
                 // $it match not found, pop from `not_member` into `temp` stack
-                (@ $ name: ident, $ predicate: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($ other: ident $($ not_member: ident)*)) => {
-                    scope! { @ $ name, $ predicate ($it $($ member)*) ($ other $($ temp)*) ($($ not_member)*) }
+                (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($ other: ident $($ not_member: ident)*)) => {
+                    scope! { @ $ name, $ contains ($it $($ member)*) ($ other $($ temp)*) ($($ not_member)*) }
                 };
                 """
-            }.joinToString("")
+            }
+        val crateName = codegenContext.moduleName.toSnakeCase()
+
+        // If we have a second operation we can perform further checks
+        val otherOperationName: String? = operations.toList().get(1)?.let {
+            codegenContext.symbolProvider.toSymbol(it).name
+        }
+        val furtherTests = if (otherOperationName != null) {
+            writable {
+                rustTemplate(
+                    """
+                    /// ## let a = Plugin::<(), $otherOperationName, u64>::apply(&scoped_a, 6);
+                    /// ## let b = Plugin::<(), $otherOperationName, u64>::apply(&scoped_b, 6);
+                    /// ## assert_eq!(a, 6_u64);
+                    /// ## assert_eq!(b, 3_u32);
+                    """,
+                )
+            }
+        } else {
+            writable {}
+        }
 
         rustTemplate(
             """
-            /// A macro to help with scoping plugins to a subset of all operations.
+            /// A macro to help with scoping [plugins](crate::plugin) to a subset of all operations.
             ///
             /// In contrast to [`aws_smithy_http_server::scope`](#{SmithyHttpServer}::scope), this macro has knowledge
             /// of the service and any operations _not_ specified will be placed in the opposing group.
@@ -56,7 +77,7 @@ class ScopeMacroGenerator(
             /// scope! {
             ///     /// Includes [`$firstOperationName`], excluding all other operations.
             ///     struct ScopeA {
-            ///         includes: [$firstOperationName],
+            ///         includes: [$firstOperationName]
             ///     }
             /// }
             ///
@@ -66,25 +87,36 @@ class ScopeMacroGenerator(
             ///         excludes: [$firstOperationName]
             ///     }
             /// }
+            ///
+            /// ## use #{SmithyHttpServer}::plugin::{Plugin, Scoped};
+            /// ## use $crateName::scope;
+            /// ## struct MockPlugin;
+            /// ## impl<P, Op, S> Plugin<P, Op, S> for MockPlugin { type Service = u32; fn apply(&self, svc: S) -> u32 { 3 } }
+            /// ## let scoped_a = Scoped::new::<ScopeA>(MockPlugin);
+            /// ## let scoped_b = Scoped::new::<ScopeB>(MockPlugin);
+            /// ## let a = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_a, 6);
+            /// ## let b = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_b, 6);
+            /// ## assert_eq!(a, 3_u32);
+            /// ## assert_eq!(b, 6_u64);
             /// ```
             ##[macro_export]
             macro_rules! scope {
                 // Completed, render impls
-                (@ $ name: ident, $ predicate: ident () ($($ temp: ident)*) ($($ not_member: ident)*)) => {
+                (@ $ name: ident, $ contains: ident () ($($ temp: ident)*) ($($ not_member: ident)*)) => {
                     $(
                         impl #{SmithyHttpServer}::plugin::scoped::Membership<$ temp> for $ name {
-                            type Contains = #{SmithyHttpServer}::plugin::scoped::$ predicate;
+                            type Contains = #{SmithyHttpServer}::plugin::scoped::$ contains;
                         }
                     )*
                     $(
                         impl #{SmithyHttpServer}::plugin::scoped::Membership<$ not_member> for $ name {
-                            type Contains = #{SmithyHttpServer}::plugin::scoped::$ predicate;
+                            type Contains = #{SmithyHttpServer}::plugin::scoped::$ contains;
                         }
                     )*
                 };
                 // All `not_member`s exhausted, move `temp` into `not_member`
-                (@ $ name: ident, $ predicate: ident ($($ member: ident)*) ($($ temp: ident)*) ()) => {
-                    scope! { @ $ name, $ predicate ($($ member)*) () ($($ temp)*) }
+                (@ $ name: ident, $ contains: ident ($($ member: ident)*) ($($ temp: ident)*) ()) => {
+                    scope! { @ $ name, $ contains ($($ member)*) () ($($ temp)*) }
                 };
                 $operationBranches
                 (
@@ -94,8 +126,7 @@ class ScopeMacroGenerator(
                     }
                 ) => {
                     use $ crate::operation_shape::*;
-                    use #{SmithyHttpServer}::scope as scope_runtime;
-                    scope_runtime! {
+                    #{SmithyHttpServer}::scope! {
                         $(##[$ attrs])*
                         $ vis struct $ name {
                             includes: [$($ include),*],
@@ -111,9 +142,8 @@ class ScopeMacroGenerator(
                     }
                 ) => {
                     use $ crate::operation_shape::*;
-                    use #{SmithyHttpServer}::scope as scope_runtime;
 
-                    scope_runtime! {
+                    #{SmithyHttpServer}::scope! {
                         $(##[$ attrs])*
                         $ vis struct $ name {
                             includes: [],
@@ -125,6 +155,7 @@ class ScopeMacroGenerator(
             }
             """,
             *codegenScope,
+            "FurtherTests" to furtherTests,
         )
     }
 
