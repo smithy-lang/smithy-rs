@@ -5,17 +5,15 @@
 #
 set -eux
 
-export TIMEFORMAT=%R
-
 function compile() {
     cd $1 &&
         export CARGORUSTFLAG="" &&
         cargo build &>/dev/null && cargo clean && # this is for downloading crates
-        \time --format="%e seconds" bash -c "cargo build  &> /dev/null" && cargo clean &&
-        \time --format="%e seconds" bash -c "cargo build --release  &> /dev/null" && cargo clean &&
+        \time --format="%e" bash -c "cargo build  &> /dev/null" && cargo clean &&
+        \time --format="%e" bash -c "cargo build --release  &> /dev/null" && cargo clean &&
         export CARGORUSTFLAG="--cfg aws_sdk_unstable" &&
-        \time --format="%e seconds" bash -c "cargo build --all-features &>/dev/null" && cargo clean &&
-        \time --format="%e seconds" bash -c "cargo build --all-features --release &>/dev/null" && cargo clean
+        \time --format="%e" bash -c "cargo build --all-features &>/dev/null" && cargo clean &&
+        \time --format="%e" bash -c "cargo build --all-features --release &>/dev/null" && cargo clean
 }
 
 ./gradlew :aws:sdk:assemble
