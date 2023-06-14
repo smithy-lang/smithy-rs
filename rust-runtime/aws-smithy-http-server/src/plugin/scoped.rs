@@ -103,7 +103,11 @@ where
 
 /// A macro to help with scoping plugins to a subset of all operations.
 ///
-/// The scope must partition _all_ operations, that is, each and every operation must be included or excluded, but not both.
+/// The scope must partition _all_ operations, that is, each and every operation must be included or excluded, but not
+/// both.
+///
+/// The generated server SDK exports a similar `scope` macro which is aware of a services operations and can complete
+/// underspecified scopes automatically.
 ///
 /// # Example
 ///
