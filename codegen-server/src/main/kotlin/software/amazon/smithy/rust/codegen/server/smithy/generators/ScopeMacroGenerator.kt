@@ -46,7 +46,7 @@ class ScopeMacroGenerator(
         val crateName = codegenContext.moduleName.toSnakeCase()
 
         // If we have a second operation we can perform further checks
-        val otherOperationName: String? = operations.toList().get(1)?.let {
+        val otherOperationName: String? = operations.toList().getOrNull(1)?.let {
             codegenContext.symbolProvider.toSymbol(it).name
         }
         val furtherTests = if (otherOperationName != null) {
