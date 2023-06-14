@@ -9,7 +9,7 @@ use super::Plugin;
 
 /// Marker struct for `true`.
 ///
-/// Implements [`ConditionalApply`] which applies the a [`Plugin`].
+/// Implements [`ConditionalApply`] which applies the [`Plugin`].
 pub struct True;
 
 /// Marker struct for `false`.
@@ -101,9 +101,9 @@ where
     }
 }
 
-/// A macro for creating subsets operations for [`Scoped`].
+/// A macro to help with scoping plugins to a subset of all operations.
 ///
-/// The scope must include or exclude _all_ operations.
+/// The scope must partition _all_ operations, that is, each and every operation must be included or excluded, but not both.
 ///
 /// # Example
 ///
