@@ -268,15 +268,17 @@ Suppose we want to apply a different `Layer` to every operation. In this case, p
 Consider the following middleware:
 
 ```rust
+# extern crate aws_smithy_http_server;
 # extern crate tower;
+use aws_smithy_http_server::shape_id::ShapeId;
 use std::task::{Context, Poll};
 use tower::Service;
 
 /// A [`Service`] that adds a print log.
 pub struct PrintService<S> {
     inner: S,
-    op_name: &'static str,
-    ser_name: &'static str
+    op_id: ShapeId,
+    ser_id: ShapeId
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -292,7 +294,7 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {} in {}", self.op_name, self.ser_name);
+        println!("Hi {} in {}", self.op_id.name(), self.ser_id.name());
         self.inner.call(req)
     }
 }
@@ -304,7 +306,8 @@ An example of a `PrintPlugin` which prints the operation name:
 
 ```rust
 # extern crate aws_smithy_http_server;
-# pub struct PrintService<S> { inner: S, name: &'static str }
+# use aws_smithy_http_server::shape_id::ShapeId;
+# pub struct PrintService<S> { inner: S, op_id: ShapeId, ser_id: ShapeId }
 use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, service::ServiceShape};
 
 /// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
@@ -319,7 +322,11 @@ where
     type Service = PrintService<S>;
 
     fn apply(&self, inner: S) -> Self::Service {
-        PrintService { op_name: Op::ID.name(), ser_name: Ser::ID.name() inner }
+        PrintService {
+            inner,
+            op_id: Op::ID,
+            ser_id: Ser::ID,
+        }
     }
 }
 ```

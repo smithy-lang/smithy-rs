@@ -55,7 +55,8 @@
 //!
 //! ```rust
 //! use aws_smithy_http_server::{
-//!     operation::{OperationShape},
+//!     operation::OperationShape,
+//!     service::ServiceShape,
 //!     plugin::{Plugin, PluginPipeline, PluginStack},
 //!     shape_id::ShapeId,
 //! };
@@ -66,7 +67,8 @@
 //! #[derive(Clone, Debug)]
 //! pub struct PrintService<S> {
 //!     inner: S,
-//!     id: ShapeId,
+//!     ser_id: ShapeId,
+//!     op_id: ShapeId
 //! }
 //!
 //! impl<R, S> Service<R> for PrintService<S>
@@ -82,7 +84,7 @@
 //!     }
 //!
 //!     fn call(&mut self, req: R) -> Self::Future {
-//!         println!("Hi {}", self.id.absolute());
+//!         println!("Hi {} in {}", self.op_id.absolute(), self.ser_id.absolute());
 //!         self.inner.call(req)
 //!     }
 //! }
@@ -93,12 +95,17 @@
 //!
 //! impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
 //! where
+//!     Ser: ServiceShape,
 //!     Op: OperationShape,
 //! {
 //!     type Service = PrintService<S>;
 //!
 //!     fn apply(&self, inner: S) -> Self::Service {
-//!         PrintService { inner, id: Op::ID }
+//!         PrintService {
+//!             inner,
+//!             ser_id: Op::ID,
+//!             op_id: Ser::ID,
+//!         }
 //!     }
 //! }
 //! ```

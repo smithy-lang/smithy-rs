@@ -37,24 +37,29 @@ where
 ///
 /// // A `Service` which prints the operation name before calling `S`.
 /// struct PrintService<S> {
-///     operation_name: ShapeId,
+///     operation_id: ShapeId,
 ///     inner: S
 /// }
 ///
-/// // A `Layer` applying `PrintService`.
-/// struct PrintLayer {
-///     operation_name: ShapeId
+/// impl<S> PrintService<S> {
+///     pub fn new(operation_id: ShapeId, inner: S) -> Self {
+///         Self {
+///             operation_id,
+///             inner
+///         }
+///     }
 /// }
 ///
-/// // Defines a closure taking the operation name to `PrintLayer`.
-/// let f = |operation_name| PrintLayer { operation_name };
+/// fn map<S>(operation_id: ShapeId, inner: S) -> PrintService<S> {
+///     PrintService { operation_id, inner }
+/// }
 ///
 /// // This plugin applies the `PrintService` middleware around every operation.
-/// let plugin = plugin_from_operation_id_fn(f);
+/// let plugin = plugin_from_operation_id_fn(map);
+/// # struct CheckHealth;
+/// # impl aws_smithy_http_server::operation::OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+/// # let _ = aws_smithy_http_server::plugin::Plugin::<(), CheckHealth, ()>::apply(&plugin, ());
 /// ```
-pub fn plugin_from_operation_id_fn<NewService, F>(f: F) -> OperationIdFn<F>
-where
-    F: Fn(ShapeId) -> NewService,
-{
+pub fn plugin_from_operation_id_fn<F>(f: F) -> OperationIdFn<F> {
     OperationIdFn { f }
 }
