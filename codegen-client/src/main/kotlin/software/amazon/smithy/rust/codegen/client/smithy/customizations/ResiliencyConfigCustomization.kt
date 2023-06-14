@@ -248,9 +248,9 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            layer.store_or_unset(self.retry_config);
-                            layer.store_or_unset(self.sleep_impl.clone());
-                            layer.store_or_unset(self.timeout_config);
+                            self.retry_config.map(|r| layer.store_put(r));
+                            self.sleep_impl.clone().map(|s| layer.store_put(s));
+                            self.timeout_config.map(|t| layer.store_put(t));
                             """,
                             *codegenScope,
                         )

@@ -162,7 +162,7 @@ private class HttpConnectorConfigCustomization(
 
             is ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
-                    rust("layer.store_or_unset(self.http_connector);")
+                    rust("self.http_connector.map(|c| layer.store_put(c));")
                 } else {
                     rust("http_connector: self.http_connector,")
                 }
