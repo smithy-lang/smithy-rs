@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -28,10 +29,12 @@ class ScopeMacroGenerator(
     private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
     private fun macro(): Writable = writable {
-        val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name
-        val operationNames = operations.joinToString(" ") { codegenContext.symbolProvider.toSymbol(it).name }
+        val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name.toPascalCase()
+        val operationNames = operations.joinToString(" ") {
+            codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
+        }
         val operationBranches = operations
-            .map { codegenContext.symbolProvider.toSymbol(it).name }.joinToString("") {
+            .map { codegenContext.symbolProvider.toSymbol(it).name.toPascalCase() }.joinToString("") {
                 """
                 // $it match found, pop from both `member` and `not_member`
                 (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
