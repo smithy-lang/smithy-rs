@@ -3,11 +3,45 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::time::SystemTime;
+//! A rate limiter for controlling the rate at which AWS requests are made. The rate changes based
+//! on the number of throttling errors encountered.
+
+// Zelda will integrate this rate limiter into the retry policy in a separate PR.
+#![allow(dead_code)]
 
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors};
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer, Storable, StoreReplace};
 use aws_smithy_types::{builder, builder_methods, builder_struct};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
+
+/// A [RuntimePlugin] to provide a standard token bucket, usable by the
+/// [`StandardRetryStrategy`](crate::client::retries::strategy::standard::StandardRetryStrategy).
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct ClientRateLimiterRuntimePlugin {
+    _rate_limiter: Arc<Mutex<ClientRateLimiter>>,
+}
+
+impl ClientRateLimiterRuntimePlugin {
+    pub fn new(cfg: &ConfigBag) -> Self {
+        Self {
+            _rate_limiter: Arc::new(Mutex::new(ClientRateLimiter::new(cfg))),
+        }
+    }
+}
+
+impl RuntimePlugin for ClientRateLimiterRuntimePlugin {
+    fn config(&self) -> Option<FrozenLayer> {
+        let cfg = Layer::new("client rate limiter");
+        // TODO(enableNewSmithyRuntimeLaunch) Move the Arc/Mutex inside the rate limiter so that it
+        //    be both storable and cloneable.
+        // cfg.store_put(self.rate_limiter.clone());
+
+        Some(cfg.freeze())
+    }
+}
 
 const MIN_FILL_RATE: f64 = 0.5;
 const MIN_CAPACITY: f64 = 1.0;
@@ -17,127 +51,151 @@ const BETA: f64 = 0.7;
 /// Controls how aggressively we scale up after being throttled
 const SCALE_CONSTANT: f64 = 0.4;
 
-pub struct ClientRateLimiter {
+#[derive(Clone, Debug)]
+pub(crate) struct ClientRateLimiter {
     /// The rate at which token are replenished.
-    fill_rate: f64,
+    token_refill_rate: f64,
     /// The maximum capacity allowed in the token bucket.
-    max_capacity: f64,
+    maximum_bucket_capacity: f64,
     /// The current capacity of the token bucket.
     /// The minimum this can be is 1.0
-    current_capacity: f64,
+    current_bucket_capacity: f64,
     /// The last time the token bucket was refilled.
-    last_timestamp: Option<f64>,
+    time_of_last_refill: Option<f64>,
     /// The smoothed rate which tokens are being retrieved.
-    measured_tx_rate: f64,
+    tokens_retrieved_per_second: f64,
     /// The last half second time bucket used.
-    last_tx_rate_bucket: f64,
+    previous_time_bucket: f64,
     /// The number of requests seen within the current time bucket.
     request_count: u64,
     /// Boolean indicating if the token bucket is enabled.
     /// The token bucket is initially disabled.
     /// When a throttling error is encountered it is enabled.
-    enabled: bool,
+    enable_throttling: bool,
     /// The maximum rate when the client was last throttled.
-    last_max_rate: f64,
+    tokens_retrieved_per_second_at_time_of_last_throttle: f64,
     /// The last time when the client was throttled.
-    last_throttle_time: f64,
+    time_of_last_throttle: f64,
     time_window: f64,
     calculated_rate: f64,
 }
 
+impl Storable for ClientRateLimiter {
+    type Storer = StoreReplace<Self>;
+}
+
 impl ClientRateLimiter {
-    pub fn builder() -> Builder {
+    pub(crate) fn new(cfg: &ConfigBag) -> Self {
+        Self::builder()
+            .time_of_last_throttle(get_unix_timestamp(cfg))
+            .previous_time_bucket(get_unix_timestamp(cfg).floor())
+            .build()
+    }
+
+    fn builder() -> Builder {
         Builder::new()
     }
 
-    pub fn acquire(&mut self, cfg: &ConfigBag, amount: f64) -> Result<(), BoxError> {
-        if !self.enabled {
+    /// If this function returns `Ok(())`, you're OK to send a request. If it returns an error,
+    /// then you should not send a request; You've sent quite enough already.
+    pub(crate) fn acquire_permission_to_send_a_request(
+        &mut self,
+        cfg: &ConfigBag,
+        amount: f64,
+    ) -> Result<(), BoxError> {
+        if !self.enable_throttling {
             // return early if we haven't encountered a throttling error yet
             return Ok(());
         }
 
-        self.refill(cfg);
+        let timestamp = get_unix_timestamp(cfg);
+        self.refill(timestamp);
 
-        if self.current_capacity < amount {
+        if self.current_bucket_capacity < amount {
             Err(BoxError::from("the client rate limiter is out of tokens"))
         } else {
-            self.current_capacity -= amount;
+            self.current_bucket_capacity -= amount;
             Ok(())
         }
     }
 
-    pub fn update_sending_rate(&mut self, cfg: &ConfigBag, is_throttling_error: bool) {
-        self.update_measured_rate(cfg);
+    pub(crate) fn update_rate_limiter(&mut self, cfg: &ConfigBag, is_throttling_error: bool) {
+        let timestamp = get_unix_timestamp(cfg);
+        self.update_tokens_retrieved_per_second(timestamp);
 
         if is_throttling_error {
-            let rate_to_use = if self.enabled {
-                f64::min(self.measured_tx_rate, self.fill_rate)
+            let rate_to_use = if self.enable_throttling {
+                f64::min(self.tokens_retrieved_per_second, self.token_refill_rate)
             } else {
-                self.measured_tx_rate
+                self.tokens_retrieved_per_second
             };
 
             // The fill_rate is from the token bucket
-            self.last_max_rate = rate_to_use;
+            self.tokens_retrieved_per_second_at_time_of_last_throttle = rate_to_use;
             self.calculate_time_window();
-            self.last_throttle_time = get_unix_timestamp(cfg);
+            self.time_of_last_throttle = timestamp;
             self.calculated_rate = cubic_throttle(rate_to_use);
             self.enable_token_bucket();
         } else {
             self.calculate_time_window();
-            self.calculated_rate = self.cubic_success(get_unix_timestamp(cfg));
+            self.calculated_rate = self.cubic_success(timestamp);
         }
 
-        let new_rate = f64::min(self.calculated_rate, 2.0 * self.measured_tx_rate);
-        self.token_bucket_update_rate(cfg, new_rate);
+        let new_rate = f64::min(self.calculated_rate, 2.0 * self.tokens_retrieved_per_second);
+        self.update_bucket_refill_rate(timestamp, new_rate);
     }
 
-    fn refill(&mut self, cfg: &ConfigBag) {
-        let timestamp = get_unix_timestamp(cfg);
-        if let Some(last_timestamp) = self.last_timestamp {
-            let fill_amount = (timestamp - last_timestamp) * self.fill_rate;
-            self.current_capacity =
-                f64::min(self.max_capacity, self.current_capacity + fill_amount);
+    fn refill(&mut self, timestamp: f64) {
+        if let Some(last_timestamp) = self.time_of_last_refill {
+            let fill_amount = (timestamp - last_timestamp) * self.token_refill_rate;
+            self.current_bucket_capacity = f64::min(
+                self.maximum_bucket_capacity,
+                self.current_bucket_capacity + fill_amount,
+            );
         }
-        self.last_timestamp = Some(timestamp);
+        self.time_of_last_refill = Some(timestamp);
     }
 
-    fn token_bucket_update_rate(&mut self, cfg: &ConfigBag, new_fill_rate: f64) {
+    fn update_bucket_refill_rate(&mut self, timestamp: f64, new_fill_rate: f64) {
         // Refill based on our current rate before we update to the new fill rate.
-        self.refill(cfg);
+        self.refill(timestamp);
 
-        self.fill_rate = f64::max(new_fill_rate, MIN_FILL_RATE);
-        self.max_capacity = f64::max(new_fill_rate, MIN_CAPACITY);
+        self.token_refill_rate = f64::max(new_fill_rate, MIN_FILL_RATE);
+        self.maximum_bucket_capacity = f64::max(new_fill_rate, MIN_CAPACITY);
         // When we scale down we can't have a current capacity that exceeds our max_capacity.
-        self.current_capacity = f64::min(self.current_capacity, self.max_capacity);
+        self.current_bucket_capacity =
+            f64::min(self.current_bucket_capacity, self.maximum_bucket_capacity);
     }
 
     fn enable_token_bucket(&mut self) {
-        self.enabled = true;
+        self.enable_throttling = true;
     }
 
-    fn update_measured_rate(&mut self, cfg: &ConfigBag) {
-        let t = get_unix_timestamp(cfg);
-        let time_bucket = (t.floor() * 2.0) / 2.0;
+    fn update_tokens_retrieved_per_second(&mut self, timestamp: f64) {
+        let next_time_bucket = (timestamp * 2.0).floor() / 2.0;
         self.request_count += 1;
 
-        if time_bucket > self.last_tx_rate_bucket {
-            let current_rate = self.request_count as f64 / (time_bucket - self.last_tx_rate_bucket);
-            self.measured_tx_rate = current_rate * SMOOTH + self.measured_tx_rate * (1.0 - SMOOTH);
+        if next_time_bucket > self.previous_time_bucket {
+            let current_rate =
+                self.request_count as f64 / (next_time_bucket - self.previous_time_bucket);
+            self.tokens_retrieved_per_second =
+                current_rate * SMOOTH + self.tokens_retrieved_per_second * (1.0 - SMOOTH);
             self.request_count = 0;
-            self.last_tx_rate_bucket = time_bucket;
+            self.previous_time_bucket = next_time_bucket;
         }
     }
 
     fn calculate_time_window(&mut self) {
         // This is broken out into a separate calculation because it only
-        // gets updated when @last_max_rate changes so it can be cached.
-        let base = (self.last_max_rate * (1.0 - BETA)) / SCALE_CONSTANT;
+        // gets updated when @tokens_retrieved_per_second_at_time_of_last_throttle() changes so it can be cached.
+        let base = (self.tokens_retrieved_per_second_at_time_of_last_throttle * (1.0 - BETA))
+            / SCALE_CONSTANT;
         self.time_window = base.powf(1.0 / 3.0);
     }
 
     fn cubic_success(&self, timestamp: f64) -> f64 {
-        let dt = timestamp - self.last_throttle_time - self.time_window;
-        (SCALE_CONSTANT * dt.powi(3)) + self.last_max_rate
+        let dt = timestamp - self.time_of_last_throttle - self.time_window;
+        (SCALE_CONSTANT * dt.powi(3)) + self.tokens_retrieved_per_second_at_time_of_last_throttle
     }
 }
 
@@ -155,33 +213,35 @@ fn get_unix_timestamp(cfg: &ConfigBag) -> f64 {
 }
 
 builder!(
-    set_fill_rate, fill_rate, f64, "The rate at which token are replenished.",
-    set_max_capacity, max_capacity, f64, "The maximum capacity allowed in the token bucket.",
-    set_current_capacity, current_capacity, f64, "The current capacity of the token bucket. The minimum this can be is 1.0",
-    set_last_timestamp, last_timestamp, f64, "The last time the token bucket was refilled.",
-    set_measured_tx_rate, measured_tx_rate, f64, "The smoothed rate which tokens are being retrieved.",
-    set_last_tx_rate_bucket, last_tx_rate_bucket, f64, "The last half second time bucket used.",
+    set_token_refill_rate, token_refill_rate, f64, "The rate at which token are replenished.",
+    set_maximum_bucket_capacity, maximum_bucket_capacity, f64, "The maximum capacity allowed in the token bucket.",
+    set_current_bucket_capacity, current_bucket_capacity, f64, "The current capacity of the token bucket. The minimum this can be is 1.0",
+    set_time_of_last_refill, time_of_last_refill, f64, "The last time the token bucket was refilled.",
+    set_tokens_retrieved_per_second, tokens_retrieved_per_second, f64, "The smoothed rate which tokens are being retrieved.",
+    set_previous_time_bucket, previous_time_bucket, f64, "The last half second time bucket used.",
     set_request_count, request_count, u64, "The number of requests seen within the current time bucket.",
-    set_enabled, enabled, bool, "Boolean indicating if the token bucket is enabled. The token bucket is initially disabled. When a throttling error is encountered it is enabled.",
-    set_last_max_rate, last_max_rate, f64, "The maximum rate when the client was last throttled.",
-    set_last_throttle_time, last_throttle_time, f64, "The last time when the client was throttled.",
+    set_enable_throttling, enable_throttling, bool, "Boolean indicating if the token bucket is enabled. The token bucket is initially disabled. When a throttling error is encountered it is enabled.",
+    set_tokens_retrieved_per_second_at_time_of_last_throttle, tokens_retrieved_per_second_at_time_of_last_throttle, f64, "The maximum rate when the client was last throttled.",
+    set_time_of_last_throttle, time_of_last_throttle, f64, "The last time when the client was throttled.",
     set_time_window, time_window, f64, "The time window used to calculate the cubic success rate.",
     set_calculated_rate, calculated_rate, f64, "The calculated rate used to update the sending rate."
 );
 
 impl Builder {
-    pub fn build(self) -> ClientRateLimiter {
+    fn build(self) -> ClientRateLimiter {
         ClientRateLimiter {
-            fill_rate: self.fill_rate.unwrap_or_default(),
-            max_capacity: self.max_capacity.unwrap_or(f64::MAX),
-            current_capacity: self.current_capacity.unwrap_or_default(),
-            last_timestamp: self.last_timestamp,
-            enabled: self.enabled.unwrap_or_default(),
-            measured_tx_rate: self.measured_tx_rate.unwrap_or_default(),
-            last_tx_rate_bucket: self.last_tx_rate_bucket.unwrap_or_default(),
+            token_refill_rate: self.token_refill_rate.unwrap_or_default(),
+            maximum_bucket_capacity: self.maximum_bucket_capacity.unwrap_or(f64::MAX),
+            current_bucket_capacity: self.current_bucket_capacity.unwrap_or_default(),
+            time_of_last_refill: self.time_of_last_refill,
+            enable_throttling: self.enable_throttling.unwrap_or_default(),
+            tokens_retrieved_per_second: self.tokens_retrieved_per_second.unwrap_or_default(),
+            previous_time_bucket: self.previous_time_bucket.unwrap_or_default(),
             request_count: self.request_count.unwrap_or_default(),
-            last_max_rate: self.last_max_rate.unwrap_or_default(),
-            last_throttle_time: self.last_throttle_time.unwrap_or_default(),
+            tokens_retrieved_per_second_at_time_of_last_throttle: self
+                .tokens_retrieved_per_second_at_time_of_last_throttle
+                .unwrap_or_default(),
+            time_of_last_throttle: self.time_of_last_throttle.unwrap_or_default(),
             time_window: self.time_window.unwrap_or_default(),
             calculated_rate: self.calculated_rate.unwrap_or_default(),
         }
@@ -194,32 +254,35 @@ mod tests {
     use crate::client::runtime_plugin::client_rate_limiter::cubic_throttle;
     use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::test_util::instant_time_and_sleep;
-    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_async::time::SharedTimeSource;
+    use aws_smithy_runtime_api::assert_eq_f64;
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
     use aws_smithy_types::config_bag::ConfigBag;
     use std::time::{Duration, SystemTime};
 
     #[test]
     fn it_sets_the_time_window_correctly() {
-        let mut rate_limiter = ClientRateLimiter::builder().last_max_rate(10.0).build();
+        let mut rate_limiter = ClientRateLimiter::builder()
+            .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
+            .build();
 
         rate_limiter.calculate_time_window();
-        assert_eq!(rate_limiter.time_window, 1.9574338205844317);
+        assert_eq_f64!(rate_limiter.time_window, 1.9574338205844317);
     }
 
     #[test]
     fn should_match_beta_decrease() {
         let new_rate = cubic_throttle(10.0);
-        assert_eq!(new_rate, 7.0);
+        assert_eq_f64!(new_rate, 7.0);
 
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_max_rate(10.0)
-            .last_throttle_time(1.0)
+            .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
+            .time_of_last_throttle(1.0)
             .build();
 
         rate_limiter.calculate_time_window();
         let new_rate = rate_limiter.cubic_success(1.0);
-        assert_eq!(new_rate, 7.0);
+        assert_eq_f64!(new_rate, 7.0);
     }
 
     #[tokio::test]
@@ -229,25 +292,23 @@ mod tests {
         cfg.interceptor_state()
             .set_request_time(SharedTimeSource::new(time_source));
         cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
+            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl)));
         let now = get_unix_timestamp(&cfg);
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_tx_rate_bucket((now).floor())
-            .last_throttle_time(now)
+            .previous_time_bucket((now).floor())
+            .time_of_last_throttle(now)
             .build();
 
         assert!(
-            !rate_limiter.enabled,
+            !rate_limiter.enable_throttling,
             "rate_limiter should be disabled by default"
         );
-        rate_limiter.update_sending_rate(&cfg, true);
+        rate_limiter.update_rate_limiter(&cfg, true);
         assert!(
-            rate_limiter.enabled,
+            rate_limiter.enable_throttling,
             "rate_limiter should be enabled after throttling error"
         );
     }
-
-    const ONE_SECOND: Duration = Duration::from_secs(1);
 
     #[tokio::test]
     async fn test_calculated_rate_with_successes() {
@@ -260,62 +321,55 @@ mod tests {
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let now = get_unix_timestamp(&cfg);
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_throttle_time(now)
-            .last_max_rate(10.0)
+            .time_of_last_throttle(now)
+            .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
             .build();
 
         struct Attempt {
-            throttled: bool,
             time_since_start: Duration,
             expected_calculated_rate: f64,
         }
 
         let attempts = [
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(5),
                 expected_calculated_rate: 7.0,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(6),
                 expected_calculated_rate: 9.64893600966,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(7),
                 expected_calculated_rate: 10.000030849917364,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(8),
                 expected_calculated_rate: 10.453284520772092,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(9),
                 expected_calculated_rate: 13.408697022224185,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(10),
                 expected_calculated_rate: 21.26626835427364,
             },
             Attempt {
-                throttled: false,
                 time_since_start: Duration::from_secs(11),
                 expected_calculated_rate: 36.425998516920465,
             },
         ];
 
+        // Think this test is a little strange? I ported the test from Go v2, and this is how it
+        // was implemented. See for yourself:
+        // https://github.com/aws/aws-sdk-go-v2/blob/844ff45cdc76182229ad098c95bf3f5ab8c20e9f/aws/retry/adaptive_ratelimit_test.go#L97
         for attempt in attempts {
-            rate_limiter.update_sending_rate(&cfg, attempt.throttled);
-            assert_eq!(
-                attempt.expected_calculated_rate,
-                rate_limiter.calculated_rate
-            );
-            assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
-            sleep_impl.sleep(ONE_SECOND).await;
+            rate_limiter.calculate_time_window();
+            let calculated_rate =
+                rate_limiter.cubic_success(attempt.time_since_start.as_secs_f64());
+
+            assert_eq_f64!(attempt.expected_calculated_rate, calculated_rate);
         }
     }
 
@@ -330,8 +384,8 @@ mod tests {
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let now = get_unix_timestamp(&cfg);
         let mut rate_limiter = ClientRateLimiter::builder()
-            .last_max_rate(10.0)
-            .last_throttle_time(now)
+            .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
+            .time_of_last_throttle(now)
             .build();
 
         struct Attempt {
@@ -391,14 +445,14 @@ mod tests {
             rate_limiter.calculate_time_window();
             if attempt.throttled {
                 calculated_rate = cubic_throttle(calculated_rate);
-                rate_limiter.last_throttle_time = attempt.time_since_start.as_secs_f64();
-                rate_limiter.last_max_rate = calculated_rate;
+                rate_limiter.time_of_last_throttle = attempt.time_since_start.as_secs_f64();
+                rate_limiter.tokens_retrieved_per_second_at_time_of_last_throttle = calculated_rate;
             } else {
                 calculated_rate =
                     rate_limiter.cubic_success(attempt.time_since_start.as_secs_f64());
             };
 
-            assert_eq!(attempt.expected_calculated_rate, calculated_rate);
+            assert_eq_f64!(attempt.expected_calculated_rate, calculated_rate);
         }
     }
 
@@ -410,117 +464,117 @@ mod tests {
             .set_request_time(SharedTimeSource::new(time_source));
         cfg.interceptor_state()
             .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
-        let mut rate_limiter = ClientRateLimiter::builder().last_timestamp(0.0).build();
+        let mut rate_limiter = ClientRateLimiter::builder().build();
 
         struct Attempt {
             throttled: bool,
             time_since_start: Duration,
-            expected_measured_tx_rate: f64,
-            expected_fill_rate: f64,
+            expected_tokens_retrieved_per_second: f64,
+            expected_token_refill_rate: f64,
         }
 
         let attempts = [
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(0.2),
-                expected_measured_tx_rate: 0.000000,
-                expected_fill_rate: 0.500000,
+                expected_tokens_retrieved_per_second: 0.000000,
+                expected_token_refill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(0.4),
-                expected_measured_tx_rate: 0.000000,
-                expected_fill_rate: 0.500000,
+                expected_tokens_retrieved_per_second: 0.000000,
+                expected_token_refill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(0.6),
-                expected_measured_tx_rate: 4.800000,
-                expected_fill_rate: 0.500000,
+                expected_tokens_retrieved_per_second: 4.800000000000001,
+                expected_token_refill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(0.8),
-                expected_measured_tx_rate: 4.800000,
-                expected_fill_rate: 0.500000,
+                expected_tokens_retrieved_per_second: 4.800000000000001,
+                expected_token_refill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.0),
-                expected_measured_tx_rate: 4.160000,
-                expected_fill_rate: 0.500000,
+                expected_tokens_retrieved_per_second: 4.160000,
+                expected_token_refill_rate: 0.500000,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.2),
-                expected_measured_tx_rate: 4.160000,
-                expected_fill_rate: 0.691200,
+                expected_tokens_retrieved_per_second: 4.160000,
+                expected_token_refill_rate: 0.691200,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.4),
-                expected_measured_tx_rate: 4.160000,
-                expected_fill_rate: 1.0975999999999997,
+                expected_tokens_retrieved_per_second: 4.160000,
+                expected_token_refill_rate: 1.0975999999999997,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.6),
-                expected_measured_tx_rate: 5.632000,
-                expected_fill_rate: 1.6384000000000005,
+                expected_tokens_retrieved_per_second: 5.632000000000001,
+                expected_token_refill_rate: 1.6384000000000005,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(1.8),
-                expected_measured_tx_rate: 5.632000,
-                expected_fill_rate: 2.332800,
+                expected_tokens_retrieved_per_second: 5.632000000000001,
+                expected_token_refill_rate: 2.332800,
             },
             Attempt {
                 throttled: true,
                 time_since_start: Duration::from_secs_f64(2.0),
-                expected_measured_tx_rate: 4.326400,
-                expected_fill_rate: 3.028480,
+                expected_tokens_retrieved_per_second: 4.326400,
+                expected_token_refill_rate: 3.0284799999999996,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(2.2),
-                expected_measured_tx_rate: 4.326400,
-                expected_fill_rate: 3.486639,
+                expected_tokens_retrieved_per_second: 4.326400,
+                expected_token_refill_rate: 3.48663917347026,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(2.4),
-                expected_measured_tx_rate: 4.326400,
-                expected_fill_rate: 3.821874,
+                expected_tokens_retrieved_per_second: 4.326400,
+                expected_token_refill_rate: 3.821874416040255,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(2.6),
-                expected_measured_tx_rate: 5.665280,
-                expected_fill_rate: 4.053386,
+                expected_tokens_retrieved_per_second: 5.665280,
+                expected_token_refill_rate: 4.053385727709987,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(2.8),
-                expected_measured_tx_rate: 5.665280,
-                expected_fill_rate: 4.200373,
+                expected_tokens_retrieved_per_second: 5.665280,
+                expected_token_refill_rate: 4.200373108479454,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(3.0),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 4.282037,
+                expected_tokens_retrieved_per_second: 4.333056,
+                expected_token_refill_rate: 4.282036558348658,
             },
             Attempt {
                 throttled: true,
                 time_since_start: Duration::from_secs_f64(3.2),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 2.997426,
+                expected_tokens_retrieved_per_second: 4.333056,
+                expected_token_refill_rate: 2.99742559084406,
             },
             Attempt {
                 throttled: false,
                 time_since_start: Duration::from_secs_f64(3.4),
-                expected_measured_tx_rate: 4.333056,
-                expected_fill_rate: 3.452226,
+                expected_tokens_retrieved_per_second: 4.333056,
+                expected_token_refill_rate: 3.4522263943863463,
             },
         ];
 
@@ -529,17 +583,17 @@ mod tests {
             sleep_impl.sleep(two_hundred_milliseconds).await;
             assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
 
-            rate_limiter.update_sending_rate(&cfg, attempt.throttled);
-            assert_eq!(
-                attempt.expected_measured_tx_rate,
-                rate_limiter.measured_tx_rate,
-                "attempt #{} measured_tx_rate was wrong",
+            rate_limiter.update_rate_limiter(&cfg, attempt.throttled);
+            assert_eq_f64!(
+                attempt.expected_tokens_retrieved_per_second,
+                rate_limiter.tokens_retrieved_per_second,
+                "attempt #{} measured_tx_rate",
                 i + 1
             );
-            assert_eq!(
-                attempt.expected_fill_rate,
-                rate_limiter.fill_rate,
-                "attempt #{} fill_rate was wrong",
+            assert_eq_f64!(
+                attempt.expected_token_refill_rate,
+                rate_limiter.token_refill_rate,
+                "attempt #{} fill_rate",
                 i + 1
             );
         }

@@ -15,3 +15,6 @@
 
 /// Smithy runtime for client orchestration.
 pub mod client;
+
+#[cfg(feature = "test-util")]
+pub mod test_util;
