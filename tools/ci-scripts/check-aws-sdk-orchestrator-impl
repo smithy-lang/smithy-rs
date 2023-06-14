@@ -16,7 +16,6 @@ cd smithy-rs
 services_that_compile=(\
     "aws-config"\
     "dynamodb"\
-    "polly"\
     "route53"\
     "s3"\
     "sts"\
@@ -30,6 +29,7 @@ services_that_pass_tests=(\
     "iam"\
     "kms"\
     "lambda"\
+    "polly"\
     "qldbsession"\
     "s3control"\
     "sso"\
