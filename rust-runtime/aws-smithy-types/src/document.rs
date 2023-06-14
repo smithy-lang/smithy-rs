@@ -4,12 +4,9 @@
  */
 
 use crate::Number;
-#[cfg(any(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    all(aws_sdk_unstable, feature = "serde-serialize")
-))]
-use serde;
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
+use std::collections::HashMap;
+
 /* ANCHOR: document */
 
 /// Document Type
@@ -18,22 +15,7 @@ use std::{borrow::Cow, collections::HashMap};
 /// Open content is useful for modeling unstructured data that has no schema, data that can't be
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-serialize"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    derive(serde::Deserialize)
-)]
-#[cfg_attr(
-    any(
-        all(aws_sdk_unstable, feature = "serde-deserialize"),
-        all(aws_sdk_unstable, feature = "serde-serialize")
-    ),
-    serde(untagged)
-)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -214,59 +196,14 @@ impl From<i32> for Document {
     }
 }
 
-/* ANCHOR END: document */
+impl From<f64> for Document {
+    fn from(value: f64) -> Self {
+        Document::Number(Number::Float(value))
+    }
+}
 
-#[cfg(test)]
-mod test {
-    /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
-    #[test]
-    #[cfg(all(
-        aws_sdk_unstable,
-        feature = "serde-serialize",
-        feature = "serde-deserialize"
-    ))]
-    fn serialize_json() {
-        use crate::Document;
-        use crate::Number;
-        use std::collections::HashMap;
-        let mut map: HashMap<String, Document> = HashMap::new();
-        // string
-        map.insert("hello".into(), "world".to_string().into());
-        // numbers
-        map.insert("pos_int".into(), Document::Number(Number::PosInt(1).into()));
-        map.insert(
-            "neg_int".into(),
-            Document::Number(Number::NegInt(-1).into()),
-        );
-        map.insert(
-            "float".into(),
-            Document::Number(Number::Float(0.1 + 0.2).into()),
-        );
-        // booleans
-        map.insert("true".into(), true.into());
-        map.insert("false".into(), false.into());
-        // check if array with different datatypes would succeed
-        map.insert(
-            "array".into(),
-            vec![
-                map.clone().into(),
-                "hello-world".to_string().into(),
-                true.into(),
-                false.into(),
-            ]
-            .into(),
-        );
-        // map
-        map.insert("map".into(), map.clone().into());
-        // null
-        map.insert("null".into(), Document::Null);
-        let obj = Document::Object(map);
-        // comparing string isnt going to work since there is no gurantee for the ordering of the keys
-        let target_file = include_str!("../test_data/serialize_document.json");
-        let json: Result<serde_json::Value, _> = serde_json::from_str(target_file);
-        // serializer
-        assert_eq!(serde_json::to_value(&obj).unwrap(), json.unwrap());
-        let doc: Result<Document, _> = serde_json::from_str(target_file);
-        assert_eq!(obj, doc.unwrap());
+impl From<Number> for Document {
+    fn from(value: Number) -> Self {
+        Document::Number(value)
     }
 }
