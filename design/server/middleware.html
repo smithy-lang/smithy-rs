@@ -330,15 +330,24 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">use tower::{util::service_fn, Layer};
 </span><span class="boring">use std::time::Duration;
-</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, PokemonService, input::*, output::*, error::*};
+</span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 </span><span class="boring">use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
 </span><span class="boring">struct LoggingLayer;
 </span><span class="boring">impl LoggingLayer { pub fn new() -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for LoggingLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>// Construct `LoggingLayer`.
+</span>use pokemon_service_server_sdk::{PokemonService, scope};
+
+scope! {
+    /// Only log on `GetPokemonSpecies` and `GetStorage`
+    struct LoggingScope {
+        includes: [GetPokemonSpecies, GetStorage]
+    }
+}
+
+// Construct `LoggingLayer`.
 let logging_plugin = LayerPlugin(LoggingLayer::new());
-let logging_plugin = filter_by_operation_id(logging_plugin, |name| name == GetPokemonSpecies::ID);
+let logging_plugin = Scoped::new::&lt;LoggingScope&gt;(logging_plugin);
 let http_plugins = PluginPipeline::new().push(logging_plugin);
 
 let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
@@ -363,11 +372,18 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 </span><span class="boring">struct BufferLayer;
 </span><span class="boring">impl BufferLayer { pub fn new(size: usize) -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for BufferLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>use pokemon_service_server_sdk::PokemonService;
+</span>use pokemon_service_server_sdk::{PokemonService, scope};
+
+scope! {
+    /// Only buffer on `GetPokemonSpecies` and `GetStorage`
+    struct BufferScope {
+        includes: [GetPokemonSpecies, GetStorage]
+    }
+}
 
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
-let buffer_plugin = filter_by_operation_id(buffer_plugin, |name| name != GetPokemonSpecies::ID);
+let buffer_plugin = Scoped::new::&lt;BufferScope&gt;(buffer_plugin);
 let model_plugins = PluginPipeline::new().push(buffer_plugin);
 
 let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
