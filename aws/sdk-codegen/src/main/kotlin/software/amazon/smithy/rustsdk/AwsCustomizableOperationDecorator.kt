@@ -47,7 +47,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
                             use #{ConfigBagAccessors};
                             let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.set_request_time(#{SharedTimeSource}::new(request_time));
+                                cfg.interceptor_state().set_request_time(#{SharedTimeSource}::new(request_time));
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self
