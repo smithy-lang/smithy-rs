@@ -13,7 +13,7 @@ mod storable;
 mod typeid_map;
 
 use crate::config_bag::typeid_map::TypeIdMap;
-use crate::type_erasure::TypeErasedBox;
+use crate::type_erasure::TypeErasedCloneableBox;
 use std::any::{type_name, TypeId};
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
@@ -65,7 +65,7 @@ impl Deref for FrozenLayer {
 
 /// Private module to keep Value type while avoiding "private type in public latest"
 pub(crate) mod value {
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub enum Value<T> {
         Set(T),
         ExplicitlyUnset(&'static str),
@@ -80,9 +80,10 @@ impl<T: Default> Default for Value<T> {
 }
 
 /// A named layer comprising a config bag
+#[derive(Clone)]
 pub struct Layer {
     name: Cow<'static, str>,
-    props: TypeIdMap<TypeErasedBox>,
+    props: TypeIdMap<TypeErasedCloneableBox>,
 }
 
 impl Debug for Layer {
@@ -102,9 +103,12 @@ impl Debug for Layer {
 
 impl Layer {
     /// Inserts `value` into the layer directly
-    fn put_directly<T: Store>(&mut self, value: T::StoredType) -> &mut Self {
+    fn put_directly<T: Store>(&mut self, value: T::StoredType) -> &mut Self
+    where
+        T::StoredType: Clone,
+    {
         self.props
-            .insert(TypeId::of::<T>(), TypeErasedBox::new(value));
+            .insert(TypeId::of::<T>(), TypeErasedCloneableBox::new(value));
         self
     }
 
@@ -137,7 +141,7 @@ impl Layer {
     }
 
     /// Remove `T` from this bag
-    pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
+    pub fn unset<T: Send + Sync + Clone + Debug + 'static>(&mut self) -> &mut Self {
         self.put_directly::<StoreReplace<T>>(Value::ExplicitlyUnset(type_name::<T>()));
         self
     }
@@ -147,7 +151,7 @@ impl Layer {
     /// NOTE: This method exists for legacy reasons to allow storing values that are not `Storeable`
     ///
     /// The implementation assumes that the type is [`StoreReplace`].
-    pub fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) -> &mut Self {
+    pub fn put<T: Send + Sync + Clone + Debug + 'static>(&mut self, value: T) -> &mut Self {
         self.put_directly::<StoreReplace<T>>(Value::Set(value));
         self
     }
@@ -155,7 +159,7 @@ impl Layer {
     /// Stores `item` of type `T` into the config bag, overriding a previous value of the same type
     pub fn store_put<T>(&mut self, item: T) -> &mut Self
     where
-        T: Storable<Storer = StoreReplace<T>>,
+        T: Storable<Storer = StoreReplace<T>> + Clone,
     {
         self.put_directly::<StoreReplace<T>>(Value::Set(item));
         self
@@ -165,7 +169,7 @@ impl Layer {
     /// or unsets it by passing a `None`
     pub fn store_or_unset<T>(&mut self, item: Option<T>) -> &mut Self
     where
-        T: Storable<Storer = StoreReplace<T>>,
+        T: Storable<Storer = StoreReplace<T>> + Clone,
     {
         let item = match item {
             Some(item) => Value::Set(item),
@@ -179,7 +183,7 @@ impl Layer {
     /// ```
     /// use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreAppend, StoreReplace};
     /// let mut layer_1 = Layer::new("example");
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// #[derive(Clone, Debug, Eq, PartialEq)]
     /// struct Interceptor(&'static str);
     /// impl Storable for Interceptor {
     ///     type Storer = StoreAppend<Interceptor>;
@@ -200,7 +204,7 @@ impl Layer {
     /// ```
     pub fn store_append<T>(&mut self, item: T) -> &mut Self
     where
-        T: Storable<Storer = StoreAppend<T>>,
+        T: Storable<Storer = StoreAppend<T>> + Clone,
     {
         match self.get_mut_or_default::<StoreAppend<T>>() {
             Value::Set(list) => list.push(item),
@@ -215,7 +219,7 @@ impl Layer {
     /// config bag.
     pub fn clear<T>(&mut self)
     where
-        T: Storable<Storer = StoreAppend<T>>,
+        T: Storable<Storer = StoreAppend<T>> + Clone,
     {
         self.put_directly::<StoreAppend<T>>(Value::ExplicitlyUnset(type_name::<T>()));
     }
@@ -227,22 +231,15 @@ impl Layer {
             .map(|t| t.downcast_ref().expect("typechecked"))
     }
 
-    /// Returns a mutable reference to `T` if it is stored in this layer
-    fn get_mut<T: Send + Sync + Store + 'static>(&mut self) -> Option<&mut T::StoredType> {
-        self.props
-            .get_mut(&TypeId::of::<T>())
-            .map(|t| t.downcast_mut().expect("typechecked"))
-    }
-
     /// Returns a mutable reference to `T` if it is stored in this layer, otherwise returns the
     /// [`Default`] implementation of `T`
     fn get_mut_or_default<T: Send + Sync + Store + 'static>(&mut self) -> &mut T::StoredType
     where
-        T::StoredType: Default,
+        T::StoredType: Default + Clone,
     {
         self.props
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| TypeErasedBox::new(T::StoredType::default()))
+            .or_insert_with(|| TypeErasedCloneableBox::new(T::StoredType::default()))
             .downcast_mut()
             .expect("typechecked")
     }
@@ -302,73 +299,9 @@ impl ConfigBag {
     }
 
     /// Retrieve the value of type `T` from the bag if exists
-    pub fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
+    pub fn get<T: Send + Sync + Clone + Debug + 'static>(&self) -> Option<&T> {
         let out = self.sourced_get::<StoreReplace<T>>();
         out
-    }
-
-    /// Return a mutable reference to `T` if it is stored in the top layer of the bag
-    pub fn get_mut<T: Send + Sync + Debug + Clone + 'static>(&mut self) -> Option<&mut T>
-    where
-        T: Storable<Storer = StoreReplace<T>>,
-    {
-        // this code looks weird to satisfy the borrow checker—we can't keep the result of `get_mut`
-        // alive (even in a returned branch) and then call `store_put`. So: drop the borrow immediately
-        // store, the value, then pull it right back
-        if matches!(self.interceptor_state.get_mut::<StoreReplace<T>>(), None) {
-            let new_item = match self.tail.iter().find_map(|b| b.load::<T>()) {
-                Some(item) => item.clone(),
-                None => return None,
-            };
-            self.interceptor_state.store_put(new_item);
-            self.get_mut()
-        } else if matches!(
-            self.interceptor_state.get::<StoreReplace<T>>(),
-            Some(Value::ExplicitlyUnset(_))
-        ) {
-            None
-        } else if let Some(Value::Set(t)) = self.interceptor_state.get_mut::<StoreReplace<T>>() {
-            Some(t)
-        } else {
-            unreachable!()
-        }
-    }
-
-    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
-    ///
-    /// - If `T` is in a deeper layer of the bag, that value will be cloned and inserted into the top layer
-    /// - If `T` is not present in the bag, the [`Default`] implementation will be used.
-    pub fn get_mut_or_default<T: Send + Sync + Debug + Clone + Default + 'static>(
-        &mut self,
-    ) -> &mut T
-    where
-        T: Storable<Storer = StoreReplace<T>>,
-    {
-        self.get_mut_or_else(|| T::default())
-    }
-
-    /// Returns a mutable reference to `T` if it is stored in the top layer of the bag
-    ///
-    /// - If `T` is in a deeper layer of the bag, that value will be cloned and inserted into the top layer
-    /// - If `T` is not present in the bag, `default` will be used to construct a new value
-    pub fn get_mut_or_else<T: Send + Sync + Debug + Clone + 'static>(
-        &mut self,
-        default: impl Fn() -> T,
-    ) -> &mut T
-    where
-        T: Storable<Storer = StoreReplace<T>>,
-    {
-        // this code looks weird to satisfy the borrow checker—we can't keep the result of `get_mut`
-        // alive (even in a returned branch) and then call `store_put`. So: drop the borrow immediately
-        // store, the value, then pull it right back
-        if self.get_mut::<T>().is_none() {
-            self.interceptor_state.store_put((default)());
-            return self
-                .get_mut()
-                .expect("item was just stored in the top layer");
-        }
-        // above it was None
-        self.get_mut().unwrap()
     }
 
     /// Add another layer to this configuration bag
@@ -489,9 +422,9 @@ mod test {
 
     #[test]
     fn layered_property_bag() {
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Prop1;
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Prop2;
         let layer_a = |bag: &mut Layer| {
             bag.put(Prop1);
@@ -501,7 +434,7 @@ mod test {
             bag.put(Prop2);
         };
 
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Prop3;
 
         let mut base_bag = ConfigBag::base()
@@ -510,7 +443,7 @@ mod test {
         base_bag.interceptor_state().put(Prop3);
         assert!(base_bag.get::<Prop1>().is_some());
 
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Prop4;
 
         let layer_c = |bag: &mut Layer| {
@@ -531,7 +464,7 @@ mod test {
     #[test]
     fn config_bag() {
         let bag = ConfigBag::base();
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Region(&'static str);
         let bag = bag.with_fn("service config", |layer: &mut Layer| {
             layer.put(Region("asdf"));
@@ -539,7 +472,7 @@ mod test {
 
         assert_eq!(bag.get::<Region>().unwrap().0, "asdf");
 
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct SigningName(&'static str);
         let operation_config = bag.with_fn("operation", |layer: &mut Layer| {
             layer.put(SigningName("s3"));
@@ -556,7 +489,7 @@ mod test {
     #[test]
     fn store_append() {
         let mut layer = Layer::new("test");
-        #[derive(Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug, Eq, PartialEq)]
         struct Interceptor(&'static str);
         impl Storable for Interceptor {
             type Storer = StoreAppend<Interceptor>;
@@ -589,7 +522,7 @@ mod test {
 
     #[test]
     fn store_append_many_layers() {
-        #[derive(Debug, PartialEq, Eq, Clone)]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         struct TestItem(i32, i32);
         impl Storable for TestItem {
             type Storer = StoreAppend<TestItem>;
@@ -645,31 +578,36 @@ mod test {
     }
 
     #[test]
-    fn get_mut_or_else() {
-        #[derive(Clone, Debug, PartialEq, Eq, Default)]
-        struct Foo(usize);
-        impl Storable for Foo {
-            type Storer = StoreReplace<Foo>;
+    fn cloning_layers() {
+        #[derive(Clone, Debug)]
+        struct TestStr(String);
+        impl Storable for TestStr {
+            type Storer = StoreReplace<TestStr>;
         }
+        let mut layer_1 = Layer::new("layer_1");
+        let expected_str = "I can be cloned";
+        layer_1.store_put(TestStr(expected_str.to_owned()));
+        let layer_1_cloned = layer_1.clone();
+        assert_eq!(expected_str, &layer_1_cloned.load::<TestStr>().unwrap().0);
 
-        let mut bag = ConfigBag::base();
-        assert_eq!(bag.get_mut::<Foo>(), None);
-        assert_eq!(bag.get_mut_or_default::<Foo>(), &Foo(0));
-        bag.get_mut_or_default::<Foo>().0 += 1;
-        assert_eq!(bag.get::<Foo>(), Some(&Foo(1)));
-
-        let old_ref = bag.load::<Foo>().unwrap();
-        assert_eq!(old_ref, &Foo(1));
-
-        // there is one in the bag, so it can be returned
-        //let mut next = bag.add_layer("next");
-        bag.get_mut::<Foo>().unwrap().0 += 1;
-        let new_ref = bag.load::<Foo>().unwrap();
-        assert_eq!(new_ref, &Foo(2));
-
-        bag.interceptor_state().unset::<Foo>();
-        // if it was unset, we can't clone the current one, that would be wrong
-        assert_eq!(bag.get_mut::<Foo>(), None);
-        assert_eq!(bag.get_mut_or_default::<Foo>(), &Foo(0));
+        #[derive(Clone, Debug)]
+        struct Rope(String);
+        impl Storable for Rope {
+            type Storer = StoreAppend<Rope>;
+        }
+        let mut layer_2 = Layer::new("layer_2");
+        layer_2.store_append(Rope("A".to_owned()));
+        layer_2.store_append(Rope("big".to_owned()));
+        layer_2.store_append(Rope("rope".to_owned()));
+        let layer_2_cloned = layer_2.clone();
+        let rope = layer_2_cloned.load::<Rope>().cloned().collect::<Vec<_>>();
+        assert_eq!(
+            "A big rope",
+            rope.iter()
+                .rev()
+                .map(|r| r.0.clone())
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
 }
