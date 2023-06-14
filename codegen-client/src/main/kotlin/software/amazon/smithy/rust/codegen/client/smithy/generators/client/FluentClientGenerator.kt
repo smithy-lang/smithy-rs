@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -315,10 +316,44 @@ class FluentClientGenerator(
     }
 
     private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+        val errorType = symbolProvider.symbolForOperationError(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
+
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
+        // input name
+        val fnName = clientOperationFnName(operation, symbolProvider)
+        implBlock(symbolProvider.symbolForBuilder(input)) {
+            rustTemplate(
+                """
+                /// Sends a request with this input using the given client.
+                pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
+                #{send_bounds:W}
+                #{boundsWithoutWhereClause:W}
+                {
+                let mut fluent_builder = client.$fnName();
+                fluent_builder.inner = self;
+                fluent_builder.send().await
+                }
+                """,
+                *preludeScope,
+                "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                } else {
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                },
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+            )
+        }
+
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
 
@@ -350,9 +385,6 @@ class FluentClientGenerator(
             "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
-            val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-            val errorType = symbolProvider.symbolForOperationError(operation)
-
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
@@ -370,6 +402,7 @@ class FluentClientGenerator(
                     }
                 }
             }
+
             if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,

@@ -108,6 +108,7 @@ class ClientCodegenVisitor(
                 codegenContext,
                 ClientModuleDocProvider(codegenContext, service.serviceNameOrDefault("the service")),
             ),
+            protocolImpl = protocolGeneratorFactory.protocol(codegenContext),
         )
 
         rustCrate = RustCrate(
