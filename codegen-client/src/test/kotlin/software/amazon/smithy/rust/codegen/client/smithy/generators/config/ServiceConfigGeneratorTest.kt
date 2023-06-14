@@ -9,7 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -101,8 +101,9 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
         }
-        val sut = ServiceConfigGenerator(listOf(ServiceCustomizer()))
-        val symbolProvider = testSymbolProvider("namespace empty".asSmithyModel())
+        val ctx = testClientCodegenContext()
+        val sut = ServiceConfigGenerator(ctx, listOf(ServiceCustomizer()))
+        val symbolProvider = ctx.symbolProvider
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ClientRustModule.Config) {
             sut.render(this)

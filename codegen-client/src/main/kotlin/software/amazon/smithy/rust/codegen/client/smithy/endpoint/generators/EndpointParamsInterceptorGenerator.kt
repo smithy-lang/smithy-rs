@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -44,6 +45,8 @@ class EndpointParamsInterceptorGenerator(
         arrayOf(
             "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
             "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
+                .resolve("client::orchestrator::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
@@ -74,6 +77,7 @@ class EndpointParamsInterceptorGenerator(
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
                     cfg: &mut #{ConfigBag},
                 ) -> Result<(), #{BoxError}> {
+                    use #{ConfigBagAccessors};
                     let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
                         .ok_or("failed to downcast to ${operationInput.name}")?;
@@ -89,7 +93,7 @@ class EndpointParamsInterceptorGenerator(
                         #{param_setters}
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
-                    cfg.put(#{EndpointResolverParams}::new(params));
+                    cfg.interceptor_state().set_endpoint_resolver_params(#{EndpointResolverParams}::new(params));
                     Ok(())
                 }
             }
@@ -167,7 +171,7 @@ class EndpointParamsInterceptorGenerator(
                     codegenContext.smithyRuntimeMode,
                 )
             }
-            rust("cfg.put(endpoint_prefix);")
+            rust("cfg.interceptor_state().put(endpoint_prefix);")
         }
     }
 }

@@ -97,11 +97,14 @@ private class GlacierAccountIdCustomization(private val codegenContext: ClientCo
     }
 }
 
+// TODO(enableNewSmithyRuntime): Install the glacier customizations as a single additional runtime plugin instead
+// of wiring up the interceptors individually
+
 /** Adds the `x-amz-glacier-version` header to all requests */
 private class GlacierApiVersionCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
             val apiVersion = codegenContext.serviceShape.version
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rustTemplate(
@@ -122,7 +125,7 @@ private class GlacierApiVersionCustomization(private val codegenContext: ClientC
 private class GlacierOperationInterceptorsCustomization(private val codegenContext: ClientCodegenContext) :
     OperationCustomization() {
     override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.AdditionalRuntimePluginConfig) {
+        if (section is OperationSection.AdditionalInterceptors) {
             val inputShape = codegenContext.model.expectShape(section.operationShape.inputShape) as StructureShape
             val inlineModule = inlineModule(codegenContext.runtimeConfig)
             if (inputShape.inputWithAccountId()) {
