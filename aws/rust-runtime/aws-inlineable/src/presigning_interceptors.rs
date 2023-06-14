@@ -11,6 +11,7 @@ use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
 use aws_runtime::invocation_id::InvocationIdInterceptor;
 use aws_runtime::request_info::RequestInfoInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
+use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime_api::client::interceptors::{
     disable_interceptor, BeforeSerializationInterceptorContextMut,
@@ -26,11 +27,15 @@ use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 #[derive(Debug)]
 pub(crate) struct SigV4PresigningInterceptor {
     config: PresigningConfig,
+    payload_override: SignableBody<'static>,
 }
 
 impl SigV4PresigningInterceptor {
-    pub(crate) fn new(config: PresigningConfig) -> Self {
-        Self { config }
+    pub(crate) fn new(config: PresigningConfig, payload_override: SignableBody<'static>) -> Self {
+        Self {
+            config,
+            payload_override,
+        }
     }
 }
 
@@ -60,8 +65,7 @@ impl Interceptor for SigV4PresigningInterceptor {
         if let Some(mut config) = cfg.get::<SigV4OperationSigningConfig>().cloned() {
             config.signing_options.expires_in = Some(self.config.expires());
             config.signing_options.signature_type = HttpSignatureType::HttpRequestQueryParams;
-            config.signing_options.payload_override =
-                Some(aws_sigv4::http_request::SignableBody::UnsignedPayload);
+            config.signing_options.payload_override = Some(self.payload_override.clone());
             cfg.interceptor_state()
                 .put::<SigV4OperationSigningConfig>(config);
             Ok(())
@@ -81,9 +85,12 @@ pub(crate) struct SigV4PresigningRuntimePlugin {
 }
 
 impl SigV4PresigningRuntimePlugin {
-    pub(crate) fn new(config: PresigningConfig) -> Self {
+    pub(crate) fn new(config: PresigningConfig, payload_override: SignableBody<'static>) -> Self {
         Self {
-            interceptor: SharedInterceptor::new(SigV4PresigningInterceptor::new(config)),
+            interceptor: SharedInterceptor::new(SigV4PresigningInterceptor::new(
+                config,
+                payload_override,
+            )),
         }
     }
 }
