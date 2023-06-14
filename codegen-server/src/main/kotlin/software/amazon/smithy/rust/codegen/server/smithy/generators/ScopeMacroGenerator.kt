@@ -66,7 +66,7 @@ class ScopeMacroGenerator(
 
         rustTemplate(
             """
-            /// A macro to help with scoping [plugins](crate::plugin) to a subset of all operations.
+            /// A macro to help with scoping [plugins](#{SmithyHttpServer}::plugin) to a subset of all operations.
             ///
             /// In contrast to [`aws_smithy_http_server::scope`](#{SmithyHttpServer}::scope), this macro has knowledge
             /// of the service and any operations _not_ specified will be placed in the opposing group.
