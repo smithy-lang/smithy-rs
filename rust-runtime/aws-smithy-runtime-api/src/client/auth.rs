@@ -6,7 +6,7 @@
 use crate::client::identity::{Identity, IdentityResolver, IdentityResolvers};
 use crate::client::orchestrator::{BoxError, HttpRequest};
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
+use aws_smithy_types::type_erasure::TypeErasedCloneableBox;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
 use std::fmt;
@@ -41,15 +41,15 @@ impl From<&'static str> for AuthSchemeId {
     }
 }
 
-#[derive(Debug)]
-pub struct AuthOptionResolverParams(TypeErasedBox);
+#[derive(Clone, Debug)]
+pub struct AuthOptionResolverParams(TypeErasedCloneableBox);
 
 impl AuthOptionResolverParams {
-    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
-        Self(TypedBox::new(params).erase())
+    pub fn new<T: Clone + fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
+        Self(TypeErasedCloneableBox::new(params))
     }
 
-    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
+    pub fn get<T: Clone + fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }

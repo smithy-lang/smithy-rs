@@ -14,7 +14,7 @@ use std::convert::{TryFrom, TryInto};
 use std::error::Error as StdError;
 use std::fmt;
 use std::mem::size_of;
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 const PRELUDE_LENGTH_BYTES: u32 = 3 * size_of::<u32>() as u32;
 const PRELUDE_LENGTH_BYTES_USIZE: usize = PRELUDE_LENGTH_BYTES as usize;
@@ -36,14 +36,14 @@ pub trait SignMessage: fmt::Debug {
 }
 
 /// A sender that gets placed in the request config to wire up an event stream signer after signing.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct DeferredSignerSender(Mutex<mpsc::Sender<Box<dyn SignMessage + Send + Sync>>>);
+pub struct DeferredSignerSender(Arc<Mutex<mpsc::Sender<Box<dyn SignMessage + Send + Sync>>>>);
 
 impl DeferredSignerSender {
     /// Creates a new `DeferredSignerSender`
     fn new(tx: mpsc::Sender<Box<dyn SignMessage + Send + Sync>>) -> Self {
-        Self(Mutex::new(tx))
+        Self(Arc::new(Mutex::new(tx)))
     }
 
     /// Sends a signer on the channel

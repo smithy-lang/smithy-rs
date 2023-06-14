@@ -32,7 +32,7 @@ impl AuthOptionResolver for StaticAuthOptionResolver {
 }
 
 /// Empty params to be used with [`StaticAuthOptionResolver`].
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StaticAuthOptionResolverParams;
 
 impl StaticAuthOptionResolverParams {

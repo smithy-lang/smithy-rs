@@ -19,7 +19,7 @@ use http::{HeaderValue, Uri};
 use std::fmt::Debug;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct StaticUriEndpointResolver {
     endpoint: Uri,
 }
@@ -44,7 +44,7 @@ impl EndpointResolver for StaticUriEndpointResolver {
 }
 
 /// Empty params to be used with [`StaticUriEndpointResolver`].
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct StaticUriEndpointResolverParams;
 
 impl StaticUriEndpointResolverParams {
@@ -75,7 +75,7 @@ impl<Params> DefaultEndpointResolver<Params> {
 
 impl<Params> EndpointResolver for DefaultEndpointResolver<Params>
 where
-    Params: Debug + Send + Sync + 'static,
+    Params: Clone + Debug + Send + Sync + 'static,
 {
     fn resolve_endpoint(&self, params: &EndpointResolverParams) -> Result<Endpoint, BoxError> {
         match params.get::<Params>() {

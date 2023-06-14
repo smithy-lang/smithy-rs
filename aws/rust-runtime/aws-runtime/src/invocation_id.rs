@@ -10,6 +10,7 @@ use aws_smithy_runtime_api::client::interceptors::{
 use aws_smithy_types::config_bag::ConfigBag;
 use http::{HeaderName, HeaderValue};
 use std::fmt::Debug;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(feature = "test-util")]
@@ -44,7 +45,7 @@ impl Interceptor for InvocationIdInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let id = cfg
-            .get::<Box<dyn InvocationIdGenerator>>()
+            .get::<Arc<dyn InvocationIdGenerator>>()
             .map(|gen| gen.generate())
             .transpose()?
             .flatten();

@@ -14,7 +14,7 @@ use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::endpoint::Endpoint;
-use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
+use aws_smithy_types::type_erasure::TypeErasedCloneableBox;
 use bytes::Bytes;
 use std::fmt;
 use std::fmt::Debug;
@@ -56,21 +56,21 @@ pub trait Connection: Send + Sync + fmt::Debug {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse>;
 }
 
-impl Connection for Box<dyn Connection> {
+impl Connection for Arc<dyn Connection> {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
         (**self).call(request)
     }
 }
 
-#[derive(Debug)]
-pub struct EndpointResolverParams(TypeErasedBox);
+#[derive(Clone, Debug)]
+pub struct EndpointResolverParams(TypeErasedCloneableBox);
 
 impl EndpointResolverParams {
-    pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
-        Self(TypedBox::new(params).erase())
+    pub fn new<T: Clone + fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
+        Self(TypeErasedCloneableBox::new(params))
     }
 
-    pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
+    pub fn get<T: Clone + fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 }
@@ -101,14 +101,14 @@ pub enum LoadedRequestBody {
 
 pub trait Settable {
     fn layer(&mut self) -> &mut Layer;
-    fn put<T: Send + Sync + Debug + 'static>(&mut self, value: T) {
+    fn put<T: Send + Sync + Clone + Debug + 'static>(&mut self, value: T) {
         self.layer().put(value);
     }
 }
 
 pub trait Gettable {
     fn config_bag(&self) -> &ConfigBag;
-    fn get<T: Send + Sync + Debug + 'static>(&self) -> Option<&T> {
+    fn get<T: Send + Sync + Clone + Debug + 'static>(&self) -> Option<&T> {
         self.config_bag().get::<T>()
     }
 }
@@ -149,7 +149,7 @@ pub trait ConfigBagAccessors {
     {
         &**self
             .config_bag()
-            .get::<Box<dyn AuthOptionResolver>>()
+            .get::<Arc<dyn AuthOptionResolver>>()
             .expect("an auth option resolver must be set")
     }
 
@@ -157,7 +157,7 @@ pub trait ConfigBagAccessors {
     where
         Self: Settable,
     {
-        self.put::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
+        self.put::<Arc<dyn AuthOptionResolver>>(Arc::new(auth_option_resolver));
     }
 
     fn endpoint_resolver_params(&self) -> &EndpointResolverParams
@@ -182,7 +182,7 @@ pub trait ConfigBagAccessors {
     {
         &**self
             .config_bag()
-            .get::<Box<dyn EndpointResolver>>()
+            .get::<Arc<dyn EndpointResolver>>()
             .expect("an endpoint resolver must be set")
     }
 
@@ -190,7 +190,7 @@ pub trait ConfigBagAccessors {
     where
         Self: Settable,
     {
-        self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
+        self.put::<Arc<dyn EndpointResolver>>(Arc::new(endpoint_resolver));
     }
 
     fn identity_resolvers(&self) -> &IdentityResolvers
@@ -215,7 +215,7 @@ pub trait ConfigBagAccessors {
     {
         &**self
             .config_bag()
-            .get::<Box<dyn Connection>>()
+            .get::<Arc<dyn Connection>>()
             .expect("missing connector")
     }
 
@@ -223,7 +223,7 @@ pub trait ConfigBagAccessors {
     where
         Self: Settable,
     {
-        self.put::<Box<dyn Connection>>(Box::new(connection));
+        self.put::<Arc<dyn Connection>>(Arc::new(connection));
     }
 
     fn http_auth_schemes(&self) -> &HttpAuthSchemes
@@ -261,7 +261,7 @@ pub trait ConfigBagAccessors {
         Self: Gettable,
     {
         &**self
-            .get::<Box<dyn ResponseDeserializer>>()
+            .get::<Arc<dyn ResponseDeserializer>>()
             .expect("missing response deserializer")
     }
     fn set_response_deserializer(
@@ -270,7 +270,7 @@ pub trait ConfigBagAccessors {
     ) where
         Self: Settable,
     {
-        self.put::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
+        self.put::<Arc<dyn ResponseDeserializer>>(Arc::new(response_deserializer));
     }
 
     fn retry_classifiers(&self) -> &RetryClassifiers
@@ -291,13 +291,13 @@ pub trait ConfigBagAccessors {
     where
         Self: Gettable,
     {
-        self.get::<Box<dyn RetryStrategy>>().map(|rs| &**rs)
+        self.get::<Arc<dyn RetryStrategy>>().map(|rs| &**rs)
     }
     fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static)
     where
         Self: Settable,
     {
-        self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
+        self.put::<Arc<dyn RetryStrategy>>(Arc::new(retry_strategy));
     }
 
     fn request_time(&self) -> Option<SharedTimeSource>

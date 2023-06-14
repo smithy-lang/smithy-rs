@@ -7,6 +7,7 @@ use crate::client::interceptors::InterceptorContext;
 use crate::client::orchestrator::BoxError;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::trace;
 
@@ -57,9 +58,9 @@ pub trait ClassifyRetry: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RetryClassifiers {
-    inner: Vec<Box<dyn ClassifyRetry>>,
+    inner: Vec<Arc<dyn ClassifyRetry>>,
 }
 
 impl RetryClassifiers {
@@ -72,7 +73,7 @@ impl RetryClassifiers {
     }
 
     pub fn with_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
-        self.inner.push(Box::new(retry_classifier));
+        self.inner.push(Arc::new(retry_classifier));
 
         self
     }
