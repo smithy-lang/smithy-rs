@@ -39,7 +39,7 @@ internal class ResiliencyConfigCustomizationTest {
         val project = TestWorkspace.testProject(model, ClientCodegenConfig())
         val codegenContext = testClientCodegenContext(model, settings = project.clientRustSettings())
 
-        stubConfigProject(ResiliencyConfigCustomization(codegenContext), project)
+        stubConfigProject(codegenContext, ResiliencyConfigCustomization(codegenContext), project)
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(project)
         project.compileAndTest()
     }

@@ -25,6 +25,7 @@ internal class EndpointConfigCustomization(
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val types = Types(runtimeConfig)
 
     override fun section(section: ServiceConfig): Writable {
@@ -38,21 +39,38 @@ internal class EndpointConfigCustomization(
                 "Params" to typesGenerator.paramsStruct(),
             )
             when (section) {
-                is ServiceConfig.ConfigStruct -> rustTemplate(
-                    "pub (crate) endpoint_resolver: $sharedEndpointResolver,",
-                    *codegenScope,
-                )
+                is ServiceConfig.ConfigStruct -> {
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate(
+                            "pub (crate) endpoint_resolver: $sharedEndpointResolver,",
+                            *codegenScope,
+                        )
+                    }
+                }
 
-                is ServiceConfig.ConfigImpl ->
-                    rustTemplate(
-                        """
-                        /// Returns the endpoint resolver.
-                        pub fn endpoint_resolver(&self) -> $sharedEndpointResolver {
-                            self.endpoint_resolver.clone()
-                        }
-                        """,
-                        *codegenScope,
-                    )
+                is ServiceConfig.ConfigImpl -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            /// Returns the endpoint resolver.
+                            pub fn endpoint_resolver(&self) -> $sharedEndpointResolver {
+                                self.inner.load::<$sharedEndpointResolver>().expect("endpoint resolver should be set").clone()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            /// Returns the endpoint resolver.
+                            pub fn endpoint_resolver(&self) -> $sharedEndpointResolver {
+                                self.endpoint_resolver.clone()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
 
                 is ServiceConfig.BuilderStruct ->
                     rustTemplate(
@@ -123,15 +141,27 @@ internal class EndpointConfigCustomization(
                 ServiceConfig.BuilderBuild -> {
                     val defaultResolver = typesGenerator.defaultResolver()
                     if (defaultResolver != null) {
-                        rustTemplate(
-                            """
-                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                                #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
-                            ),
-                            """,
-                            *codegenScope,
-                            "DefaultResolver" to defaultResolver,
-                        )
+                        if (runtimeMode.defaultToOrchestrator) {
+                            rustTemplate(
+                                """
+                                layer.store_put(self.endpoint_resolver.unwrap_or_else(||
+                                    #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
+                                ));
+                                """,
+                                *codegenScope,
+                                "DefaultResolver" to defaultResolver,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
+                                    #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
+                                ),
+                                """,
+                                *codegenScope,
+                                "DefaultResolver" to defaultResolver,
+                            )
+                        }
                     } else {
                         val alwaysFailsResolver =
                             RuntimeType.forInlineFun("MissingResolver", ClientRustModule.Endpoint) {
@@ -152,13 +182,23 @@ internal class EndpointConfigCustomization(
                             }
                         // To keep this diff under control, rather than `.expect` here, insert a resolver that will
                         // always fail. In the future, this will be changed to an `expect()`
-                        rustTemplate(
-                            """
-                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})),
-                            """,
-                            *codegenScope,
-                            "FailingResolver" to alwaysFailsResolver,
-                        )
+                        if (runtimeMode.defaultToOrchestrator) {
+                            rustTemplate(
+                                """
+                                layer.store_put(self.endpoint_resolver.unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})));
+                                """,
+                                *codegenScope,
+                                "FailingResolver" to alwaysFailsResolver,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})),
+                                """,
+                                *codegenScope,
+                                "FailingResolver" to alwaysFailsResolver,
+                            )
+                        }
                     }
                 }
 

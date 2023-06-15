@@ -26,17 +26,13 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
         writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> rustTemplate(
-                    """
-                    pub(crate) interceptors: Vec<#{SharedInterceptor}>,
-                    """,
+                    "pub(crate) interceptors: Vec<#{SharedInterceptor}>,",
                     *codegenScope,
                 )
 
                 ServiceConfig.BuilderStruct ->
                     rustTemplate(
-                        """
-                        interceptors: Vec<#{SharedInterceptor}>,
-                        """,
+                        "interceptors: Vec<#{SharedInterceptor}>,",
                         *codegenScope,
                     )
 
@@ -171,17 +167,13 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> rust(
-                    """
-                    interceptors: self.interceptors,
-                    """,
-                )
-
                 is ServiceConfig.RuntimePluginInterceptors -> rust(
                     """
                     ${section.interceptors}.extend(self.interceptors.iter().cloned());
                     """,
                 )
+
+                is ServiceConfig.BuilderBuildExtras -> rust("interceptors: self.interceptors,")
 
                 else -> emptySection
             }
