@@ -265,7 +265,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
                 pub struct $inputFuture {
-                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = #{Result}<#{I}, #{RuntimeError}>> + Send>>
+                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = #{Result}<#{I}, #{RuntimeError}>> + #{Send}>>
                 }
             }
 
@@ -280,10 +280,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
             impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
             where
-                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: #{SmithyHttpServer}::body::HttpBody + #{Send},
                 B: 'static,
                 ${streamingBodyTraitBounds(operationShape)}
-                B::Data: Send,
+                B::Data: #{Send},
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
@@ -384,8 +384,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     #{RequestRejection}
                 >
                 where
-                    B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
-                    B::Data: Send,
+                    B: #{SmithyHttpServer}::body::HttpBody + #{Send}, ${streamingBodyTraitBounds(operationShape)}
+                    B::Data: #{Send},
                     #{RequestRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 """.trimIndent(),
                 *codegenScope,
