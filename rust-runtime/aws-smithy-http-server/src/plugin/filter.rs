@@ -6,7 +6,7 @@
 use super::{either::Either, IdentityPlugin};
 
 use crate::operation::OperationShape;
-use crate::service::ServiceShapeMember;
+use crate::service::ContainsOperation;
 use crate::shape_id::ShapeId;
 
 use super::Plugin;
@@ -83,7 +83,7 @@ pub struct FilterByOperation<Inner, F> {
 
 impl<Ser, Op, S, Inner, F> Plugin<Ser, Op, S> for FilterByOperation<Inner, F>
 where
-    Ser: ServiceShapeMember<Op>,
+    Ser: ContainsOperation<Op>,
     F: Fn(Ser::Operations) -> bool,
     Inner: Plugin<Ser, Op, S>,
     Op: OperationShape,
@@ -91,7 +91,7 @@ where
     type Service = Either<Inner::Service, S>;
 
     fn apply(&self, svc: S) -> Self::Service {
-        let either_plugin = if (self.predicate)(<Ser as ServiceShapeMember<Op>>::ENUM_VALUE) {
+        let either_plugin = if (self.predicate)(<Ser as ContainsOperation<Op>>::ENUM_VALUE) {
             Either::Left { value: &self.inner }
         } else {
             Either::Right { value: IdentityPlugin }
@@ -107,13 +107,13 @@ where
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::filter_by_operation;
-/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId, service::{ServiceShape, ServiceShapeMember}};
+/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId, service::{ServiceShape, ContainsOperation}};
 /// # struct Pl;
 /// # struct PokemonService;
 /// # #[derive(PartialEq, Eq)]
 /// # enum Operation { CheckHealth }
 /// # impl ServiceShape for PokemonService { const VERSION: Option<&'static str> = None; const ID: ShapeId = ShapeId::new("", "", ""); type Operations = Operation; type Protocol = (); }
-/// # impl ServiceShapeMember<CheckHealth> for PokemonService { const ENUM_VALUE: Operation = Operation::CheckHealth; }
+/// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # struct CheckHealth;
 /// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
 /// # impl Plugin<PokemonService, CheckHealth, ()> for Pl { type Service = (); fn apply(&self, input: ()) -> Self::Service { input }}

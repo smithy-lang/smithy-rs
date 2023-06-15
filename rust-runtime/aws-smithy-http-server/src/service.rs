@@ -12,7 +12,7 @@
 //! We generate an implementation on this for every service struct (exported from the root of the generated crate).
 //!
 //! As stated in the [operation module documentation](crate::operation) we also generate marker structs for
-//! [`OperationShape`], these are coupled to the `S: ServiceShape` via the [`ServiceShapeMember`] trait.
+//! [`OperationShape`], these are coupled to the `S: ServiceShape` via the [`ContainsOperation`] trait.
 //!
 //! The model
 //!
@@ -31,7 +31,7 @@
 //!
 //! ```rust,no_run
 //! # use aws_smithy_http_server::shape_id::ShapeId;
-//! # use aws_smithy_http_server::service::{ServiceShape, ServiceShapeMember};
+//! # use aws_smithy_http_server::service::{ServiceShape, ContainsOperation};
 //! # use aws_smithy_http_server::proto::rest_json_1::RestJson1;
 //! # pub struct Shopping;
 //! // For more information on these marker structs see `OperationShape`
@@ -52,12 +52,12 @@
 //!     type Operations = Operation;
 //! }
 //!
-//! impl ServiceShapeMember<GetShopping> for Shopping {
-//!     const ENUM_VALUE: Operation = Operation::GetShopping;
+//! impl ContainsOperation<GetShopping> for Shopping {
+//!     const VALUE: Operation = Operation::GetShopping;
 //! }
 //!
-//! impl ServiceShapeMember<PutShopping> for Shopping {
-//!     const ENUM_VALUE: Operation = Operation::PutShopping;
+//! impl ContainsOperation<PutShopping> for Shopping {
+//!     const VALUE: Operation = Operation::PutShopping;
 //! }
 //! ```
 //!
@@ -84,6 +84,6 @@ pub trait ServiceShape {
     type Operations;
 }
 
-pub trait ServiceShapeMember<Op>: ServiceShape {
-    const ENUM_VALUE: Self::Operations;
+pub trait ContainsOperation<Op>: ServiceShape {
+    const VALUE: Self::Operations;
 }

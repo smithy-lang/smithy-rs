@@ -628,8 +628,8 @@ class ServerServiceGenerator(
         for ((_, value) in operationStructNames) {
             rustTemplate(
                 """
-                impl #{SmithyHttpServer}::service::ServiceShapeMember<crate::operation_shape::$value> for $serviceName {
-                    const ENUM_VALUE: Operation = Operation::$value;
+                impl #{SmithyHttpServer}::service::ContainsOperation<crate::operation_shape::$value> for $serviceName {
+                    const VALUE: Operation = Operation::$value;
                 }
                 """,
                 *codegenScope,
