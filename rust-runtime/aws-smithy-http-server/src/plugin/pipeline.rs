@@ -34,7 +34,7 @@ use super::LayerPlugin;
 ///
 /// `PluginPipeline` is itself a [`Plugin`]: you can apply any transformation that expects a
 /// [`Plugin`] to an entire pipeline. In this case, we want to use
-/// [`filter_by_operation_id`](crate::plugin::filter_by_operation_id) to limit the scope of
+/// [`filter_by_operation`](crate::plugin::filter_by_operation) to limit the scope of
 /// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust

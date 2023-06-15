@@ -13,6 +13,9 @@ use super::Plugin;
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
 ///
+/// This contrasts with [`Scoped`](crate::plugin::Scoped) which can be used to selectively apply a [`Plugin`] to a
+/// subset of operations at _compile time_.
+///
 /// See [`filter_by_operation`] for more details.
 pub struct FilterByOperation<Inner, F> {
     inner: Inner,
@@ -40,6 +43,9 @@ where
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
+///
+/// Users should prefer [`Scoped`](crate::plugin::Scoped) and fallback to [`filter_by_operation`] in cases where
+/// [`Plugin`] application must be decided at runtime.
 ///
 /// # Example
 ///
