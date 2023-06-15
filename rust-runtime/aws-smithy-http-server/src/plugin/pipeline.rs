@@ -38,23 +38,23 @@ use super::LayerPlugin;
 /// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{filter_by_operation_id, PluginPipeline};
+/// use aws_smithy_http_server::plugin::{filter_by_operation, PluginPipeline};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 /// use aws_smithy_http_server::shape_id::ShapeId;
+/// # #[derive(PartialEq)]
+/// # enum Operation { CheckHealth }
 /// # struct CheckHealth;
 /// # impl CheckHealth { const ID: ShapeId = ShapeId::new("namespace#MyName", "namespace", "MyName"); }
 ///
 /// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
-/// let operation_specific_pipeline = filter_by_operation_id(
-///     PluginPipeline::new()
+///  let plugin = PluginPipeline::new()
 ///         .push(LoggingPlugin)
-///         .push(MetricsPlugin),
-///     |name| name == CheckHealth::ID
-/// );
+///         .push(MetricsPlugin);
+/// let filtered_plugin = filter_by_operation(plugin, |operation: Operation| operation == Operation::CheckHealth);
 /// let pipeline = PluginPipeline::new()
-///     .push(operation_specific_pipeline)
+///     .push(filtered_plugin)
 ///     // The auth plugin will be applied to all operations
 ///     .push(AuthPlugin);
 /// ```

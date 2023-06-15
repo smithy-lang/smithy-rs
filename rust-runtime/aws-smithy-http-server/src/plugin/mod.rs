@@ -14,13 +14,15 @@
 //! # use aws_smithy_http_server::plugin::*;
 //! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # let layer = ();
+//! # #[derive(PartialEq)]
+//! # enum Operation { GetPokemonSpecies }
 //! # struct GetPokemonSpecies;
 //! # impl GetPokemonSpecies { const ID: ShapeId = ShapeId::new("namespace#name", "namespace", "name"); };
 //! // Create a `Plugin` from a HTTP `Layer`
 //! let plugin = LayerPlugin(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_id(plugin, |id| id.name() == GetPokemonSpecies::ID.name());
+//! let plugin = filter_by_operation(plugin, |operation: Operation| operation == Operation::GetPokemonSpecies);
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
@@ -124,7 +126,7 @@ mod stack;
 
 pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
 pub use either::Either;
-pub use filter::{filter_by_operation, filter_by_operation_id, FilterByOperation, FilterByOperationId};
+pub use filter::{filter_by_operation, FilterByOperation};
 pub use identity::IdentityPlugin;
 pub use layer::{LayerPlugin, PluginLayer};
 pub use pipeline::PluginPipeline;

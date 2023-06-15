@@ -7,70 +7,8 @@ use super::{either::Either, IdentityPlugin};
 
 use crate::operation::OperationShape;
 use crate::service::ContainsOperation;
-use crate::shape_id::ShapeId;
 
 use super::Plugin;
-
-/// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::ID`](crate::operation::OperationShape).
-///
-/// This contrasts with [`Scoped`](crate::plugin::Scoped) which can be used to selectively apply a [`Plugin`] to a
-/// subset of operations at _compile time_.
-///
-/// See [`filter_by_operation_id`] for more details.
-pub struct FilterByOperationId<Inner, F> {
-    inner: Inner,
-    predicate: F,
-}
-
-/// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::ID`](crate::operation::OperationShape).
-///
-/// Users should prefer [`Scoped`](crate::plugin::Scoped) and fallback to [`filter_by_operation_id`] in cases where
-/// [`Plugin`] application must be decided at runtime.
-///
-/// # Example
-///
-/// ```rust
-/// use aws_smithy_http_server::plugin::filter_by_operation_id;
-/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId};
-/// # struct Pl;
-/// # struct CheckHealth;
-/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
-/// # impl Plugin<(), CheckHealth, ()> for Pl { type Output = (); fn apply(&self, input: ()) -> Self::Output { input }}
-/// # let plugin = Pl;
-/// # let svc = ();
-/// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_by_operation_id(plugin, |name| name != CheckHealth::ID);
-/// let new_operation = filtered_plugin.apply(svc);
-/// ```
-pub fn filter_by_operation_id<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationId<Inner, F>
-where
-    F: Fn(ShapeId) -> bool,
-{
-    FilterByOperationId {
-        inner: plugins,
-        predicate,
-    }
-}
-
-impl<Ser, Op, T, Inner, F> Plugin<Ser, Op, T> for FilterByOperationId<Inner, F>
-where
-    F: Fn(ShapeId) -> bool,
-    Inner: Plugin<Ser, Op, T>,
-    Op: OperationShape,
-{
-    type Output = Either<Inner::Output, T>;
-
-    fn apply(&self, input: T) -> Self::Output {
-        let either_plugin = if (self.predicate)(Op::ID) {
-            Either::Left { value: &self.inner }
-        } else {
-            Either::Right { value: IdentityPlugin }
-        };
-        either_plugin.apply(input)
-    }
-}
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
