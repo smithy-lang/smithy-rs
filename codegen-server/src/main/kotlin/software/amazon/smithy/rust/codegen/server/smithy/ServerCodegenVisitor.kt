@@ -628,13 +628,9 @@ open class ServerCodegenVisitor(
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
-        // Generate operation shapes.
-        rustCrate.withModule(ServerRustModule.OperationShape) {
-            ServerOperationGenerator(shape, codegenContext).render(this)
-        }
-
-        // Generate operations ser/de.
+        // Generate operations ser/de and operation shapes.
         rustCrate.withModule(ServerRustModule.Operation) {
+            ServerOperationGenerator(shape, codegenContext).render(this)
             protocolGenerator.renderOperation(this, shape)
         }
     }

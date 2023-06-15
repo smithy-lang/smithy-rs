@@ -208,7 +208,7 @@ A "HTTP layer" can be applied to specific operations.
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
 # use std::time::Duration;
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# use pokemon_service_server_sdk::{operation::GetPokemonSpecies, input::*, output::*, error::*};
 # use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct LoggingLayer;
@@ -247,7 +247,7 @@ A "model layer" can be applied to specific operations.
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# use pokemon_service_server_sdk::{operation::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # use aws_smithy_http_server::{operation::*, plugin::*};
 # struct BufferLayer;
@@ -406,7 +406,7 @@ This allows for:
 # impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin { type Service = S; fn apply(&self, svc: S) -> Self::Service { svc }}
 # trait PrintExt<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>>; }
 # impl<EP> PrintExt<EP> for PluginPipeline<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# use pokemon_service_server_sdk::{operation::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 use aws_smithy_http_server::plugin::{IdentityPlugin, PluginPipeline};
 use pokemon_service_server_sdk::PokemonService;
