@@ -27,16 +27,43 @@
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
 //!
-//! ```
-//! # use aws_smithy_http_server::plugin::*;
-//! # use aws_smithy_http_server::shape_id::ShapeId;
-//! // A `tower::Layer` which requires the operation name
-//! struct PrintLayer {
-//!     name: ShapeId,
+//! ```rust
+//! # use aws_smithy_http_server::{service::*, operation::OperationShape, plugin::Plugin, shape_id::ShapeId};
+//! # pub enum Operation { CheckHealth, GetPokemonSpecies }
+//! # impl Operation { fn shape_id(&self) -> ShapeId { ShapeId::new("", "", "") }}
+//! # pub struct CheckHealth;
+//! # pub struct GetPokemonSpecies;
+//! # pub struct PokemonService;
+//! # impl ServiceShape for PokemonService {
+//! #   const ID: ShapeId = ShapeId::new("", "", "");
+//! #   const VERSION: Option<&'static str> = None;
+//! #   type Protocol = ();
+//! #   type Operations = Operation;
+//! # }
+//! # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+//! # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+//! # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
+//! # impl ContainsOperation<GetPokemonSpecies> for PokemonService { const VALUE: Operation = Operation::GetPokemonSpecies; }
+//! use aws_smithy_http_server::plugin::plugin_from_operation_fn;
+//! use tower::layer::layer_fn;
+//!
+//! struct FooService<S> {
+//!     info: String,
+//!     inner: S
 //! }
 //!
-//! // Create a `Plugin` using `PrintLayer`
-//! let plugin = plugin_from_operation_id_fn(|name| PrintLayer { name });
+//! fn map<S>(op: Operation, inner: S) -> FooService<S> {
+//!     match op {
+//!         Operation::CheckHealth => FooService { info: op.shape_id().name().to_string(), inner },
+//!         Operation::GetPokemonSpecies => FooService { info: "bar".to_string(), inner },
+//!         _ => todo!()
+//!     }
+//! }
+//!
+//! // This plugin applies the `FooService` middleware around every operation.
+//! let plugin = plugin_from_operation_fn(map);
+//! # let _ = Plugin::<PokemonService, CheckHealth, ()>::apply(&plugin, ());
+//! # let _ = Plugin::<PokemonService, GetPokemonSpecies, ()>::apply(&plugin, ());
 //! ```
 //!
 //! # Combine [`Plugin`]s
@@ -124,7 +151,7 @@ mod pipeline;
 pub mod scoped;
 mod stack;
 
-pub use closure::{plugin_from_operation_id_fn, OperationIdFn};
+pub use closure::{plugin_from_operation_fn, OperationFn};
 pub use either::Either;
 pub use filter::{filter_by_operation, FilterByOperation};
 pub use identity::IdentityPlugin;
