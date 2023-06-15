@@ -140,7 +140,7 @@ class AwsPresigningDecorator internal constructor(
     }
 }
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up middleware
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up middleware
 class AwsInputPresignedMethod(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
