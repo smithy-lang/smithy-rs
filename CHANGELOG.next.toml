@@ -226,6 +226,9 @@ pub trait ServiceShape {
     /// The [`ShapeId`] of the service.
     const ID: ShapeId;
 
+    /// The version of the service.
+    const VERSION: Option<&'static str>;
+
     /// The [Protocol] applied to this service.
     ///
     /// [Protocol]: https://smithy.io/2.0/spec/protocol-traits.html

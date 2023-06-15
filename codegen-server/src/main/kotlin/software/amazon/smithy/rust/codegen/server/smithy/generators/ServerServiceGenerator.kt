@@ -621,7 +621,6 @@ class ServerServiceGenerator(
             pub enum Operation {
                 $operations
             }
-
             """,
             *codegenScope,
         )
