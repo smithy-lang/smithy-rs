@@ -427,7 +427,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
-        val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
+        fun idempotencyToken(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
 
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
             RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
