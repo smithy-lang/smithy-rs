@@ -120,7 +120,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         }
     }
 
-    // TODO(enableNewSmithyRuntime): Remove this customization class
+    // TODO(enableNewSmithyRuntimeCleanup): Remove this customization class
     private class UserAgentMutateOpRequest(
         codegenContext: ClientCodegenContext,
     ) : OperationCustomization() {

@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -124,7 +125,7 @@ class FluentClientGenerator(
                     },
                 "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
                 "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-                // TODO(enableNewSmithyRuntime): Delete the generics when cleaning up middleware
+                // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
                 "generics_decl" to generics.decl,
                 "smithy_inst" to generics.smithyInst,
             )
@@ -223,7 +224,7 @@ class FluentClientGenerator(
                         }
 
                         ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntime): Delete this function when cleaning up middleware
+                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
                         // This is currently kept around so the tests still compile in both modes
                         /// Creates a client with the given service configuration.
                         pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
@@ -233,7 +234,7 @@ class FluentClientGenerator(
                         }
 
                         ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntime): Delete this function when cleaning up middleware
+                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
                         // This is currently kept around so the tests still compile in both modes
                         /// Returns the client's configuration.
                         pub fn conf(&self) -> &crate::Config {
@@ -315,10 +316,50 @@ class FluentClientGenerator(
     }
 
     private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
+        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+        val errorType = symbolProvider.symbolForOperationError(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
+
         val input = operation.inputShape(model)
         val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
         // Filter out any derive that isn't Clone. Then add a Debug derive
+        // input name
+        val fnName = clientOperationFnName(operation, symbolProvider)
+        implBlock(symbolProvider.symbolForBuilder(input)) {
+            rustTemplate(
+                """
+                /// Sends a request with this input using the given client.
+                pub async fn send_with${generics.inst}(
+                    self,
+                    client: &crate::Client${generics.inst}
+                ) -> #{Result}<
+                    #{OperationOutput},
+                    #{SdkError}<
+                        #{OperationError},
+                        #{RawResponseType}
+                    >
+                > #{send_bounds:W} #{boundsWithoutWhereClause:W} {
+                    let mut fluent_builder = client.$fnName();
+                    fluent_builder.inner = self;
+                    fluent_builder.send().await
+                }
+                """,
+                *preludeScope,
+                "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                } else {
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                },
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
+                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
+                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
+            )
+        }
+
         val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
 
@@ -350,9 +391,6 @@ class FluentClientGenerator(
             "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
-            val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-            val errorType = symbolProvider.symbolForOperationError(operation)
-
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
@@ -370,6 +408,7 @@ class FluentClientGenerator(
                     }
                 }
             }
+
             if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,
@@ -477,7 +516,7 @@ class FluentClientGenerator(
                     }
 
                     ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntime): Remove `async` once we switch to orchestrator
+                    // TODO(enableNewSmithyRuntimeCleanup): Remove `async` once we switch to orchestrator
                     pub async fn customize_orchestrator(
                         self,
                     ) -> #{CustomizableOperation}<
@@ -517,7 +556,7 @@ class FluentClientGenerator(
 
                         /// Consumes this builder, creating a customizable operation that can be modified before being
                         /// sent.
-                        // TODO(enableNewSmithyRuntime): Remove `async` and `Result` once we switch to orchestrator
+                        // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
                         pub async fn customize(
                             self,
                         ) -> #{Result}<

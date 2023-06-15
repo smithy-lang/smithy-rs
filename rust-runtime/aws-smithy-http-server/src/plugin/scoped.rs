@@ -20,34 +20,34 @@ pub struct False;
 /// Conditionally applies a [`Plugin`] `Pl` to some service `S`.
 ///
 /// See [`True`] and [`False`].
-pub trait ConditionalApply<P, Op, S, Pl> {
+pub trait ConditionalApply<Ser, Op, Pl, T> {
     type Service;
 
-    fn apply(plugin: &Pl, svc: S) -> Self::Service;
+    fn apply(plugin: &Pl, svc: T) -> Self::Service;
 }
 
-impl<P, Op, S, Pl> ConditionalApply<P, Op, S, Pl> for True
+impl<Ser, Op, Pl, T> ConditionalApply<Ser, Op, Pl, T> for True
 where
-    Pl: Plugin<P, Op, S>,
+    Pl: Plugin<Ser, Op, T>,
 {
-    type Service = Pl::Service;
+    type Service = Pl::Output;
 
-    fn apply(plugin: &Pl, svc: S) -> Self::Service {
-        plugin.apply(svc)
+    fn apply(plugin: &Pl, input: T) -> Self::Service {
+        plugin.apply(input)
     }
 }
 
-impl<P, Op, S, Pl> ConditionalApply<P, Op, S, Pl> for False {
-    type Service = S;
+impl<P, Op, Pl, T> ConditionalApply<P, Op, Pl, T> for False {
+    type Service = T;
 
-    fn apply(_plugin: &Pl, svc: S) -> Self::Service {
-        svc
+    fn apply(_plugin: &Pl, input: T) -> Self::Service {
+        input
     }
 }
 
 /// A [`Plugin`] which scopes the application of an inner [`Plugin`].
 ///
-/// In cases where operation selection must be performed at runtime [`filter_by_operation_id`](crate::plugin::filter_by_operation_id)
+/// In cases where operation selection must be performed at runtime [`filter_by_operation`](crate::plugin::filter_by_operation)
 /// can be used.
 ///
 /// Operations within the scope will have the inner [`Plugin`] applied.
@@ -90,16 +90,15 @@ pub trait Membership<Op> {
     type Contains;
 }
 
-impl<P, Op, S, Scope, Pl> Plugin<P, Op, S> for Scoped<Scope, Pl>
+impl<Ser, Op, T, Scope, Pl> Plugin<Ser, Op, T> for Scoped<Scope, Pl>
 where
     Scope: Membership<Op>,
-    Scope::Contains: ConditionalApply<P, Op, S, Pl>,
-    Pl: Plugin<P, Op, S>,
+    Scope::Contains: ConditionalApply<Ser, Op, Pl, T>,
 {
-    type Service = <Scope::Contains as ConditionalApply<P, Op, S, Pl>>::Service;
+    type Output = <Scope::Contains as ConditionalApply<Ser, Op, Pl, T>>::Service;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        <Scope::Contains as ConditionalApply<P, Op, S, Pl>>::apply(&self.plugin, svc)
+    fn apply(&self, input: T) -> Self::Output {
+        <Scope::Contains as ConditionalApply<Ser, Op, Pl, T>>::apply(&self.plugin, input)
     }
 }
 
@@ -170,9 +169,9 @@ mod tests {
     struct MockPlugin;
 
     impl<P, Op> Plugin<P, Op, u32> for MockPlugin {
-        type Service = String;
+        type Output = String;
 
-        fn apply(&self, svc: u32) -> Self::Service {
+        fn apply(&self, svc: u32) -> Self::Output {
             svc.to_string()
         }
     }

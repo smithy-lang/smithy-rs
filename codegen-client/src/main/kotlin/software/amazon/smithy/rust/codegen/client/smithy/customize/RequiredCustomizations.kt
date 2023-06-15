@@ -56,7 +56,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        // TODO(enableNewSmithyRuntime): Keep only then branch once we switch to orchestrator
         if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
             baseCustomizations + ResiliencyConfigCustomization(codegenContext) + InterceptorConfigCustomization(
                 codegenContext,

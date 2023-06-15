@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HdrHistogram
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
@@ -122,12 +123,13 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())
             addDependency(HdrHistogram)
+            addDependency(HttpBody.toDevDependency())
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)
             addDependency(TracingTest)
 
-            // TODO(enableNewSmithyRuntime): These additional dependencies may not be needed anymore when removing this flag
+            // TODO(enableNewSmithyRuntimeCleanup): These additional dependencies may not be needed anymore when removing this flag
             // depending on if the sra-test is kept around or not.
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 addDependency(CargoDependency.smithyRuntime(codegenContext.runtimeConfig).toDevDependency())

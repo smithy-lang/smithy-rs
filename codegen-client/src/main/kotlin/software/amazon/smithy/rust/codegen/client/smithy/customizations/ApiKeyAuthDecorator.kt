@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-// TODO(enableNewSmithyRuntime): Delete this decorator when switching to the orchestrator
+// TODO(enableNewSmithyRuntimeCleanup): Delete this decorator when switching to the orchestrator
 
 /**
  * Inserts a ApiKeyAuth configuration into the operation

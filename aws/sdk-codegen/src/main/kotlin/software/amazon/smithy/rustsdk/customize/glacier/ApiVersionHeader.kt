@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
-// TODO(enableNewSmithyRuntime): Delete this file when cleaning up middleware.
+// TODO(enableNewSmithyRuntimeCleanup): Delete this file when cleaning up middleware.
 
 class ApiVersionHeader(
     /**

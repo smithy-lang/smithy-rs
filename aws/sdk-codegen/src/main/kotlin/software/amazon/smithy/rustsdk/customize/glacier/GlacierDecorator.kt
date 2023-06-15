@@ -97,7 +97,7 @@ private class GlacierAccountIdCustomization(private val codegenContext: ClientCo
     }
 }
 
-// TODO(enableNewSmithyRuntime): Install the glacier customizations as a single additional runtime plugin instead
+// TODO(enableNewSmithyRuntimeLaunch): Install the glacier customizations as a single additional runtime plugin instead
 // of wiring up the interceptors individually
 
 /** Adds the `x-amz-glacier-version` header to all requests */

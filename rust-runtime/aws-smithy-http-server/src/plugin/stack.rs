@@ -22,15 +22,15 @@ impl<Inner, Outer> PluginStack<Inner, Outer> {
     }
 }
 
-impl<P, Op, S, Inner, Outer> Plugin<P, Op, S> for PluginStack<Inner, Outer>
+impl<Ser, Op, T, Inner, Outer> Plugin<Ser, Op, T> for PluginStack<Inner, Outer>
 where
-    Inner: Plugin<P, Op, S>,
-    Outer: Plugin<P, Op, Inner::Service>,
+    Inner: Plugin<Ser, Op, T>,
+    Outer: Plugin<Ser, Op, Inner::Output>,
 {
-    type Service = Outer::Service;
+    type Output = Outer::Output;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        let svc = self.inner.apply(svc);
+    fn apply(&self, input: T) -> Self::Output {
+        let svc = self.inner.apply(input);
         self.outer.apply(svc)
     }
 }

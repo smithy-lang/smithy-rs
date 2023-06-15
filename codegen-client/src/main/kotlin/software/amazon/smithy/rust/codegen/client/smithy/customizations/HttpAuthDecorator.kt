@@ -223,7 +223,7 @@ private class HttpAuthOperationCustomization(codegenContext: ClientCodegenContex
                     }
                 }
 
-                // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
+                // TODO(enableNewSmithyRuntimeLaunch): Make auth options additive in the config bag so that multiple codegen decorators can register them
                 rustTemplate("${section.newLayerName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
             }
 

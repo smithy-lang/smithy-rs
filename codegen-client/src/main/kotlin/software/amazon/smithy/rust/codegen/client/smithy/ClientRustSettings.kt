@@ -72,7 +72,7 @@ data class ClientRustSettings(
     }
 }
 
-// TODO(enableNewSmithyRuntime): Remove this mode after switching to the orchestrator
+// TODO(enableNewSmithyRuntimeCleanup): Remove this mode after switching to the orchestrator
 enum class SmithyRuntimeMode {
     Middleware,
     BothDefaultMiddleware,
