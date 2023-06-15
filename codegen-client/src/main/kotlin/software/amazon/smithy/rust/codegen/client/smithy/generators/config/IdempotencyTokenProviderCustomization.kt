@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 
 /**
- * Add a `make_token` field to Service config. See below for the resulting generated code.
+ * Add a `token_provider` field to Service config. See below for the resulting generated code.
  */
 class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRuntimeMode) : NamedCustomization<ServiceConfig>() {
 
@@ -22,7 +22,7 @@ class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRunti
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
                 if (runtimeMode.defaultToMiddleware) {
-                    rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
+                    rust("pub (crate) token_provider: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
                 }
             }
 
@@ -33,7 +33,7 @@ class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRunti
                         /// Returns a copy of the idempotency token provider.
                         /// If a random token provider was configured,
                         /// a newly-randomized token provider will be returned.
-                        pub fn make_token(&self) -> #{IdempotencyTokenProvider} {
+                        pub fn token_provider(&self) -> #{IdempotencyTokenProvider} {
                             self.inner.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
                         }
                         """,
@@ -45,8 +45,8 @@ class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRunti
                         /// Returns a copy of the idempotency token provider.
                         /// If a random token provider was configured,
                         /// a newly-randomized token provider will be returned.
-                        pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
-                            self.make_token.clone()
+                        pub fn token_provider(&self) -> #T::IdempotencyTokenProvider {
+                            self.token_provider.clone()
                         }
                         """,
                         RuntimeType.IdempotencyToken,
@@ -55,21 +55,21 @@ class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRunti
             }
 
             ServiceConfig.BuilderStruct -> writable {
-                rust("make_token: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
+                rust("token_provider: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
             }
 
             ServiceConfig.BuilderImpl -> writable {
                 rustTemplate(
                     """
                     /// Sets the idempotency token provider to use for service calls that require tokens.
-                    pub fn make_token(mut self, make_token: impl Into<#{TokenProvider}>) -> Self {
-                        self.set_make_token(Some(make_token.into()));
+                    pub fn token_provider(mut self, token_provider: impl Into<#{TokenProvider}>) -> Self {
+                        self.set_token_provider(Some(token_provider.into()));
                         self
                     }
 
                     /// Sets the idempotency token provider to use for service calls that require tokens.
-                    pub fn set_make_token(&mut self, make_token: Option<#{TokenProvider}>) -> &mut Self {
-                        self.make_token = make_token;
+                    pub fn set_token_provider(&mut self, token_provider: Option<#{TokenProvider}>) -> &mut Self {
+                        self.token_provider = token_provider;
                         self
                     }
                     """,
@@ -80,60 +80,22 @@ class IdempotencyTokenProviderCustomization(private val runtimeMode: SmithyRunti
             ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rust(
-                        "layer.store_put(self.make_token.unwrap_or_else(#T::default_provider));",
+                        "layer.store_put(self.token_provider.unwrap_or_else(#T::default_provider));",
                         RuntimeType.IdempotencyToken,
                     )
                 } else {
                     rust(
-                        "make_token: self.make_token.unwrap_or_else(#T::default_provider),",
+                        "token_provider: self.token_provider.unwrap_or_else(#T::default_provider),",
                         RuntimeType.IdempotencyToken,
                     )
                 }
             }
 
             is ServiceConfig.DefaultForTests -> writable {
-                rust("""${section.configBuilderRef}.set_make_token(Some("00000000-0000-4000-8000-000000000000".into()));""")
+                rust("""${section.configBuilderRef}.set_token_provider(Some("00000000-0000-4000-8000-000000000000".into()));""")
             }
 
             else -> writable { }
         }
     }
 }
-
-/* Generated Code
-pub struct Config {
-    pub(crate) make_token: Box<dyn crate::idempotency_token::MakeIdempotencyToken>,
-}
-impl Config {
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-}
-#[derive(Default)]
-pub struct Builder {
-    #[allow(dead_code)]
-    make_token: Option<Box<dyn crate::idempotency_token::MakeIdempotencyToken>>,
-}
-impl Builder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the idempotency token provider to use for service calls that require tokens.
-    pub fn make_token(
-        mut self,
-        make_token: impl crate::idempotency_token::MakeIdempotencyToken + 'static,
-    ) -> Self {
-        self.make_token = Some(Box::new(make_token));
-        self
-    }
-
-    pub fn build(self) -> Config {
-        Config {
-            make_token: self
-            .make_token
-            .unwrap_or_else(|| Box::new(crate::idempotency_token::default_provider())),
-        }
-    }
-}
- */
