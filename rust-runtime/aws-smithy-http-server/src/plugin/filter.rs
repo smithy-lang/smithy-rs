@@ -91,7 +91,7 @@ where
     type Service = Either<Inner::Service, S>;
 
     fn apply(&self, svc: S) -> Self::Service {
-        let either_plugin = if (self.predicate)(<Ser as ContainsOperation<Op>>::ENUM_VALUE) {
+        let either_plugin = if (self.predicate)(<Ser as ContainsOperation<Op>>::VALUE) {
             Either::Left { value: &self.inner }
         } else {
             Either::Right { value: IdentityPlugin }
