@@ -134,7 +134,7 @@ pub use stack::PluginStack;
 /// A mapping from one [`Service`](tower::Service) to another. This should be viewed as a
 /// [`Layer`](tower::Layer) parameterized by the protocol and operation.
 ///
-/// The generics `Protocol` and `Op` allow the behavior to be parameterized.
+/// The generics `Ser` and `Op` allow the behavior to be parameterized.
 ///
 /// See [module](crate::plugin) documentation for more information.
 pub trait Plugin<Ser, Op, S> {
