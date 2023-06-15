@@ -19,8 +19,8 @@ use std::task::{Context, Poll};
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
-    op_id: ShapeId,
-    ser_id: ShapeId,
+    operation_id: ShapeId,
+    service_id: ShapeId,
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -36,7 +36,11 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {} in {}", self.op_id.absolute(), self.ser_id.absolute());
+        println!(
+            "Hi {} in {}",
+            self.operation_id.absolute(),
+            self.service_id.absolute()
+        );
         self.inner.call(req)
     }
 }
@@ -54,8 +58,8 @@ where
     fn apply(&self, inner: S) -> Self::Service {
         PrintService {
             inner,
-            op_id: Op::ID,
-            ser_id: Ser::ID,
+            operation_id: Op::ID,
+            service_id: Ser::ID,
         }
     }
 }

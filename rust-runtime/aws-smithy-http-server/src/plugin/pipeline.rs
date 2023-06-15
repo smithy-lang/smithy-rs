@@ -157,8 +157,8 @@ impl<P> PluginPipeline<P> {
     ///     fn apply(&self, inner: S) -> Self::Service {
     ///         PrintService {
     ///             inner,
-    ///             ser_id: Ser::ID,
-    ///             op_id: Op::ID
+    ///             service_id: Ser::ID,
+    ///             operation_id: Op::ID
     ///         }
     ///     }
     /// }

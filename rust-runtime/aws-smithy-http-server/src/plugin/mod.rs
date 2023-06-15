@@ -67,8 +67,8 @@
 //! #[derive(Clone, Debug)]
 //! pub struct PrintService<S> {
 //!     inner: S,
-//!     ser_id: ShapeId,
-//!     op_id: ShapeId
+//!     service_id: ShapeId,
+//!     operation_id: ShapeId
 //! }
 //!
 //! impl<R, S> Service<R> for PrintService<S>
@@ -84,7 +84,7 @@
 //!     }
 //!
 //!     fn call(&mut self, req: R) -> Self::Future {
-//!         println!("Hi {} in {}", self.op_id.absolute(), self.ser_id.absolute());
+//!         println!("Hi {} in {}", self.operation_id.absolute(), self.service_id.absolute());
 //!         self.inner.call(req)
 //!     }
 //! }
@@ -103,8 +103,8 @@
 //!     fn apply(&self, inner: S) -> Self::Service {
 //!         PrintService {
 //!             inner,
-//!             ser_id: Op::ID,
-//!             op_id: Ser::ID,
+//!             service_id: Op::ID,
+//!             operation_id: Ser::ID,
 //!         }
 //!     }
 //! }

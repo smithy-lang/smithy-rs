@@ -293,8 +293,8 @@ use tower::Service;
 /// A [`Service`] that adds a print log.
 pub struct PrintService<S> {
     inner: S,
-    op_id: ShapeId,
-    ser_id: ShapeId
+    operation_id: ShapeId,
+    service_id: ShapeId
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -310,7 +310,7 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {} in {}", self.op_id.name(), self.ser_id.name());
+        println!("Hi {} in {}", self.operation_id.name(), self.service_id.name());
         self.inner.call(req)
     }
 }
@@ -323,7 +323,7 @@ An example of a `PrintPlugin` which prints the operation name:
 ```rust
 # extern crate aws_smithy_http_server;
 # use aws_smithy_http_server::shape_id::ShapeId;
-# pub struct PrintService<S> { inner: S, op_id: ShapeId, ser_id: ShapeId }
+# pub struct PrintService<S> { inner: S, operation_id: ShapeId, service_id: ShapeId }
 use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, service::ServiceShape};
 
 /// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
@@ -340,8 +340,8 @@ where
     fn apply(&self, inner: S) -> Self::Service {
         PrintService {
             inner,
-            op_id: Op::ID,
-            ser_id: Ser::ID,
+            operation_id: Op::ID,
+            service_id: Ser::ID,
         }
     }
 }
