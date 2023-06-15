@@ -442,3 +442,9 @@ message = "Add a `send_with` function on `-Input` types for sending requests wit
 author = "thomas-k-cameron"
 references = ["smithy-rs#2652"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
+
+[[smithy-rs]]
+message = "Consolidate `operation` and `operation_shape` modules in the generated server SDK"
+author = "hlbarber"
+references = ["smithy-rs#2781"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
