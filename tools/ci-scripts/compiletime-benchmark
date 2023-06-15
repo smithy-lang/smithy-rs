@@ -3,7 +3,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-set -eux
+set -e
 
 function compile() {
     cd $1 &&
@@ -24,6 +24,7 @@ for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
         echo "$variable" &>>/tmp/compiletime-benchmark.txt
         compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable" &>>/tmp/compiletime-benchmark.txt
         echo "END" &>>/tmp/compiletime-benchmark.txt
+        break
     fi
 done
 
