@@ -12,7 +12,7 @@
 //! We generate an implementation on this for every service struct (exported from the root of the generated crate).
 //!
 //! As stated in the [operation module documentation](crate::operation) we also generate marker structs for
-//! [`OperationShape`], these are coupled to the `S: ServiceShape` via the [`ContainsOperation`] trait.
+//! [`OperationShape`](crate::operation::OperationShape), these are coupled to the `S: ServiceShape` via the [`ContainsOperation`] trait.
 //!
 //! The model
 //!
