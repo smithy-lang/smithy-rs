@@ -185,11 +185,58 @@ author = "ysaito1001"
 message = """
 The middleware system has been reworked as we push for a unified, simple, and consistent API. The following changes have been made in service of this goal:
 
+- A `ServiceShape` trait has been added.
 - The `Plugin` trait has been simplified.
 - The `Operation` structure has been removed.
 - A `Scoped` `Plugin` has been added.
 
 The `Plugin` trait has now been simplified and the `Operation` struct has been removed.
+
+## Addition of `ServiceShape`
+
+Since the [0.52 release](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) the `OperationShape` has existed.
+
+```rust
+/// Models the [Smithy Operation shape].
+///
+/// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
+pub trait OperationShape {
+    /// The ID of the operation.
+    const ID: ShapeId;
+
+    /// The operation input.
+    type Input;
+    /// The operation output.
+    type Output;
+    /// The operation error. [`Infallible`](std::convert::Infallible) in the case where no error
+    /// exists.
+    type Error;
+}
+```
+
+This allowed `Plugin` authors to access these associated types and constants. See the [`PrintPlugin`](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs) as an example.
+
+We continue with this approach and introduce the following trait:
+
+```rust
+/// Models the [Smithy Service shape].
+///
+/// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html
+pub trait ServiceShape {
+    /// The [`ShapeId`] of the service.
+    const ID: ShapeId;
+
+    /// The [Protocol] applied to this service.
+    ///
+    /// [Protocol]: https://smithy.io/2.0/spec/protocol-traits.html
+    type Protocol;
+
+    /// An enumeration of all operations contained in this service.
+    type Operations;
+}
+```
+
+With the changes to `Plugin`, described below, middleware authors now have access to this information at compile time.
 
 ## Simplication of the `Plugin` trait
 
@@ -209,14 +256,16 @@ modified an `Operation`.
 Now,
 
 ```rust
-trait Plugin<Protocol, Operation, S> {
+trait Plugin<Service, Operation, S> {
     type Service;
 
     fn apply(&self, svc: S) -> Self::Service;
 }
 ```
 
-maps a `tower::Service` to a `tower::Service`. This is equivalent to `tower::Layer` with two extra type parameters: `Protocol` and `Operation`.
+maps a `tower::Service` to a `tower::Service`. This is equivalent to `tower::Layer` with two extra type parameters: `Service` and `Operation`, which implement `ServiceShape` and `OperationShape` respectively.
+
+Having both `Service` and `Operation` as type parameters also provides an even surface for advanced users to extend the codegenerator in a structured way. See [this issue](https://github.com/awslabs/smithy-rs/issues/2777) for more context.
 
 The following middleware setup
 
@@ -286,7 +335,7 @@ where
 
 pub struct PrintPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+impl<Ser, Op, S, L> Plugin<Ser, Op, S, L> for PrintPlugin
 where
     Op: OperationShape,
 {
@@ -294,6 +343,21 @@ where
 
     fn apply(&self, svc: S) -> Self::Service {
         PrintService { inner, name: Op::ID.name() }
+    }
+}
+```
+
+Alternatively, using the new `ServiceShape`, implemented on `Ser`:
+
+```rust
+impl<Ser, Op, S, L> Plugin<Ser, Op, S, L> for PrintPlugin
+where
+    Ser: ServiceShape,
+{
+    type Service = PrintService<S>;
+
+    fn apply(&self, svc: S) -> Self::Service {
+        PrintService { inner, name: Ser::ID.name() }
     }
 }
 ```
