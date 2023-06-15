@@ -159,6 +159,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     private val codegenScope = arrayOf(
+        *RuntimeType.preludeScope,
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
         "Cow" to RuntimeType.Cow,
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
@@ -264,12 +265,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
                 pub struct $inputFuture {
-                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = #{Result}<#{I}, #{RuntimeError}>> + Send>>
                 }
             }
 
             impl std::future::Future for $inputFuture {
-                type Output = Result<#{I}, #{RuntimeError}>;
+                type Output = #{Result}<#{I}, #{RuntimeError}>;
 
                 fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
                     let this = self.project();
@@ -378,7 +379,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 pub async fn $fnName<B>(
                     ##[allow(unused_variables)] request: #{http}::Request<B>
-                ) -> std::result::Result<
+                ) -> #{Result}<
                     #{I},
                     #{RequestRejection}
                 >
@@ -415,7 +416,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 pub fn $fnName(
                     ##[allow(unused_variables)] output: #{O}
-                ) -> std::result::Result<
+                ) -> #{Result}<
                     #{SmithyHttpServer}::response::Response,
                     #{ResponseRejection}
                 >
@@ -438,7 +439,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "http_error") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
+                "pub fn $fnName(error: &#{E}) -> #{Result}<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
                 "E" to errorSymbol,
             ) {
@@ -1146,7 +1147,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val output = unconstrainedShapeSymbolProvider.toSymbol(binding.member)
         return protocolFunctions.deserializeFn(binding.member) { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
+                "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{RequestRejection}>",
                 *codegenScope,
                 "O" to output,
             ) {
