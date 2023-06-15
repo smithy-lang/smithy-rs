@@ -284,7 +284,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 B: 'static,
                 ${streamingBodyTraitBounds(operationShape)}
                 B::Data: #{Send},
-                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                #{RequestRejection} : #{From}<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
                 type Future = $inputFuture;
@@ -386,7 +386,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 where
                     B: #{SmithyHttpServer}::body::HttpBody + #{Send}, ${streamingBodyTraitBounds(operationShape)}
                     B::Data: #{Send},
-                    #{RequestRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                    #{RequestRejection}: #{From}<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 """.trimIndent(),
                 *codegenScope,
                 "I" to inputSymbol,
