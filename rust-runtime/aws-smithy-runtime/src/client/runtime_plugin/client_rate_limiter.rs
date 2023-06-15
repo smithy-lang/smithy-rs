@@ -252,10 +252,10 @@ impl Builder {
 mod tests {
     use super::{get_unix_timestamp, ClientRateLimiter};
     use crate::client::runtime_plugin::client_rate_limiter::cubic_throttle;
+    use approx::assert_relative_eq;
     use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::SharedTimeSource;
-    use aws_smithy_runtime_api::assert_eq_f64;
     use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
     use aws_smithy_types::config_bag::ConfigBag;
     use std::time::{Duration, SystemTime};
@@ -267,13 +267,13 @@ mod tests {
             .build();
 
         rate_limiter.calculate_time_window();
-        assert_eq_f64!(rate_limiter.time_window, 1.9574338205844317);
+        assert_relative_eq!(rate_limiter.time_window, 1.9574338205844317);
     }
 
     #[test]
     fn should_match_beta_decrease() {
         let new_rate = cubic_throttle(10.0);
-        assert_eq_f64!(new_rate, 7.0);
+        assert_relative_eq!(new_rate, 7.0);
 
         let mut rate_limiter = ClientRateLimiter::builder()
             .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
@@ -282,7 +282,7 @@ mod tests {
 
         rate_limiter.calculate_time_window();
         let new_rate = rate_limiter.cubic_success(1.0);
-        assert_eq_f64!(new_rate, 7.0);
+        assert_relative_eq!(new_rate, 7.0);
     }
 
     #[tokio::test]
@@ -369,7 +369,7 @@ mod tests {
             let calculated_rate =
                 rate_limiter.cubic_success(attempt.time_since_start.as_secs_f64());
 
-            assert_eq_f64!(attempt.expected_calculated_rate, calculated_rate);
+            assert_relative_eq!(attempt.expected_calculated_rate, calculated_rate);
         }
     }
 
@@ -452,7 +452,7 @@ mod tests {
                     rate_limiter.cubic_success(attempt.time_since_start.as_secs_f64());
             };
 
-            assert_eq_f64!(attempt.expected_calculated_rate, calculated_rate);
+            assert_relative_eq!(attempt.expected_calculated_rate, calculated_rate);
         }
     }
 
@@ -584,17 +584,13 @@ mod tests {
             assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
 
             rate_limiter.update_rate_limiter(&cfg, attempt.throttled);
-            assert_eq_f64!(
+            assert_relative_eq!(
                 attempt.expected_tokens_retrieved_per_second,
-                rate_limiter.tokens_retrieved_per_second,
-                "attempt #{} measured_tx_rate",
-                i + 1
+                rate_limiter.tokens_retrieved_per_second
             );
-            assert_eq_f64!(
+            assert_relative_eq!(
                 attempt.expected_token_refill_rate,
-                rate_limiter.token_refill_rate,
-                "attempt #{} fill_rate",
-                i + 1
+                rate_limiter.token_refill_rate
             );
         }
     }

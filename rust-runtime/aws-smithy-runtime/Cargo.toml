@@ -31,6 +31,7 @@ tracing = "0.1.37"
 fastrand = "1.4"
 
 [dev-dependencies]
+approx = "0.5.1"
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
