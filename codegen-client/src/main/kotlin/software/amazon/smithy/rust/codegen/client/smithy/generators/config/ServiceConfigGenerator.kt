@@ -329,7 +329,7 @@ class ServiceConfigGenerator(
             """
             impl #{RuntimePlugin} for Builder {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    // TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`
+                    // TODO(enableNewSmithyRuntimeLaunch): Put into `cfg` the fields in `self.config_override` that are not `None`
                     ##[allow(unused_mut)]
                     let mut cfg = #{Layer}::new("service config");
                     #{config}

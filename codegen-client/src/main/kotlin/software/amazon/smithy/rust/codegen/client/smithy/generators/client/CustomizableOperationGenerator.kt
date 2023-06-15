@@ -36,8 +36,8 @@ class CustomizableOperationGenerator(
     fun render(crate: RustCrate) {
         crate.withModule(ClientRustModule.Client.customize) {
             rustTemplate(
-                // TODO(enableNewSmithyRuntime): Stop exporting `Operation` when removing middleware
-                // TODO(enableNewSmithyRuntime): Re-export orchestrator equivalents for retry types when removing middleware
+                // TODO(enableNewSmithyRuntimeCleanup): Stop exporting `Operation` when removing middleware
+                // TODO(enableNewSmithyRuntimeLaunch): Re-export orchestrator equivalents for retry types when defaulting to orchestrator
                 """
                 pub use #{Operation};
                 pub use #{Request};
@@ -171,7 +171,7 @@ class CustomizableOperationGenerator(
         crate.withModule(customizeModule) {
             renderConvenienceAliases(customizeModule, this)
 
-            // TODO(enableNewSmithyRuntime): Render it directly under the customize module when CustomizableOperation
+            // TODO(enableNewSmithyRuntimeCleanup): Render it directly under the customize module when CustomizableOperation
             //  in the middleware has been removed.
             withInlineModule(
                 RustModule.new(
@@ -332,12 +332,12 @@ fun renderCustomizableOperationSend(codegenContext: ClientCodegenContext, generi
         *preludeScope,
         "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        // TODO(enableNewSmithyRuntime): Delete the trait bounds when cleaning up middleware
+        // TODO(enableNewSmithyRuntimeCleanup): Delete the trait bounds when cleaning up middleware
         "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
         "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
         "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
         "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-        // TODO(enableNewSmithyRuntime): Delete the generics when cleaning up middleware
+        // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
     )

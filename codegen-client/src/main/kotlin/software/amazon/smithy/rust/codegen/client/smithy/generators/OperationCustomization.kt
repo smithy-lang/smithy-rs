@@ -23,7 +23,7 @@ sealed class OperationSection(name: String) : Section(name) {
     data class OperationImplBlock(override val customizations: List<OperationCustomization>) :
         OperationSection("OperationImplBlock")
 
-    // TODO(enableNewSmithyRuntime): Delete this customization hook when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization hook when cleaning up middleware
     /** Write additional functions inside the Input's impl block */
     @Deprecated("customization for middleware; won't be used in the orchestrator impl")
     data class InputImpl(
@@ -33,7 +33,7 @@ sealed class OperationSection(name: String) : Section(name) {
         val protocol: Protocol,
     ) : OperationSection("InputImpl")
 
-    // TODO(enableNewSmithyRuntime): Delete this customization hook when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization hook when cleaning up middleware
     @Deprecated("customization for middleware; won't be used in the orchestrator impl")
     data class MutateInput(
         override val customizations: List<OperationCustomization>,
@@ -41,7 +41,7 @@ sealed class OperationSection(name: String) : Section(name) {
         val config: String,
     ) : OperationSection("MutateInput")
 
-    // TODO(enableNewSmithyRuntime): Delete this customization hook when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization hook when cleaning up middleware
     /** Write custom code into the block that builds an operation
      *
      * [request]: Name of the variable holding the `aws_smithy_http::Request`
@@ -55,7 +55,7 @@ sealed class OperationSection(name: String) : Section(name) {
         val config: String,
     ) : OperationSection("Feature")
 
-    // TODO(enableNewSmithyRuntime): Delete this customization hook when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization hook when cleaning up middleware
     @Deprecated("customization for middleware; won't be used in the orchestrator impl")
     data class FinalizeOperation(
         override val customizations: List<OperationCustomization>,
@@ -69,7 +69,7 @@ sealed class OperationSection(name: String) : Section(name) {
         /** Name of the response headers map (for referring to it in Rust code) */
         val responseHeadersName: String,
 
-        // TODO(enableNewSmithyRuntime): Remove this flag when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove this flag when switching to the orchestrator
         /** Whether the property bag exists in this context */
         val propertyBagAvailable: Boolean,
     ) : OperationSection("MutateOutput")
@@ -165,11 +165,11 @@ sealed class OperationSection(name: String) : Section(name) {
 }
 
 abstract class OperationCustomization : NamedCustomization<OperationSection>() {
-    // TODO(enableNewSmithyRuntime): Delete this when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when cleaning up middleware
     @Deprecated("property for middleware; won't be used in the orchestrator impl")
     open fun retryType(): RuntimeType? = null
 
-    // TODO(enableNewSmithyRuntime): Delete this when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when cleaning up middleware
     /**
      * Does `make_operation` consume the self parameter?
      *
@@ -179,7 +179,7 @@ abstract class OperationCustomization : NamedCustomization<OperationSection>() {
     @Deprecated("property for middleware; won't be used in the orchestrator impl")
     open fun consumesSelf(): Boolean = false
 
-    // TODO(enableNewSmithyRuntime): Delete this when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this when cleaning up middleware
     /**
      * Does `make_operation` mutate the self parameter?
      */
