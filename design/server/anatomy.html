@@ -520,20 +520,20 @@ state in &lt;&lt;fork&gt;&gt;
 <h2 id="plugins"><a class="header" href="#plugins">Plugins</a></h2>
 <!-- TODO(missing_doc): Link to "Write a Plugin" documentation -->
 <p>A <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/plugin/trait.Plugin.html"><code>Plugin</code></a> is a
-[<code>tower::Layer</code>] with two extra type parameters, <code>Protocol</code> and <code>Operation</code>. This allows the middleware to be
+[<code>tower::Layer</code>] with two extra type parameters, <code>Service</code> and <code>Operation</code>, corresponding to <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a> and <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a>. This allows the middleware to be
 parameterized them and change behavior depending on the context in which it's applied.</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span>pub trait Plugin&lt;Protocol, Operation, S&gt; {
-    type Service;
+</span>pub trait Plugin&lt;Service, Operation, T&gt; {
+    type Output;
 
-    fn apply(&amp;self, svc: S) -&gt; Self::Service;
+    fn apply(&amp;self, input: T) -&gt; Self::Output;
 }
 <span class="boring">use aws_smithy_http_server::plugin::Plugin as Pl;
-</span><span class="boring">impl&lt;P, Op, S, T: Pl&lt;P, Op, S&gt;&gt; Plugin&lt;P, Op, S&gt; for T {
-</span><span class="boring">  type Service = &lt;T as Pl&lt;P, Op, S&gt;&gt;::Service;
-</span><span class="boring">  fn apply(&amp;self, svc: S) -&gt; Self::Service { &lt;T as Pl&lt;P, Op, S&gt;&gt;::apply(self, svc) }
+</span><span class="boring">impl&lt;Ser, Op, T, U: Pl&lt;Ser, Op, T&gt;&gt; Plugin&lt;Ser, Op, T&gt; for U {
+</span><span class="boring">  type Output = &lt;U as Pl&lt;Ser, Op, T&gt;&gt;::Output;
+</span><span class="boring">  fn apply(&amp;self, input: T) -&gt; Self::Output { &lt;U as Pl&lt;Ser, Op, T&gt;&gt;::apply(self, input) }
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre></pre>
 <p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
@@ -620,19 +620,19 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
         HandlerType:Handler&lt;GetPokemonSpecies, HandlerExtractors&gt;,
 
         ModelPlugin: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
             IntoService&lt;GetPokemonSpecies, HandlerType&gt;
         &gt;,
         UpgradePlugin::&lt;UpgradeExtractors&gt;: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         &gt;,
         HttpPlugin: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::&lt;UpgradeExtractors&gt;::Service
+            UpgradePlugin::&lt;UpgradeExtractors&gt;::Output
         &gt;,
     {
         let svc = GetPokemonSpecies::from_handler(handler);
@@ -648,19 +648,19 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
         S: OperationService&lt;GetPokemonSpecies, ServiceExtractors&gt;,
 
         ModelPlugin: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
             Normalize&lt;GetPokemonSpecies, S&gt;
         &gt;,
         UpgradePlugin::&lt;UpgradeExtractors&gt;: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         &gt;,
         HttpPlugin: Plugin&lt;
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::&lt;UpgradeExtractors&gt;::Service
+            UpgradePlugin::&lt;UpgradeExtractors&gt;::Output
         &gt;,
     {
         let svc = GetPokemonSpecies::from_service(service);

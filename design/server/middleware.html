@@ -399,14 +399,17 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 <p>Consider the following middleware:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
+</span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">extern crate tower;
-</span>use std::task::{Context, Poll};
+</span>use aws_smithy_http_server::shape_id::ShapeId;
+use std::task::{Context, Poll};
 use tower::Service;
 
 /// A [`Service`] that adds a print log.
 pub struct PrintService&lt;S&gt; {
     inner: S,
-    name: &amp;'static str,
+    operation_id: ShapeId,
+    service_id: ShapeId
 }
 
 impl&lt;R, S&gt; Service&lt;R&gt; for PrintService&lt;S&gt;
@@ -422,7 +425,7 @@ where
     }
 
     fn call(&amp;mut self, req: R) -&gt; Self::Future {
-        println!(&quot;Hi {}&quot;, self.name);
+        println!(&quot;Hi {} in {}&quot;, self.operation_id.name(), self.service_id.name());
         self.inner.call(req)
     }
 }
@@ -432,56 +435,27 @@ where
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span><span class="boring">pub struct PrintService&lt;S&gt; { inner: S, name: &amp;'static str }
-</span>use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape};
+</span><span class="boring">use aws_smithy_http_server::shape_id::ShapeId;
+</span><span class="boring">pub struct PrintService&lt;S&gt; { inner: S, operation_id: ShapeId, service_id: ShapeId }
+</span>use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, service::ServiceShape};
 
 /// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl&lt;P, Op, S&gt; Plugin&lt;P, Op, S&gt; for PrintPlugin
+impl&lt;Ser, Op, T&gt; Plugin&lt;Ser, Op, T&gt; for PrintPlugin
 where
+    Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Service = PrintService&lt;S&gt;;
+    type Output = PrintService&lt;T&gt;;
 
-    fn apply(&amp;self, inner: S) -&gt; Self::Service {
-        PrintService { name: Op::ID.name(), inner }
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<p>An alternative example which prints the protocol name:</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">extern crate aws_smithy_http_server;
-</span><span class="boring">pub struct PrintService&lt;S&gt; { name: &amp;'static str, inner: S}
-</span>use aws_smithy_http_server::{
-    plugin::Plugin,
-    proto::{
-        aws_json_10::AwsJson1_0,
-        rest_xml::RestXml,
-    }
-};
-
-/// A [`Plugin`] for a service builder to add a [`PrintService`] over operations.
-#[derive(Debug)]
-pub struct PrintPlugin;
-
-impl&lt;Op, S&gt; Plugin&lt;AwsJson1_0, Op, S&gt; for PrintPlugin
-{
-    type Service = PrintService&lt;S&gt;;
-
-    fn apply(&amp;self, inner: S) -&gt; Self::Service {
-        PrintService { name: &quot;AWS JSON 1.0&quot;, inner }
-    }
-}
-
-impl&lt;Op, S&gt; Plugin&lt;RestXml, Op, S&gt; for PrintPlugin
-{
-    type Service = PrintService&lt;S&gt;;
-
-    fn apply(&amp;self, inner: S) -&gt; Self::Service {
-        PrintService { name: &quot;AWS REST XML&quot;, inner }
+    fn apply(&amp;self, inner: T) -&gt; Self::Output {
+        PrintService {
+            inner,
+            operation_id: Op::ID,
+            service_id: Ser::ID,
+        }
     }
 }
 <span class="boring">}</span></code></pre></pre>
@@ -513,7 +487,7 @@ impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for PluginPipeline&l
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">use aws_smithy_http_server::plugin::{PluginStack, Plugin};
 </span><span class="boring">struct PrintPlugin;
-</span><span class="boring">impl&lt;P, Op, S&gt; Plugin&lt;P, Op, S&gt; for PrintPlugin { type Service = S; fn apply(&amp;self, svc: S) -&gt; Self::Service { svc }}
+</span><span class="boring">impl&lt;Ser, Op, T&gt; Plugin&lt;Ser, Op, T&gt; for PrintPlugin { type Output = T; fn apply(&amp;self, svc: T) -&gt; Self::Output { svc }}
 </span><span class="boring">trait PrintExt&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt;; }
 </span><span class="boring">impl&lt;EP&gt; PrintExt&lt;EP&gt; for PluginPipeline&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt; { self.push(PrintPlugin) }}
 </span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
