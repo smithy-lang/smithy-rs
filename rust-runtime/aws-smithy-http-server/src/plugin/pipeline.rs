@@ -150,11 +150,11 @@ impl<P> PluginPipeline<P> {
     /// #[derive(Debug)]
     /// pub struct PrintPlugin;
     ///
-    /// impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
+    /// impl<Ser, Op, S> Plugin<Ser, Op, T> for PrintPlugin
     /// // [...]
     /// {
     ///     // [...]
-    ///     fn apply(&self, inner: S) -> Self::Service {
+    ///     fn apply(&self, inner: T) -> Self::Service {
     ///         PrintService {
     ///             inner,
     ///             service_id: Ser::ID,
@@ -174,13 +174,13 @@ impl<P> PluginPipeline<P> {
     }
 }
 
-impl<Ser, Op, S, InnerPlugin> Plugin<Ser, Op, S> for PluginPipeline<InnerPlugin>
+impl<Ser, Op, T, InnerPlugin> Plugin<Ser, Op, T> for PluginPipeline<InnerPlugin>
 where
-    InnerPlugin: Plugin<Ser, Op, S>,
+    InnerPlugin: Plugin<Ser, Op, T>,
 {
-    type Service = InnerPlugin::Service;
+    type Output = InnerPlugin::Output;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        self.0.apply(svc)
+    fn apply(&self, input: T) -> Self::Output {
+        self.0.apply(input)
     }
 }

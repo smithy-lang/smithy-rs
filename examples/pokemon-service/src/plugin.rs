@@ -48,14 +48,14 @@ where
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin
 where
     Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Service = PrintService<S>;
+    type Output = PrintService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         PrintService {
             inner,
             operation_id: Op::ID,

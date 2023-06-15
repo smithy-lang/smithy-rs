@@ -13,15 +13,15 @@ pub struct OperationIdFn<F> {
     f: F,
 }
 
-impl<Ser, Op, S, NewService, F> Plugin<Ser, Op, S> for OperationIdFn<F>
+impl<Ser, Op, T, NewService, F> Plugin<Ser, Op, T> for OperationIdFn<F>
 where
-    F: Fn(ShapeId, S) -> NewService,
+    F: Fn(ShapeId, T) -> NewService,
     Op: OperationShape,
 {
-    type Service = NewService;
+    type Output = NewService;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        (self.f)(Op::ID, svc)
+    fn apply(&self, input: T) -> Self::Output {
+        (self.f)(Op::ID, input)
     }
 }
 

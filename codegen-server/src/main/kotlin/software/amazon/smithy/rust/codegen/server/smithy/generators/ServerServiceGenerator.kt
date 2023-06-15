@@ -144,7 +144,7 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Service
+                        ModelPlugin::Output
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
@@ -154,13 +154,13 @@ class ServerServiceGenerator(
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Service
+                                ModelPlugin::Output
                             >
-                        >::Service
+                        >::Output
                     >,
 
-                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -207,7 +207,7 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Service
+                        ModelPlugin::Output
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
@@ -217,13 +217,13 @@ class ServerServiceGenerator(
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Service
+                                ModelPlugin::Output
                             >
-                        >::Service
+                        >::Output
                     >,
 
-                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;

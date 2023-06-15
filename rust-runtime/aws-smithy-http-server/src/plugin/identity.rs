@@ -9,7 +9,7 @@ use super::Plugin;
 pub struct IdentityPlugin;
 
 impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
-    type Service = S;
+    type Output = S;
 
     fn apply(&self, svc: S) -> S {
         svc

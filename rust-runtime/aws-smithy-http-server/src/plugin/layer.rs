@@ -16,9 +16,9 @@ impl<Ser, Op, S, L> Plugin<Ser, Op, S> for LayerPlugin<L>
 where
     L: Layer<S>,
 {
-    type Service = L::Service;
+    type Output = L::Service;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, svc: S) -> Self::Output {
         self.0.layer(svc)
     }
 }
@@ -34,7 +34,7 @@ impl<S, Ser, Op, Pl> Layer<S> for PluginLayer<Ser, Op, Pl>
 where
     Pl: Plugin<Ser, Op, S>,
 {
-    type Service = Pl::Service;
+    type Service = Pl::Output;
 
     fn layer(&self, inner: S) -> Self::Service {
         self.plugin.apply(inner)

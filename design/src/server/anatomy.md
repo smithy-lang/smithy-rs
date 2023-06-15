@@ -430,15 +430,15 @@ parameterized them and change behavior depending on the context in which it's ap
 
 ```rust
 # extern crate aws_smithy_http_server;
-pub trait Plugin<Service, Operation, S> {
-    type Service;
+pub trait Plugin<Service, Operation, T> {
+    type Output;
 
-    fn apply(&self, svc: S) -> Self::Service;
+    fn apply(&self, input: T) -> Self::Output;
 }
 # use aws_smithy_http_server::plugin::Plugin as Pl;
-# impl<Ser, Op, S, T: Pl<Ser, Op, S>> Plugin<Ser, Op, S> for T {
-#   type Service = <T as Pl<Ser, Op, S>>::Service;
-#   fn apply(&self, svc: S) -> Self::Service { <T as Pl<Ser, Op, S>>::apply(self, svc) }
+# impl<Ser, Op, T, U: Pl<Ser, Op, T>> Plugin<Ser, Op, T> for U {
+#   type Output = <U as Pl<Ser, Op, T>>::Output;
+#   fn apply(&self, input: T) -> Self::Output { <U as Pl<Ser, Op, T>>::apply(self, input) }
 # }
 ```
 
@@ -545,12 +545,12 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
         UpgradePlugin::<UpgradeExtractors>: Plugin<
             PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         >,
         HttpPlugin: Plugin<
             PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::<UpgradeExtractors>::Service
+            UpgradePlugin::<UpgradeExtractors>::Output
         >,
     {
         let svc = GetPokemonSpecies::from_handler(handler);
@@ -573,12 +573,12 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
         UpgradePlugin::<UpgradeExtractors>: Plugin<
             PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         >,
         HttpPlugin: Plugin<
             PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::<UpgradeExtractors>::Service
+            UpgradePlugin::<UpgradeExtractors>::Output
         >,
     {
         let svc = GetPokemonSpecies::from_service(service);

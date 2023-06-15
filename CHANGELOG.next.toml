@@ -259,10 +259,10 @@ modified an `Operation`.
 Now,
 
 ```rust
-trait Plugin<Service, Operation, S> {
-    type Service;
+trait Plugin<Service, Operation, T> {
+    type Output;
 
-    fn apply(&self, svc: S) -> Self::Service;
+    fn apply(&self, input: T) -> Self::Output;
 }
 ```
 
@@ -338,13 +338,13 @@ where
 
 pub struct PrintPlugin;
 
-impl<Ser, Op, S, L> Plugin<Ser, Op, S, L> for PrintPlugin
+impl<Service, Op, T> Plugin<Service, Operation, T> for PrintPlugin
 where
     Op: OperationShape,
 {
-    type Service = PrintService<S>;
+    type Output = PrintService<S>;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         PrintService { inner, name: Op::ID.name() }
     }
 }
@@ -353,13 +353,13 @@ where
 Alternatively, using the new `ServiceShape`, implemented on `Ser`:
 
 ```rust
-impl<Ser, Op, S, L> Plugin<Ser, Op, S, L> for PrintPlugin
+impl<Service, Operation, T> Plugin<Service, Operation, T> for PrintPlugin
 where
     Ser: ServiceShape,
 {
     type Service = PrintService<S>;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Service {
         PrintService { inner, name: Ser::ID.name() }
     }
 }

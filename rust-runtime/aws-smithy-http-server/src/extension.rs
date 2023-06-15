@@ -114,13 +114,13 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<Ser, Op, S> Plugin<Ser, Op, S> for OperationExtensionPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {
-    type Service = OperationExtensionService<S>;
+    type Output = OperationExtensionService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         OperationExtensionService {
             inner,
             operation_extension: OperationExtension(Op::ID),

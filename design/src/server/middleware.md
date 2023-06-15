@@ -330,14 +330,14 @@ use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, service:
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin
 where
     Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Service = PrintService<S>;
+    type Output = PrintService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         PrintService {
             inner,
             operation_id: Op::ID,
@@ -376,7 +376,7 @@ This allows for:
 # extern crate aws_smithy_http_server;
 # use aws_smithy_http_server::plugin::{PluginStack, Plugin};
 # struct PrintPlugin;
-# impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin { type Service = S; fn apply(&self, svc: S) -> Self::Service { svc }}
+# impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin { type Output = T; fn apply(&self, svc: T) -> Self::Output { svc }}
 # trait PrintExt<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>>; }
 # impl<EP> PrintExt<EP> for PluginPipeline<EP> { fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};

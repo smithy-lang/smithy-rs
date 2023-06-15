@@ -37,7 +37,7 @@ pub struct FilterByOperationId<Inner, F> {
 /// # struct Pl;
 /// # struct CheckHealth;
 /// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
-/// # impl Plugin<(), CheckHealth, ()> for Pl { type Service = (); fn apply(&self, input: ()) -> Self::Service { input }}
+/// # impl Plugin<(), CheckHealth, ()> for Pl { type Output = (); fn apply(&self, input: ()) -> Self::Output { input }}
 /// # let plugin = Pl;
 /// # let svc = ();
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
@@ -54,21 +54,21 @@ where
     }
 }
 
-impl<Ser, Op, S, Inner, F> Plugin<Ser, Op, S> for FilterByOperationId<Inner, F>
+impl<Ser, Op, T, Inner, F> Plugin<Ser, Op, T> for FilterByOperationId<Inner, F>
 where
     F: Fn(ShapeId) -> bool,
-    Inner: Plugin<Ser, Op, S>,
+    Inner: Plugin<Ser, Op, T>,
     Op: OperationShape,
 {
-    type Service = Either<Inner::Service, S>;
+    type Output = Either<Inner::Output, T>;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, input: T) -> Self::Output {
         let either_plugin = if (self.predicate)(Op::ID) {
             Either::Left { value: &self.inner }
         } else {
             Either::Right { value: IdentityPlugin }
         };
-        either_plugin.apply(svc)
+        either_plugin.apply(input)
     }
 }
 
@@ -81,22 +81,22 @@ pub struct FilterByOperation<Inner, F> {
     predicate: F,
 }
 
-impl<Ser, Op, S, Inner, F> Plugin<Ser, Op, S> for FilterByOperation<Inner, F>
+impl<Ser, Op, T, Inner, F> Plugin<Ser, Op, T> for FilterByOperation<Inner, F>
 where
     Ser: ContainsOperation<Op>,
     F: Fn(Ser::Operations) -> bool,
-    Inner: Plugin<Ser, Op, S>,
+    Inner: Plugin<Ser, Op, T>,
     Op: OperationShape,
 {
-    type Service = Either<Inner::Service, S>;
+    type Output = Either<Inner::Output, T>;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, input: T) -> Self::Output {
         let either_plugin = if (self.predicate)(<Ser as ContainsOperation<Op>>::VALUE) {
             Either::Left { value: &self.inner }
         } else {
             Either::Right { value: IdentityPlugin }
         };
-        either_plugin.apply(svc)
+        either_plugin.apply(input)
     }
 }
 
@@ -116,7 +116,7 @@ where
 /// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # struct CheckHealth;
 /// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
-/// # impl Plugin<PokemonService, CheckHealth, ()> for Pl { type Service = (); fn apply(&self, input: ()) -> Self::Service { input }}
+/// # impl Plugin<PokemonService, CheckHealth, ()> for Pl { type Output = (); fn apply(&self, input: ()) -> Self::Output { input }}
 /// # let plugin = Pl;
 /// # let svc = ();
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.

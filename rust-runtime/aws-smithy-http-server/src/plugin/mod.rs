@@ -93,14 +93,14 @@
 //! #[derive(Debug)]
 //! pub struct PrintPlugin;
 //!
-//! impl<Ser, Op, S> Plugin<Ser, Op, S> for PrintPlugin
+//! impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin
 //! where
 //!     Ser: ServiceShape,
 //!     Op: OperationShape,
 //! {
-//!     type Service = PrintService<S>;
+//!     type Output = PrintService<T>;
 //!
-//!     fn apply(&self, inner: S) -> Self::Service {
+//!     fn apply(&self, inner: T) -> Self::Output {
 //!         PrintService {
 //!             inner,
 //!             service_id: Op::ID,
@@ -141,21 +141,21 @@ pub use stack::PluginStack;
 ///
 /// [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
 /// [operation]: https://smithy.io/2.0/spec/service-types.html#operation
-pub trait Plugin<Ser, Op, S> {
+pub trait Plugin<Ser, Op, T> {
     /// The type of the new [`Service`](tower::Service).
-    type Service;
+    type Output;
 
     /// Maps a [`Service`](tower::Service) to another.
-    fn apply(&self, svc: S) -> Self::Service;
+    fn apply(&self, input: T) -> Self::Output;
 }
 
-impl<'a, Ser, Op, S, Pl> Plugin<Ser, Op, S> for &'a Pl
+impl<'a, Ser, Op, T, Pl> Plugin<Ser, Op, T> for &'a Pl
 where
-    Pl: Plugin<Ser, Op, S>,
+    Pl: Plugin<Ser, Op, T>,
 {
-    type Service = Pl::Service;
+    type Output = Pl::Output;
 
-    fn apply(&self, inner: S) -> Self::Service {
-        <Pl as Plugin<Ser, Op, S>>::apply(self, inner)
+    fn apply(&self, inner: T) -> Self::Output {
+        <Pl as Plugin<Ser, Op, T>>::apply(self, inner)
     }
 }
