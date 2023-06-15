@@ -51,7 +51,7 @@ open class OperationGenerator(
                     """
                     pub(crate) fn register_default_runtime_plugins(
                         runtime_plugins: #{RuntimePlugins},
-                        operation: #{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>,
+                        operation: impl #{RuntimePlugin} + 'static,
                         handle: #{Arc}<crate::client::Handle>,
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
@@ -180,7 +180,7 @@ open class OperationGenerator(
                     ) -> #{RuntimePlugins} {
                         #{register_default_runtime_plugins}(
                             runtime_plugins,
-                            #{Box}::new(Self::new()) as _,
+                            Self::new(),
                             handle,
                             config_override
                         )

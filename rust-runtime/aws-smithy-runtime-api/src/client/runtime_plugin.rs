@@ -55,18 +55,12 @@ impl RuntimePlugins {
         Default::default()
     }
 
-    pub fn with_client_plugin(
-        mut self,
-        plugin: impl RuntimePlugin + Send + Sync + 'static,
-    ) -> Self {
+    pub fn with_client_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
         self.client_plugins.push(SharedRuntimePlugin::new(plugin));
         self
     }
 
-    pub fn with_operation_plugin(
-        mut self,
-        plugin: impl RuntimePlugin + Send + Sync + 'static,
-    ) -> Self {
+    pub fn with_operation_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
         self.operation_plugins
             .push(SharedRuntimePlugin::new(plugin));
         self
