@@ -614,15 +614,38 @@ class ServerServiceGenerator(
 
     private fun operationEnum(): Writable = writable {
         val operations = operationStructNames.values.joinToString(",")
+        val matchArms: Writable = operationStructNames.map {
+                (shape, name) ->
+            writable {
+                val absolute = shape.id.toString().replace("#", "##")
+                rustTemplate(
+                    """
+                    $name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}")
+                    """,
+                    *codegenScope,
+                )
+            }
+        }.join(",")
         rustTemplate(
             """
-            /// An enumeration of all operations in $serviceName.
+            /// An enumeration of all [operations](https://smithy.io/2.0/spec/service-types.html##operation) in $serviceName.
             ##[derive(Debug, PartialEq, Eq, Clone, Copy)]
             pub enum Operation {
                 $operations
             }
+
+            impl Operation {
+                /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](#{SmithyHttpServer}::shape_id::ShapeId).
+                pub fn shape_id(&self) -> #{SmithyHttpServer}::shape_id::ShapeId {
+                    use Operation::*;
+                    match self {
+                        #{Arms}
+                    }
+                }
+            }
             """,
             *codegenScope,
+            "Arms" to matchArms,
         )
 
         for ((_, value) in operationStructNames) {
