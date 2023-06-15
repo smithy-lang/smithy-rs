@@ -125,7 +125,7 @@ class FluentClientGenerator(
                     },
                 "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
                 "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-                // TODO(enableNewSmithyRuntime): Delete the generics when cleaning up middleware
+                // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
                 "generics_decl" to generics.decl,
                 "smithy_inst" to generics.smithyInst,
             )
@@ -224,7 +224,7 @@ class FluentClientGenerator(
                         }
 
                         ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntime): Delete this function when cleaning up middleware
+                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
                         // This is currently kept around so the tests still compile in both modes
                         /// Creates a client with the given service configuration.
                         pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
@@ -234,7 +234,7 @@ class FluentClientGenerator(
                         }
 
                         ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntime): Delete this function when cleaning up middleware
+                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
                         // This is currently kept around so the tests still compile in both modes
                         /// Returns the client's configuration.
                         pub fn conf(&self) -> &crate::Config {
@@ -329,13 +329,19 @@ class FluentClientGenerator(
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
-                pub async fn send_with${generics.inst}(self, client: &crate::Client${generics.inst}) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{RawResponseType}>>
-                #{send_bounds:W}
-                #{boundsWithoutWhereClause:W}
-                {
-                let mut fluent_builder = client.$fnName();
-                fluent_builder.inner = self;
-                fluent_builder.send().await
+                pub async fn send_with${generics.inst}(
+                    self,
+                    client: &crate::Client${generics.inst}
+                ) -> #{Result}<
+                    #{OperationOutput},
+                    #{SdkError}<
+                        #{OperationError},
+                        #{RawResponseType}
+                    >
+                > #{send_bounds:W} #{boundsWithoutWhereClause:W} {
+                    let mut fluent_builder = client.$fnName();
+                    fluent_builder.inner = self;
+                    fluent_builder.send().await
                 }
                 """,
                 *preludeScope,
@@ -510,7 +516,7 @@ class FluentClientGenerator(
                     }
 
                     ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntime): Remove `async` once we switch to orchestrator
+                    // TODO(enableNewSmithyRuntimeCleanup): Remove `async` once we switch to orchestrator
                     pub async fn customize_orchestrator(
                         self,
                     ) -> #{CustomizableOperation}<
@@ -550,7 +556,7 @@ class FluentClientGenerator(
 
                         /// Consumes this builder, creating a customizable operation that can be modified before being
                         /// sent.
-                        // TODO(enableNewSmithyRuntime): Remove `async` and `Result` once we switch to orchestrator
+                        // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
                         pub async fn customize(
                             self,
                         ) -> #{Result}<

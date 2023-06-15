@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
-// TODO(enableNewSmithyRuntime): Delete this client generics on/off switch headache
+// TODO(enableNewSmithyRuntimeCleanup): Delete this client generics on/off switch headache
 interface FluentClientGenerics {
     /** Declaration with defaults set */
     val decl: Writable

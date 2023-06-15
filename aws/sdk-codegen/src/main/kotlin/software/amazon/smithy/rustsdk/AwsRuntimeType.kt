@@ -53,11 +53,11 @@ object AwsRuntimeType {
             ),
         )
 
-    // TODO(enableNewSmithyRuntime): Delete the `presigning_service.rs` inlineable when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete the `presigning_service.rs` inlineable when cleaning up middleware
     fun presigningService(): RuntimeType =
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning_service", visibility = Visibility.PUBCRATE))
 
-    // TODO(enableNewSmithyRuntime): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,

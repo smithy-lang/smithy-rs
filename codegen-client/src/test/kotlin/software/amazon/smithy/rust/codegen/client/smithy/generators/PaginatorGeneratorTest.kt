@@ -70,7 +70,7 @@ internal class PaginatorGeneratorTest {
         }
     """.asSmithyModel()
 
-    // TODO(enableNewSmithyRuntime): Remove this middleware test when launching
+    // TODO(enableNewSmithyRuntimeCleanup): Remove this middleware test when launching
     @Test
     fun `generate paginators that compile with middleware`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
