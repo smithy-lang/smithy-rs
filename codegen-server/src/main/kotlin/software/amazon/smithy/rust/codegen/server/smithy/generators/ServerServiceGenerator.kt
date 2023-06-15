@@ -594,10 +594,13 @@ class ServerServiceGenerator(
         val namespace = serviceId.namespace
         val name = serviceId.name
         val absolute = serviceId.toString().replace("#", "##")
+        val version = codegenContext.serviceShape.version?.let { "Some(\"$it\")" } ?: "None"
         rustTemplate(
             """
             impl #{SmithyHttpServer}::service::ServiceShape for $serviceName {
                 const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name");
+
+                const VERSION: Option<&'static str> = $version;
 
                 type Protocol = #{Protocol};
 

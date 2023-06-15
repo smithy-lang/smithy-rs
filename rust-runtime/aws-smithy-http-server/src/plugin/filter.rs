@@ -112,7 +112,7 @@ where
 /// # struct PokemonService;
 /// # #[derive(PartialEq, Eq)]
 /// # enum Operation { CheckHealth }
-/// # impl ServiceShape for PokemonService { const ID: ShapeId = ShapeId::new("", "", ""); type Operations = Operation; type Protocol = (); }
+/// # impl ServiceShape for PokemonService { const VERSION: Option<&'static str> = None; const ID: ShapeId = ShapeId::new("", "", ""); type Operations = Operation; type Protocol = (); }
 /// # impl ServiceShapeMember<CheckHealth> for PokemonService { const ENUM_VALUE: Operation = Operation::CheckHealth; }
 /// # struct CheckHealth;
 /// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }

@@ -3,14 +3,77 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! The shape of a [Smithy service] is modelled by the [`ServiceShape`] trait. Its associated types
+//! [`ServiceShape::ID`], [`ServiceShape::VERSION`], [`ServiceShape::Protocol`], and [`ServiceShape::Operations`] map
+//! to the services [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id), the version field, the applied
+//! [protocol trait](https://smithy.io/2.0/aws/protocols/index.html) (see [`proto`](crate::proto) module), and the
+//! operations field.
+//!
+//! We generate an implementation on this for every service struct (exported from the root of the generated crate).
+//!
+//! As stated in the [operation module documentation](crate::operation) we also generate marker structs for
+//! [`OperationShape`], these are coupled to the `S: ServiceShape` via the [`ServiceShapeMember`] trait.
+//!
+//! The model
+//!
+//! ```smithy
+//! @restJson1
+//! service Shopping {
+//!     version: "1.0",
+//!     operations: [
+//!         GetShopping,
+//!         PutShopping
+//!     ]
+//! }
+//! ```
+//!
+//! is identified with the implementation
+//!
+//! ```rust,no_run
+//! # use aws_smithy_http_server::shape_id::ShapeId;
+//! # use aws_smithy_http_server::service::{ServiceShape, ServiceShapeMember};
+//! # use aws_smithy_http_server::proto::rest_json_1::RestJson1;
+//! # pub struct Shopping;
+//! // For more information on these marker structs see `OperationShape`
+//! struct GetShopping;
+//! struct PutShopping;
+//!
+//! // This is a generated enumeration of all operations.
+//! #[derive(PartialEq, Eq, Clone, Copy)]
+//! pub enum Operation {
+//!     GetShopping,
+//!     PutShopping
+//! }
+//!
+//! impl ServiceShape for Shopping {
+//!     const ID: ShapeId = ShapeId::new("namespace#Shopping", "namespace", "Shopping");
+//!     const VERSION: Option<&'static str> = Some("1.0");
+//!     type Protocol = RestJson1;
+//!     type Operations = Operation;
+//! }
+//!
+//! impl ServiceShapeMember<GetShopping> for Shopping {
+//!     const ENUM_VALUE: Operation = Operation::GetShopping;
+//! }
+//!
+//! impl ServiceShapeMember<PutShopping> for Shopping {
+//!     const ENUM_VALUE: Operation = Operation::PutShopping;
+//! }
+//! ```
+//!
+//! [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
+
 use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Service shape].
 ///
-/// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html
+/// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html#service
 pub trait ServiceShape {
     /// The [`ShapeId`] of the service.
     const ID: ShapeId;
+
+    /// The version of the service.
+    const VERSION: Option<&'static str>;
 
     /// The [Protocol] applied to this service.
     ///
