@@ -94,7 +94,6 @@ impl<P, Op, S, Scope, Pl> Plugin<P, Op, S> for Scoped<Scope, Pl>
 where
     Scope: Membership<Op>,
     Scope::Contains: ConditionalApply<P, Op, S, Pl>,
-    Pl: Plugin<P, Op, S>,
 {
     type Service = <Scope::Contains as ConditionalApply<P, Op, S, Pl>>::Service;
 
