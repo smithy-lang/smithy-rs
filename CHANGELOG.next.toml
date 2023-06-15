@@ -472,7 +472,7 @@ let scoped_plugin = Scoped::new::<SomeScope>(plugin);
 ```
 
 """
-references = ["smithy-rs#2740", "smithy-rs#2759"]
+references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "hlbarber"
 
