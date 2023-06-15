@@ -265,7 +265,7 @@ Note that both traits are parameterized by `Protocol`. These [protocols](https:/
 
 ```rust
 # extern crate aws_smithy_http_server;
-# use aws_smithy_http_server::proto::{
+# use aws_smithy_http_server::protocol::{
 #   aws_json_10::AwsJson1_0 as _,
 #   aws_json_11::AwsJson1_1 as _,
 #   rest_json_1::RestJson1 as _,
@@ -615,7 +615,7 @@ The final outcome, an instance of `PokemonService`, looks roughly like this:
 
 ```rust
 # extern crate aws_smithy_http_server;
-# use aws_smithy_http_server::{routing::RoutingService, proto::rest_json_1::{router::RestRouter, RestJson1}};
+# use aws_smithy_http_server::{routing::RoutingService, protocol::rest_json_1::{router::RestRouter, RestJson1}};
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {

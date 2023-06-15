@@ -186,7 +186,7 @@ impl Deref for RuntimeErrorExtension {
 mod tests {
     use tower::{service_fn, Layer, ServiceExt};
 
-    use crate::{plugin::PluginLayer, proto::rest_json_1::RestJson1};
+    use crate::{plugin::PluginLayer, protocol::rest_json_1::RestJson1};
 
     use super::*;
 

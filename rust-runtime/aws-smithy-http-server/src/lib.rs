@@ -19,7 +19,7 @@ pub mod instrumentation;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]
-pub mod protocols;
+pub mod protocol;
 #[doc(hidden)]
 pub mod rejection;
 pub mod request;
@@ -39,6 +39,3 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
 mod test_helpers;
-
-#[doc(hidden)]
-pub mod proto;

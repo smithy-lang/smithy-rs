@@ -345,7 +345,7 @@ An alternative example which prints the protocol name:
 # pub struct PrintService<S> { name: &'static str, inner: S}
 use aws_smithy_http_server::{
     plugin::Plugin,
-    proto::{
+    protocol::{
         aws_json_10::AwsJson1_0,
         rest_xml::RestXml,
     }
