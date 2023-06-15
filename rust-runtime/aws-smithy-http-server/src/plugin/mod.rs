@@ -134,9 +134,13 @@ pub use stack::PluginStack;
 /// A mapping from one [`Service`](tower::Service) to another. This should be viewed as a
 /// [`Layer`](tower::Layer) parameterized by the protocol and operation.
 ///
-/// The generics `Ser` and `Op` allow the behavior to be parameterized.
+/// The generics `Ser` and `Op` allow the behavior to be parameterized by the [Smithy service] and
+/// [operation] it's applied to.
 ///
 /// See [module](crate::plugin) documentation for more information.
+///
+/// [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
+/// [operation]: https://smithy.io/2.0/spec/service-types.html#operation
 pub trait Plugin<Ser, Op, S> {
     /// The type of the new [`Service`](tower::Service).
     type Service;
