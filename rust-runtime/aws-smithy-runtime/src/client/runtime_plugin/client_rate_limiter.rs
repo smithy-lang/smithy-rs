@@ -579,7 +579,7 @@ mod tests {
         ];
 
         let two_hundred_milliseconds = Duration::from_millis(200);
-        for (i, attempt) in attempts.into_iter().enumerate() {
+        for attempt in attempts {
             sleep_impl.sleep(two_hundred_milliseconds).await;
             assert_eq!(attempt.time_since_start, sleep_impl.total_duration());
 
