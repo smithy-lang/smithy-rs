@@ -170,7 +170,7 @@ class ServiceRuntimePluginGenerator(
                 }
 
                 fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
-                    interceptors.extend(self.handle.conf.interceptors.iter().cloned());
+                    interceptors.extend(self.handle.conf.interceptors().cloned());
                     #{additional_interceptors}
                 }
             }
