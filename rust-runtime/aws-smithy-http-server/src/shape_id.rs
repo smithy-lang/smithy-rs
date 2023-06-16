@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Extension types.
-//!
-//! Shape ID is a type that describes a Smithy shape.
+//! A [`ShapeId`] represents a [Smithy Shape ID](https://smithy.io/2.0/spec/model.html#shape-id).
 //!
 //! # Example
 //!
 //! In the following model:
+//!
 //! ```smithy
 //! namespace smithy.example
 //!
@@ -22,7 +21,7 @@
 
 pub use crate::request::extension::{Extension, MissingExtension};
 
-/// Shape ID for a modelled Smithy shape.
+/// Represents a [Smithy Shape ID](https://smithy.io/2.0/spec/model.html#shape-id).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShapeId {
     absolute: &'static str,
@@ -42,17 +41,23 @@ impl ShapeId {
         }
     }
 
-    /// Returns the Smithy operation namespace.
+    /// Returns the namespace.
+    ///
+    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
     pub fn namespace(&self) -> &'static str {
         self.namespace
     }
 
-    /// Returns the Smithy operation name.
+    /// Returns the member name.
+    ///
+    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
     pub fn name(&self) -> &'static str {
         self.name
     }
 
-    /// Returns the absolute operation shape ID.
+    /// Returns the absolute shape ID.
+    ///
+    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
     pub fn absolute(&self) -> &'static str {
         self.absolute
     }

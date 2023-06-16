@@ -50,7 +50,8 @@ class ServerServiceGenerator(
     private val crateName = codegenContext.moduleUseName()
 
     private val service = codegenContext.serviceShape
-    private val serviceName = service.id.name.toPascalCase()
+    private val serviceId = service.id
+    private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
     private val builderBodyGenericTypeName = "Body"
 
@@ -136,30 +137,30 @@ class ServerServiceGenerator(
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation::$structName, HandlerExtractors>,
 
                     ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
                         #{SmithyHttpServer}::operation::IntoService<crate::operation::$structName, HandlerType>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
-                        ModelPlugin::Service
+                        ModelPlugin::Output
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                #{Protocol},
+                                $serviceName,
                                 crate::operation::$structName,
-                                ModelPlugin::Service
+                                ModelPlugin::Output
                             >
-                        >::Service
+                        >::Output
                     >,
 
-                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -199,30 +200,30 @@ class ServerServiceGenerator(
                     S: #{SmithyHttpServer}::operation::OperationService<crate::operation::$structName, ServiceExtractors>,
 
                     ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
                         #{SmithyHttpServer}::operation::Normalize<crate::operation::$structName, S>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
-                        ModelPlugin::Service
+                        ModelPlugin::Output
                     >,
                     HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        #{Protocol},
+                        $serviceName,
                         crate::operation::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                #{Protocol},
+                                $serviceName,
                                 crate::operation::$structName,
-                                ModelPlugin::Service
+                                ModelPlugin::Output
                             >
-                        >::Service
+                        >::Output
                     >,
 
-                    HttpPlugin::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -353,7 +354,6 @@ class ServerServiceGenerator(
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                val operationZstTypeName = operationStructNames[operationShape]!!
                 rustTemplate(
                     """
                     (
@@ -590,6 +590,75 @@ class ServerServiceGenerator(
         )
     }
 
+    private fun serviceShapeImpl(): Writable = writable {
+        val namespace = serviceId.namespace
+        val name = serviceId.name
+        val absolute = serviceId.toString().replace("#", "##")
+        val version = codegenContext.serviceShape.version?.let { "Some(\"$it\")" } ?: "None"
+        rustTemplate(
+            """
+            impl #{SmithyHttpServer}::service::ServiceShape for $serviceName {
+                const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name");
+
+                const VERSION: Option<&'static str> = $version;
+
+                type Protocol = #{Protocol};
+
+                type Operations = Operation;
+            }
+            """,
+            "Protocol" to protocol.markerStruct(),
+            *codegenScope,
+        )
+    }
+
+    private fun operationEnum(): Writable = writable {
+        val operations = operationStructNames.values.joinToString(",")
+        val matchArms: Writable = operationStructNames.map {
+                (shape, name) ->
+            writable {
+                val absolute = shape.id.toString().replace("#", "##")
+                rustTemplate(
+                    """
+                    Operation::$name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}")
+                    """,
+                    *codegenScope,
+                )
+            }
+        }.join(",")
+        rustTemplate(
+            """
+            /// An enumeration of all [operations](https://smithy.io/2.0/spec/service-types.html##operation) in $serviceName.
+            ##[derive(Debug, PartialEq, Eq, Clone, Copy)]
+            pub enum Operation {
+                $operations
+            }
+
+            impl Operation {
+                /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](#{SmithyHttpServer}::shape_id::ShapeId).
+                pub fn shape_id(&self) -> #{SmithyHttpServer}::shape_id::ShapeId {
+                    match self {
+                        #{Arms}
+                    }
+                }
+            }
+            """,
+            *codegenScope,
+            "Arms" to matchArms,
+        )
+
+        for ((_, value) in operationStructNames) {
+            rustTemplate(
+                """
+                impl #{SmithyHttpServer}::service::ContainsOperation<crate::operation::$value> for $serviceName {
+                    const VALUE: Operation = Operation::$value;
+                }
+                """,
+                *codegenScope,
+            )
+        }
+    }
+
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -600,11 +669,17 @@ class ServerServiceGenerator(
             #{RequestSpecs:W}
 
             #{Struct:W}
+
+            #{Operations}
+
+            #{ServiceImpl}
             """,
             "Builder" to builder(),
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
             "Struct" to serviceStruct(),
+            "Operations" to operationEnum(),
+            "ServiceImpl" to serviceShapeImpl(),
             *codegenScope,
         )
     }

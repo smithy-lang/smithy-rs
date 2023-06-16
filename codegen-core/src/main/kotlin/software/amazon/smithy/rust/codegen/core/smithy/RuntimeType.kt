@@ -274,6 +274,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val String = std.resolve("string::String")
         val Sync = std.resolve("marker::Sync")
         val TryFrom = stdConvert.resolve("TryFrom")
+        val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
         // external cargo dependency types
@@ -431,7 +432,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
-        val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
+        fun idempotencyToken(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
 
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
             RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
