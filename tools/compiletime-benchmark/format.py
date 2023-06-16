@@ -15,15 +15,12 @@ def main():
         f.close()
 
 
-def read_file() -> itertools.chain[str]:
+def parser() -> str:
     # read file
     f = open("/tmp/compiletime-benchmark.txt", "r").read()
     iter = map(lambda x: x.split("END"), f.split("START"))
     iter = itertools.chain.from_iterable(iter)
-    return iter
-
-
-def parser(iter: itertools.chain[str]) -> str:
+    
     # I could've used a dataframe like pandas but this works.
     markdown = """
     | sdk name | dev | release | dev all features | release all features |
