@@ -32,10 +32,11 @@ def parser() -> str:
         print(i)
         for l in i.splitlines():
             if not "+" in l:
-                outputs.append(l.replace(" seconds", ""))
+                outputs.append(l.replace("real", "").replace(" ", ""))
 
         if len(outputs) != 6:
             continue
+        
         outputs = outputs[1:]
         sdk_name = outputs[0]
         row = f"|{sdk_name}|" + \

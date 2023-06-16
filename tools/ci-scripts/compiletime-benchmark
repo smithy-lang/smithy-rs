@@ -11,7 +11,7 @@ cd smithy-rs
 DIR=$PWD
 
 function log_time() {
-    \time --format="%e" bash -c "$1 &> /dev/null" &>> /tmp/compiletime-benchmark.txt
+    time "bash -c $1 &> /dev/null" | grep "real" &>> /tmp/compiletime-benchmark.txt
 }
 
 function compile() {
