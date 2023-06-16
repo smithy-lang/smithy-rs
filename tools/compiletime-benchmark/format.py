@@ -6,7 +6,7 @@
 import itertools
 
 def main():
-    markdown = parser(read_file())
+    markdown = parser()
     print(markdown)
     # write file
     with open("/tmp/compiletime-benchmark.md", "w") as f:
@@ -20,7 +20,7 @@ def parser() -> str:
     f = open("/tmp/compiletime-benchmark.txt", "r").read()
     iter = map(lambda x: x.split("END"), f.split("START"))
     iter = itertools.chain.from_iterable(iter)
-    
+
     # I could've used a dataframe like pandas but this works.
     markdown = """
     | sdk name | dev | release | dev all features | release all features |
