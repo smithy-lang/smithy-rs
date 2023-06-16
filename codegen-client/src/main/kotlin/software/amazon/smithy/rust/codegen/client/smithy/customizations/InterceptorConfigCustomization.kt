@@ -26,23 +26,19 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
         writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> rustTemplate(
-                    """
-                    pub(crate) interceptors: Vec<#{SharedInterceptor}>,
-                    """,
+                    "pub(crate) interceptors: Vec<#{SharedInterceptor}>,",
                     *codegenScope,
                 )
 
                 ServiceConfig.BuilderStruct ->
                     rustTemplate(
-                        """
-                        interceptors: Vec<#{SharedInterceptor}>,
-                        """,
+                        "interceptors: Vec<#{SharedInterceptor}>,",
                         *codegenScope,
                     )
 
                 ServiceConfig.ConfigImpl -> rustTemplate(
                     """
-                    // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                    // TODO(enableNewSmithyRuntimeLaunch): Remove this doc hidden upon launch
                     ##[doc(hidden)]
                     /// Returns interceptors currently registered by the user.
                     pub fn interceptors(&self) -> impl Iterator<Item = &#{SharedInterceptor}> + '_ {
@@ -55,7 +51,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
-                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                        // TODO(enableNewSmithyRuntimeLaunch): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Add an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
@@ -106,7 +102,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                             self
                         }
 
-                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                        // TODO(enableNewSmithyRuntimeLaunch): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Add a [`SharedInterceptor`](#{SharedInterceptor}) that runs at specific stages of the request execution pipeline.
                         ///
@@ -160,7 +156,7 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                             self
                         }
 
-                        // TODO(enableNewSmithyRuntime): Remove this doc hidden upon launch
+                        // TODO(enableNewSmithyRuntimeLaunch): Remove this doc hidden upon launch
                         ##[doc(hidden)]
                         /// Set [`SharedInterceptor`](#{SharedInterceptor})s for the builder.
                         pub fn set_interceptors(&mut self, interceptors: impl IntoIterator<Item = #{SharedInterceptor}>) -> &mut Self {
@@ -171,17 +167,13 @@ class InterceptorConfigCustomization(codegenContext: CodegenContext) : ConfigCus
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> rust(
-                    """
-                    interceptors: self.interceptors,
-                    """,
-                )
-
                 is ServiceConfig.RuntimePluginInterceptors -> rust(
                     """
                     ${section.interceptors}.extend(self.interceptors.iter().cloned());
                     """,
                 )
+
+                is ServiceConfig.BuilderBuildExtras -> rust("interceptors: self.interceptors,")
 
                 else -> emptySection
             }

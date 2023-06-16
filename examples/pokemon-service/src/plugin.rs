@@ -8,6 +8,7 @@
 use aws_smithy_http_server::{
     operation::OperationShape,
     plugin::{Plugin, PluginPipeline, PluginStack},
+    service::ServiceShape,
     shape_id::ShapeId,
 };
 use tower::Service;
@@ -18,7 +19,8 @@ use std::task::{Context, Poll};
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
-    id: ShapeId,
+    operation_id: ShapeId,
+    service_id: ShapeId,
 }
 
 impl<R, S> Service<R> for PrintService<S>
@@ -34,7 +36,11 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {}", self.id.absolute());
+        println!(
+            "Hi {} in {}",
+            self.operation_id.absolute(),
+            self.service_id.absolute()
+        );
         self.inner.call(req)
     }
 }
@@ -42,14 +48,19 @@ where
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin
 where
+    Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Service = PrintService<S>;
+    type Output = PrintService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
-        PrintService { inner, id: Op::ID }
+    fn apply(&self, inner: T) -> Self::Output {
+        PrintService {
+            inner,
+            operation_id: Op::ID,
+            service_id: Ser::ID,
+        }
     }
 }
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].

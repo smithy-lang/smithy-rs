@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -131,7 +130,11 @@ class RegionDecorator : ClientCodegenDecorator {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable {
-                            rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
+                            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                                rust("$configRef.region().as_ref().map(|r|r.as_ref().to_owned())")
+                            } else {
+                                rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
+                            }
                         }
                         else -> null
                     }
@@ -153,22 +156,41 @@ class RegionDecorator : ClientCodegenDecorator {
     }
 }
 
-class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val region = region(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val codegenScope = arrayOf("Region" to region.resolve("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
-            ServiceConfig.ConfigImpl -> rustTemplate(
-                """
-                /// Returns the AWS region, if it was provided.
-                pub fn region(&self) -> Option<&#{Region}> {
-                    self.region.as_ref()
+            ServiceConfig.ConfigStruct -> {
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
                 }
-                """,
-                *codegenScope,
-            )
+            }
+            ServiceConfig.ConfigImpl -> {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Returns the AWS region, if it was provided.
+                        pub fn region(&self) -> Option<&#{Region}> {
+                            self.inner.load::<#{Region}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Returns the AWS region, if it was provided.
+                        pub fn region(&self) -> Option<&#{Region}> {
+                            self.region.as_ref()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
 
             ServiceConfig.BuilderStruct ->
                 rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
@@ -201,10 +223,13 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                     *codegenScope,
                 )
 
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                """region: self.region,""",
-                *codegenScope,
-            )
+            ServiceConfig.BuilderBuild -> {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rust("layer.store_or_unset(self.region);")
+                } else {
+                    rust("region: self.region,")
+                }
+            }
 
             else -> emptySection
         }

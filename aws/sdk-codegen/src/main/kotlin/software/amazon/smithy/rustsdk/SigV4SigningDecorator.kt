@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 
-// TODO(enableNewSmithyRuntime): Remove this decorator (superseded by SigV4AuthDecorator)
+// TODO(enableNewSmithyRuntimeCleanup): Remove this decorator (superseded by SigV4AuthDecorator)
 /**
  * The SigV4SigningDecorator:
  * - adds a `signing_service()` method to `config` to return the default signing service
