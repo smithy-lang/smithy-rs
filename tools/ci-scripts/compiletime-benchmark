@@ -3,7 +3,12 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-set -e
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+set -ex
+
+cd smithy-rs
+DIR=$PWD
 
 function compile() {
     cd $1 &&
@@ -17,14 +22,13 @@ function compile() {
 }
 
 ./gradlew :aws:sdk:assemble
-DIR=$PWD
+
 for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
     if [[ $variable != *"aws-"* ]]; then
         echo "START" &>>/tmp/compiletime-benchmark.txt
         echo "$variable" &>>/tmp/compiletime-benchmark.txt
         compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable" &>>/tmp/compiletime-benchmark.txt
         echo "END" &>>/tmp/compiletime-benchmark.txt
-        break
     fi
 done
 
