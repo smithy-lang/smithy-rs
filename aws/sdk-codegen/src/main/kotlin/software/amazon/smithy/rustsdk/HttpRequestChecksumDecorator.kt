@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
+private fun RuntimeConfig.awsInlineableHttpRequestChecksum() = RuntimeType.forInlineDependency(
     InlineAwsDependency.forRustFile(
         "http_body_checksum", visibility = Visibility.PUBCRATE,
         CargoDependency.Bytes,
@@ -157,7 +157,7 @@ class HttpRequestChecksumCustomization(
                             "BoxError" to runtimeApi.resolve("client::interceptors::error::BoxError"),
                             "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
                             "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
-                            "RequestChecksumInterceptor" to runtimeConfig.awsInlineableBodyWithChecksum()
+                            "RequestChecksumInterceptor" to runtimeConfig.awsInlineableHttpRequestChecksum()
                                 .resolve("RequestChecksumInterceptor"),
                             "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
                                 codegenContext,
