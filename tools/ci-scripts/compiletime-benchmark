@@ -5,13 +5,13 @@
 #
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
-set -ex
+set -x
 
 cd smithy-rs
 DIR=$PWD
 
 function log_time() {
-    \time --format="%e" bash -c "$1 &> /dev/null" >> /tmp/compiletime-benchmark.txt
+    \time --format="%e" bash -c "$1 &> /dev/null" &>> /tmp/compiletime-benchmark.txt
 }
 
 function compile() {
@@ -38,7 +38,7 @@ for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
         echo "START" &>>/tmp/compiletime-benchmark.txt
         echo "$variable" &>>/tmp/compiletime-benchmark.txt
         compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable" &>>/tmp/compiletime-benchmark.txt
-        echo "END" &>>/tmp/compiletime-benchmark.txt
+        echo "END" &>> /tmp/compiletime-benchmark.txt
     fi
 done
 
