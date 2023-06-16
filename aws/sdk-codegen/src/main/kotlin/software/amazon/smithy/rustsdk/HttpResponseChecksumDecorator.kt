@@ -119,8 +119,10 @@ class HttpResponseChecksumCustomization(
                         }
                         """,
                         "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
-                        "wrap_body_with_checksum_validator" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksum().resolve("wrap_body_with_checksum_validator"),
-                        "check_headers_for_precalculated_checksum" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksum().resolve("check_headers_for_precalculated_checksum"),
+                        "wrap_body_with_checksum_validator" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
+                            .resolve("wrap_body_with_checksum_validator"),
+                        "check_headers_for_precalculated_checksum" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
+                            .resolve("check_headers_for_precalculated_checksum"),
                     )
                 }
             }
