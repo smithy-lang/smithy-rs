@@ -257,7 +257,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<#{Box}<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
             #{verifyAcceptHeaderStaticContentTypeInit:W}
@@ -265,7 +265,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
                 pub struct $inputFuture {
-                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = #{Result}<#{I}, #{RuntimeError}>> + #{Send}>>
+                    inner: std::pin::Pin<#{Box}<dyn std::future::Future<Output = #{Result}<#{I}, #{RuntimeError}>> + #{Send}>>
                 }
             }
 
@@ -303,7 +303,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         #{RuntimeError}::from(e)
                     });
                     $inputFuture {
-                        inner: Box::pin(fut)
+                        inner: #{Box}::pin(fut)
                     }
                 }
             }
