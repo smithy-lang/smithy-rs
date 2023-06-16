@@ -85,7 +85,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         *codegenScope,
                     )
                 } else {
-                    // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
+                    // TODO(enableNewSmithyRuntimeCleanup): Delete this branch when middleware is no longer used
                     rustTemplate(
                         """
                         ##[doc(hidden)]

@@ -34,7 +34,7 @@ def main(skip_generation=False):
     os.chdir(sdk_directory)
 
     failed = False
-    # TODO(enableNewSmithyRuntime): Remove the deny list below
+    # TODO(enableNewSmithyRuntimeLaunch): Remove the deny list below
     deny_list = [
         "aws-runtime",
         "aws-runtime-api",

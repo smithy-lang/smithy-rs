@@ -223,7 +223,7 @@ private class HttpAuthOperationCustomization(codegenContext: ClientCodegenContex
                     }
                 }
 
-                // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
+                // TODO(enableNewSmithyRuntimeLaunch): Make auth options additive in the config bag so that multiple codegen decorators can register them
                 rustTemplate("${section.newLayerName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
             }
 
@@ -237,6 +237,7 @@ private class HttpAuthConfigCustomization(
     private val authSchemes: HttpAuthSchemes,
 ) : ConfigCustomization() {
     private val codegenScope = codegenScope(codegenContext.runtimeConfig)
+    private val runtimeMode = codegenContext.smithyRuntimeMode
 
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
@@ -324,7 +325,9 @@ private class HttpAuthConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> {
-                rust("identity_resolvers: self.identity_resolvers,")
+                if (runtimeMode.defaultToMiddleware) {
+                    rust("identity_resolvers: self.identity_resolvers,")
+                }
             }
 
             is ServiceConfig.ConfigStruct -> {
@@ -341,6 +344,10 @@ private class HttpAuthConfigCustomization(
                     """,
                     *codegenScope,
                 )
+            }
+
+            is ServiceConfig.BuilderBuildExtras -> {
+                rust("identity_resolvers: self.identity_resolvers,")
             }
 
             else -> {}

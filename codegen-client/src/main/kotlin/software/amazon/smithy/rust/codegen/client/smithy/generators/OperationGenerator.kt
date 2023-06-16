@@ -38,10 +38,10 @@ open class OperationGenerator(
      * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
-    // TODO(enableNewSmithyRuntime): Remove the `makeOperationGenerator`
+    // TODO(enableNewSmithyRuntimeCleanup): Remove the `makeOperationGenerator`
     private val makeOperationGenerator: MakeOperationGenerator,
     private val bodyGenerator: ProtocolPayloadGenerator,
-    // TODO(enableNewSmithyRuntime): Remove the `traitGenerator`
+    // TODO(enableNewSmithyRuntimeCleanup): Remove the `traitGenerator`
     private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
 ) {
     companion object {
@@ -51,7 +51,7 @@ open class OperationGenerator(
                     """
                     pub(crate) fn register_default_runtime_plugins(
                         runtime_plugins: #{RuntimePlugins},
-                        operation: #{Box}<dyn #{RuntimePlugin} + #{Send} + #{Sync}>,
+                        operation: impl #{RuntimePlugin} + 'static,
                         handle: #{Arc}<crate::client::Handle>,
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
@@ -82,7 +82,7 @@ open class OperationGenerator(
      */
     fun renderOperation(
         operationWriter: RustWriter,
-        // TODO(enableNewSmithyRuntime): Remove the `inputWriter` since `make_operation` generation is going away
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `inputWriter` since `make_operation` generation is going away
         inputWriter: RustWriter,
         operationShape: OperationShape,
         codegenDecorator: ClientCodegenDecorator,
@@ -180,7 +180,7 @@ open class OperationGenerator(
                     ) -> #{RuntimePlugins} {
                         #{register_default_runtime_plugins}(
                             runtime_plugins,
-                            #{Box}::new(Self::new()) as _,
+                            Self::new(),
                             handle,
                             config_override
                         )

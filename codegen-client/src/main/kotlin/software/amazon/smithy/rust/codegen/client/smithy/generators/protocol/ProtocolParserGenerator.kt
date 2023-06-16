@@ -55,13 +55,13 @@ class ProtocolParserGenerator(
         "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        // TODO(enableNewSmithyRuntime): Remove the `PropertyBag` below
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `PropertyBag` below
         "PropertyBag" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("property_bag::PropertyBag"),
     )
 
     fun parseResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
@@ -189,7 +189,7 @@ class ProtocolParserGenerator(
 
     fun parseStreamingResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
@@ -241,7 +241,7 @@ class ProtocolParserGenerator(
         outputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: Symbol,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ) {

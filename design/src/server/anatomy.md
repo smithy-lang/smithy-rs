@@ -425,20 +425,20 @@ state in <<fork>>
 <!-- TODO(missing_doc): Link to "Write a Plugin" documentation -->
 
 A [`Plugin`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/plugin/trait.Plugin.html) is a
-[`tower::Layer`] with two extra type parameters, `Protocol` and `Operation`. This allows the middleware to be
+[`tower::Layer`] with two extra type parameters, `Service` and `Operation`, corresponding to [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) and [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation). This allows the middleware to be
 parameterized them and change behavior depending on the context in which it's applied.
 
 ```rust
 # extern crate aws_smithy_http_server;
-pub trait Plugin<Protocol, Operation, S> {
-    type Service;
+pub trait Plugin<Service, Operation, T> {
+    type Output;
 
-    fn apply(&self, svc: S) -> Self::Service;
+    fn apply(&self, input: T) -> Self::Output;
 }
 # use aws_smithy_http_server::plugin::Plugin as Pl;
-# impl<P, Op, S, T: Pl<P, Op, S>> Plugin<P, Op, S> for T {
-#   type Service = <T as Pl<P, Op, S>>::Service;
-#   fn apply(&self, svc: S) -> Self::Service { <T as Pl<P, Op, S>>::apply(self, svc) }
+# impl<Ser, Op, T, U: Pl<Ser, Op, T>> Plugin<Ser, Op, T> for U {
+#   type Output = <U as Pl<Ser, Op, T>>::Output;
+#   fn apply(&self, input: T) -> Self::Output { <U as Pl<Ser, Op, T>>::apply(self, input) }
 # }
 ```
 
@@ -538,19 +538,19 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
         HandlerType:Handler<GetPokemonSpecies, HandlerExtractors>,
 
         ModelPlugin: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
             IntoService<GetPokemonSpecies, HandlerType>
         >,
         UpgradePlugin::<UpgradeExtractors>: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         >,
         HttpPlugin: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::<UpgradeExtractors>::Service
+            UpgradePlugin::<UpgradeExtractors>::Output
         >,
     {
         let svc = GetPokemonSpecies::from_handler(handler);
@@ -566,19 +566,19 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
         S: OperationService<GetPokemonSpecies, ServiceExtractors>,
 
         ModelPlugin: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
             Normalize<GetPokemonSpecies, S>
         >,
         UpgradePlugin::<UpgradeExtractors>: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            ModelPlugin::Service
+            ModelPlugin::Output
         >,
         HttpPlugin: Plugin<
-            RestJson1,
+            PokemonService,
             GetPokemonSpecies,
-            UpgradePlugin::<UpgradeExtractors>::Service
+            UpgradePlugin::<UpgradeExtractors>::Output
         >,
     {
         let svc = GetPokemonSpecies::from_service(service);

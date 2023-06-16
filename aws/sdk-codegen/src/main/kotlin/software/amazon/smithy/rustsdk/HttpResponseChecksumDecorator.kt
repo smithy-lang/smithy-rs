@@ -33,7 +33,7 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Implement checksumming via interceptor and delete this decorator
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this decorator
     private fun applies(codegenContext: ClientCodegenContext, operationShape: OperationShape): Boolean =
         codegenContext.smithyRuntimeMode.generateMiddleware && operationShape.outputShape != ShapeId.from("com.amazonaws.s3#GetObjectOutput")
 
