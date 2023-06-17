@@ -51,7 +51,9 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[derive(Debug)]
-struct RequestChecksumInterceptorState(ChecksumAlgorithm);
+struct RequestChecksumInterceptorState {
+    checksum_algorithm: Option<ChecksumAlgorithm>,
+}
 impl Storable for RequestChecksumInterceptorState {
     type Storer = StoreReplace<Self>;
 }
@@ -81,11 +83,11 @@ where
         context: &BeforeSerializationInterceptorContextRef<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(checksum_algorithm) = (self.algorithm_provider)(context.input())? {
-            let mut layer = Layer::new("RequestChecksumInterceptor");
-            layer.store_put(RequestChecksumInterceptorState(checksum_algorithm));
-            cfg.push_layer(layer);
-        }
+        let checksum_algorithm = (self.algorithm_provider)(context.input())?;
+
+        let mut layer = Layer::new("RequestChecksumInterceptor");
+        layer.store_put(RequestChecksumInterceptorState { checksum_algorithm });
+        cfg.push_layer(layer);
 
         Ok(())
     }
@@ -98,8 +100,11 @@ where
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(state) = cfg.load::<RequestChecksumInterceptorState>() {
-            let checksum_algorithm = state.0;
+        let state = cfg
+            .load::<RequestChecksumInterceptorState>()
+            .expect("set in `read_before_serialization`");
+
+        if let Some(checksum_algorithm) = state.checksum_algorithm {
             let request = context.request_mut();
             add_checksum_for_request_body(request, checksum_algorithm, cfg)?;
         }

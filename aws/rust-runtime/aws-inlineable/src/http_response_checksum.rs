@@ -7,22 +7,99 @@
 
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
-use aws_http::content_encoding::{AwsChunkedBody, AwsChunkedBodyOptions};
-use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
-use aws_sigv4::http_request::SignableBody;
 use aws_smithy_checksums::ChecksumAlgorithm;
-use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
 use aws_smithy_http::body::{BoxBody, SdkBody};
-use aws_smithy_http::operation::error::BuildError;
 use aws_smithy_runtime_api::client::interceptors::context::Input;
 use aws_smithy_runtime_api::client::interceptors::{
-    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut, BoxError,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, BoxError,
     Interceptor,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
-use http_body::Body;
 use std::{fmt, mem};
+
+#[derive(Debug)]
+struct ResponseChecksumInterceptorState {
+    validation_enabled: bool,
+}
+impl Storable for ResponseChecksumInterceptorState {
+    type Storer = StoreReplace<Self>;
+}
+
+pub(crate) struct ResponseChecksumInterceptor<VE> {
+    response_algorithms: &'static [&'static str],
+    validation_enabled: VE,
+}
+
+impl<VE> fmt::Debug for ResponseChecksumInterceptor<VE> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResponseChecksumInterceptor")
+            .field("response_algorithms", &self.response_algorithms)
+            .finish()
+    }
+}
+
+impl<VE> ResponseChecksumInterceptor<VE> {
+    pub(crate) fn new(
+        response_algorithms: &'static [&'static str],
+        validation_enabled: VE,
+    ) -> Self {
+        Self {
+            response_algorithms,
+            validation_enabled,
+        }
+    }
+}
+
+impl<VE> Interceptor for ResponseChecksumInterceptor<VE>
+where
+    VE: Fn(&Input) -> bool,
+{
+    fn read_before_serialization(
+        &self,
+        context: &BeforeSerializationInterceptorContextRef<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let validation_enabled = (self.validation_enabled)(context.input());
+
+        let mut layer = Layer::new("ResponseChecksumInterceptor");
+        layer.store_put(ResponseChecksumInterceptorState { validation_enabled });
+        cfg.push_layer(layer);
+
+        Ok(())
+    }
+
+    fn modify_before_deserialization(
+        &self,
+        context: &mut BeforeDeserializationInterceptorContextMut<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let state = cfg
+            .load::<ResponseChecksumInterceptorState>()
+            .expect("set in `read_before_serialization`");
+
+        if state.validation_enabled {
+            let response = context.response_mut();
+            let maybe_checksum_headers = check_headers_for_precalculated_checksum(
+                response.headers(),
+                self.response_algorithms,
+            );
+            if let Some((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
+                let mut body = SdkBody::taken();
+                mem::swap(&mut body, response.body_mut());
+
+                let mut body = wrap_body_with_checksum_validator(
+                    body,
+                    checksum_algorithm,
+                    precalculated_checksum.clone(),
+                );
+                mem::swap(&mut body, response.body_mut());
+            }
+        }
+
+        Ok(())
+    }
+}
 
 /// Given an `SdkBody`, a `aws_smithy_checksums::ChecksumAlgorithm`, and a pre-calculated checksum,
 /// return an `SdkBody` where the body will processed with the checksum algorithm and checked
