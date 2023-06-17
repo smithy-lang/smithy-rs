@@ -214,15 +214,7 @@ mod tests {
     use aws_smithy_types::base64;
     use bytes::BytesMut;
     use http_body::Body;
-    use std::sync::Once;
     use tempfile::NamedTempFile;
-
-    static INIT_LOGGER: Once = Once::new();
-    fn init_logger() {
-        INIT_LOGGER.call_once(|| {
-            tracing_subscriber::fmt::init();
-        });
-    }
 
     #[tokio::test]
     async fn test_checksum_body_is_retryable() {

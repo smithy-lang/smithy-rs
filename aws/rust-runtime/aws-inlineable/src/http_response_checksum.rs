@@ -91,7 +91,7 @@ where
                 let mut body = wrap_body_with_checksum_validator(
                     body,
                     checksum_algorithm,
-                    precalculated_checksum.clone(),
+                    precalculated_checksum,
                 );
                 mem::swap(&mut body, response.body_mut());
             }
@@ -216,19 +216,9 @@ mod tests {
     use aws_smithy_http::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
-    use std::sync::Once;
-
-    static INIT_LOGGER: Once = Once::new();
-    fn init_logger() {
-        INIT_LOGGER.call_once(|| {
-            tracing_subscriber::fmt::init();
-        });
-    }
 
     #[tokio::test]
     async fn test_build_checksum_validated_body_works() {
-        init_logger();
-
         let checksum_algorithm = "crc32".parse().unwrap();
         let input_text = "Hello world";
         let precalculated_checksum = Bytes::from_static(&[0x8b, 0xd6, 0x9e, 0x52]);
