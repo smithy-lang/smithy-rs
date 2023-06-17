@@ -391,7 +391,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "I" to inputSymbol,
             ) {
-                withBlock("#{Ok}({", "})") {
+                withBlockTemplate("#{Ok}({", "})", *codegenScope) {
                     serverRenderShapeParser(
                         operationShape,
                         inputShape,
@@ -424,7 +424,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
-                withBlock("#{Ok}({", "})") {
+                withBlockTemplate("#{Ok}({", "})", *codegenScope) {
                     serverRenderOutputShapeResponseSerializer(
                         operationShape,
                         httpBindingResolver.responseBindings(operationShape),
@@ -443,7 +443,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "E" to errorSymbol,
             ) {
-                withBlock("#{Ok}({", "})") {
+                withBlockTemplate("#{Ok}({", "})", *codegenScope) {
                     serverRenderErrorShapeResponseSerializer(
                         operationShape,
                         errorSymbol,
@@ -1209,7 +1209,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                     }
                 }
-                rust("#{Ok}(${symbolProvider.wrapOptional(binding.member, "value")})")
+                rustTemplate("#{Ok}(${symbolProvider.wrapOptional(binding.member, "value")})", *codegenScope)
             }
         }
     }
