@@ -15,6 +15,7 @@ function log_time() {
     echo "$1"
     cargo build
     { time $1; } &> tmp_time_log.txt
+    cat tmp_time_log.txt
     cat tmp_time_log.txt | grep real >> /tmp/compiletime-benchmark.txt
 }
 
