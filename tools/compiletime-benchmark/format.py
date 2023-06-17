@@ -5,6 +5,7 @@
 
 import itertools
 
+
 def main():
     markdown = parser()
     print(markdown)
@@ -26,7 +27,7 @@ def parser() -> str:
     | sdk name | dev | release | dev all features | release all features |
     | -------- | --- | ------- | ---------------- | -------------------- |
     """
-
+    markdown += "\n"
     for i in iter:
         outputs = []
         print(i)
@@ -36,13 +37,14 @@ def parser() -> str:
 
         if len(outputs) != 6:
             continue
-        
+
         outputs = outputs[1:]
         sdk_name = outputs[0]
         row = f"|{sdk_name}|" + \
             "|".join(outputs[1:]) + "|"
 
         markdown += row
+        markdown += "\n"
 
     return markdown
 

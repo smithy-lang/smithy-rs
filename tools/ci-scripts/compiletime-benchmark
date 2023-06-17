@@ -11,7 +11,10 @@ cd smithy-rs
 DIR=$PWD
 
 function log_time() {
-    { time "bash -c $1 &> /dev/null"; } 2>&1 | grep real &>> /tmp/compiletime-benchmark.txt
+    time "bash -c $1 &> /dev/null" &> /tmp/temp-log.txt &&
+    cat /tmp/temp-log.txt 
+    real_time=$(tail /tmp/temp-log.txt | grep real )
+    echo $real_time >> /tmp/compiletime-benchmark.txt
 }
 
 function compile() {
