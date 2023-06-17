@@ -9,40 +9,38 @@ set -x
 
 cd smithy-rs
 DIR=$PWD
-
+TMP_LOG="/tmp/temp-log.txt"
 function log_time() {
-    { time "bash -c $1"; } &> /tmp/temp-log.txt &&
-    cat /tmp/temp-log.txt 
-    real_time=$(tail /tmp/temp-log.txt | grep real )
+    cargo clean
+    echo "$1"
+    touch $TMP_LOG
+    { time $1 &>$TMP_LOG; } &> $TMP_LOG
+    echo $(cat /tmp/temp-log.txt)
+    real_time=$(tail $TMP_LOG | grep real)
     echo $real_time >> /tmp/compiletime-benchmark.txt
-    rm /tmp/temp-log.txt 
 }
 
 function compile() {
     cd $1 &&
         export CARGORUSTFLAG="" &&
+        cargo build && # this is for downloading crates
         cargo clean &&
-        cargo build &>/dev/null && 
-        cargo clean && # this is for downloading crates
         log_time "cargo build" &&
-        cargo clean &&
         log_time "cargo build --release" &&
-        cargo clean &&
         export CARGORUSTFLAG="--cfg aws_sdk_unstable" &&
         log_time "cargo build --all-features" &&
-        cargo clean &&
-        log_time "cargo build --release --all-features" &&
-        cargo clean
+        log_time "cargo build --release --all-features"
 }
 
 ./gradlew :aws:sdk:assemble
 
 for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
+    echo $variable
     if [[ $variable != *"aws-"* ]]; then
         echo "START" &>>/tmp/compiletime-benchmark.txt
         echo "$variable" &>>/tmp/compiletime-benchmark.txt
         compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable"
-        echo "END" &>> /tmp/compiletime-benchmark.txt
+        echo "END" &>>/tmp/compiletime-benchmark.txt
     fi
 done
 
