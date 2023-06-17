@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -244,7 +245,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     val target = model.expectShape(payload.target)
                     if (!target.isBlobShape || target.hasTrait<MediaTypeTrait>()) {
                         val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
-                            ?.let { "Some(${it.dq()})" } ?: "None"
+                            ?.let { "#{Some}(${it.dq()})" } ?: "#{None}"
                         rustTemplate(
                             """
                             #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
@@ -701,7 +702,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (protocol is RestJson) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, #{Some}("application/json"))?;
                     """,
                     *codegenScope,
                 )
@@ -719,20 +720,21 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val member = binding.member
             val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
-                rust("if let Some(value) = ")
+                rustTemplate("if let #{Some}(value) = ", *codegenScope)
                 parsedValue(this)
-                rust(
+                rustTemplate(
                     """
                     {
                         input = input.${member.setterName()}(${
                         if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                            "Some(value)"
+                            "#{Some}(value)"
                         } else {
                             "value"
                         }
                     });
                     }
                     """,
+                    *codegenScope,
                 )
             }
         }
@@ -787,7 +789,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             {
-                                Some(#{Deserializer}(&mut body.into().into_inner())?)
+                                #{Some}(#{Deserializer}(&mut body.into().into_inner())?)
                             }
                             """,
                             "Deserializer" to deserializer,
@@ -1080,7 +1082,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (queryParamsBinding != null) {
                 val isOptional = unconstrainedShapeSymbolProvider.toSymbol(queryParamsBinding.member).isOptional()
                 withBlock("input = input.${queryParamsBinding.member.setterName()}(", ");") {
-                    conditionalBlock("Some(", ")", conditional = isOptional) {
+                    conditionalBlockTemplate("#{Some}(", ")", conditional = isOptional, *codegenScope) {
                         write("query_params")
                     }
                 }
@@ -1099,7 +1101,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         }(",
                         ");",
                     ) {
-                        conditionalBlock("Some(", ")", conditional = isOptional) {
+                        conditionalBlockTemplate("#{Some}(", ")", conditional = isOptional, *codegenScope) {
                             conditionalBlock(
                                 "#T(",
                                 ")",
