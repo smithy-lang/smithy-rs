@@ -212,7 +212,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), &$staticContentType) {
-                        return Err(#{RequestRejection}::NotAcceptable);
+                        return #{Err}(#{RequestRejection}::NotAcceptable);
                     }
                     """,
                     *codegenScope,
@@ -327,8 +327,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
                 fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                     match #{serialize_response}(self) {
-                        Ok(response) => response,
-                        Err(e) => {
+                        #{Ok}(response) => response,
+                        #{Err}(e) => {
                             #{Tracing}::error!(error = %e, "failed to serialize response");
                             #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
@@ -348,11 +348,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
                     fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         match #{serialize_error}(&self) {
-                            Ok(mut response) => {
+                            #{Ok}(mut response) => {
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                                 response
                             },
-                            Err(e) => {
+                            #{Err}(e) => {
                                 #{Tracing}::error!(error = %e, "failed to serialize response");
                                 #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                             }
@@ -391,7 +391,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "I" to inputSymbol,
             ) {
-                withBlock("Ok({", "})") {
+                withBlock("#{Ok}({", "})") {
                     serverRenderShapeParser(
                         operationShape,
                         inputShape,
@@ -424,7 +424,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
-                withBlock("Ok({", "})") {
+                withBlock("#{Ok}({", "})") {
                     serverRenderOutputShapeResponseSerializer(
                         operationShape,
                         httpBindingResolver.responseBindings(operationShape),
@@ -443,7 +443,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "E" to errorSymbol,
             ) {
-                withBlock("Ok({", "})") {
+                withBlock("#{Ok}({", "})") {
                     serverRenderErrorShapeResponseSerializer(
                         operationShape,
                         errorSymbol,
@@ -871,7 +871,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if !input_string.ends_with("$restAfterGreedyLabel") {
-                        return Err(#{RequestRejection}::UriPatternGreedyLabelPostfixNotFound);
+                        return #{Err}(#{RequestRejection}::UriPatternGreedyLabelPostfixNotFound);
                     }
                     let input_string = &input_string[..(input_string.len() - "$restAfterGreedyLabel".len())];
                     """.trimIndent(),
@@ -1209,7 +1209,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                     }
                 }
-                rust("Ok(${symbolProvider.wrapOptional(binding.member, "value")})")
+                rust("#{Ok}(${symbolProvider.wrapOptional(binding.member, "value")})")
             }
         }
     }
