@@ -21,12 +21,12 @@ function log_time() {
 
 function compile() {
     cd $1 &&
-        export CARGORUSTFLAG="" &&
+        export RUSTFLAGS="" &&
         cargo build && # this is for downloading crates
         cargo clean &&
         log_time "cargo build" &&
         log_time "cargo build --release" &&
-        export CARGORUSTFLAG="--cfg aws_sdk_unstable" &&
+        export RUSTFLAGS="--cfg aws_sdk_unstable" &&
         log_time "cargo build --all-features" &&
         log_time "cargo build --release --all-features"
 }

@@ -23,17 +23,17 @@ def parser() -> str:
     iter = itertools.chain.from_iterable(iter)
 
     # I could've used a dataframe like pandas but this works.
-    markdown = """
-    | sdk name | dev | release | dev all features | release all features |
-    | -------- | --- | ------- | ---------------- | -------------------- |
-    """
+    markdown = "| sdk name | dev | release | dev all features | release all features |"
+    markdown += "\n"
+    markdown += "| -------- | --- | ------- | ---------------- | -------------------- |"
+
     markdown += "\n"
     for i in iter:
         outputs = []
         print(i)
         for l in i.splitlines():
             if not "+" in l:
-                outputs.append(l.replace("real", "").replace(" ", ""))
+                outputs.append(l.replace("real", "").replace(" ", "", 16))
 
         if len(outputs) != 6:
             continue
