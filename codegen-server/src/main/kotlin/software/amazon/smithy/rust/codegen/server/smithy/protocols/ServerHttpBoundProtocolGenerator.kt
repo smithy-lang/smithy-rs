@@ -971,7 +971,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val (queryBindingsTargetingCollection, queryBindingsTargetingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
             queryBindingsTargetingSimple.forEach {
-                rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
+                rust("let mut ${symbolProvider.toMemberName(it.member)}_seen = false;")
             }
             queryBindingsTargetingCollection.forEach {
                 rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
@@ -983,7 +983,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
-                        if !seen_$memberName && k == "${it.locationName}" {
+                        if !${memberName}_seen && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(&v)?
                             );
