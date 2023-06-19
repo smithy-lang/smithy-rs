@@ -13,15 +13,15 @@ use super::InstrumentOperation;
 #[derive(Debug)]
 pub struct InstrumentPlugin;
 
-impl<P, Op, S> Plugin<P, Op, S> for InstrumentPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for InstrumentPlugin
 where
     Op: OperationShape,
     Op: Sensitivity,
 {
-    type Service = InstrumentOperation<S, Op::RequestFmt, Op::ResponseFmt>;
+    type Output = InstrumentOperation<T, Op::RequestFmt, Op::ResponseFmt>;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        InstrumentOperation::new(svc, Op::ID)
+    fn apply(&self, input: T) -> Self::Output {
+        InstrumentOperation::new(input, Op::ID)
             .request_fmt(Op::request_fmt())
             .response_fmt(Op::response_fmt())
     }

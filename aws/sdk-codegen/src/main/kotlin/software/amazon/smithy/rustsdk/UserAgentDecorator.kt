@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -40,7 +40,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
+        return baseCustomizations + AppNameCustomization(codegenContext)
     }
 
     override fun operationCustomizations(
@@ -120,7 +120,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         }
     }
 
-    // TODO(enableNewSmithyRuntime): Remove this customization class
+    // TODO(enableNewSmithyRuntimeCleanup): Remove this customization class
     private class UserAgentMutateOpRequest(
         codegenContext: ClientCodegenContext,
     ) : OperationCustomization() {
@@ -149,15 +149,18 @@ class UserAgentDecorator : ClientCodegenDecorator {
         }
     }
 
-    private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private class AppNameCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val runtimeMode = codegenContext.smithyRuntimeMode
         private val codegenScope = arrayOf(
+            *preludeScope,
             "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
         )
 
         override fun section(section: ServiceConfig): Writable =
             when (section) {
                 is ServiceConfig.BuilderStruct -> writable {
-                    rustTemplate("app_name: Option<#{AppName}>,", *codegenScope)
+                    rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
                 }
 
                 is ServiceConfig.BuilderImpl -> writable {
@@ -176,7 +179,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         ///
                         /// This _optional_ name is used to identify the application in the user agent that
                         /// gets sent along with requests.
-                        pub fn set_app_name(&mut self, app_name: Option<#{AppName}>) -> &mut Self {
+                        pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
                             self.app_name = app_name;
                             self
                         }
@@ -186,26 +189,47 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.BuilderBuild -> writable {
-                    rust("app_name: self.app_name,")
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rust("layer.store_or_unset(self.app_name);")
+                    } else {
+                        rust("app_name: self.app_name,")
+                    }
                 }
 
                 is ServiceConfig.ConfigStruct -> writable {
-                    rustTemplate("app_name: Option<#{AppName}>,", *codegenScope)
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
+                    }
                 }
 
                 is ServiceConfig.ConfigImpl -> writable {
-                    rustTemplate(
-                        """
-                        /// Returns the name of the app that is using the client, if it was provided.
-                        ///
-                        /// This _optional_ name is used to identify the application in the user agent that
-                        /// gets sent along with requests.
-                        pub fn app_name(&self) -> Option<&#{AppName}> {
-                            self.app_name.as_ref()
-                        }
-                        """,
-                        *codegenScope,
-                    )
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            /// Returns the name of the app that is using the client, if it was provided.
+                            ///
+                            /// This _optional_ name is used to identify the application in the user agent that
+                            /// gets sent along with requests.
+                            pub fn app_name(&self) -> #{Option}<&#{AppName}> {
+                               self.inner.load::<#{AppName}>()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            /// Returns the name of the app that is using the client, if it was provided.
+                            ///
+                            /// This _optional_ name is used to identify the application in the user agent that
+                            /// gets sent along with requests.
+                            pub fn app_name(&self) -> #{Option}<&#{AppName}> {
+                               self.app_name.as_ref()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
                 else -> emptySection

@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up `enableNewSmithyRuntime`
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,

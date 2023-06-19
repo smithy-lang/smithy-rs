@@ -34,27 +34,27 @@ use super::LayerPlugin;
 ///
 /// `PluginPipeline` is itself a [`Plugin`]: you can apply any transformation that expects a
 /// [`Plugin`] to an entire pipeline. In this case, we want to use
-/// [`filter_by_operation_id`](crate::plugin::filter_by_operation_id) to limit the scope of
+/// [`filter_by_operation`](crate::plugin::filter_by_operation) to limit the scope of
 /// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{filter_by_operation_id, PluginPipeline};
+/// use aws_smithy_http_server::plugin::{filter_by_operation, PluginPipeline};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 /// use aws_smithy_http_server::shape_id::ShapeId;
+/// # #[derive(PartialEq)]
+/// # enum Operation { CheckHealth }
 /// # struct CheckHealth;
 /// # impl CheckHealth { const ID: ShapeId = ShapeId::new("namespace#MyName", "namespace", "MyName"); }
 ///
 /// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
-/// let operation_specific_pipeline = filter_by_operation_id(
-///     PluginPipeline::new()
+///  let plugin = PluginPipeline::new()
 ///         .push(LoggingPlugin)
-///         .push(MetricsPlugin),
-///     |name| name == CheckHealth::ID
-/// );
+///         .push(MetricsPlugin);
+/// let filtered_plugin = filter_by_operation(plugin, |operation: Operation| operation == Operation::CheckHealth);
 /// let pipeline = PluginPipeline::new()
-///     .push(operation_specific_pipeline)
+///     .push(filtered_plugin)
 ///     // The auth plugin will be applied to all operations
 ///     .push(AuthPlugin);
 /// ```
@@ -150,12 +150,16 @@ impl<P> PluginPipeline<P> {
     /// #[derive(Debug)]
     /// pub struct PrintPlugin;
     ///
-    /// impl<P, Op, S> Plugin<P, Op, S> for PrintPlugin
+    /// impl<Ser, Op, S> Plugin<Ser, Op, T> for PrintPlugin
     /// // [...]
     /// {
     ///     // [...]
-    ///     fn apply(&self, inner: S) -> Self::Service {
-    ///         PrintService { inner, name: Op::ID }
+    ///     fn apply(&self, inner: T) -> Self::Service {
+    ///         PrintService {
+    ///             inner,
+    ///             service_id: Ser::ID,
+    ///             operation_id: Op::ID
+    ///         }
     ///     }
     /// }
     /// ```
@@ -170,13 +174,13 @@ impl<P> PluginPipeline<P> {
     }
 }
 
-impl<P, Op, S, InnerPlugin> Plugin<P, Op, S> for PluginPipeline<InnerPlugin>
+impl<Ser, Op, T, InnerPlugin> Plugin<Ser, Op, T> for PluginPipeline<InnerPlugin>
 where
-    InnerPlugin: Plugin<P, Op, S>,
+    InnerPlugin: Plugin<Ser, Op, T>,
 {
-    type Service = InnerPlugin::Service;
+    type Output = InnerPlugin::Output;
 
-    fn apply(&self, svc: S) -> Self::Service {
-        self.0.apply(svc)
+    fn apply(&self, input: T) -> Self::Output {
+        self.0.apply(input)
     }
 }

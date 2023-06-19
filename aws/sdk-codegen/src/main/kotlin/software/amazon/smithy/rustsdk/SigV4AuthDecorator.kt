@@ -143,7 +143,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                             service: None,
                             signing_options,
                         });
-                        // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
+                        // TODO(enableNewSmithyRuntimeLaunch): Make auth options additive in the config bag so that multiple codegen decorators can register them
                         let auth_option_resolver = #{StaticAuthOptionResolver}::new(
                             vec![#{SIGV4_SCHEME_ID}]
                         );
