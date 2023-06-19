@@ -106,7 +106,7 @@ impl Clone for ClonableLayer {
 }
 
 // We need to "override" the mutable methods to encode the information that an item being stored
-// implements `Clone`. For the immutable methods, they can just be deligated via the `Deref` trait.
+// implements `Clone`. For the immutable methods, they can just be delegated via the `Deref` trait.
 impl ClonableLayer {
     /// Creates a new `CloneableLayer` with a given name
     pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
