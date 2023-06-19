@@ -60,6 +60,7 @@ where
     const RESOLVED: bool = nand(B1::RESOLVED, B2::RESOLVED);
 }
 
+/// The NAND gate of two [`BooleanExpr`] boolean expressions.
 pub struct NAnd<Boolean1, Boolean2>(pub Boolean1, pub Boolean2);
 
 impl<Ser, Op, Pl, T, B1, B2> ConditionalApply<Ser, Op, Pl, T> for NAnd<B1, B2>
@@ -130,6 +131,44 @@ where
     fn apply(&self, input: T) -> Self::Output {
         <Scope::Contains as ConditionalApply<Ser, Op, Pl, T>>::apply(&self.plugin, input)
     }
+}
+
+/// The complement of a [`Scope`].
+/// The operations included in a scope become exludes and vice versa.
+struct Complement<Scope>(Scope);
+
+impl<Op, Scope> Membership<Op> for Complement<Scope>
+where
+    Scope: Membership<Op>,
+{
+    // Not Scope
+    type Contains = NAnd<Scope::Contains, Scope::Contains>;
+}
+
+/// The intersection of two [`Scope`]s.
+/// All and only the operations included in both scopes are included in this new scopes.
+pub struct Intersection<ScopeA, ScopeB>(ScopeA, ScopeB);
+
+impl<Op, ScopeA, ScopeB> Membership<Op> for Intersection<ScopeA, ScopeB>
+where
+    ScopeA: Membership<Op>,
+    ScopeB: Membership<Op>,
+{
+    // ScopeA and ScopeB
+    type Contains = NAnd<NAnd<ScopeA::Contains, ScopeB::Contains>, NAnd<ScopeA::Contains, ScopeB::Contains>>;
+}
+
+/// The union of two [`Scope`]s.
+/// All and only the operations included in either scopes are included in this new scopes.
+pub struct Union<ScopeA, ScopeB>(ScopeA, ScopeB);
+
+impl<Op, ScopeA, ScopeB> Membership<Op> for Union<ScopeA, ScopeB>
+where
+    ScopeA: Membership<Op>,
+    ScopeB: Membership<Op>,
+{
+    // ScopeA or ScopeB
+    type Contains = NAnd<NAnd<ScopeA::Contains, ScopeA::Contains>, NAnd<ScopeB::Contains, ScopeB::Contains>>;
 }
 
 /// A macro to help with scoping [plugins](crate::plugin) to a subset of all operations.
@@ -295,35 +334,4 @@ mod tests {
         let out: String = Plugin::<(), OperationC, _>::apply(&scoped_plugin, 3_u32);
         assert_eq!(out, "3".to_string());
     }
-}
-
-struct Complement<Scope>(Scope);
-
-impl<Op, Scope> Membership<Op> for Complement<Scope>
-where
-    Scope: Membership<Op>,
-{
-    type Contains = NAnd<Scope::Contains, Scope::Contains>;
-}
-
-pub struct Intersection<ScopeA, ScopeB>(ScopeA, ScopeB);
-
-impl<Op, ScopeA, ScopeB> Membership<Op> for Intersection<ScopeA, ScopeB>
-where
-    ScopeA: Membership<Op>,
-    ScopeB: Membership<Op>,
-{
-    // ScopeA & ScopeB
-    type Contains = NAnd<NAnd<ScopeA::Contains, ScopeB::Contains>, NAnd<ScopeA::Contains, ScopeB::Contains>>;
-}
-
-pub struct Union<ScopeA, ScopeB>(ScopeA, ScopeB);
-
-impl<Op, ScopeA, ScopeB> Membership<Op> for Union<ScopeA, ScopeB>
-where
-    ScopeA: Membership<Op>,
-    ScopeB: Membership<Op>,
-{
-    // ScopeA | ScopeB
-    type Contains = NAnd<NAnd<ScopeA::Contains, ScopeA::Contains>, NAnd<ScopeB::Contains, ScopeB::Contains>>;
 }
