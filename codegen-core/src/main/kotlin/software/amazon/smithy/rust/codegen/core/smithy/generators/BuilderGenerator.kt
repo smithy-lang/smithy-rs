@@ -92,6 +92,8 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 
 // Setter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
+// Setter names will never hit a reserved word and therefore never need escaping.
+fun MemberShape.getterName() = "get_${this.memberName.toSnakeCase()}"
 
 class BuilderGenerator(
     private val model: Model,
@@ -210,6 +212,28 @@ class BuilderGenerator(
         }
     }
 
+    /**
+     * Render a `get_foo` method. This is useful as a target for code generation, because the argument type
+     * is the same as the resulting member type, and is always optional.
+     */
+    private fun renderBuilderMemberGetterFn(
+        writer: RustWriter,
+        outerType: RustType,
+        member: MemberShape,
+        memberName: String,
+    ) {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
+        //  a non `Option`al target type: in all other cases the client generates `Option`al types.
+        val inputType = outerType.asOptional()
+
+        writer.documentShape(member, model)
+        writer.deprecatedShape(member)
+        writer.rustBlock("pub fn ${member.getterName()}(&self) -> &${inputType.render(true)}") {
+            rust("&self.$memberName")
+        }
+    }
+
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
         metadata.additionalAttributes.render(writer)
@@ -240,6 +264,7 @@ class BuilderGenerator(
                 }
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
+                renderBuilderMemberGetterFn(this, outerType, member, memberName)
             }
             writeCustomizations(customizations, BuilderSection.AdditionalMethods(shape))
             renderBuildFn(this)

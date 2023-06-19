@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -409,6 +410,14 @@ class FluentClientGenerator(
                 }
             }
 
+            rust("/// Access the inner ${operationSymbol.name} builder as a reference.\n")
+            withBlockTemplate(
+                "pub fn inner(&self) -> &#{Inner} {", "}",
+                "Inner" to symbolProvider.symbolForBuilder(input),
+            ) {
+                write("&self.inner")
+            }
+
             if (smithyRuntimeMode.generateMiddleware) {
                 val middlewareScope = arrayOf(
                     *preludeScope,
@@ -630,6 +639,9 @@ class FluentClientGenerator(
                 val setterName = member.setterName()
                 val optionalInputType = outerType.asOptional()
                 with(core) { renderInputHelper(member, setterName, optionalInputType) }
+
+                val getterName = member.getterName()
+                with(core) { renderGetterHelper(member, getterName, optionalInputType) }
             }
         }
     }

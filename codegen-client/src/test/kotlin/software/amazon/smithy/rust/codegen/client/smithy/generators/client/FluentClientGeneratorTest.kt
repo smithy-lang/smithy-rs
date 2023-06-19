@@ -6,17 +6,26 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class FluentClientGeneratorTest {
     val model = """
@@ -30,7 +39,10 @@ class FluentClientGeneratorTest {
         }
 
         operation SayHello { input: TestInput }
-        structure TestInput {}
+        structure TestInput {
+           foo: String,
+           byteValue: Byte,
+        }
     """.asSmithyModel()
 
     @Test
@@ -66,6 +78,52 @@ class FluentClientGeneratorTest {
                             rust(".http_connector(connector.clone())")
                         }
                     },
+                )
+            }
+        }
+        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams, test = test)
+        clientIntegrationTest(
+            model,
+            TestCodegenSettings.orchestratorModeTestParams,
+            test = test,
+        )
+    }
+
+    @Test
+    fun `generate inner builders`() {
+        val test: (ClientCodegenContext, RustCrate) -> Unit = { codegenContext, rustCrate ->
+            rustCrate.integrationTest("inner_builder") {
+                val moduleName = codegenContext.moduleUseName()
+                rustTemplate(
+                    """
+                    ##[test]
+                    fn test() {
+                        let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
+                        let config = $moduleName::Config::builder()
+                            .endpoint_resolver("http://localhost:1234")
+                            #{set_http_connector}
+                            .build();
+                        let smithy_client = aws_smithy_client::Builder::new()
+                            .connector(connector.clone())
+                            .middleware_fn(|r| r)
+                            .build_dyn();
+                        let client = $moduleName::Client::with_config(smithy_client, config); 
+                    
+                        let say_hello_input_builder = client.say_hello().byte_value(4).foo("hello!");
+                        assert_eq!(*say_hello_input_builder.get_foo(), Some("hello!".to_string()));
+                        let inner = say_hello_input_builder.inner();
+                        assert_eq!(*inner.get_byte_value(), Some(4));
+                    }
+                    """,
+                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
+                        .withFeature("test-util").toType()
+                        .resolve("test_connection::TestConnection"),
+                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "set_http_connector" to writable {
+                        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                            rust(".http_connector(connector.clone())")
+                        }
+                    }
                 )
             }
         }
