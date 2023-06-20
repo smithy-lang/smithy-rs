@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! This module hosts _exactly_ the same as [`crate::proto::rest_json_1::rejection`], except that
-//! [`crate::proto::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
+//! This module hosts _exactly_ the same as [`crate::protocol::rest_json_1::rejection`], except that
+//! [`crate::protocol::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
 //! [`RequestRejection::XmlDeserialize`].
 
 use crate::rejection::MissingContentTypeReason;
