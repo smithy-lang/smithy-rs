@@ -17,6 +17,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this file
+
 class HttpVersionListCustomization(
     private val codegenContext: CodegenContext,
     private val operationShape: OperationShape,
