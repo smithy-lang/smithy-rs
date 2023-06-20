@@ -7,27 +7,27 @@
 //!
 //! This module contains the [`RuntimeError`] type.
 //!
-//! As opposed to rejection types (see [`crate::proto::rest_json_1::rejection`]), which are an internal detail about
+//! As opposed to rejection types (see [`crate::protocol::rest_json_1::rejection`]), which are an internal detail about
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
 //! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
 //! can be conflated under the [`RuntimeError::Serialization`] enum variant.
 //!
 //! The HTTP response representation of the specific `RuntimeError` is protocol-specific: for
-//! example, the runtime error in the [`crate::proto::rest_json_1`] protocol sets the `X-Amzn-Errortype` header.
+//! example, the runtime error in the [`crate::protocol::rest_json_1`] protocol sets the `X-Amzn-Errortype` header.
 //!
 //! Generated code works always works with [`crate::rejection`] types when deserializing requests
 //! and serializing response. Just before a response needs to be sent, the generated code looks up
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 //!
-//! This module hosts the `RuntimeError` type _specific_ to the [`crate::proto::rest_json_1`] protocol, but
+//! This module hosts the `RuntimeError` type _specific_ to the [`crate::protocol::rest_json_1`] protocol, but
 //! the paragraphs above apply to _all_ protocol-specific rejection types.
 //!
 //! Similarly, `RuntimeError` variants are exhaustively documented solely in this module if they have
 //! direct counterparts in other protocols. This is to avoid documentation getting out of date.
 //!
-//! Consult `crate::proto::$protocolName::runtime_error` for the `RuntimeError` type for other protocols.
+//! Consult `crate::protocol::$protocolName::runtime_error` for the `RuntimeError` type for other protocols.
 
 use super::rejection::RequestRejection;
 use super::rejection::ResponseRejection;

@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -32,20 +33,23 @@ internal class InlineDependencyTest {
 
     @Test
     fun `locate dependencies from the inlineable module`() {
-        val dep = InlineDependency.idempotencyToken()
+        val runtimeConfig = TestRuntimeConfig
+        val dep = InlineDependency.serializationSettings(runtimeConfig)
         val testProject = TestWorkspace.testProject()
         testProject.lib {
             rustTemplate(
                 """
+
                 ##[test]
-                fn idempotency_works() {
-                    use #{idempotency}::uuid_v4;
-                    let res = uuid_v4(0);
-                    assert_eq!(res, "00000000-0000-4000-8000-000000000000");
+                fn header_serialization_settings_can_be_constructed() {
+                    use #{serialization_settings}::HeaderSerializationSettings;
+                    use #{aws_smithy_http}::header::set_request_header_if_absent;
+                    let _settings = HeaderSerializationSettings::default();
                 }
 
                 """,
-                "idempotency" to dep.toType(),
+                "serialization_settings" to dep.toType(),
+                "aws_smithy_http" to RuntimeType.smithyHttp(runtimeConfig),
             )
         }
         testProject.compileAndTest()

@@ -114,13 +114,13 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<P, Op, S> Plugin<P, Op, S> for OperationExtensionPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {
-    type Service = OperationExtensionService<S>;
+    type Output = OperationExtensionService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         OperationExtensionService {
             inner,
             operation_extension: OperationExtension(Op::ID),
@@ -186,7 +186,7 @@ impl Deref for RuntimeErrorExtension {
 mod tests {
     use tower::{service_fn, Layer, ServiceExt};
 
-    use crate::{plugin::PluginLayer, proto::rest_json_1::RestJson1};
+    use crate::{plugin::PluginLayer, protocol::rest_json_1::RestJson1};
 
     use super::*;
 

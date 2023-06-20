@@ -10,7 +10,7 @@ use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::AwsJson1_1;
 
-pub use crate::proto::aws_json::router::*;
+pub use crate::protocol::aws_json::router::*;
 
 impl IntoResponse<AwsJson1_1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {

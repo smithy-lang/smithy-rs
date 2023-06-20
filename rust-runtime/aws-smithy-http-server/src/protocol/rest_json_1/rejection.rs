@@ -28,7 +28,7 @@
 //! into responses. They serve as a mechanism to keep track of all the possible errors that can
 //! occur when processing a request or a response, in far more detail than what AWS protocols need
 //! to. This is why they are so granular: other (possibly protocol-specific) error types (like
-//! [`crate::proto::rest_json_1::runtime_error::RuntimeError`]) can "group" them when exposing
+//! [`crate::protocol::rest_json_1::runtime_error::RuntimeError`]) can "group" them when exposing
 //! errors to clients while the framework does not need to sacrifice fidelity in private error
 //! handling routines, and future-proofing itself at the same time (for example, we might want to
 //! record metrics about rejection types).
@@ -36,16 +36,16 @@
 //! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
 //! (`crate::Error`) to represent their underlying causes, so they can be composed with other types
 //! that take in (possibly type-erased) [`std::error::Error`]s, like
-//! [`crate::proto::rest_json_1::runtime_error::RuntimeError`], thus allowing us to represent the
+//! [`crate::protocol::rest_json_1::runtime_error::RuntimeError`], thus allowing us to represent the
 //! full error chain.
 //!
-//! This module hosts rejection types _specific_ to the [`crate::proto::rest_json_1`] protocol, but
+//! This module hosts rejection types _specific_ to the [`crate::protocol::rest_json_1`] protocol, but
 //! the paragraphs above apply to _all_ protocol-specific rejection types.
 //!
 //! Similarly, rejection type variants are exhaustively documented solely in this module if they have
 //! direct counterparts in other protocols. This is to avoid documentation getting out of date.
 //!
-//! Consult `crate::proto::$protocolName::rejection` for rejection types for other protocols.
+//! Consult `crate::protocol::$protocolName::rejection` for rejection types for other protocols.
 
 use crate::rejection::MissingContentTypeReason;
 use std::num::TryFromIntError;

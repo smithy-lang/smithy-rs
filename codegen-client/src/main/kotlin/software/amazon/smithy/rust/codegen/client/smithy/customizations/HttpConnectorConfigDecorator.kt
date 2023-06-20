@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
@@ -31,9 +30,10 @@ class HttpConnectorConfigDecorator : ClientCodegenDecorator {
 }
 
 private class HttpConnectorConfigCustomization(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
@@ -42,19 +42,33 @@ private class HttpConnectorConfigCustomization(
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                }
             }
 
             is ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                    pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                        self.http_connector.as_ref()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.inner.load::<#{HttpConnector}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.http_connector.as_ref()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ServiceConfig.BuilderStruct -> writable {
@@ -147,7 +161,11 @@ private class HttpConnectorConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                rust("http_connector: self.http_connector,")
+                if (runtimeMode.defaultToOrchestrator) {
+                    rust("self.http_connector.map(|c| layer.store_put(c));")
+                } else {
+                    rust("http_connector: self.http_connector,")
+                }
             }
 
             else -> emptySection

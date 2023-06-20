@@ -121,7 +121,7 @@ impl<S> FromIterator<(String, S)> for AwsJsonRouter<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{proto::test_helpers::req, routing::Router};
+    use crate::{protocol::test_helpers::req, routing::Router};
 
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
