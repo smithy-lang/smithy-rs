@@ -987,7 +987,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(&v)?
                             );
-                            seen_$memberName = true;
+                            ${memberName}_seen = true;
                         }
                         """.trimIndent(),
                         "deserializer" to deserializer,
