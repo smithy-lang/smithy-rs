@@ -35,44 +35,6 @@ references = ["smithy-rs#2722", "aws-sdk-rust#703"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
-[[smithy-rs]]
-message = """
-- rust runtime
-  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
-
-- Core codegen code
-  - Add sensitive warning
-  - Add `serde` attributes
-  - Import `serde` crate to enable `serde(skip)` on some namespaces
-  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
-
-- Client codegen code
-  - add `serde` as dependency behind feature gate
-  - add `serde` support to uknown variant types
-"""
-author = "thomas-k-cameron"
-references = ["smithy-rs#2615"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-
-[[aws-sdk-rust]]
-message = """
-- rust runtime
-  - Implements serde support to `Number`, `Blob`, `Document`, `DateTime`
-
-- Core codegen code
-  - Add sensitive warning
-  - Add `serde` attributes
-  - Import `serde` crate to enable `serde(skip)` on some namespaces
-  - Add `serde` crate behind unstable feature gate on `Cargo.toml`
-
-- Client codegen code
-  - add `serde` as dependency behind feature gate
-  - add `serde` support to uknown variant types
-"""
-author = "thomas-k-cameron"
-references = ["smithy-rs#2615"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-
 [[aws-sdk-rust]]
 message = "`SsoCredentialsProvider`, `AssumeRoleProvider`, and `WebIdentityTokenCredentialsProvider` now use `NoCredentialsCache` internally when fetching credentials using an STS client. This avoids double-caching when these providers are wrapped by `LazyCredentialsCache` when a service client is created."
 references = ["smithy-rs#2720"]

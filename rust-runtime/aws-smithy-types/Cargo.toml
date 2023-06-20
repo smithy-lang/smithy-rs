@@ -22,10 +22,6 @@ num-integer = "0.1.44"
 ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
 
-[target."cfg(aws_sdk_unstable)".dependencies.serde]
-version = "1"
-features = ["derive"]
-
 [dev-dependencies]
 base64 = "0.13.0"
 ciborium = { version = "0.2.1" }
@@ -45,3 +41,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "base64"
 harness = false
+
+[target."cfg(aws_sdk_unstable)".dependencies.serde]
+version = "1"
+features = ["derive"]
