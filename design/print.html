@@ -2010,7 +2010,7 @@ pub trait IntoResponse&lt;Protocol&gt; {
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span><span class="boring">use aws_smithy_http_server::proto::{
+</span><span class="boring">use aws_smithy_http_server::protocol::{
 </span><span class="boring">  aws_json_10::AwsJson1_0 as _,
 </span><span class="boring">  aws_json_11::AwsJson1_1 as _,
 </span><span class="boring">  rest_json_1::RestJson1 as _,
@@ -2317,7 +2317,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span><span class="boring">use aws_smithy_http_server::{routing::RoutingService, proto::rest_json_1::{router::RestRouter, RestJson1}};
+</span><span class="boring">use aws_smithy_http_server::{routing::RoutingService, protocol::rest_json_1::{router::RestRouter, RestJson1}};
 </span>/// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService&lt;S&gt; {
