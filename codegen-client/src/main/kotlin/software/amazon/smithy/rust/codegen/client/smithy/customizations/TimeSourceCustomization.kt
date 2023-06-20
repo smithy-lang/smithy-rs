@@ -56,15 +56,16 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                     }
                 }
 
-                is ServiceConfig.BuilderStruct ->
-                    rustTemplate(
-                        """
-                        time_source: #{Option}<#{SharedTimeSource}>,
-                        """,
-                        *codegenScope,
-                    )
+                is ServiceConfig.BuilderStruct -> {
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate(
+                            "time_source: #{Option}<#{SharedTimeSource}>,",
+                            *codegenScope,
+                        )
+                    }
+                }
 
-                ServiceConfig.BuilderImpl ->
+                ServiceConfig.BuilderImpl -> {
                     rustTemplate(
                         """
                         /// Sets the time source used for this service
@@ -72,34 +73,53 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                             mut self,
                             time_source: impl #{Into}<#{SharedTimeSource}>,
                         ) -> Self {
-                            self.time_source = Some(time_source.into());
-                            self
-                        }
-                        /// Sets the time source used for this service
-                        pub fn set_time_source(
-                            &mut self,
-                            time_source: #{Option}<#{SharedTimeSource}>,
-                        ) -> &mut Self {
-                            self.time_source = time_source;
+                            self.set_time_source(#{Some}(time_source.into()));
                             self
                         }
                         """,
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            layer.store_put(self.time_source.unwrap_or_default());
+                            /// Sets the time source used for this service
+                            pub fn set_time_source(
+                                &mut self,
+                                time_source: #{Option}<#{SharedTimeSource}>,
+                            ) -> &mut Self {
+                                self.inner.store_or_unset(time_source);
+                                self
+                            }
                             """,
                             *codegenScope,
                         )
                     } else {
                         rustTemplate(
                             """
-                            time_source: self.time_source.unwrap_or_default(),
+                            /// Sets the time source used for this service
+                            pub fn set_time_source(
+                                &mut self,
+                                time_source: #{Option}<#{SharedTimeSource}>,
+                            ) -> &mut Self {
+                                self.time_source = time_source;
+                                self
+                            }
                             """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
+                ServiceConfig.BuilderBuild -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            "self.inner.store_put(self.inner.load::<#{SharedTimeSource}>().cloned().unwrap_or_default());",
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            "time_source: self.time_source.unwrap_or_default(),",
                             *codegenScope,
                         )
                     }

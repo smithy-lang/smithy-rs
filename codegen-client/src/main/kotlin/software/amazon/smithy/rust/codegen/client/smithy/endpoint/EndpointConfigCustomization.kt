@@ -72,11 +72,14 @@ internal class EndpointConfigCustomization(
                     }
                 }
 
-                is ServiceConfig.BuilderStruct ->
-                    rustTemplate(
-                        "endpoint_resolver: #{Option}<$sharedEndpointResolver>,",
-                        *codegenScope,
-                    )
+                is ServiceConfig.BuilderStruct -> {
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate(
+                            "endpoint_resolver: #{Option}<$sharedEndpointResolver>,",
+                            *codegenScope,
+                        )
+                    }
+                }
 
                 ServiceConfig.BuilderImpl -> {
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
@@ -121,7 +124,7 @@ internal class EndpointConfigCustomization(
                         /// Sets the endpoint resolver to use when making requests.
                         $defaultResolverDocs
                         pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
-                            self.endpoint_resolver = #{Some}(#{SharedEndpointResolver}::new(endpoint_resolver));
+                            self.set_endpoint_resolver(#{Some}(#{SharedEndpointResolver}::new(endpoint_resolver)));
                             self
                         }
 
@@ -129,13 +132,31 @@ internal class EndpointConfigCustomization(
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                         /// rules for `$moduleUseName`.
-                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
-                            self.endpoint_resolver = endpoint_resolver;
-                            self
-                        }
                         """,
                         *codegenScope,
                     )
+
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
+                                self.inner.store_or_unset(endpoint_resolver);
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
+                                self.endpoint_resolver = endpoint_resolver;
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
                 ServiceConfig.BuilderBuild -> {
@@ -144,9 +165,9 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                layer.store_put(self.endpoint_resolver.unwrap_or_else(||
+                                self.inner.store_put(self.inner.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
                                     #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
-                                ));
+                                ).clone());
                                 """,
                                 *codegenScope,
                                 "DefaultResolver" to defaultResolver,
@@ -185,7 +206,7 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                layer.store_put(self.endpoint_resolver.unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})));
+                                self.inner.store_put(self.inner.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})));
                                 """,
                                 *codegenScope,
                                 "FailingResolver" to alwaysFailsResolver,
