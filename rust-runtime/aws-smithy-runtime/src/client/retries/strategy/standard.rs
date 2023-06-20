@@ -159,8 +159,9 @@ impl RetryStrategy for StandardRetryStrategy {
                         Some(permit) => self.set_retry_permit(permit),
                         None => {
                             tracing::debug!(
-                        "attempt #{request_attempts} failed with {kind:?}; However, no retry permits are available, so no retry will be attempted.",
-                    );
+                                "attempt #{request_attempts} failed with {kind:?}; \
+                                However, no retry permits are available, so no retry will be attempted.",
+                            );
                             return Ok(ShouldAttempt::No);
                         }
                     }
@@ -179,7 +180,7 @@ impl RetryStrategy for StandardRetryStrategy {
             }
             Some(_) => unreachable!("RetryReason is non-exhaustive"),
             None => {
-                tracing::trace!(
+                tracing::debug!(
                     attempts = request_attempts,
                     max_attempts = self.max_attempts,
                     "encountered unretryable error"

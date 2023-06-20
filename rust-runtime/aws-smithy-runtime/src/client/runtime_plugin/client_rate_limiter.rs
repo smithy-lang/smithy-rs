@@ -6,13 +6,13 @@
 //! A rate limiter for controlling the rate at which AWS requests are made. The rate changes based
 //! on the number of throttling errors encountered.
 
-// Zelda will integrate this rate limiter into the retry policy in a separate PR.
+// TODO(enableNewSmithyRuntimeLaunch): Zelda will integrate this rate limiter into the retry policy in a separate PR.
 #![allow(dead_code)]
 
 use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::{builder, builder_methods, builder_struct};
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer, Storable, StoreReplace};
-use aws_smithy_types::{builder, builder_methods, builder_struct};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
