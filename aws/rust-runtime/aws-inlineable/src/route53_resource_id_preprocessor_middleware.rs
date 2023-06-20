@@ -3,19 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![allow(dead_code)]
-
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeSerializationInterceptorContextMut, BoxError, Interceptor,
-};
-use aws_smithy_types::config_bag::ConfigBag;
-use std::fmt;
-use std::marker::PhantomData;
+// TODO(enableNewSmithyRuntimeCleanup): Delete this module
 
 // This function is only used to strip prefixes from resource IDs at the time they're passed as
 // input to a request. Resource IDs returned in responses may or may not include a prefix.
 /// Strip the resource type prefix from resource ID return
-fn trim_resource_id(resource_id: &mut Option<String>) {
+pub fn trim_resource_id(resource_id: &mut Option<String>) {
     const PREFIXES: &[&str] = &[
         "/hostedzone/",
         "hostedzone/",
@@ -37,55 +30,9 @@ fn trim_resource_id(resource_id: &mut Option<String>) {
     }
 }
 
-pub(crate) struct Route53ResourceIdInterceptor<G, T>
-where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
-{
-    get_mut_resource_id: G,
-    _phantom: PhantomData<T>,
-}
-
-impl<G, T> fmt::Debug for Route53ResourceIdInterceptor<G, T>
-where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Route53ResourceIdInterceptor").finish()
-    }
-}
-
-impl<G, T> Route53ResourceIdInterceptor<G, T>
-where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
-{
-    pub(crate) fn new(get_mut_resource_id: G) -> Self {
-        Self {
-            get_mut_resource_id,
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<G, T> Interceptor for Route53ResourceIdInterceptor<G, T>
-where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
-    T: fmt::Debug + Send + Sync + 'static,
-{
-    fn modify_before_serialization(
-        &self,
-        context: &mut BeforeSerializationInterceptorContextMut<'_>,
-        _cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        let input: &mut T = context.input_mut().downcast_mut().expect("correct type");
-        let field = (self.get_mut_resource_id)(input);
-        trim_resource_id(field);
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::trim_resource_id;
+    use crate::route53_resource_id_preprocessor_middleware::trim_resource_id;
 
     #[test]
     fn does_not_change_regular_zones() {

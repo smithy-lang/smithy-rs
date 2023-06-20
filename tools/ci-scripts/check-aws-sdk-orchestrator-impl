@@ -15,14 +15,13 @@ cd smithy-rs
 # TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
     "aws-config"\
-    "dynamodb"\
-    "route53"\
     "s3"\
     "sts"\
 )
 
 services_that_pass_tests=(\
     "config"\
+    "dynamodb"\
     "ec2"\
     "ecs"\
     "glacier"\
@@ -31,6 +30,7 @@ services_that_pass_tests=(\
     "lambda"\
     "polly"\
     "qldbsession"\
+    "route53"\
     "s3control"\
     "sso"\
     "transcribestreaming"\
