@@ -32,7 +32,7 @@ class IdempotencyTokenGenerator(codegenContext: CodegenContext, operationShape: 
                 rustTemplate(
                     """
                     if ${section.input}.$memberName.is_none() {
-                        ${section.input}.$memberName = #{Some}(${section.config}.make_token.make_idempotency_token());
+                        ${section.input}.$memberName = #{Some}(${section.config}.idempotency_token_provider.make_idempotency_token());
                     }
                     """,
                     *preludeScope,

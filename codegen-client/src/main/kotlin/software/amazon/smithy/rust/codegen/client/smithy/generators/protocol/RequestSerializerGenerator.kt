@@ -29,7 +29,8 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 class RequestSerializerGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
-    private val bodyGenerator: ProtocolPayloadGenerator,
+    private val bodyGenerator: ProtocolPayloadGenerator?,
+    private val nameOverride: String? = null,
 ) {
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
@@ -63,11 +64,12 @@ class RequestSerializerGenerator(
         val inputShape = operationShape.inputShape(codegenContext.model)
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputSymbol = symbolProvider.toSymbol(inputShape)
+        val serializerName = nameOverride ?: "${operationName}RequestSerializer"
         writer.rustTemplate(
             """
             ##[derive(Debug)]
-            struct ${operationName}RequestSerializer;
-            impl #{RequestSerializer} for ${operationName}RequestSerializer {
+            struct $serializerName;
+            impl #{RequestSerializer} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
@@ -85,22 +87,26 @@ class RequestSerializerGenerator(
             "ConcreteInput" to inputSymbol,
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to writable {
-                val body = writable {
-                    bodyGenerator.generatePayload(
-                        this,
-                        "input",
-                        operationShape,
-                        ClientAdditionalPayloadContext(propertyBagAvailable = false),
-                    )
-                }
-                val streamingMember = inputShape.findStreamingMember(codegenContext.model)
-                val isBlobStreaming =
-                    streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
-                if (isBlobStreaming) {
-                    // Consume the `ByteStream` into its inner `SdkBody`.
-                    rust("#T.into_inner()", body)
+                if (bodyGenerator != null) {
+                    val body = writable {
+                        bodyGenerator.generatePayload(
+                            this,
+                            "input",
+                            operationShape,
+                            ClientAdditionalPayloadContext(propertyBagAvailable = false),
+                        )
+                    }
+                    val streamingMember = inputShape.findStreamingMember(codegenContext.model)
+                    val isBlobStreaming =
+                        streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
+                    if (isBlobStreaming) {
+                        // Consume the `ByteStream` into its inner `SdkBody`.
+                        rust("#T.into_inner()", body)
+                    } else {
+                        rustTemplate("#{SdkBody}::from(#{body})", *codegenScope, "body" to body)
+                    }
                 } else {
-                    rustTemplate("#{SdkBody}::from(#{body})", *codegenScope, "body" to body)
+                    rustTemplate("#{SdkBody}::empty()", *codegenScope)
                 }
             },
             "add_content_length" to if (needsContentLength(operationShape)) {

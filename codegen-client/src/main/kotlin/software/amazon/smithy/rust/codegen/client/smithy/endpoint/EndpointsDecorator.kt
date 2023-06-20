@@ -102,7 +102,6 @@ class EndpointsDecorator : ClientCodegenDecorator {
     override val name: String = "Endpoints"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Remove `operationCustomizations` and `InjectEndpointInMakeOperation`
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
@@ -155,6 +154,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
      *     .build();
      * ```
      */
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization
     class InjectEndpointInMakeOperation(
         private val ctx: ClientCodegenContext,
         private val typesGenerator: EndpointTypesGenerator,

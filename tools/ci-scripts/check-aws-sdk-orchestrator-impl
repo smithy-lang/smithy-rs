@@ -12,11 +12,10 @@ C_RESET='\033[0m'
 set -eu
 cd smithy-rs
 
-# TODO(enableNewSmithyRuntime): Move these into `services_that_pass_tests` as more progress is made
+# TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
     "aws-config"\
     "dynamodb"\
-    "polly"\
     "route53"\
     "s3"\
     "sts"\
@@ -30,6 +29,7 @@ services_that_pass_tests=(\
     "iam"\
     "kms"\
     "lambda"\
+    "polly"\
     "qldbsession"\
     "s3control"\
     "sso"\

@@ -5,9 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.client.testutil.withSmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -29,28 +32,51 @@ class ClientContextConfigCustomizationTest {
         service TestService { operations: [] }
     """.asSmithyModel()
 
-    @Test
-    fun `client params generate a valid customization`() {
+    @ParameterizedTest
+    @ValueSource(strings = ["middleware", "orchestrator"])
+    fun `client params generate a valid customization`(smithyRuntimeModeStr: String) {
         val project = TestWorkspace.testProject()
+        val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         project.unitTest {
-            rust(
-                """
-                let conf = crate::Config::builder().a_string_param("hello!").a_bool_param(true).build();
-                assert_eq!(conf.a_string_param.unwrap(), "hello!");
-                assert_eq!(conf.a_bool_param, Some(true));
-                """,
-            )
+            if (smithyRuntimeMode.defaultToOrchestrator) {
+                rust(
+                    """
+                    let conf = crate::Config::builder().a_string_param("hello!").a_bool_param(true).build();
+                    assert_eq!(conf.a_string_param().unwrap(), "hello!");
+                    assert_eq!(conf.a_bool_param(), Some(true));
+                    """,
+                )
+            } else {
+                rust(
+                    """
+                    let conf = crate::Config::builder().a_string_param("hello!").a_bool_param(true).build();
+                    assert_eq!(conf.a_string_param.unwrap(), "hello!");
+                    assert_eq!(conf.a_bool_param, Some(true));
+                    """,
+                )
+            }
         }
         // unset fields
         project.unitTest {
-            rust(
-                """
-                let conf = crate::Config::builder().a_string_param("hello!").build();
-                assert_eq!(conf.a_string_param.unwrap(), "hello!");
-                assert_eq!(conf.a_bool_param, None);
-                """,
-            )
+            if (smithyRuntimeMode.defaultToOrchestrator) {
+                rust(
+                    """
+                    let conf = crate::Config::builder().a_string_param("hello!").build();
+                    assert_eq!(conf.a_string_param().unwrap(), "hello!");
+                    assert_eq!(conf.a_bool_param(), None);
+                    """,
+                )
+            } else {
+                rust(
+                    """
+                    let conf = crate::Config::builder().a_string_param("hello!").build();
+                    assert_eq!(conf.a_string_param.unwrap(), "hello!");
+                    assert_eq!(conf.a_bool_param, None);
+                    """,
+                )
+            }
         }
-        validateConfigCustomizations(ClientContextConfigCustomization(testClientCodegenContext(model)), project)
+        val context = testClientCodegenContext(model).withSmithyRuntimeMode(smithyRuntimeMode)
+        validateConfigCustomizations(context, ClientContextConfigCustomization(context), project)
     }
 }

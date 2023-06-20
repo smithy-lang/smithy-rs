@@ -108,7 +108,7 @@ class ScopeMacroGenerator(
             /// ## use #{SmithyHttpServer}::plugin::{Plugin, Scoped};
             /// ## use $crateName::scope;
             /// ## struct MockPlugin;
-            /// ## impl<P, Op, S> Plugin<P, Op, S> for MockPlugin { type Service = u32; fn apply(&self, svc: S) -> u32 { 3 } }
+            /// ## impl<S, Op, T> Plugin<S, Op, T> for MockPlugin { type Output = u32; fn apply(&self, input: T) -> u32 { 3 } }
             /// ## let scoped_a = Scoped::new::<ScopeA>(MockPlugin);
             /// ## let scoped_b = Scoped::new::<ScopeB>(MockPlugin);
             /// ## let a = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_a, 6);

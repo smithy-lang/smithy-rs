@@ -102,20 +102,20 @@ where
     }
 }
 
-impl<P, Op, S, Le, Ri> Plugin<P, Op, S> for Either<Le, Ri>
+impl<Ser, Op, T, Le, Ri> Plugin<Ser, Op, T> for Either<Le, Ri>
 where
-    Le: Plugin<P, Op, S>,
-    Ri: Plugin<P, Op, S>,
+    Le: Plugin<Ser, Op, T>,
+    Ri: Plugin<Ser, Op, T>,
 {
-    type Service = Either<Le::Service, Ri::Service>;
+    type Output = Either<Le::Output, Ri::Output>;
 
-    fn apply(&self, svc: S) -> Self::Service {
+    fn apply(&self, input: T) -> Self::Output {
         match self {
             Either::Left { value } => Either::Left {
-                value: value.apply(svc),
+                value: value.apply(input),
             },
             Either::Right { value } => Either::Right {
-                value: value.apply(svc),
+                value: value.apply(input),
             },
         }
     }
