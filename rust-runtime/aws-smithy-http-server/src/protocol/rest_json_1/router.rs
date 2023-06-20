@@ -10,7 +10,7 @@ use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::RestJson1;
 
-pub use crate::proto::rest::router::*;
+pub use crate::protocol::rest::router::*;
 
 impl IntoResponse<RestJson1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {

@@ -3,29 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::body::empty;
-use crate::body::BoxBody;
+use crate::body::{empty, BoxBody};
 use crate::extension::RuntimeErrorExtension;
 use crate::response::IntoResponse;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
-use super::RestXml;
+use super::AwsJson1_0;
 
-pub use crate::proto::rest::router::*;
+pub use crate::protocol::aws_json::router::*;
 
-/// An AWS REST routing error.
-impl IntoResponse<RestXml> for Error {
+impl IntoResponse<AwsJson1_0> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
-            Error::NotFound => http::Response::builder()
+            Error::MethodNotAllowed => method_disallowed(),
+            _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/xml")
+                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.0")
                 .extension(RuntimeErrorExtension::new(
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-            Error::MethodNotAllowed => method_disallowed(),
+                .expect("invalid HTTP response for AWS JSON 1.0 routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
     }
 }

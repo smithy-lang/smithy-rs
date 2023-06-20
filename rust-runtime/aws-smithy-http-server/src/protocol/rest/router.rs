@@ -112,7 +112,7 @@ impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{proto::test_helpers::req, routing::request_spec::*};
+    use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
     use http::Method;
 

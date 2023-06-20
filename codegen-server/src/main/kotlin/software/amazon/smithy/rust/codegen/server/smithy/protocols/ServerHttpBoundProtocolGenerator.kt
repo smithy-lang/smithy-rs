@@ -210,7 +210,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if !#{SmithyHttpServer}::protocols::accept_header_classifier(request.headers(), &$staticContentType) {
+                    if !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &$staticContentType) {
                         return Err(#{RequestRejection}::NotAcceptable);
                     }
                     """,
@@ -246,7 +246,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             ?.let { "Some(${it.dq()})" } ?: "None"
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
+                            #{SmithyHttpServer}::protocol::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
                             """,
                             *codegenScope,
                         )
@@ -700,7 +700,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (protocol is RestJson) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    #{SmithyHttpServer}::protocol::content_type_header_classifier(&parts.headers, Some("application/json"))?;
                     """,
                     *codegenScope,
                 )
@@ -742,7 +742,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
+                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
                     """,
                     *codegenScope,
                 )
