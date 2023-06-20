@@ -79,10 +79,18 @@ impl<T: Default> Default for Value<T> {
     }
 }
 
+/// [`CloneableLayer`] allows itself to be cloned. This is useful when a type that implements
+/// `Clone` wishes to store a config layer.
+///
+/// It ensures that all the items in `CloneableLayer` are `Clone` upon entry, e.g. when they are
+/// first stored, the mutable methods require that they have a `Clone` bound on them.
+///
+/// While [`FrozenLayer`] is also cloneable, which is a shallow clone via `Arc`, `CloneableLayer`
+/// performs a deep clone that newly allocates all the items stored in it.
 #[derive(Debug)]
-pub struct ClonableLayer(Layer);
+pub struct CloneableLayer(Layer);
 
-impl Deref for ClonableLayer {
+impl Deref for CloneableLayer {
     type Target = Layer;
 
     fn deref(&self) -> &Self::Target {
@@ -90,13 +98,13 @@ impl Deref for ClonableLayer {
     }
 }
 
-impl DerefMut for ClonableLayer {
+impl DerefMut for CloneableLayer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Clone for ClonableLayer {
+impl Clone for CloneableLayer {
     fn clone(&self) -> Self {
         Self(
             self.try_clone()
@@ -107,7 +115,7 @@ impl Clone for ClonableLayer {
 
 // We need to "override" the mutable methods to encode the information that an item being stored
 // implements `Clone`. For the immutable methods, they can just be delegated via the `Deref` trait.
-impl ClonableLayer {
+impl CloneableLayer {
     /// Creates a new `CloneableLayer` with a given name
     pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
         Self(Layer::new(name))
@@ -610,7 +618,7 @@ impl From<Layer> for FrozenLayer {
 #[cfg(test)]
 mod test {
     use super::ConfigBag;
-    use crate::config_bag::{ClonableLayer, Layer, Storable, StoreAppend, StoreReplace};
+    use crate::config_bag::{CloneableLayer, Layer, Storable, StoreAppend, StoreReplace};
 
     #[test]
     fn layered_property_bag() {
@@ -805,7 +813,7 @@ mod test {
         impl Storable for TestStr {
             type Storer = StoreReplace<TestStr>;
         }
-        let mut layer_1 = ClonableLayer::new("layer_1");
+        let mut layer_1 = CloneableLayer::new("layer_1");
         let expected_str = "I can be cloned";
         layer_1.store_put(TestStr(expected_str.to_owned()));
         let layer_1_cloned = layer_1.clone();
@@ -816,7 +824,7 @@ mod test {
         impl Storable for Rope {
             type Storer = StoreAppend<Rope>;
         }
-        let mut layer_2 = ClonableLayer::new("layer_2");
+        let mut layer_2 = CloneableLayer::new("layer_2");
         layer_2.store_append(Rope("A".to_owned()));
         layer_2.store_append(Rope("big".to_owned()));
         layer_2.store_append(Rope("rope".to_owned()));
