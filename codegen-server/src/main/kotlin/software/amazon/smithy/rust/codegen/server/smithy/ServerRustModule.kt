@@ -35,7 +35,6 @@ object ServerRustModule {
 
     val Error = RustModule.public("error")
     val Operation = RustModule.public("operation")
-    val OperationShape = RustModule.public("operation_shape")
     val Model = RustModule.public("model")
     val Input = RustModule.public("input")
     val Output = RustModule.public("output")
@@ -54,8 +53,7 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
         val strDoc: (String) -> Writable = { str -> writable { docs(escape(str)) } }
         return when (module) {
             ServerRustModule.Error -> strDoc("All error types that operations can return. Documentation on these types is copied from the model.")
-            ServerRustModule.Operation -> strDoc("All operations that this crate can perform.")
-            ServerRustModule.OperationShape -> operationShapeModuleDoc()
+            ServerRustModule.Operation -> operationShapeModuleDoc()
             ServerRustModule.Model -> strDoc("Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
             ServerRustModule.Input -> strDoc("Input structures for operations. Documentation on these types is copied from the model.")
             ServerRustModule.Output -> strDoc("Output structures for operations. Documentation on these types is copied from the model.")

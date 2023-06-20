@@ -62,7 +62,7 @@ This is enabled via the `instrument` method provided by the `aws_smithy_http_ser
 ```rust,no_run
 # extern crate aws_smithy_http_server;
 # extern crate pokemon_service_server_sdk;
-# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# use pokemon_service_server_sdk::{operation::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 use aws_smithy_http_server::{
   instrumentation::InstrumentExt,

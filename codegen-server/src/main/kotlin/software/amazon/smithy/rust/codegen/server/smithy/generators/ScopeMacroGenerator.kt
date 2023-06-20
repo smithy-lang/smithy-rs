@@ -111,8 +111,8 @@ class ScopeMacroGenerator(
             /// ## impl<S, Op, T> Plugin<S, Op, T> for MockPlugin { type Output = u32; fn apply(&self, input: T) -> u32 { 3 } }
             /// ## let scoped_a = Scoped::new::<ScopeA>(MockPlugin);
             /// ## let scoped_b = Scoped::new::<ScopeB>(MockPlugin);
-            /// ## let a = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_a, 6);
-            /// ## let b = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_b, 6);
+            /// ## let a = Plugin::<(), $crateName::operation::$firstOperationName, u64>::apply(&scoped_a, 6);
+            /// ## let b = Plugin::<(), $crateName::operation::$firstOperationName, u64>::apply(&scoped_b, 6);
             /// ## assert_eq!(a, 3_u32);
             /// ## assert_eq!(b, 6_u64);
             /// ```
@@ -142,7 +142,7 @@ class ScopeMacroGenerator(
                         includes: [$($ include:ident),*]
                     }
                 ) => {
-                    use $ crate::operation_shape::*;
+                    use $ crate::operation::*;
                     #{SmithyHttpServer}::scope! {
                         $(##[$ attrs])*
                         $ vis struct $ name {
@@ -158,7 +158,7 @@ class ScopeMacroGenerator(
                         excludes: [$($ exclude:ident),*]
                     }
                 ) => {
-                    use $ crate::operation_shape::*;
+                    use $ crate::operation::*;
 
                     #{SmithyHttpServer}::scope! {
                         $(##[$ attrs])*

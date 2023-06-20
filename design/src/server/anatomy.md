@@ -44,7 +44,7 @@ Smithy Rust will use this model to produce the following API:
 ```rust
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
-# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonService};
+# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation::*, PokemonService};
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     todo!()
@@ -171,7 +171,7 @@ use pokemon_service_server_sdk::{
     input::GetPokemonSpeciesInput,
     output::GetPokemonSpeciesOutput,
     error::GetPokemonSpeciesError,
-    operation_shape::GetPokemonSpecies
+    operation::GetPokemonSpecies
 };
 use aws_smithy_http_server::operation::OperationShapeExt;
 
@@ -192,7 +192,7 @@ use pokemon_service_server_sdk::{
     input::GetPokemonSpeciesInput,
     output::GetPokemonSpeciesOutput,
     error::GetPokemonSpeciesError,
-    operation_shape::GetPokemonSpecies
+    operation::GetPokemonSpecies
 };
 use aws_smithy_http_server::operation::OperationShapeExt;
 use std::task::{Context, Poll};
