@@ -93,7 +93,7 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 // Setter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 
-// Setter names will never hit a reserved word and therefore never need escaping.
+// Getter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.getterName() = "get_${this.memberName.toSnakeCase()}"
 
 class BuilderGenerator(

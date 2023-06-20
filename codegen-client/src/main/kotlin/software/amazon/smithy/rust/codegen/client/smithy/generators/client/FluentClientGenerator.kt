@@ -410,9 +410,9 @@ class FluentClientGenerator(
                 }
             }
 
-            rust("/// Access the inner ${operationSymbol.name} builder as a reference.\n")
+            rust("/// Access the ${operationSymbol.name} as a reference.\n")
             withBlockTemplate(
-                "pub fn inner(&self) -> &#{Inner} {", "}",
+                "pub fn as_input(&self) -> &#{Inner} {", "}",
                 "Inner" to symbolProvider.symbolForBuilder(input),
             ) {
                 write("&self.inner")

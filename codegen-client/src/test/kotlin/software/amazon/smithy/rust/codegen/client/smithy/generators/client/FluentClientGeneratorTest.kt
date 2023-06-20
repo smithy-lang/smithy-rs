@@ -100,10 +100,10 @@ class FluentClientGeneratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config); 
                     
-                        let say_hello_input_builder = client.say_hello().byte_value(4).foo("hello!");
-                        assert_eq!(*say_hello_input_builder.get_foo(), Some("hello!".to_string()));
-                        let inner = say_hello_input_builder.inner();
-                        assert_eq!(*inner.get_byte_value(), Some(4));
+                        let say_hello_fluent_builder = client.say_hello().byte_value(4).foo("hello!");
+                        assert_eq!(*say_hello_fluent_builder.get_foo(), Some("hello!".to_string()));
+                        let input = say_hello_fluent_builder.as_input();
+                        assert_eq!(*input.get_byte_value(), Some(4));
                     }
                     """,
                     "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
