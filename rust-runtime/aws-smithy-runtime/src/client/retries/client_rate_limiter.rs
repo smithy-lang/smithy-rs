@@ -16,8 +16,7 @@ use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer, Storable, Stor
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-/// A [RuntimePlugin] to provide a standard token bucket, usable by the
-/// [`StandardRetryStrategy`](crate::client::retries::strategy::standard::StandardRetryStrategy).
+/// A [RuntimePlugin] to provide a client rate limiter, usable by a retry strategy.
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct ClientRateLimiterRuntimePlugin {
