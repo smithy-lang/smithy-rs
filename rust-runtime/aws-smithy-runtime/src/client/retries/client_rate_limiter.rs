@@ -252,8 +252,7 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_unix_timestamp, ClientRateLimiter};
-    use crate::client::runtime_plugin::client_rate_limiter::cubic_throttle;
+    use super::{cubic_throttle, get_unix_timestamp, ClientRateLimiter};
     use approx::assert_relative_eq;
     use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::test_util::instant_time_and_sleep;
