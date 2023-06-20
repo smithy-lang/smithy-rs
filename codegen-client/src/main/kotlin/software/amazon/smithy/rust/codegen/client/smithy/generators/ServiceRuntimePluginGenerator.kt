@@ -149,8 +149,8 @@ class ServiceRuntimePluginGenerator(
                     //     list of classifiers defined here, rather than replacing them.
 
                     let sleep_impl = self.handle.conf.sleep_impl();
-                    let timeout_config = self.handle.conf.timeout_config().cloned().unwrap_or_else(|| #{TimeoutConfig}::disabled());
-                    let retry_config = self.handle.conf.retry_config().cloned().unwrap_or_else(|| #{RetryConfig}::disabled());
+                    let timeout_config = self.handle.conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
+                    let retry_config = self.handle.conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
 
                     cfg.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
 
