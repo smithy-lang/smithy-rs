@@ -41,6 +41,13 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
 
     /**
+     * Hook for declaring singletons that store cross-operation state.
+     *
+     * Examples include token buckets, ID generators, etc.
+     */
+    class DeclareSingletons : ServiceRuntimePluginSection("DeclareSingletons")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val newLayerName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -152,8 +159,6 @@ class ServiceRuntimePluginGenerator(
                     let timeout_config = self.handle.conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let retry_config = self.handle.conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
 
-                    cfg.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
-
                     let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
                     if let Some(connection) = self.handle.conf.http_connector()
                             .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
@@ -174,6 +179,9 @@ class ServiceRuntimePluginGenerator(
                     #{additional_interceptors}
                 }
             }
+
+            /// Cross-operation shared-state singletons
+            #{declare_singletons}
             """,
             *codegenScope,
             "http_auth_scheme_customizations" to writable {
@@ -184,6 +192,9 @@ class ServiceRuntimePluginGenerator(
             },
             "additional_interceptors" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("interceptors"))
+            },
+            "declare_singletons" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())
             },
         )
     }

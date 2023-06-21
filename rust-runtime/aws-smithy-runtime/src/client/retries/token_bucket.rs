@@ -40,7 +40,7 @@ const RETRY_TIMEOUT_COST: u32 = RETRY_COST * 2;
 const PERMIT_REGENERATION_AMOUNT: usize = 1;
 
 #[derive(Clone, Debug)]
-pub(crate) struct TokenBucket {
+pub struct TokenBucket {
     semaphore: Arc<Semaphore>,
     max_permits: usize,
     timeout_retry_cost: u32,
@@ -63,7 +63,7 @@ impl Default for TokenBucket {
 }
 
 impl TokenBucket {
-    pub(crate) fn new(initial_quota: usize) -> Self {
+    pub fn new(initial_quota: usize) -> Self {
         Self {
             semaphore: Arc::new(Semaphore::new(initial_quota)),
             max_permits: initial_quota,

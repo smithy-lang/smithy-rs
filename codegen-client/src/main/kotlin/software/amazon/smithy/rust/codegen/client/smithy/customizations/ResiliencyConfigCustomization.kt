@@ -302,27 +302,76 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
     }
 }
 
-class ResiliencyServiceRuntimePluginCustomization(
-    private val codegenContext: ClientCodegenContext,
-) : ServiceRuntimePluginCustomization() {
+class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
+    private val retries = smithyRuntimeCrate.resolve("client::retries")
+    private val codegenScope = arrayOf(
+        "OnceCell" to RuntimeType.OnceCell.resolve("sync::OnceCell"),
+        "TokenBucket" to retries.resolve("TokenBucket"),
+        "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
+        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
+        "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
+        "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
+    )
+
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            rustTemplate(
-                """
-                if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
-                    ${section.newLayerName}.put(sleep_impl);
-                }
-                if let Some(timeout_config) = self.handle.conf.timeout_config() {
-                    ${section.newLayerName}.put(timeout_config.clone());
-                }
-                ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone});
-                """,
-                "maybe_clone" to writable {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                        rust(".clone()")
+        when (section) {
+            is ServiceRuntimePluginSection.AdditionalConfig -> {
+                rustTemplate(
+                    """
+                    if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
+                        ${section.newLayerName}.put(sleep_impl);
                     }
-                },
-            )
+
+                    match retry_config.mode() {
+                        #{RetryMode}::Adaptive => {
+                            let seconds_since_unix_epoch = self
+                                .handle
+                                .conf
+                                .time_source()
+                                .now()
+                                .duration_since(#{SystemTime}::UNIX_EPOCH)
+                                .expect("the present takes place after the UNIX_EPOCH")
+                                .as_secs_f64();
+                            let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
+                                #{ClientRateLimiter}::new(seconds_since_unix_epoch)
+                            }).clone();
+                            ${section.newLayerName}.put(client_rate_limiter);
+                            // TODO(enableNewSmithyRuntimeLaunch) Do we need to insert the token bucket for adaptive retries?
+                        },
+                        #{RetryMode}::Standard => {
+                            let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
+                            ${section.newLayerName}.put(token_bucket);
+                        },
+                        _ => unreachable!("RetryMode is non-exhaustive")
+                    }
+
+                    ${section.newLayerName}.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
+                    ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone})
+                        .put(timeout_config)
+                        .put(retry_config);
+                    """,
+                    *codegenScope,
+                    "maybe_clone" to writable {
+                        if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                            rust(".clone()")
+                        }
+                    },
+                )
+            }
+            is ServiceRuntimePluginSection.DeclareSingletons -> {
+                // TODO(enableNewSmithyRuntimeLaunch) We can use the standard library's `OnceCell` once we upgrade the
+                //    MSRV to 1.70
+                rustTemplate(
+                    """
+                    const TOKEN_BUCKET: #{OnceCell}<#{TokenBucket}> = #{OnceCell}::new();
+                    const CLIENT_RATE_LIMITER: #{OnceCell}<#{ClientRateLimiter}> = #{OnceCell}::new();
+                    """,
+                    *codegenScope,
+                )
+            }
+            else -> emptySection
         }
     }
 }

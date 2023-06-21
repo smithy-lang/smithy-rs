@@ -24,7 +24,7 @@ use aws_smithy_runtime_api::client::retries::ShouldAttempt;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::mem;
-use tracing::{debug, debug_span, instrument, Instrument};
+use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
@@ -170,7 +170,7 @@ async fn try_op(
         .unwrap_or(Ok(ShouldAttempt::Yes));
     match should_attempt {
         // Yes, let's make a request
-        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OK'd initial request"),
+        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),
         // No, this request shouldn't be sent
         Ok(ShouldAttempt::No) => {
             let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
@@ -178,15 +178,19 @@ async fn try_op(
         }
         // No, we shouldn't make a request because...
         Err(err) => halt!([ctx] => OrchestratorError::other(err)),
-        Ok(ShouldAttempt::YesAfterDelay(_)) => {
-            unreachable!("Delaying the initial request is currently unsupported. If this feature is important to you, please file an issue in GitHub.")
+        Ok(ShouldAttempt::YesAfterDelay(delay)) => {
+            let sleep_impl = halt_on_err!([ctx] => cfg.sleep_impl().ok_or(OrchestratorError::other(
+                "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
+            )));
+            debug!("retry strategy has OKed initial request after a {delay:?} delay");
+            sleep_impl.sleep(delay).await;
         }
     }
 
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
-    for i in 1usize.. {
+    for i in 1u32.. {
         debug!("beginning attempt #{i}");
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
@@ -224,12 +228,12 @@ async fn try_op(
             ShouldAttempt::Yes => continue,
             // No, this request shouldn't be retried
             ShouldAttempt::No => {
-                debug!("this error is not retryable, exiting attempt loop");
+                debug!("a retry is either unnecessary or not possible, exiting attempt loop");
                 break;
             }
             ShouldAttempt::YesAfterDelay(delay) => {
                 let sleep_impl = halt_on_err!([ctx] => cfg.sleep_impl().ok_or(OrchestratorError::other(
-                    "the retry strategy requested a delay before sending the next request, but no 'async sleep' implementation was set"
+                    "the retry strategy requested a delay before sending the retry request, but no 'async sleep' implementation was set"
                 )));
                 sleep_impl.sleep(delay).await;
                 continue;
@@ -273,6 +277,7 @@ async fn try_attempt(
             }
         })
     });
+    trace!(response = ?call_result, "received response from service");
     ctx.set_response(call_result);
     ctx.enter_before_deserialization_phase();
 

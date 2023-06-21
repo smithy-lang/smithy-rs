@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::retries::client_rate_limiter::{ClientRateLimiter, RequestReason};
 use crate::client::retries::strategy::standard::ReleaseResult::{
     APermitWasReleased, NoPermitWasReleased,
 };
@@ -14,29 +15,37 @@ use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryReason, RetryStrategy, ShouldAttempt,
 };
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::sync::OwnedSemaphorePermit;
+use tracing::debug;
 
 // The initial attempt, plus three retries.
-const DEFAULT_MAX_ATTEMPTS: usize = 4;
+const DEFAULT_MAX_ATTEMPTS: u32 = 4;
 
 #[derive(Debug)]
 pub struct StandardRetryStrategy {
     // Retry settings
     base: fn() -> f64,
     initial_backoff: Duration,
-    max_attempts: usize,
+    max_attempts: u32,
     max_backoff: Duration,
     retry_permit: Mutex<Option<OwnedSemaphorePermit>>,
 }
 
 impl StandardRetryStrategy {
     pub fn new(retry_config: &RetryConfig) -> Self {
+        let base = if retry_config.use_static_exponential_base() {
+            || 1.0
+        } else {
+            fastrand::f64
+        };
         // TODO(enableNewSmithyRuntimeLaunch) add support for `retry_config.reconnect_mode()` here or in the orchestrator flow.
         Self::default()
-            .with_max_attempts(retry_config.max_attempts() as usize)
+            .with_base(base)
+            .with_max_backoff(retry_config.max_backoff())
+            .with_max_attempts(retry_config.max_attempts())
             .with_initial_backoff(retry_config.initial_backoff())
     }
 
@@ -45,7 +54,7 @@ impl StandardRetryStrategy {
         self
     }
 
-    pub fn with_max_attempts(mut self, max_attempts: usize) -> Self {
+    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
     }
@@ -100,8 +109,19 @@ impl Default for StandardRetryStrategy {
 }
 
 impl RetryStrategy for StandardRetryStrategy {
-    fn should_attempt_initial_request(&self, _cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
-        // The standard token bucket is only ever considered for retry requests.
+    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
+        if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+            let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+            if let Err(delay) = crl.acquire_permission_to_send_a_request(
+                seconds_since_unix_epoch,
+                RequestReason::InitialRequest,
+            ) {
+                return Ok(ShouldAttempt::YesAfterDelay(delay));
+            }
+        } else {
+            debug!("no client rate limiter configured, so no token is required for the initial request.");
+        }
+
         Ok(ShouldAttempt::Yes)
     }
 
@@ -115,8 +135,9 @@ impl RetryStrategy for StandardRetryStrategy {
             "This must never be called without reaching the point where the result exists.",
         );
         let token_bucket = cfg.get::<TokenBucket>();
+        let client_rate_limiter = cfg.get::<ClientRateLimiter>();
         if output_or_error.is_ok() {
-            tracing::debug!("request succeeded, no retry necessary");
+            debug!("request succeeded, no retry necessary");
             if let Some(tb) = token_bucket {
                 // If this retry strategy is holding any permits, release them back to the bucket.
                 if let NoPermitWasReleased = self.release_retry_permit() {
@@ -126,6 +147,10 @@ impl RetryStrategy for StandardRetryStrategy {
                     // back up again.
                     tb.regenerate_a_token();
                 }
+            }
+            if let Some(crl) = client_rate_limiter {
+                let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+                crl.update_rate_limiter(seconds_since_unix_epoch, false);
             }
 
             return Ok(ShouldAttempt::No);
@@ -137,7 +162,12 @@ impl RetryStrategy for StandardRetryStrategy {
             .expect("at least one request attempt is made before any retry is attempted")
             .attempts();
         if request_attempts >= self.max_attempts {
-            tracing::trace!(
+            if let Some(crl) = client_rate_limiter {
+                let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+                crl.update_rate_limiter(seconds_since_unix_epoch, false);
+            }
+
+            debug!(
                 attempts = request_attempts,
                 max_attempts = self.max_attempts,
                 "not retrying because we are out of attempts"
@@ -152,21 +182,7 @@ impl RetryStrategy for StandardRetryStrategy {
         // Calculate the appropriate backoff time.
         let backoff = match retry_reason {
             Some(RetryReason::Explicit(dur)) => dur,
-            Some(RetryReason::Error(kind)) => {
-                // If a token bucket was set, and the RetryReason IS NOT explicit, attempt to acquire a retry permit.
-                if let Some(tb) = token_bucket {
-                    match tb.acquire(&kind) {
-                        Some(permit) => self.set_retry_permit(permit),
-                        None => {
-                            tracing::debug!(
-                                "attempt #{request_attempts} failed with {kind:?}; \
-                                However, no retry permits are available, so no retry will be attempted.",
-                            );
-                            return Ok(ShouldAttempt::No);
-                        }
-                    }
-                };
-
+            Some(RetryReason::Error(_)) => {
                 let backoff = calculate_exponential_backoff(
                     // Generate a random base multiplier to create jitter
                     (self.base)(),
@@ -174,13 +190,18 @@ impl RetryStrategy for StandardRetryStrategy {
                     self.initial_backoff.as_secs_f64(),
                     // `self.local.attempts` tracks number of requests made including the initial request
                     // The initial attempt shouldn't count towards backoff calculations so we subtract it
-                    (request_attempts - 1) as u32,
+                    request_attempts - 1,
                 );
                 Duration::from_secs_f64(backoff).min(self.max_backoff)
             }
             Some(_) => unreachable!("RetryReason is non-exhaustive"),
             None => {
-                tracing::debug!(
+                if let Some(crl) = client_rate_limiter {
+                    let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+                    crl.update_rate_limiter(seconds_since_unix_epoch, false);
+                }
+
+                debug!(
                     attempts = request_attempts,
                     max_attempts = self.max_attempts,
                     "encountered unretryable error"
@@ -189,7 +210,53 @@ impl RetryStrategy for StandardRetryStrategy {
             }
         };
 
-        tracing::debug!(
+        if let (Some(crl), Some(RetryReason::Error(kind))) =
+            (client_rate_limiter, retry_reason.as_ref())
+        {
+            let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+            crl.update_rate_limiter(
+                seconds_since_unix_epoch,
+                kind == &ErrorKind::ThrottlingError,
+            )
+        };
+
+        match retry_reason {
+            Some(RetryReason::Error(kind)) => {
+                match (token_bucket, client_rate_limiter) {
+                    (None, Some(crl)) => {
+                        let request_reason = match kind {
+                            ErrorKind::ThrottlingError => RequestReason::RetryTimeout,
+                            _other_kind => RequestReason::Retry,
+                        };
+
+                        let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+                        if let Err(delay) = crl.acquire_permission_to_send_a_request(
+                            seconds_since_unix_epoch,
+                            request_reason,
+                        ) {
+                            return Ok(ShouldAttempt::YesAfterDelay(delay));
+                        }
+                    }
+                    (Some(tb), None) => match tb.acquire(&kind) {
+                        Some(permit) => self.set_retry_permit(permit),
+                        None => {
+                            debug!("attempt #{request_attempts} failed with {kind:?}; However, no retry permits are available, so no retry will be attempted.");
+                            return Ok(ShouldAttempt::No);
+                        }
+                    },
+                    (Some(_), Some(_)) => {
+                        panic!("Either a token bucket or a client rate limiter must be set, but not both");
+                    }
+                    (None, None) => { /* no buckets, no problems */ }
+                }
+            }
+            Some(RetryReason::Explicit(_)) => { /* do nothing, we don't need a token for this case*/
+            }
+            Some(_) => unreachable!("RetryReason is non-exhaustive"),
+            None => unreachable!("this case is covered by the previous match"),
+        }
+
+        debug!(
             "attempt #{request_attempts} failed with {:?}; retrying after {:?}",
             retry_reason.expect("the match statement above ensures this is not None"),
             backoff
@@ -201,6 +268,15 @@ impl RetryStrategy for StandardRetryStrategy {
 
 fn calculate_exponential_backoff(base: f64, initial_backoff: f64, retry_attempts: u32) -> f64 {
     base * initial_backoff * 2_u32.pow(retry_attempts) as f64
+}
+
+fn get_seconds_since_unix_epoch(cfg: &ConfigBag) -> f64 {
+    let request_time = cfg.request_time().unwrap();
+    request_time
+        .now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
 }
 
 #[cfg(test)]
@@ -236,7 +312,7 @@ mod tests {
 
     fn set_up_cfg_and_context(
         error_kind: ErrorKind,
-        current_request_attempts: usize,
+        current_request_attempts: u32,
     ) -> (InterceptorContext, ConfigBag) {
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
@@ -485,7 +561,7 @@ mod tests {
         let (mut cfg, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::TransientError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
-            .with_max_attempts(usize::MAX);
+            .with_max_attempts(u32::MAX);
         cfg.interceptor_state().put(TokenBucket::new(PERMIT_COUNT));
         let token_bucket = cfg.get::<TokenBucket>().unwrap().clone();
 
@@ -513,7 +589,7 @@ mod tests {
         // Replenish permits until we get back to `PERMIT_COUNT`
         while token_bucket.available_permits() < PERMIT_COUNT {
             if attempt > 23 {
-                panic!("This test should have completed by now (fillup)");
+                panic!("This test should have completed by now (fill-up)");
             }
 
             cfg.interceptor_state().put(RequestAttempts::new(attempt));
