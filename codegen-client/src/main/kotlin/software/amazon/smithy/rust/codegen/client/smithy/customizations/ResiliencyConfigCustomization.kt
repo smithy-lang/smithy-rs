@@ -228,7 +228,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         rustTemplate(
                             """
                             pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
-                                sleep_impl.clone().map(|s| self.inner.store_put(s));
+                                sleep_impl.map(|s| self.inner.store_put(s));
                                 self
                             }
                             """,

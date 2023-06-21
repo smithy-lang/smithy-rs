@@ -167,7 +167,7 @@ internal class EndpointConfigCustomization(
                                 """
                                 self.inner.store_put(self.inner.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
                                     #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
-                                ).clone());
+                                ));
                                 """,
                                 *codegenScope,
                                 "DefaultResolver" to defaultResolver,
