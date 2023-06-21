@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Approx
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
@@ -80,8 +81,11 @@ class IntegrationTestDependencies(
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
                 addDependency(smithyAsync)
+                addDependency(smithyTypes)
                 addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
@@ -103,6 +107,7 @@ class IntegrationTestDependencies(
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
         "transcribestreaming" -> listOf(TranscribeTestDependencies())
         "s3" -> listOf(S3TestDependencies(codegenContext))
+        "dynamodb" -> listOf(DynamoDbTestDependencies())
         else -> emptyList()
     }
 }
@@ -113,6 +118,13 @@ class TranscribeTestDependencies : LibRsCustomization() {
             addDependency(AsyncStream)
             addDependency(FuturesCore)
             addDependency(Hound)
+        }
+}
+
+class DynamoDbTestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(Approx)
         }
 }
 
