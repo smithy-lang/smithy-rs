@@ -56,6 +56,7 @@ open class OperationGenerator(
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = runtime_plugins
+                            .with_client_plugin(handle.conf.clone())
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
                             .with_operation_plugin(operation);
                         if let Some(config_override) = config_override {
