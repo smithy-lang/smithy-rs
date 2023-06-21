@@ -16,6 +16,10 @@ class ClientRuntimeTypesReExportGenerator(
     private val rustCrate: RustCrate,
 ) {
     fun render() {
+        if (!codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            return
+        }
+
         val rc = codegenContext.runtimeConfig
         val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
 
