@@ -121,7 +121,7 @@ class HttpAuthDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val authSchemes = HttpAuthSchemes.from(codegenContext)
         if (authSchemes.anyEnabled()) {
-            rustCrate.withModule(ClientRustModule.Config) {
+            rustCrate.withModule(ClientRustModule.config) {
                 val codegenScope = codegenScope(codegenContext.runtimeConfig)
                 if (authSchemes.isTokenBased()) {
                     rustTemplate("pub use #{Token};", *codegenScope)

@@ -59,7 +59,7 @@ open class MakeOperationGenerator(
 
     private val codegenScope = arrayOf(
         *preludeScope,
-        "config" to ClientRustModule.Config,
+        "config" to ClientRustModule.config,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "http" to RuntimeType.Http,
         "operation" to RuntimeType.operationModule(runtimeConfig),

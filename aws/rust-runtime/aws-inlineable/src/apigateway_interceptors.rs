@@ -5,9 +5,9 @@
 
 #![allow(dead_code)]
 
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
-};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::header::ACCEPT;
 use http::HeaderValue;

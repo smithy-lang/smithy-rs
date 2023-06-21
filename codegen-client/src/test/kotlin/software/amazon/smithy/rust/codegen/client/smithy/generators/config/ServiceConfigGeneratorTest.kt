@@ -165,7 +165,7 @@ internal class ServiceConfigGeneratorTest {
         val sut = ServiceConfigGenerator(codegenContext, listOf(ServiceCustomizer(codegenContext)))
         val symbolProvider = codegenContext.symbolProvider
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ClientRustModule.Config) {
+        project.withModule(ClientRustModule.config) {
             sut.render(this)
             if (smithyRuntimeMode.defaultToOrchestrator) {
                 unitTest(

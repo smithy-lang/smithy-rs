@@ -190,7 +190,7 @@ open class OperationGenerator(
                     *codegenScope,
                     "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
                     "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::InterceptorContext"),
+                    "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                     "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),

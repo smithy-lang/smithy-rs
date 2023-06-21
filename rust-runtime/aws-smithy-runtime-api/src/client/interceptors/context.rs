@@ -27,10 +27,6 @@
 //! recommended for storing request-specific information in your interceptor implementation.
 //! Use the [`ConfigBag`] instead.
 
-/// Operation phases.
-pub mod phase;
-pub mod wrappers;
-
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_http::result::SdkError;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -47,6 +43,19 @@ pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
 type Response = HttpResponse;
+
+pub use wrappers::{
+    AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
+    BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
+    BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
+    FinalizerInterceptorContextRef,
+};
+
+mod wrappers;
+
+/// Operation phases.
+pub(crate) mod phase;
 
 /// A container for the data currently available to an interceptor.
 ///

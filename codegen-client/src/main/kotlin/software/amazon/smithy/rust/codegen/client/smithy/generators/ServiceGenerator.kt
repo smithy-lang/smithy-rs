@@ -40,7 +40,7 @@ class ServiceGenerator(
             decorator.errorCustomizations(codegenContext, emptyList()),
         ).render(rustCrate)
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
                 codegenContext,
                 extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
@@ -62,5 +62,7 @@ class ServiceGenerator(
             Attribute.DocInline.render(this)
             write("pub use config::Config;")
         }
+
+        ClientRuntimeTypesReExportGenerator(codegenContext, rustCrate).render()
     }
 }

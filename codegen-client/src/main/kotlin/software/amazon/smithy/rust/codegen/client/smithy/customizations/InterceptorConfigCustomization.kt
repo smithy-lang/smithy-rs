@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val interceptors = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
 
     // TODO(enableNewSmithyRuntimeCleanup): Remove the writable below
     private val maybeHideOrchestratorCode = writable {
@@ -25,8 +24,8 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
         }
     }
     private val codegenScope = arrayOf(
-        "Interceptor" to interceptors.resolve("Interceptor"),
-        "SharedInterceptor" to interceptors.resolve("SharedInterceptor"),
+        "Interceptor" to RuntimeType.interceptor(runtimeConfig),
+        "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
         "maybe_hide_orchestrator_code" to maybeHideOrchestratorCode,
     )
 

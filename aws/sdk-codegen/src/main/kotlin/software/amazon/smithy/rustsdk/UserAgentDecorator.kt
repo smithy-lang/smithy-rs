@@ -88,7 +88,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
             )
         }
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
             rustTemplate(
                 "pub use #{AppName};",

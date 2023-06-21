@@ -10,10 +10,11 @@ use aws_runtime::auth::sigv4::SigV4OperationSigningConfig;
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream;
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, BoxError,
-    Interceptor,
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, LoadedRequestBody};
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
@@ -234,7 +235,7 @@ fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
 #[cfg(test)]
 mod account_id_autofill_tests {
     use super::*;
-    use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
@@ -273,7 +274,7 @@ mod account_id_autofill_tests {
 #[cfg(test)]
 mod api_version_tests {
     use super::*;
-    use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_types::type_erasure::TypedBox;
 
     #[test]
