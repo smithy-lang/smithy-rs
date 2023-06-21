@@ -114,7 +114,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
-                            "self.inner.store_put(self.inner.load::<#{SharedTimeSource}>().cloned().unwrap_or_default());",
+                            "layer.store_put(layer.load::<#{SharedTimeSource}>().cloned().unwrap_or_default());",
                             *codegenScope,
                         )
                     } else {

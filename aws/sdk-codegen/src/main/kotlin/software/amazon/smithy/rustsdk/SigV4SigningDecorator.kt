@@ -81,23 +81,42 @@ class SigV4SigningConfig(
     private val serviceHasEventStream: Boolean,
     private val sigV4Trait: SigV4Trait,
 ) : ConfigCustomization() {
+    private val codegenScope = arrayOf(
+        "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
+        "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
+        "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
+    )
+
     override fun section(section: ServiceConfig): Writable = writable {
-        if (section is ServiceConfig.ConfigImpl) {
-            if (serviceHasEventStream) {
-                // enable the aws-sig-auth `sign-eventstream` feature
-                addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
-            }
-            rust(
-                """
-                /// The signature version 4 service signing name to use in the credential scope when signing requests.
-                ///
-                /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                /// [`SigningService`](aws_types::SigningService) during operation construction
-                pub fn signing_service(&self) -> &'static str {
-                    ${sigV4Trait.name.dq()}
+        when (section) {
+            ServiceConfig.ConfigImpl -> {
+                if (serviceHasEventStream) {
+                    // enable the aws-sig-auth `sign-eventstream` feature
+                    addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
                 }
-                """,
-            )
+                rust(
+                    """
+                    /// The signature version 4 service signing name to use in the credential scope when signing requests.
+                    ///
+                    /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
+                    /// [`SigningService`](aws_types::SigningService) during operation construction
+                    pub fn signing_service(&self) -> &'static str {
+                        ${sigV4Trait.name.dq()}
+                    }
+                    """,
+                )
+            }
+            ServiceConfig.BuilderBuild -> {
+                rustTemplate(
+                    """
+                    layer.put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                    layer.load::<#{Region}>().cloned().map(|r| layer.put(#{SigningRegion}::from(r)));
+                    """,
+                    *codegenScope,
+                )
+            }
+
+            else -> emptySection
         }
     }
 }

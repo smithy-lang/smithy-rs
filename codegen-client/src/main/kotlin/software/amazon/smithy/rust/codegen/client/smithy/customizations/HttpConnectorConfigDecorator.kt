@@ -38,7 +38,12 @@ private class HttpConnectorConfigCustomization(
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
+        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
+        "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
+        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connections::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
+        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
+        "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -183,7 +188,29 @@ private class HttpConnectorConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        let sleep_impl = layer.load::<#{SharedAsyncSleep}>().cloned();
+                        let timeout_config = layer.load::<#{TimeoutConfig}>().cloned().unwrap_or_else(|| #{TimeoutConfig}::disabled());
+
+                        let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
+
+                        if let Some(connection) = layer.load::<#{HttpConnector}>()
+                                .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                                .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
+                            let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
+                                // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                                connection
+                            )) as _;
+                            layer.set_connection(connection);
+                        }
+
+                        """,
+                        *codegenScope,
+                        "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
+                    )
+                } else {
                     rust("http_connector: self.http_connector,")
                 }
             }
