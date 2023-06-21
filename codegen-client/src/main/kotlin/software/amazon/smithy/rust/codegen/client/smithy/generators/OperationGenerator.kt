@@ -157,7 +157,7 @@ open class OperationGenerator(
                                     .unwrap()
                             })
                         };
-                        let context = Self::orchestrate_with_stop_point(&runtime_plugins, input, #{StopPoint}::None)
+                        let context = Self::orchestrate_with_stop_point(runtime_plugins, input, #{StopPoint}::None)
                             .await
                             .map_err(map_err)?;
                         let output = context.finalize().map_err(map_err)?;

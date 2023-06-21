@@ -97,5 +97,5 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations + listOf(ResiliencyServiceRuntimePluginCustomization())
+        baseCustomizations + listOf(ResiliencyServiceRuntimePluginCustomization(codegenContext))
 }

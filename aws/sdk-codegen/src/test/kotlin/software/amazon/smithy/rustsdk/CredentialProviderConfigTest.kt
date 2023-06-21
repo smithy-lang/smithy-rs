@@ -17,6 +17,6 @@ internal class CredentialProviderConfigTest {
     fun `generates a valid config`(smithyRuntimeModeStr: String) {
         val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         val codegenContext = awsTestCodegenContext().withSmithyRuntimeMode(smithyRuntimeMode)
-        validateConfigCustomizations(codegenContext, CredentialProviderConfig(codegenContext.runtimeConfig))
+        validateConfigCustomizations(codegenContext, CredentialProviderConfig(codegenContext))
     }
 }
