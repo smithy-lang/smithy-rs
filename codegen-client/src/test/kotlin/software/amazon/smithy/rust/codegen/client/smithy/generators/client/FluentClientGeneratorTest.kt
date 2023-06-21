@@ -114,7 +114,7 @@ class FluentClientGeneratorTest {
                         if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                             rust(".http_connector(connector.clone())")
                         }
-                    }
+                    },
                 )
             }
         }
