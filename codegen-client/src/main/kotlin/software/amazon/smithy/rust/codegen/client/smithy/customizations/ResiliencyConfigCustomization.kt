@@ -364,10 +364,12 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
     }
 }
 
-class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomization() {
+class ResiliencyServiceRuntimePluginCustomization(
+    private val codegenContext: ClientCodegenContext,
+) : ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            rust(
+            rustTemplate(
                 """
                 if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
                     ${section.newLayerName}.put(sleep_impl);
@@ -375,8 +377,13 @@ class ResiliencyServiceRuntimePluginCustomization : ServiceRuntimePluginCustomiz
                 if let Some(timeout_config) = self.handle.conf.timeout_config() {
                     ${section.newLayerName}.put(timeout_config.clone());
                 }
-                ${section.newLayerName}.put(self.handle.conf.time_source().clone());
+                ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone});
                 """,
+                "maybe_clone" to writable {
+                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                        rust(".clone()")
+                    }
+                },
             )
         }
     }
