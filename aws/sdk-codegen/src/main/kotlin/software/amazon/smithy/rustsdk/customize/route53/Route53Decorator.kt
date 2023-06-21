@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -45,10 +46,14 @@ class Route53Decorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        val hostedZoneMember =
-            operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
+        val inputShape = operation.inputShape(codegenContext.model)
+        val hostedZoneMember = inputShape.members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
-            baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
+            baseCustomizations + TrimResourceIdCustomization(
+                codegenContext,
+                inputShape,
+                codegenContext.symbolProvider.toMemberName(hostedZoneMember),
+            )
         } else {
             baseCustomizations
         }
@@ -59,25 +64,50 @@ class Route53Decorator : ClientCodegenDecorator {
     }
 }
 
-class TrimResourceIdCustomization(private val fieldName: String) : OperationCustomization() {
+class TrimResourceIdCustomization(
+    private val codegenContext: ClientCodegenContext,
+    private val inputShape: StructureShape,
+    private val fieldName: String,
+) :
+    OperationCustomization() {
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = true
 
-    private val trimResourceId =
-        RuntimeType.forInlineDependency(
-            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
-        )
-            .resolve("trim_resource_id")
-
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateInput -> writable {
+    override fun section(section: OperationSection): Writable = writable {
+        when (section) {
+            // TODO(enableNewSmithyRuntimeCleanup): Delete this `MutateInput` section
+            is OperationSection.MutateInput -> {
+                val trimResourceId =
+                    RuntimeType.forInlineDependency(
+                        InlineAwsDependency.forRustFile("route53_resource_id_preprocessor_middleware"),
+                    )
+                        .resolve("trim_resource_id")
                 rustTemplate(
                     "#{trim_resource_id}(&mut ${section.input}.$fieldName);",
                     "trim_resource_id" to trimResourceId,
                 )
             }
-            else -> emptySection
+
+            is OperationSection.AdditionalInterceptors -> {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                    val interceptor =
+                        RuntimeType.forInlineDependency(
+                            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
+                        ).resolve("Route53ResourceIdInterceptor")
+                    rustTemplate(
+                        """
+                        #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
+                            &mut input.$fieldName
+                        })
+                        """,
+                        "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
+                        "Route53ResourceIdInterceptor" to interceptor,
+                        "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
+                    )
+                }
+            }
+            else -> {}
         }
     }
 }
