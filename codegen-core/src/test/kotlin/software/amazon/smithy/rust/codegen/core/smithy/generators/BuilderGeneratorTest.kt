@@ -42,7 +42,7 @@ internal class BuilderGeneratorTest {
                     """
                     let my_struct_builder = MyStruct::builder().byte_value(4).foo("hello!");
                     assert_eq!(*my_struct_builder.get_byte_value(), Some(4));
-                    
+
                     let my_struct = my_struct_builder.build();
                     assert_eq!(my_struct.foo.unwrap(), "hello!");
                     assert_eq!(my_struct.bar, 0);

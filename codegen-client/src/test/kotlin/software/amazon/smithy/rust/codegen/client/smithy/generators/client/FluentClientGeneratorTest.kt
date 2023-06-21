@@ -98,8 +98,8 @@ class FluentClientGeneratorTest {
                             .connector(connector.clone())
                             .middleware_fn(|r| r)
                             .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config); 
-                    
+                        let client = $moduleName::Client::with_config(smithy_client, config);
+
                         let say_hello_fluent_builder = client.say_hello().byte_value(4).foo("hello!");
                         assert_eq!(*say_hello_fluent_builder.get_foo(), Some("hello!".to_string()));
                         let input = say_hello_fluent_builder.as_input();
