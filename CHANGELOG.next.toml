@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+ [[aws-sdk-rust]]
+ message = "Add accessors to Builders"
+ references = ["smithy-rs#2791"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false }
+ author = "davidsouther"
+
+ [[smithy-rs]]
+ message = "Add accessors to Builders"
+ references = ["smithy-rs#2791"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+ author = "davidsouther"
+
 [[smithy-rs]]
 message = "Avoid intermediate vec allocations in AggregatedBytes::to_vec."
 author = "yotamofek"
