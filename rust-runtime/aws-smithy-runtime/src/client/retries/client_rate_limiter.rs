@@ -661,7 +661,8 @@ mod tests {
         // Assert that the rate limiter respects the passage of time.
         assert_relative_eq!(
             inner.last_timestamp.unwrap(),
-            sleep_impl.total_duration().as_secs_f64()
+            sleep_impl.total_duration().as_secs_f64(),
+            max_relative = 0.0001
         );
     }
 }

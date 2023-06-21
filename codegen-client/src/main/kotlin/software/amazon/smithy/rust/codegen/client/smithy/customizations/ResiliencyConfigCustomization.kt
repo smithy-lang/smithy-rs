@@ -365,8 +365,8 @@ class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: Cl
                 //    MSRV to 1.70
                 rustTemplate(
                     """
-                    const TOKEN_BUCKET: #{OnceCell}<#{TokenBucket}> = #{OnceCell}::new();
-                    const CLIENT_RATE_LIMITER: #{OnceCell}<#{ClientRateLimiter}> = #{OnceCell}::new();
+                    static TOKEN_BUCKET: #{OnceCell}<#{TokenBucket}> = #{OnceCell}::new();
+                    static CLIENT_RATE_LIMITER: #{OnceCell}<#{ClientRateLimiter}> = #{OnceCell}::new();
                     """,
                     *codegenScope,
                 )
