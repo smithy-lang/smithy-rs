@@ -126,18 +126,30 @@ internal class ServiceConfigGeneratorTest {
                         }
                     }
 
-                    ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
-                    ServiceConfig.BuilderImpl -> emptySection
-                    ServiceConfig.BuilderBuild -> writable {
+                    ServiceConfig.BuilderStruct -> writable {
+                        if (runtimeMode.defaultToMiddleware) {
+                            rust("config_field: Option<u64>")
+                        }
+                    }
+                    ServiceConfig.BuilderImpl -> writable {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
-                                "layer.store_or_unset(self.config_field.map(#{T}));",
+                                """
+                                ##[allow(missing_docs)]
+                                pub fn config_field(mut self, config_field: u64) -> Self {
+                                    self.inner.store_put(#{T}(config_field));
+                                    self
+                                }
+                                """,
                                 "T" to configParamNewtype(
                                     "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
                                     codegenContext.runtimeConfig,
                                 ),
                             )
-                        } else {
+                        }
+                    }
+                    ServiceConfig.BuilderBuild -> writable {
+                        if (runtimeMode.defaultToMiddleware) {
                             rust("config_field: self.config_field.unwrap_or_default(),")
                         }
                     }
@@ -159,8 +171,7 @@ internal class ServiceConfigGeneratorTest {
                 unitTest(
                     "set_config_fields",
                     """
-                    let mut builder = Config::builder();
-                    builder.config_field = Some(99);
+                    let builder = Config::builder().config_field(99);
                     let config = builder.build();
                     assert_eq!(config.config_field(), 99);
                     """,
