@@ -7,19 +7,19 @@
 //!
 //! Interceptors have access to varying pieces of context during the course of an operation.
 //!
-//! An operation is composed of multiple phases. The initial phase is [`Phase::BeforeSerialization`], which
-//! has the original input as context. The next phase is [`Phase::BeforeTransmit`], which has the serialized
+//! An operation is composed of multiple phases. The initial phase is "before serialization", which
+//! has the original input as context. The next phase is "before transmit", which has the serialized
 //! request as context. Depending on which hook is being called with the dispatch context,
 //! the serialized request may or may not be signed (which should be apparent from the hook name).
-//! Following the [`Phase::BeforeTransmit`] phase is the [`Phase::BeforeDeserialization`] phase, which has
-//! the raw response available as context. Finally, the [`Phase::AfterDeserialization`] phase
+//! Following the "before transmit" phase is the "before deserialization" phase, which has
+//! the raw response available as context. Finally, the "after deserialization" phase
 //! has both the raw and parsed response available.
 //!
 //! To summarize:
-//! 1. [`Phase::BeforeSerialization`]: Only has the operation input.
-//! 2. [`Phase::BeforeTransmit`]: Only has the serialized request.
-//! 3. [`Phase::BeforeDeserialization`]: Has the raw response.
-//! 3. [`Phase::AfterDeserialization`]: Has the raw response and the parsed response.
+//! 1. Before serialization: Only has the operation input.
+//! 2. Before transmit: Only has the serialized request.
+//! 3. Before deserialization: Has the raw response.
+//! 3. After deserialization: Has the raw response and the parsed response.
 //!
 //! When implementing hooks, if information from a previous phase is required, then implement
 //! an earlier hook to examine that context, and save off any necessary information into the
@@ -60,8 +60,8 @@ pub(crate) mod phase;
 /// A container for the data currently available to an interceptor.
 ///
 /// Different context is available based on which phase the operation is currently in. For example,
-/// context in the [`Phase::BeforeSerialization`] phase won't have a `request` yet since the input hasn't been
-/// serialized at that point. But once it gets into the [`Phase::BeforeTransmit`] phase, the `request` will be set.
+/// context in the "before serialization" phase won't have a `request` yet since the input hasn't been
+/// serialized at that point. But once it gets into the "before transmit" phase, the `request` will be set.
 #[derive(Debug)]
 pub struct InterceptorContext<I = Input, O = Output, E = Error> {
     pub(crate) input: Option<I>,
@@ -74,7 +74,7 @@ pub struct InterceptorContext<I = Input, O = Output, E = Error> {
 }
 
 impl InterceptorContext<Input, Output, Error> {
-    /// Creates a new interceptor context in the [`Phase::BeforeSerialization`] phase.
+    /// Creates a new interceptor context in the "before serialization" phase.
     pub fn new(input: Input) -> InterceptorContext<Input, Output, Error> {
         InterceptorContext {
             input: Some(input),
