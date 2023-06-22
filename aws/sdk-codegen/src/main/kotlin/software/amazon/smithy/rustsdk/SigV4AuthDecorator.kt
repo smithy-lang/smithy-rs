@@ -78,22 +78,6 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                     // enable the aws-runtime `sign-eventstream` feature
                     addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
-                section.putConfigValue(this) {
-                    rustTemplate("#{SigningService}::from_static(self.handle.conf.signing_service())", *codegenScope)
-                }
-                rustTemplate(
-                    """
-                    if let Some(region) = self.handle.conf.region() {
-                        #{put_signing_region}
-                    }
-                    """,
-                    *codegenScope,
-                    "put_signing_region" to writable {
-                        section.putConfigValue(this) {
-                            rustTemplate("#{SigningRegion}::from(region.clone())", *codegenScope)
-                        }
-                    },
-                )
             }
 
             else -> {}

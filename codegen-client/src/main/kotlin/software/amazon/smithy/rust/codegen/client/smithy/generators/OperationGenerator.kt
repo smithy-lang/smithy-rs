@@ -56,6 +56,7 @@ open class OperationGenerator(
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = runtime_plugins
+                            .with_client_plugin(handle.conf.clone())
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
                             .with_operation_plugin(operation);
                         if let Some(config_override) = config_override {
@@ -157,7 +158,7 @@ open class OperationGenerator(
                                     .unwrap()
                             })
                         };
-                        let context = Self::orchestrate_with_stop_point(&runtime_plugins, input, #{StopPoint}::None)
+                        let context = Self::orchestrate_with_stop_point(runtime_plugins, input, #{StopPoint}::None)
                             .await
                             .map_err(map_err)?;
                         let output = context.finalize().map_err(map_err)?;

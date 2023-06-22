@@ -143,7 +143,7 @@ fun decoratorForBuiltIn(
                             } else {
                                 rust("$configRef.$name")
                             }
-                            if (parameter.type == ParameterType.STRING) {
+                            if (codegenContext.smithyRuntimeMode.defaultToMiddleware && parameter.type == ParameterType.STRING) {
                                 rust(".clone()")
                             }
                         }
