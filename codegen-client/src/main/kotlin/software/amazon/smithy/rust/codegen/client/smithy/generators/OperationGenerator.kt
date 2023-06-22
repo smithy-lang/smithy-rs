@@ -56,6 +56,7 @@ open class OperationGenerator(
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = runtime_plugins
+                            .with_client_plugin(handle.conf.clone())
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
                             .with_operation_plugin(operation);
                         if let Some(config_override) = config_override {
@@ -190,7 +191,7 @@ open class OperationGenerator(
                     *codegenScope,
                     "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
                     "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::InterceptorContext"),
+                    "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                     "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),

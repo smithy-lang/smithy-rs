@@ -96,6 +96,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations + listOf(ResiliencyServiceRuntimePluginCustomization(codegenContext))
+    ): List<ServiceRuntimePluginCustomization> = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+        baseCustomizations + ResiliencyServiceRuntimePluginCustomization(codegenContext)
+    } else {
+        baseCustomizations
+    }
 }

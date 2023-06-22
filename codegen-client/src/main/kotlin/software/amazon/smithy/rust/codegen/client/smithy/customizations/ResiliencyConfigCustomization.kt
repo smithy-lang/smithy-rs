@@ -12,11 +12,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyAsync
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
@@ -25,12 +26,21 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
     private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
+    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
+    private val retries = smithyRuntimeCrate.resolve("client::retries")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
+        *preludeScope,
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "Sleep" to sleepModule.resolve("Sleep"),
+        "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
+        "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
+        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
+        "TokenBucket" to retries.resolve("TokenBucket"),
+        "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
+        "SharedTimeSource" to smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -40,9 +50,9 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     if (runtimeMode.defaultToMiddleware) {
                         rustTemplate(
                             """
-                            retry_config: Option<#{RetryConfig}>,
-                            sleep_impl: Option<#{SharedAsyncSleep}>,
-                            timeout_config: Option<#{TimeoutConfig}>,
+                            retry_config: #{Option}<#{RetryConfig}>,
+                            sleep_impl: #{Option}<#{SharedAsyncSleep}>,
+                            timeout_config: #{Option}<#{TimeoutConfig}>,
                             """,
                             *codegenScope,
                         )
@@ -54,17 +64,17 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         rustTemplate(
                             """
                             /// Return a reference to the retry configuration contained in this config, if any.
-                            pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
+                            pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
                                 self.inner.load::<#{RetryConfig}>()
                             }
 
                             /// Return a cloned shared async sleep implementation from this config, if any.
-                            pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
+                            pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
                                 self.inner.load::<#{SharedAsyncSleep}>().cloned()
                             }
 
                             /// Return a reference to the timeout configuration contained in this config, if any.
-                            pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> {
+                            pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
                                 self.inner.load::<#{TimeoutConfig}>()
                             }
                             """,
@@ -74,17 +84,17 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         rustTemplate(
                             """
                             /// Return a reference to the retry configuration contained in this config, if any.
-                            pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
+                            pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
                                 self.retry_config.as_ref()
                             }
 
                             /// Return a cloned shared async sleep implementation from this config, if any.
-                            pub fn sleep_impl(&self) -> Option<#{SharedAsyncSleep}> {
+                            pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
                                 self.sleep_impl.clone()
                             }
 
                             /// Return a reference to the timeout configuration contained in this config, if any.
-                            pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> {
+                            pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
                                 self.timeout_config.as_ref()
                             }
                             """,
@@ -94,17 +104,19 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                 }
 
                 is ServiceConfig.BuilderStruct -> {
-                    rustTemplate(
-                        """
-                        retry_config: Option<#{RetryConfig}>,
-                        sleep_impl: Option<#{SharedAsyncSleep}>,
-                        timeout_config: Option<#{TimeoutConfig}>,
-                        """,
-                        *codegenScope,
-                    )
+                    if (runtimeMode.defaultToMiddleware) {
+                        rustTemplate(
+                            """
+                            retry_config: #{Option}<#{RetryConfig}>,
+                            sleep_impl: #{Option}<#{SharedAsyncSleep}>,
+                            timeout_config: #{Option}<#{TimeoutConfig}>,
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
-                ServiceConfig.BuilderImpl ->
+                is ServiceConfig.BuilderImpl -> {
                     rustTemplate(
                         """
                         /// Set the retry_config for the builder
@@ -138,10 +150,34 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// disable_retries(&mut builder);
                         /// let config = builder.build();
                         /// ```
-                        pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
-                            self.retry_config = retry_config;
-                            self
-                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
+                                retry_config.map(|r| self.inner.store_put(r));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
+                                self.retry_config = retry_config;
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                    rustTemplate(
+                        """
 
                         /// Set the sleep_impl for the builder
                         ///
@@ -192,10 +228,34 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// set_never_ending_sleep_impl(&mut builder);
                         /// let config = builder.build();
                         /// ```
-                        pub fn set_sleep_impl(&mut self, sleep_impl: Option<#{SharedAsyncSleep}>) -> &mut Self {
-                            self.sleep_impl = sleep_impl;
-                            self
-                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
+                                sleep_impl.map(|s| self.inner.store_put(s));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
+                                self.sleep_impl = sleep_impl;
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                    rustTemplate(
+                        """
 
                         /// Set the timeout_config for the builder
                         ///
@@ -236,21 +296,57 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// set_request_timeout(&mut builder);
                         /// let config = builder.build();
                         /// ```
-                        pub fn set_timeout_config(&mut self, timeout_config: Option<#{TimeoutConfig}>) -> &mut Self {
-                            self.timeout_config = timeout_config;
-                            self
-                        }
                         """,
                         *codegenScope,
                     )
+
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
+                                timeout_config.map(|t| self.inner.store_put(t));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
+                                self.timeout_config = timeout_config;
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
 
                 ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            self.retry_config.map(|r| layer.store_put(r));
-                            self.sleep_impl.clone().map(|s| layer.store_put(s));
-                            self.timeout_config.map(|t| layer.store_put(t));
+                            let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+
+                            if retry_config.mode() == #{RetryMode}::Adaptive {
+                                if let Some(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
+                                    let seconds_since_unix_epoch = time_source
+                                        .now()
+                                        .duration_since(#{SystemTime}::UNIX_EPOCH)
+                                        .expect("the present takes place after the UNIX_EPOCH")
+                                        .as_secs_f64();
+                                    let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
+                                        #{ClientRateLimiter}::new(seconds_since_unix_epoch)
+                                    }).clone();
+                                    layer.put(client_rate_limiter);
+                                }
+                            }
+
+                            // The token bucket is used for both standard AND adaptive retries.
+                            let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
+                            layer.put(token_bucket);
+                            layer.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
                             """,
                             *codegenScope,
                         )
@@ -276,33 +372,28 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
     fun extras(rustCrate: RustCrate) {
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
-                """
-                pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};
-
-                /// Retry configuration
-                ///
-                /// These are re-exported from `aws-smithy-types` for convenience.
-                pub mod retry {
-                    pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};
-                }
-                /// Timeout configuration
-                ///
-                /// These are re-exported from `aws-smithy-types` for convenience.
-                pub mod timeout {
-                    pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
-                }
-                """,
-                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+                "pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};",
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
+            )
+        }
+        rustCrate.withModule(ClientRustModule.Config.retry) {
+            rustTemplate(
+                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
+                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+            )
+        }
+        rustCrate.withModule(ClientRustModule.Config.timeout) {
+            rustTemplate(
+                "pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};",
                 "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
             )
         }
     }
 }
 
-class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
+class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
     private val retries = smithyRuntimeCrate.resolve("client::retries")
@@ -310,51 +401,10 @@ class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: Cl
         "OnceCell" to RuntimeType.OnceCell.resolve("sync::OnceCell"),
         "TokenBucket" to retries.resolve("TokenBucket"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
-        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
-        "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
-        "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
-                rustTemplate(
-                    """
-                    if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
-                        ${section.newLayerName}.put(sleep_impl);
-                    }
-
-                    if retry_config.mode() == #{RetryMode}::Adaptive {
-                        let seconds_since_unix_epoch = self
-                            .handle
-                            .conf
-                            .time_source()
-                            .now()
-                            .duration_since(#{SystemTime}::UNIX_EPOCH)
-                            .expect("the present takes place after the UNIX_EPOCH")
-                            .as_secs_f64();
-                        let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
-                            #{ClientRateLimiter}::new(seconds_since_unix_epoch)
-                        }).clone();
-                        ${section.newLayerName}.put(client_rate_limiter);
-                    }
-
-                    // The token bucket is used for both standard AND adaptive retries.
-                    let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
-                    ${section.newLayerName}.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
-                    ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone})
-                        .put(token_bucket)
-                        .put(timeout_config)
-                        .put(retry_config);
-                    """,
-                    *codegenScope,
-                    "maybe_clone" to writable {
-                        if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                            rust(".clone()")
-                        }
-                    },
-                )
-            }
             is ServiceRuntimePluginSection.DeclareSingletons -> {
                 // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
                 //    MSRV to 1.70
