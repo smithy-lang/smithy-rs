@@ -361,7 +361,7 @@ class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: Cl
                 )
             }
             is ServiceRuntimePluginSection.DeclareSingletons -> {
-                // TODO(enableNewSmithyRuntimeLaunch) We can use the standard library's `OnceCell` once we upgrade the
+                // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
                 //    MSRV to 1.70
                 rustTemplate(
                     """
