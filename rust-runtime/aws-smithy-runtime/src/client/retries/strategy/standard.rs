@@ -88,6 +88,59 @@ impl StandardRetryStrategy {
             p.forget()
         }
     }
+
+    fn calculate_backoff(
+        &self,
+        cfg: &ConfigBag,
+        retry_reason: Option<&RetryReason>,
+    ) -> Result<Duration, ShouldAttempt> {
+        let request_attempts = cfg
+            .get::<RequestAttempts>()
+            .expect("at least one request attempt is made before any retry is attempted")
+            .attempts();
+        let token_bucket = cfg.get::<TokenBucket>();
+
+        match retry_reason {
+            Some(RetryReason::Explicit(backoff)) => Ok(*backoff),
+            Some(RetryReason::Error(kind)) => {
+                update_rate_limiter_if_exists(cfg, kind == &ErrorKind::ThrottlingError);
+                if let Some(delay) = check_rate_limiter_for_delay(cfg, *kind) {
+                    Ok(delay.min(self.max_backoff))
+                } else {
+                    if let Some(tb) = token_bucket {
+                        match tb.acquire(kind) {
+                            Some(permit) => self.set_retry_permit(permit),
+                            None => {
+                                debug!("attempt #{request_attempts} failed with {kind:?}; However, no retry permits are available, so no retry will be attempted.");
+                                return Err(ShouldAttempt::No);
+                            }
+                        }
+                    }
+
+                    let backoff = calculate_exponential_backoff(
+                        // Generate a random base multiplier to create jitter
+                        (self.base)(),
+                        // Get the backoff time multiplier in seconds (with fractional seconds)
+                        self.initial_backoff.as_secs_f64(),
+                        // `self.local.attempts` tracks number of requests made including the initial request
+                        // The initial attempt shouldn't count towards backoff calculations so we subtract it
+                        request_attempts - 1,
+                    );
+                    Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
+                }
+            }
+            Some(_) => unreachable!("RetryReason is non-exhaustive"),
+            None => {
+                update_rate_limiter_if_exists(cfg, false);
+                debug!(
+                    attempts = request_attempts,
+                    max_attempts = self.max_attempts,
+                    "encountered unretryable error"
+                );
+                Err(ShouldAttempt::No)
+            }
+        }
+    }
 }
 
 enum ReleaseResult {
@@ -135,7 +188,6 @@ impl RetryStrategy for StandardRetryStrategy {
             "This must never be called without reaching the point where the result exists.",
         );
         let token_bucket = cfg.get::<TokenBucket>();
-        let client_rate_limiter = cfg.get::<ClientRateLimiter>();
         if output_or_error.is_ok() {
             debug!("request succeeded, no retry necessary");
             if let Some(tb) = token_bucket {
@@ -148,10 +200,7 @@ impl RetryStrategy for StandardRetryStrategy {
                     tb.regenerate_a_token();
                 }
             }
-            if let Some(crl) = client_rate_limiter {
-                let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
-                crl.update_rate_limiter(seconds_since_unix_epoch, false);
-            }
+            update_rate_limiter_if_exists(cfg, false);
 
             return Ok(ShouldAttempt::No);
         }
@@ -162,10 +211,7 @@ impl RetryStrategy for StandardRetryStrategy {
             .expect("at least one request attempt is made before any retry is attempted")
             .attempts();
         if request_attempts >= self.max_attempts {
-            if let Some(crl) = client_rate_limiter {
-                let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
-                crl.update_rate_limiter(seconds_since_unix_epoch, false);
-            }
+            update_rate_limiter_if_exists(cfg, false);
 
             debug!(
                 attempts = request_attempts,
@@ -180,82 +226,11 @@ impl RetryStrategy for StandardRetryStrategy {
         let retry_reason = retry_classifiers.classify_retry(ctx);
 
         // Calculate the appropriate backoff time.
-        let backoff = match retry_reason {
-            Some(RetryReason::Explicit(dur)) => dur,
-            Some(RetryReason::Error(_)) => {
-                let backoff = calculate_exponential_backoff(
-                    // Generate a random base multiplier to create jitter
-                    (self.base)(),
-                    // Get the backoff time multiplier in seconds (with fractional seconds)
-                    self.initial_backoff.as_secs_f64(),
-                    // `self.local.attempts` tracks number of requests made including the initial request
-                    // The initial attempt shouldn't count towards backoff calculations so we subtract it
-                    request_attempts - 1,
-                );
-                Duration::from_secs_f64(backoff).min(self.max_backoff)
-            }
-            Some(_) => unreachable!("RetryReason is non-exhaustive"),
-            None => {
-                if let Some(crl) = client_rate_limiter {
-                    let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
-                    crl.update_rate_limiter(seconds_since_unix_epoch, false);
-                }
-
-                debug!(
-                    attempts = request_attempts,
-                    max_attempts = self.max_attempts,
-                    "encountered unretryable error"
-                );
-                return Ok(ShouldAttempt::No);
-            }
+        let backoff = match self.calculate_backoff(cfg, retry_reason.as_ref()) {
+            Ok(value) => value,
+            // In some cases, backoff calculation will decide that we shouldn't retry at all.
+            Err(value) => return Ok(value),
         };
-
-        if let (Some(crl), Some(RetryReason::Error(kind))) =
-            (client_rate_limiter, retry_reason.as_ref())
-        {
-            let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
-            crl.update_rate_limiter(
-                seconds_since_unix_epoch,
-                kind == &ErrorKind::ThrottlingError,
-            )
-        };
-
-        match retry_reason {
-            Some(RetryReason::Error(kind)) => {
-                match (token_bucket, client_rate_limiter) {
-                    (None, Some(crl)) => {
-                        let request_reason = match kind {
-                            ErrorKind::ThrottlingError => RequestReason::RetryTimeout,
-                            _other_kind => RequestReason::Retry,
-                        };
-
-                        let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
-                        if let Err(delay) = crl.acquire_permission_to_send_a_request(
-                            seconds_since_unix_epoch,
-                            request_reason,
-                        ) {
-                            return Ok(ShouldAttempt::YesAfterDelay(delay));
-                        }
-                    }
-                    (Some(tb), None) => match tb.acquire(&kind) {
-                        Some(permit) => self.set_retry_permit(permit),
-                        None => {
-                            debug!("attempt #{request_attempts} failed with {kind:?}; However, no retry permits are available, so no retry will be attempted.");
-                            return Ok(ShouldAttempt::No);
-                        }
-                    },
-                    (Some(_), Some(_)) => {
-                        panic!("Either a token bucket or a client rate limiter must be set, but not both");
-                    }
-                    (None, None) => { /* no buckets, no problems */ }
-                }
-            }
-            Some(RetryReason::Explicit(_)) => { /* do nothing, we don't need a token for this case*/
-            }
-            Some(_) => unreachable!("RetryReason is non-exhaustive"),
-            None => unreachable!("this case is covered by the previous match"),
-        }
-
         debug!(
             "attempt #{request_attempts} failed with {:?}; retrying after {:?}",
             retry_reason.expect("the match statement above ensures this is not None"),
@@ -264,6 +239,30 @@ impl RetryStrategy for StandardRetryStrategy {
 
         Ok(ShouldAttempt::YesAfterDelay(backoff))
     }
+}
+
+fn update_rate_limiter_if_exists(cfg: &ConfigBag, is_throttling_error: bool) {
+    if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+        let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+        crl.update_rate_limiter(seconds_since_unix_epoch, is_throttling_error);
+    }
+}
+
+fn check_rate_limiter_for_delay(cfg: &ConfigBag, kind: ErrorKind) -> Option<Duration> {
+    if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+        let retry_reason = if kind == ErrorKind::ThrottlingError {
+            RequestReason::RetryTimeout
+        } else {
+            RequestReason::Retry
+        };
+        if let Err(delay) = crl
+            .acquire_permission_to_send_a_request(get_seconds_since_unix_epoch(cfg), retry_reason)
+        {
+            return Some(delay);
+        }
+    }
+
+    None
 }
 
 fn calculate_exponential_backoff(base: f64, initial_backoff: f64, retry_attempts: u32) -> f64 {

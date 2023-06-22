@@ -67,6 +67,7 @@ open class MakeOperationGenerator(
         "OpBuildError" to runtimeConfig.operationBuildError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "SharedPropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
     )
 
     fun generateMakeOperation(
@@ -98,6 +99,12 @@ open class MakeOperationGenerator(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,
         ) {
+            rustTemplate(
+                """
+                assert_ne!(_config.retry_config().map(|rc| rc.mode()), Some(#{RetryMode}::Adaptive), "Adaptive retry mode is unsupported, please use Standard mode or disable retries.");
+                """,
+                *codegenScope,
+            )
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
 
             withBlock("let mut request = {", "};") {

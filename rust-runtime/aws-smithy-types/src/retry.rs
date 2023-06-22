@@ -100,14 +100,11 @@ impl FromStr for RetryMode {
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
 
-        #[cfg(aws_sdk_orchestrator_mode)]
-        if string.eq_ignore_ascii_case("adaptive") {
-            return Ok(RetryMode::Adaptive);
-        }
-
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
+        } else if string.eq_ignore_ascii_case("adaptive") {
+            return Ok(RetryMode::Adaptive);
         } else {
             Err(RetryModeParseError::new(string))
         }
@@ -318,7 +315,6 @@ impl RetryConfig {
     }
 
     /// Creates a default `RetryConfig` with `RetryMode::Adaptive` and max attempts of three.
-    #[cfg(aws_sdk_orchestrator_mode)]
     pub fn adaptive() -> Self {
         Self {
             mode: RetryMode::Adaptive,

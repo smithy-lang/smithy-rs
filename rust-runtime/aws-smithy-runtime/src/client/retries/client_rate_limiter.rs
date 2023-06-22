@@ -466,18 +466,14 @@ mod tests {
         // https://github.com/aws/aws-sdk-go-v2/blob/844ff45cdc76182229ad098c95bf3f5ab8c20e9f/aws/retry/adaptive_ratelimit_test.go#L97
         let mut calculated_rate = 0.0;
         for attempt in attempts {
-            rate_limiter.inner.lock().unwrap().calculate_time_window();
+            let mut inner = rate_limiter.inner.lock().unwrap();
+            inner.calculate_time_window();
             if attempt.throttled {
                 calculated_rate = cubic_throttle(calculated_rate);
-                rate_limiter.inner.lock().unwrap().time_of_last_throttle =
-                    attempt.seconds_since_unix_epoch;
-                rate_limiter.inner.lock().unwrap().last_max_rate = calculated_rate;
+                inner.time_of_last_throttle = attempt.seconds_since_unix_epoch;
+                inner.last_max_rate = calculated_rate;
             } else {
-                calculated_rate = rate_limiter
-                    .inner
-                    .lock()
-                    .unwrap()
-                    .cubic_success(attempt.seconds_since_unix_epoch);
+                calculated_rate = inner.cubic_success(attempt.seconds_since_unix_epoch);
             };
 
             assert_relative_eq!(attempt.expected_calculated_rate, calculated_rate);

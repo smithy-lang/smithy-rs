@@ -324,31 +324,26 @@ class ResiliencyServiceRuntimePluginCustomization(private val codegenContext: Cl
                         ${section.newLayerName}.put(sleep_impl);
                     }
 
-                    match retry_config.mode() {
-                        #{RetryMode}::Adaptive => {
-                            let seconds_since_unix_epoch = self
-                                .handle
-                                .conf
-                                .time_source()
-                                .now()
-                                .duration_since(#{SystemTime}::UNIX_EPOCH)
-                                .expect("the present takes place after the UNIX_EPOCH")
-                                .as_secs_f64();
-                            let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
-                                #{ClientRateLimiter}::new(seconds_since_unix_epoch)
-                            }).clone();
-                            ${section.newLayerName}.put(client_rate_limiter);
-                            // TODO(enableNewSmithyRuntimeLaunch) Do we need to insert the token bucket for adaptive retries?
-                        },
-                        #{RetryMode}::Standard => {
-                            let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
-                            ${section.newLayerName}.put(token_bucket);
-                        },
-                        _ => unreachable!("RetryMode is non-exhaustive")
+                    if retry_config.mode() == #{RetryMode}::Adaptive {
+                        let seconds_since_unix_epoch = self
+                            .handle
+                            .conf
+                            .time_source()
+                            .now()
+                            .duration_since(#{SystemTime}::UNIX_EPOCH)
+                            .expect("the present takes place after the UNIX_EPOCH")
+                            .as_secs_f64();
+                        let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
+                            #{ClientRateLimiter}::new(seconds_since_unix_epoch)
+                        }).clone();
+                        ${section.newLayerName}.put(client_rate_limiter);
                     }
 
+                    // The token bucket is used for both standard AND adaptive retries.
+                    let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
                     ${section.newLayerName}.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
                     ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone})
+                        .put(token_bucket)
                         .put(timeout_config)
                         .put(retry_config);
                     """,
