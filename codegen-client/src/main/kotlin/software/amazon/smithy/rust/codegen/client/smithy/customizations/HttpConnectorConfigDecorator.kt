@@ -192,7 +192,7 @@ private class HttpConnectorConfigCustomization(
                     rustTemplate(
                         """
                         let sleep_impl = layer.load::<#{SharedAsyncSleep}>().cloned();
-                        let timeout_config = layer.load::<#{TimeoutConfig}>().cloned().unwrap_or_else(|| #{TimeoutConfig}::disabled());
+                        let timeout_config = layer.load::<#{TimeoutConfig}>().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
 
                         let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
 
