@@ -90,7 +90,6 @@ class ServiceRuntimePluginGenerator(
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
             "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
-            "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
             "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
             "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
             "HttpConnector" to client.resolve("http_connector::HttpConnector"),
@@ -103,7 +102,6 @@ class ServiceRuntimePluginGenerator(
             "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
-            "default_connector" to client.resolve("conns::default_connector"),
             "require_connector" to client.resolve("conns::require_connector"),
             "TimeoutConfig" to smithyTypes.resolve("timeout::TimeoutConfig"),
             "RetryConfig" to smithyTypes.resolve("retry::RetryConfig"),
@@ -140,37 +138,13 @@ class ServiceRuntimePluginGenerator(
                     // Set an empty auth option resolver to be overridden by operations that need auth.
                     cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(#{Vec}::new()));
 
-                    let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                        self.handle.conf.endpoint_resolver());
-                    cfg.set_endpoint_resolver(endpoint_resolver);
-
-                    // TODO(enableNewSmithyRuntimeLaunch): Make it possible to set retry classifiers at the service level.
-                    //     Retry classifiers can also be set at the operation level and those should be added to the
-                    //     list of classifiers defined here, rather than replacing them.
-
-                    let sleep_impl = self.handle.conf.sleep_impl();
-                    let timeout_config = self.handle.conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                    let retry_config = self.handle.conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-
-                    cfg.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
-
-                    let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
-                    if let Some(connection) = self.handle.conf.http_connector()
-                            .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
-                            .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
-                        let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
-                            // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
-                            connection
-                        )) as _;
-                        cfg.set_connection(connection);
-                    }
                     #{additional_config}
 
                     Some(cfg.freeze())
                 }
 
                 fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
-                    interceptors.extend(self.handle.conf.interceptors().cloned());
+                    let _interceptors = interceptors;
                     #{additional_interceptors}
                 }
             }
@@ -183,7 +157,7 @@ class ServiceRuntimePluginGenerator(
                 writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))
             },
             "additional_interceptors" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("interceptors"))
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
             },
         )
     }

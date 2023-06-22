@@ -145,11 +145,11 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """
-                        self.inner.store_put(
-                            self.inner.load::<#{CredentialsCache}>()
+                        layer.store_put(
+                            layer.load::<#{CredentialsCache}>()
                                 .cloned()
                                 .unwrap_or_else({
-                                    let sleep = self.inner.load::<#{SharedAsyncSleep}>().cloned();
+                                    let sleep = layer.load::<#{SharedAsyncSleep}>().cloned();
                                     || match sleep {
                                         Some(sleep) => {
                                             #{CredentialsCache}::lazy_builder()
@@ -159,7 +159,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                                         None => #{CredentialsCache}::lazy(),
                                     }
                                 })
-                                .create_cache(self.inner.load::<#{SharedCredentialsProvider}>().cloned().unwrap_or_else(|| {
+                                .create_cache(layer.load::<#{SharedCredentialsProvider}>().cloned().unwrap_or_else(|| {
                                     #{SharedCredentialsProvider}::new(#{DefaultProvider})
                                 }))
                         );

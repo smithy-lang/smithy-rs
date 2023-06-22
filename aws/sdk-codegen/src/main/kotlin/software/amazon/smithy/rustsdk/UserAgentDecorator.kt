@@ -104,12 +104,6 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             when (section) {
-                is ServiceRuntimePluginSection.AdditionalConfig -> {
-                    section.putConfigValue(this) {
-                        rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
-                    }
-                }
-
                 is ServiceRuntimePluginSection.RegisterInterceptor -> {
                     section.registerInterceptor(runtimeConfig, this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
@@ -212,7 +206,9 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.BuilderBuild -> writable {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rust("layer.put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                    } else {
                         rust("app_name: self.app_name,")
                     }
                 }

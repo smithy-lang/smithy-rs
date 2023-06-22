@@ -14,7 +14,7 @@ use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryReason, RetryStrategy, ShouldAttempt,
 };
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::RetryConfig;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -31,6 +31,10 @@ pub struct StandardRetryStrategy {
     max_attempts: usize,
     max_backoff: Duration,
     retry_permit: Mutex<Option<OwnedSemaphorePermit>>,
+}
+
+impl Storable for StandardRetryStrategy {
+    type Storer = StoreReplace<Self>;
 }
 
 impl StandardRetryStrategy {

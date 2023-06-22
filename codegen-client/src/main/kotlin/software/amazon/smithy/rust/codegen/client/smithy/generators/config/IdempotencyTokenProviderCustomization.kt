@@ -108,7 +108,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
             ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
-                        "self.inner.store_put(self.inner.load::<#{IdempotencyTokenProvider}>().cloned().unwrap_or_else(#{default_provider}));",
+                        "layer.store_put(layer.load::<#{IdempotencyTokenProvider}>().cloned().unwrap_or_else(#{default_provider}));",
                         *codegenScope,
                     )
                 } else {
