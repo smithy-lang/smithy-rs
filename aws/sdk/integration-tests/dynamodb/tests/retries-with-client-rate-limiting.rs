@@ -6,8 +6,7 @@
 #[cfg(aws_sdk_orchestrator_mode)]
 mod test {
     use approx::assert_relative_eq;
-    use aws_sdk_dynamodb::config::Region;
-    use aws_sdk_dynamodb::config::SharedAsyncSleep;
+    use aws_sdk_dynamodb::config::{Credentials, Region, SharedAsyncSleep};
     use aws_sdk_dynamodb::{config::retry::RetryConfig, error::ProvideErrorMetadata};
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::SharedTimeSource;
@@ -70,6 +69,7 @@ mod test {
 
         let conn = TestConnection::new(events);
         let config = aws_sdk_dynamodb::Config::builder()
+            .credentials_provider(Credentials::for_tests())
             .region(Region::new("us-east-1"))
             .retry_config(
                 RetryConfig::adaptive()
@@ -126,6 +126,7 @@ mod test {
 
         let conn = TestConnection::new(events);
         let config = aws_sdk_dynamodb::Config::builder()
+            .credentials_provider(Credentials::for_tests())
             .region(Region::new("us-east-1"))
             .retry_config(
                 RetryConfig::adaptive()

@@ -101,7 +101,7 @@ open class MakeOperationGenerator(
         ) {
             rustTemplate(
                 """
-                assert_ne!(_config.retry_config().map(|rc| rc.mode()), Some(#{RetryMode}::Adaptive), "Adaptive retry mode is unsupported, please use Standard mode or disable retries.");
+                assert_ne!(_config.retry_config().map(|rc| rc.mode()), #{Option}::Some(#{RetryMode}::Adaptive), "Adaptive retry mode is unsupported, please use Standard mode or disable retries.");
                 """,
                 *codegenScope,
             )
