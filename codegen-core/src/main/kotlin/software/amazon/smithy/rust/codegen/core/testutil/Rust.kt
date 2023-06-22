@@ -42,6 +42,19 @@ import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
+object Commands {
+    val CargoEnvDWarnings = mapOf(
+        "RUSTFLAGS" to "-D warnings --cfg aws_sdk_unstable",
+    )
+    val CargoEnvDDeadCode = mapOf(
+        "RUSTFLAGS" to "-A dead_code --cfg aws_sdk_unstable",
+    )
+    const val CargoTest = "cargo test --all-features"
+    const val CargoCheck = "cargo check --all-features"
+    const val CargoFmt = "cargo fmt "
+    const val CargoClippy = "cargo clippy"
+}
+
 val TestModuleDocProvider = object : ModuleDocProvider {
     override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
         docs("Some test documentation\n\nSome more details...")
@@ -332,14 +345,14 @@ fun TestWriterDelegator.compileAndTest(
     println("Generated files:")
     printGeneratedFiles()
     try {
-        "cargo fmt".runCommand(baseDir)
+        Commands.CargoFmt.runCommand(baseDir)
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
-    val env = mapOf("RUSTFLAGS" to "-A dead_code")
-    val testOutput = "cargo test".runCommand(baseDir, env)
+    val env = Commands.CargoEnvDDeadCode
+    val testOutput = Commands.CargoTest.runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy".runCommand(baseDir, env)
+        Commands.CargoClippy.runCommand(baseDir, env)
     }
     return testOutput
 }
@@ -379,9 +392,9 @@ fun RustWriter.compileAndTest(
     val testModule = tempDir.resolve("src/$module.rs")
     try {
         val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-            "cargo test".runCommand(tempDir.toPath())
+            Commands.CargoTest.runCommand(tempDir.toPath())
         } else {
-            "cargo check".runCommand(tempDir.toPath())
+            Commands.CargoCheck.runCommand(tempDir.toPath())
         }
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
@@ -488,4 +501,4 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     return this
 }
 
-fun String.runWithWarnings(crate: Path) = this.runCommand(crate, mapOf("RUSTFLAGS" to "-D warnings"))
+fun String.runWithWarnings(crate: Path) = this.runCommand(crate, Commands.CargoEnvDWarnings)
