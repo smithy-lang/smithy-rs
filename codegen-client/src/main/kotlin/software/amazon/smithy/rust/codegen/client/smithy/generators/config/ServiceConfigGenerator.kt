@@ -151,7 +151,7 @@ data class ConfigParam(
  * Therefore, primitive types, such as bool and String, need to be wrapped in newtypes to make them distinct.
  */
 fun configParamNewtype(newtypeName: String, inner: Symbol, runtimeConfig: RuntimeConfig) =
-    RuntimeType.forInlineFun(newtypeName, ClientRustModule.Config) {
+    RuntimeType.forInlineFun(newtypeName, ClientRustModule.config) {
         val codegenScope = arrayOf(
             "Storable" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Storable"),
             "StoreReplace" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::StoreReplace"),
@@ -299,7 +299,7 @@ typealias ConfigCustomization = NamedCustomization<ServiceConfig>
  */
 
 class ServiceConfigGenerator(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val customizations: List<ConfigCustomization> = listOf(),
 ) {
     companion object {
@@ -318,9 +318,9 @@ class ServiceConfigGenerator(
     private val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
     val codegenScope = arrayOf(
-        "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+        "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-        "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+        "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
         "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),

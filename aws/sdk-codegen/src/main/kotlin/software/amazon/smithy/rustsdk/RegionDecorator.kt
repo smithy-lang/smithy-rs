@@ -116,7 +116,7 @@ class RegionDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (usesRegion(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.Config) {
+            rustCrate.withModule(ClientRustModule.config) {
                 rust("pub use #T::Region;", region(codegenContext.runtimeConfig))
             }
         }

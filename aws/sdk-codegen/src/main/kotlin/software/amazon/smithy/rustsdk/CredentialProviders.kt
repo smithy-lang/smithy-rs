@@ -53,7 +53,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             rust(
                 "pub use #T::Credentials;",
                 AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),

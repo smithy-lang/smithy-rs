@@ -26,10 +26,10 @@ class OperationRuntimePluginGenerator(
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),

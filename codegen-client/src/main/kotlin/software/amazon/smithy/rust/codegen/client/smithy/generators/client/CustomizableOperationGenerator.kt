@@ -35,23 +35,21 @@ class CustomizableOperationGenerator(
 
     fun render(crate: RustCrate) {
         crate.withModule(ClientRustModule.Client.customize) {
-            rustTemplate(
-                // TODO(enableNewSmithyRuntimeCleanup): Stop exporting `Operation` when removing middleware
-                // TODO(enableNewSmithyRuntimeLaunch): Re-export orchestrator equivalents for retry types when defaulting to orchestrator
-                """
-                pub use #{Operation};
-                pub use #{Request};
-                pub use #{Response};
-                pub use #{ClassifyRetry};
-                pub use #{RetryKind};
-                """,
-                "Operation" to smithyHttp.resolve("operation::Operation"),
-                "Request" to smithyHttp.resolve("operation::Request"),
-                "Response" to smithyHttp.resolve("operation::Response"),
-                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
-            )
             if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+                rustTemplate(
+                    """
+                    pub use #{Operation};
+                    pub use #{Request};
+                    pub use #{Response};
+                    pub use #{ClassifyRetry};
+                    pub use #{RetryKind};
+                    """,
+                    "Operation" to smithyHttp.resolve("operation::Operation"),
+                    "Request" to smithyHttp.resolve("operation::Request"),
+                    "Response" to smithyHttp.resolve("operation::Response"),
+                    "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+                    "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
+                )
                 renderCustomizableOperationModule(this)
             }
         }

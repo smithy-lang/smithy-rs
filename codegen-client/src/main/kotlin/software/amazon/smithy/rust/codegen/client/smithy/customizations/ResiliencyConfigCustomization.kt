@@ -344,26 +344,21 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
     fun extras(rustCrate: RustCrate) {
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
-                """
-                pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};
-
-                /// Retry configuration
-                ///
-                /// These are re-exported from `aws-smithy-types` for convenience.
-                pub mod retry {
-                    pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};
-                }
-                /// Timeout configuration
-                ///
-                /// These are re-exported from `aws-smithy-types` for convenience.
-                pub mod timeout {
-                    pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
-                }
-                """,
-                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+                "pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};",
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
+            )
+        }
+        rustCrate.withModule(ClientRustModule.Config.retry) {
+            rustTemplate(
+                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
+                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+            )
+        }
+        rustCrate.withModule(ClientRustModule.Config.timeout) {
+            rustTemplate(
+                "pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};",
                 "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
             )
         }

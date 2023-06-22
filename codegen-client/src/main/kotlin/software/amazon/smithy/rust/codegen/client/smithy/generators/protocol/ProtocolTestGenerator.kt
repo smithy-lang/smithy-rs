@@ -219,7 +219,7 @@ class DefaultProtocolTestGenerator(
                 .withFeature("test-util")
                 .toType()
                 .resolve("test_connection::capture_request"),
-            "config" to ClientRustModule.Config,
+            "config" to ClientRustModule.config,
             "customParams" to customParams,
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "conn", "config_builder", "client"))

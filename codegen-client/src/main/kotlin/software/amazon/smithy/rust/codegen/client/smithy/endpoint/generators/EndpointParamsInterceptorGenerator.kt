@@ -42,17 +42,17 @@ class EndpointParamsInterceptorGenerator(
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "BoxError" to RuntimeType.boxError(rc),
+            "ConfigBag" to RuntimeType.configBag(rc),
             "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
                 .resolve("client::orchestrator::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to interceptors.resolve("Interceptor"),
-            "InterceptorContext" to interceptors.resolve("InterceptorContext"),
-            "BeforeSerializationInterceptorContextRef" to interceptors.resolve("context::wrappers::BeforeSerializationInterceptorContextRef"),
+            "Interceptor" to RuntimeType.interceptor(rc),
+            "InterceptorContext" to RuntimeType.interceptorContext(rc),
+            "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
             "Output" to interceptors.resolve("context::Output"),
             "Error" to interceptors.resolve("context::Error"),

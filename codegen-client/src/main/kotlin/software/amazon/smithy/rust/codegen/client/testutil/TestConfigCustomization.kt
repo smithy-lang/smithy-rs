@@ -127,7 +127,7 @@ fun validateConfigCustomizations(
 fun stubConfigProject(codegenContext: ClientCodegenContext, customization: ConfigCustomization, project: TestWriterDelegator): TestWriterDelegator {
     val customizations = listOf(stubConfigCustomization("a", codegenContext)) + customization + stubConfigCustomization("b", codegenContext)
     val generator = ServiceConfigGenerator(codegenContext, customizations = customizations.toList())
-    project.withModule(ClientRustModule.Config) {
+    project.withModule(ClientRustModule.config) {
         generator.render(this)
         unitTest(
             "config_send_sync",
