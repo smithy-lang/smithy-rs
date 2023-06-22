@@ -51,7 +51,7 @@ object Commands {
     )
     const val CargoTest = "cargo test --all-features"
     const val CargoCheck = "cargo check --all-features"
-    const val CargoFmt = "cargo fmt "
+    const val CargoFmt = "cargo fmt"
     const val CargoClippy = "cargo clippy"
 }
 
