@@ -321,8 +321,10 @@ class ServiceConfigGenerator(
         "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
         "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+        "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+        "Layer" to smithyTypes.resolve("config_bag::Layer"),
         "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
         *preludeScope,
     )
@@ -426,6 +428,17 @@ class ServiceConfigGenerator(
             if (runtimeMode.defaultToOrchestrator) {
                 rust("##[allow(unused_mut)]")
                 rustBlock("pub fn build(mut self) -> Config") {
+                    rustTemplate(
+                        """
+                        use #{ConfigBagAccessors};
+                        // The builder is being turned into a service config. While doing so, we'd like to avoid
+                        // requiring that items created and stored _during_ the build method be `Clone`, since they
+                        // will soon be part of a `FrozenLayer` owned by the service config. So we will convert the
+                        // current `CloneableLayer` into a `Layer` that does not impose the `Clone` requirement.
+                        let mut layer: #{Layer} = self.inner.into();
+                        """,
+                        *codegenScope,
+                    )
                     customizations.forEach {
                         it.section(ServiceConfig.BuilderBuild)(this)
                     }
@@ -433,7 +446,7 @@ class ServiceConfigGenerator(
                         customizations.forEach {
                             it.section(ServiceConfig.BuilderBuildExtras)(this)
                         }
-                        rust("inner: self.inner.freeze(),")
+                        rust("inner: layer.freeze(),")
                     }
                 }
             } else {
@@ -451,6 +464,25 @@ class ServiceConfigGenerator(
         }
     }
 
+    fun renderRuntimePluginImplForSelf(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl #{RuntimePlugin} for Config {
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    #{Some}(self.inner.clone())
+                }
+
+                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
+                    interceptors.extend(self.interceptors.iter().cloned());
+                }
+            }
+
+            """,
+            *codegenScope,
+            "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+        )
+    }
+
     fun renderRuntimePluginImplForBuilder(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -460,7 +492,7 @@ class ServiceConfigGenerator(
                     ##[allow(unused_mut)]
                     let mut cfg = #{CloneableLayer}::new("service config");
                     #{config}
-                    Some(cfg.freeze())
+                    #{Some}(cfg.freeze())
                 }
 
                 fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {

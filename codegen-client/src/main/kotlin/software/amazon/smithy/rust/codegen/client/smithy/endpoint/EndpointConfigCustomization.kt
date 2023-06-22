@@ -34,6 +34,7 @@ internal class EndpointConfigCustomization(
             val resolverTrait = "#{SmithyResolver}<#{Params}>"
             val codegenScope = arrayOf(
                 *preludeScope,
+                "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
                 "SharedEndpointResolver" to types.sharedEndpointResolver,
                 "SmithyResolver" to types.resolveEndpoint,
                 "Params" to typesGenerator.paramsStruct(),
@@ -165,9 +166,11 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                self.inner.store_put(self.inner.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
+                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
                                     #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
                                 ));
+                                layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,
                                 "DefaultResolver" to defaultResolver,
@@ -206,7 +209,11 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                self.inner.store_put(self.inner.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||#{SharedEndpointResolver}::new(#{FailingResolver})));
+                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
+                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                    #{SharedEndpointResolver}::new(#{FailingResolver})
+                                ).clone());
+                                layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,
                                 "FailingResolver" to alwaysFailsResolver,

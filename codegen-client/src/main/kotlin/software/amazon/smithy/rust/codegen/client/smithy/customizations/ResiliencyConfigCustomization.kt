@@ -7,11 +7,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -32,6 +29,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "Sleep" to sleepModule.resolve("Sleep"),
+        "StandardRetryStrategy" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::strategy::StandardRetryStrategy"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )
 
@@ -316,7 +314,15 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                 }
 
                 ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                            layer.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
                         rustTemplate(
                             // We call clone on sleep_impl because the field is used by
                             // initializing the credentials_cache field later in the build
@@ -359,31 +365,6 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
                 "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
-            )
-        }
-    }
-}
-
-class ResiliencyServiceRuntimePluginCustomization(
-    private val codegenContext: ClientCodegenContext,
-) : ServiceRuntimePluginCustomization() {
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-            rustTemplate(
-                """
-                if let Some(sleep_impl) = self.handle.conf.sleep_impl() {
-                    ${section.newLayerName}.put(sleep_impl);
-                }
-                if let Some(timeout_config) = self.handle.conf.timeout_config() {
-                    ${section.newLayerName}.put(timeout_config.clone());
-                }
-                ${section.newLayerName}.put(self.handle.conf.time_source()#{maybe_clone});
-                """,
-                "maybe_clone" to writable {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                        rust(".clone()")
-                    }
-                },
             )
         }
     }
