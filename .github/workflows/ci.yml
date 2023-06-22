@@ -154,8 +154,6 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-standalone-integration-tests
           runner: ubuntu-latest
-        - action: compiletime-benchmark
-          runner: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -300,19 +298,6 @@ jobs:
     - name: Test AWS rust-runtime crates
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
-
-  # compile time benchmark
-  compiletime-benchmark:
-    name: Compile time benchmark
-    runs-on: ${{ matrix.test.runner }}
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        path: smithy-rs
-        ref: ${{ inputs.git_ref }}
-    - name: compiletime-benchmark
-      run: bash tools/ci-scripts/compiletime-benchmark
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
