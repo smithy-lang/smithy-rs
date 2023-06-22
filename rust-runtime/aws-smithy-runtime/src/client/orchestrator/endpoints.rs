@@ -12,7 +12,7 @@ use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
     BoxError, ConfigBagAccessors, EndpointResolver, EndpointResolverParams, HttpRequest,
 };
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
 use http::{HeaderValue, Uri};
@@ -63,6 +63,13 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
 #[derive(Debug, Clone)]
 pub struct DefaultEndpointResolver<Params> {
     inner: SharedEndpointResolver<Params>,
+}
+
+impl<Params> Storable for DefaultEndpointResolver<Params>
+where
+    Params: Debug + Send + Sync + 'static,
+{
+    type Storer = StoreReplace<Self>;
 }
 
 impl<Params> DefaultEndpointResolver<Params> {

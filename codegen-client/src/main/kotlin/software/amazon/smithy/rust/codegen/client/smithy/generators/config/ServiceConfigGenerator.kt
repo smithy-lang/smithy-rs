@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.codegenScope
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -92,7 +91,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
-    // TODO(enableNewSmithyRuntime): This is temporary until config builder is backed by a CloneableLayer.
+    // TODO(enableNewSmithyRuntimeLaunch): This is temporary until config builder is backed by a CloneableLayer.
     //  It is needed because certain config fields appear explicitly regardless of the smithy runtime mode, e.g.
     //  interceptors. The [BuilderBuild] section is bifurcated depending on the runtime mode (in the orchestrator mode,
     //  storing a field into a frozen layer and in the middleware moving it into a corresponding service config field)
@@ -217,7 +216,9 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderStruct -> writable {
-                rust("${param.name}: #T,", param.type.makeOptional())
+                if (runtimeMode.defaultToMiddleware) {
+                    rust("${param.name}: #T,", param.type.makeOptional())
+                }
             }
 
             ServiceConfig.BuilderImpl -> writable {
@@ -225,31 +226,39 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                 rust(
                     """
                     pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
-                        self.${param.name} = Some(${param.name}.into());
+                        self.set_${param.name}(Some(${param.name}.into()));
                         self
-                        }""",
+                    }""",
                     param.type,
                 )
 
                 docsOrFallback(param.setterDocs)
-                rust(
-                    """
-                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
-                        self.${param.name} = ${param.name};
-                        self
-                    }
-                    """,
-                    param.type,
-                )
-            }
-
-            ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
-                        "layer.store_or_unset(self.${param.name}.map(#{newtype}));",
+                        """
+                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
+                            self.inner.store_or_unset(${param.name}.map(#{newtype}));
+                            self
+                        }
+                        """,
+                        "T" to param.type,
                         "newtype" to param.newtype!!,
                     )
                 } else {
+                    rust(
+                        """
+                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
+                            self.${param.name} = ${param.name};
+                            self
+                        }
+                        """,
+                        param.type,
+                    )
+                }
+            }
+
+            ServiceConfig.BuilderBuild -> writable {
+                if (runtimeMode.defaultToMiddleware) {
                     val default = "".letIf(!param.optional) { ".unwrap_or_default() " }
                     rust("${param.name}: self.${param.name}$default,")
                 }
@@ -310,10 +319,12 @@ class ServiceConfigGenerator(
     private val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
     val codegenScope = arrayOf(
         "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-        "Layer" to smithyTypes.resolve("config_bag::Layer"),
+        "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
         "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+        "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+        "Layer" to smithyTypes.resolve("config_bag::Layer"),
         "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
         *preludeScope,
     )
@@ -365,6 +376,12 @@ class ServiceConfigGenerator(
         writer.docs("Builder for creating a `Config`.")
         writer.raw("#[derive(Clone, Default)]")
         writer.rustBlock("pub struct Builder") {
+            if (runtimeMode.defaultToOrchestrator) {
+                rustTemplate(
+                    "inner: #{CloneableLayer},",
+                    *codegenScope,
+                )
+            }
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
@@ -408,10 +425,18 @@ class ServiceConfigGenerator(
             }
 
             docs("Builds a [`Config`].")
-            rustBlock("pub fn build(self) -> Config") {
-                if (runtimeMode.defaultToOrchestrator) {
+            if (runtimeMode.defaultToOrchestrator) {
+                rust("##[allow(unused_mut)]")
+                rustBlock("pub fn build(mut self) -> Config") {
                     rustTemplate(
-                        """let mut layer = #{Layer}::new("$moduleUseName::Config");""",
+                        """
+                        use #{ConfigBagAccessors};
+                        // The builder is being turned into a service config. While doing so, we'd like to avoid
+                        // requiring that items created and stored _during_ the build method be `Clone`, since they
+                        // will soon be part of a `FrozenLayer` owned by the service config. So we will convert the
+                        // current `CloneableLayer` into a `Layer` that does not impose the `Clone` requirement.
+                        let mut layer: #{Layer} = self.inner.into();
+                        """,
                         *codegenScope,
                     )
                     customizations.forEach {
@@ -423,7 +448,9 @@ class ServiceConfigGenerator(
                         }
                         rust("inner: layer.freeze(),")
                     }
-                } else {
+                }
+            } else {
+                rustBlock("pub fn build(self) -> Config") {
                     rustBlock("Config") {
                         customizations.forEach {
                             it.section(ServiceConfig.BuilderBuild)(this)
@@ -437,6 +464,25 @@ class ServiceConfigGenerator(
         }
     }
 
+    fun renderRuntimePluginImplForSelf(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl #{RuntimePlugin} for Config {
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    #{Some}(self.inner.clone())
+                }
+
+                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
+                    interceptors.extend(self.interceptors.iter().cloned());
+                }
+            }
+
+            """,
+            *codegenScope,
+            "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+        )
+    }
+
     fun renderRuntimePluginImplForBuilder(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -444,9 +490,9 @@ class ServiceConfigGenerator(
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     // TODO(enableNewSmithyRuntimeLaunch): Put into `cfg` the fields in `self.config_override` that are not `None`
                     ##[allow(unused_mut)]
-                    let mut cfg = #{Layer}::new("service config");
+                    let mut cfg = #{CloneableLayer}::new("service config");
                     #{config}
-                    Some(cfg.freeze())
+                    #{Some}(cfg.freeze())
                 }
 
                 fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {

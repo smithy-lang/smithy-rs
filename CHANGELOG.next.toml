@@ -11,6 +11,24 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+ [[aws-sdk-rust]]
+ message = "Add accessors to Builders"
+ references = ["smithy-rs#2791"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false }
+ author = "davidsouther"
+
+ [[smithy-rs]]
+ message = "Add accessors to Builders"
+ references = ["smithy-rs#2791"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+ author = "davidsouther"
+
+[[smithy-rs]]
+message = "Avoid intermediate vec allocations in AggregatedBytes::to_vec."
+author = "yotamofek"
+references = ["smithy-rs#2786"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+
 [[smithy-rs]]
 message = "Fix bug in AWS JSON 1.x routers where, if a service had more than 14 operations, the router was created without the route for the 15th operation."
 author = "thor-bjorgvinsson"
