@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 
 class FluentClientCore(private val model: Model) {
@@ -65,6 +66,17 @@ class FluentClientCore(private val model: Model) {
         rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
             write("self.inner = self.inner.$memberName(${functionInput.value});")
             write("self")
+        }
+    }
+
+    /**
+     * Generate and write Rust code for a getter method that returns a reference to the inner data.
+     */
+    fun RustWriter.renderGetterHelper(member: MemberShape, memberName: String, coreType: RustType) {
+        documentShape(member, model)
+        deprecatedShape(member)
+        withBlockTemplate("pub fn $memberName(&self) -> &#{CoreType} {", "}", "CoreType" to coreType) {
+            write("self.inner.$memberName()")
         }
     }
 }
