@@ -428,6 +428,7 @@ class ServiceConfigGenerator(
                 rustBlock("pub fn build(mut self) -> Config") {
                     rustTemplate(
                         """
+                        ##[allow(unused_imports)]
                         use #{ConfigBagAccessors};
                         // The builder is being turned into a service config. While doing so, we'd like to avoid
                         // requiring that items created and stored _during_ the build method be `Clone`, since they
@@ -470,14 +471,17 @@ class ServiceConfigGenerator(
                     #{Some}(self.inner.clone())
                 }
 
-                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
-                    interceptors.extend(self.interceptors.iter().cloned());
+                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
+                    #{interceptors}
                 }
             }
 
             """,
             *codegenScope,
             "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+            "interceptors" to writable {
+                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors"))
+            },
         )
     }
 

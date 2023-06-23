@@ -111,6 +111,9 @@ class ServiceRuntimePluginGenerator(
     fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
         writer.rustTemplate(
             """
+            // TODO(enableNewSmithyRuntimeLaunch) Remove `allow(dead_code)` as well as a field `handle` when
+            //  the field is no longer used.
+            ##[allow(dead_code)]
             ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 handle: #{Arc}<crate::client::Handle>,
