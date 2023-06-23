@@ -132,7 +132,10 @@ class RegionDecorator : ClientCodegenDecorator {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable {
                             if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                                rust("$configRef.region().as_ref().map(|r|r.as_ref().to_owned())")
+                                rustTemplate(
+                                    "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
+                                    "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                                )
                             } else {
                                 rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
                             }

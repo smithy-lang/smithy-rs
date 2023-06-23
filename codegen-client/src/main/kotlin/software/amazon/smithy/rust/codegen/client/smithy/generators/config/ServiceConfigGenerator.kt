@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.codegenScope
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -159,14 +160,36 @@ fun configParamNewtype(newtypeName: String, inner: Symbol, runtimeConfig: Runtim
         rustTemplate(
             """
             ##[derive(Debug, Clone)]
-            pub(crate) struct $newtypeName($inner);
+            pub(crate) struct $newtypeName(pub(crate) $inner);
             impl #{Storable} for $newtypeName {
-                type Storer = #{StoreReplace}<$newtypeName>;
+                type Storer = #{StoreReplace}<Self>;
             }
             """,
             *codegenScope,
         )
     }
+
+/**
+ * Render an expression that loads a value from a config bag.
+ *
+ * The expression to be rendered handles a case where a newtype is stored in the config bag, but the user expects
+ * the underlying raw type after the newtype has been loaded from the bag.
+ */
+fun loadFromConfigBag(innerTypeName: String, newtype: RuntimeType): Writable = writable {
+    rustTemplate(
+        """
+        load::<#{newtype}>().map(#{f})
+        """,
+        "newtype" to newtype,
+        "f" to writable {
+            if (innerTypeName == "bool") {
+                rust("|ty| ty.0")
+            } else {
+                rust("|ty| ty.0.clone()")
+            }
+        },
+    )
+}
 
 /**
  * Config customization for a config param with no special behavior:
@@ -187,31 +210,6 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                         false -> param.type
                     }
                     rust("pub (crate) ${param.name}: #T,", t)
-                }
-            }
-
-            ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        pub(crate) fn ${param.name}(&self) -> #{output} {
-                            self.inner.load::<#{newtype}>().map(#{f})
-                        }
-                        """,
-                        "f" to writable {
-                            if (param.type.name == "bool") {
-                                rust("|ty| ty.0")
-                            } else {
-                                rust("|ty| ty.0.clone()")
-                            }
-                        },
-                        "newtype" to param.newtype!!,
-                        "output" to if (param.optional) {
-                            param.type.makeOptional()
-                        } else {
-                            param.type
-                        },
-                    )
                 }
             }
 

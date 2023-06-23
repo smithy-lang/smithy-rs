@@ -127,9 +127,6 @@ class ServiceRuntimePluginGenerator(
                     use #{ConfigBagAccessors};
                     let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
 
-                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
-                    cfg.put(self.handle.clone());
-
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
                         .build();
