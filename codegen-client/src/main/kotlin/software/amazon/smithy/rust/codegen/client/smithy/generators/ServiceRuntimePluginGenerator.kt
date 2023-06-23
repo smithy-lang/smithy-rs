@@ -111,6 +111,9 @@ class ServiceRuntimePluginGenerator(
     fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
         writer.rustTemplate(
             """
+            // TODO(enableNewSmithyRuntimeLaunch) Remove `allow(dead_code)` as well as a field `handle` when
+            //  the field is no longer used.
+            ##[allow(dead_code)]
             ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 handle: #{Arc}<crate::client::Handle>,
@@ -126,9 +129,6 @@ class ServiceRuntimePluginGenerator(
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     use #{ConfigBagAccessors};
                     let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
-
-                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
-                    cfg.put(self.handle.clone());
 
                     let http_auth_schemes = #{HttpAuthSchemes}::builder()
                         #{http_auth_scheme_customizations}
