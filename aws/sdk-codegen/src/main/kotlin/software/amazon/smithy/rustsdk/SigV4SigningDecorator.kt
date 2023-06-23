@@ -113,8 +113,8 @@ class SigV4SigningConfig(
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """
-                        layer.put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
-                        layer.load::<#{Region}>().cloned().map(|r| layer.put(#{SigningRegion}::from(r)));
+                        layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                        layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
                         """,
                         *codegenScope,
                     )

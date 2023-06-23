@@ -244,6 +244,9 @@ class FluentClientGenerator(
                     }
                     """,
                     *clientScope,
+                    // TODO(enableNewSmithyRuntimeLaunch): Remove the handle config hack
+                    "Storable" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Storable"),
+                    "StoreReplace" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::StoreReplace"),
                 )
             }
         }

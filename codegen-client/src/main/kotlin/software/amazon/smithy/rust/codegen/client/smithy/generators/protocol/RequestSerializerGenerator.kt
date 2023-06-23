@@ -72,7 +72,7 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
-                    let _header_serialization_settings = _cfg.get::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
+                    let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };
