@@ -12,17 +12,22 @@ C_RESET='\033[0m'
 set -eu
 cd smithy-rs
 
+# TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_compile` as more progress is made
+services_that_dont_compile=(\
+    "timestreamquery",
+    "timestreamwrite",
+)
+
 # TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
     "aws-config"\
-    "dynamodb"\
-    "route53"\
     "s3"\
     "sts"\
 )
 
 services_that_pass_tests=(\
     "config"\
+    "dynamodb"\
     "ec2"\
     "ecs"\
     "glacier"\
@@ -31,6 +36,7 @@ services_that_pass_tests=(\
     "lambda"\
     "polly"\
     "qldbsession"\
+    "route53"\
     "s3control"\
     "sso"\
     "transcribestreaming"\
@@ -41,8 +47,10 @@ services_that_pass_tests=(\
 cd aws/sdk/build/aws-sdk/sdk
 for service in "${services_that_compile[@]}"; do
     pushd "${service}"
-    echo -e "${C_YELLOW}# Running 'cargo check --all-features' on '${service}'${C_RESET}"
+    echo -e "${C_YELLOW}# Running 'cargo check --all-features --all-targets' on '${service}'${C_RESET}"
     RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo check --all-features --all-targets
+    echo -e "${C_YELLOW}# Running 'cargo clippy --all-features' on '${service}'${C_RESET}"
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo clippy --all-features
     popd
 done
 
@@ -50,6 +58,8 @@ for service in "${services_that_pass_tests[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo test --all-features' on '${service}'${C_RESET}"
     RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo test --all-features --all-targets --no-fail-fast
+    echo -e "${C_YELLOW}# Running 'cargo clippy --all-features' on '${service}'${C_RESET}"
+    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo clippy --all-features
     popd
 done
 

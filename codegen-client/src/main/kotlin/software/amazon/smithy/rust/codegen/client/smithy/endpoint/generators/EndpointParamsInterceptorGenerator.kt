@@ -9,7 +9,6 @@ import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
@@ -43,17 +42,17 @@ class EndpointParamsInterceptorGenerator(
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "BoxError" to RuntimeType.boxError(rc),
+            "ConfigBag" to RuntimeType.configBag(rc),
             "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
                 .resolve("client::orchestrator::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to interceptors.resolve("Interceptor"),
-            "InterceptorContext" to interceptors.resolve("InterceptorContext"),
-            "BeforeSerializationInterceptorContextRef" to interceptors.resolve("context::wrappers::BeforeSerializationInterceptorContextRef"),
+            "Interceptor" to RuntimeType.interceptor(rc),
+            "InterceptorContext" to RuntimeType.interceptorContext(rc),
+            "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
             "Output" to interceptors.resolve("context::Output"),
             "Error" to interceptors.resolve("context::Error"),
@@ -118,11 +117,7 @@ class EndpointParamsInterceptorGenerator(
         idx.getClientContextParams(codegenContext.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
             val paramName = EndpointParamsGenerator.memberName(name)
             val setterName = EndpointParamsGenerator.setterName(name)
-            if (param.type == ShapeType.BOOLEAN) {
-                rust(".$setterName(_config.$paramName())")
-            } else {
-                rust(".$setterName(_config.$paramName().clone())")
-            }
+            rust(".$setterName(_config.$paramName())")
         }
 
         idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
