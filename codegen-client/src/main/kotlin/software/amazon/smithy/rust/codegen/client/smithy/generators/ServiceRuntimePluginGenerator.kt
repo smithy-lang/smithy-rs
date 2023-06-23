@@ -46,7 +46,7 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class AdditionalConfig(val newLayerName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
-            writer.rust("$newLayerName.put(#T);", value)
+            writer.rust("$newLayerName.store_put(#T);", value)
         }
     }
 
@@ -85,6 +85,7 @@ class ServiceRuntimePluginGenerator(
             "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+            "DynAuthOptionResolver" to runtimeApi.resolve("client::auth::DynAuthOptionResolver"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
@@ -136,7 +137,9 @@ class ServiceRuntimePluginGenerator(
                     cfg.set_http_auth_schemes(http_auth_schemes);
 
                     // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(#{Vec}::new()));
+                    cfg.set_auth_option_resolver(
+                        #{DynAuthOptionResolver}::new(#{StaticAuthOptionResolver}::new(#{Vec}::new()))
+                    );
 
                     #{additional_config}
 

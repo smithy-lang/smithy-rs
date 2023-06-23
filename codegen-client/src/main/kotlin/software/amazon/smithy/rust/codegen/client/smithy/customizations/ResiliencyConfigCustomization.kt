@@ -9,7 +9,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -26,6 +25,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
+        "DynRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::DynRetryStrategy"),
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "Sleep" to sleepModule.resolve("Sleep"),
@@ -318,7 +318,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         rustTemplate(
                             """
                             let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                            layer.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
+                            layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
                             """,
                             *codegenScope,
                         )

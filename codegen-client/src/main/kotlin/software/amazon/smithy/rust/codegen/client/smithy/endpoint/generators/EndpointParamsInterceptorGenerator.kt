@@ -173,7 +173,7 @@ class EndpointParamsInterceptorGenerator(
                     codegenContext.smithyRuntimeMode,
                 )
             }
-            rust("cfg.interceptor_state().put(endpoint_prefix);")
+            rust("cfg.interceptor_state().store_put(endpoint_prefix);")
         }
     }
 }

@@ -91,6 +91,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
         val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
+            "DynAuthOptionResolver" to runtimeApi.resolve("client::auth::DynAuthOptionResolver"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "HttpSignatureType" to awsRuntime.resolve("auth::sigv4::HttpSignatureType"),
             "SIGV4_SCHEME_ID" to awsRuntime.resolve("auth::sigv4::SCHEME_ID"),
@@ -122,15 +123,15 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
 
-                        ${section.newLayerName}.put(#{SigV4OperationSigningConfig} {
+                        ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
                             region: None,
                             service: None,
                             signing_options,
                         });
                         // TODO(enableNewSmithyRuntimeLaunch): Make auth options additive in the config bag so that multiple codegen decorators can register them
-                        let auth_option_resolver = #{StaticAuthOptionResolver}::new(
+                        let auth_option_resolver = #{DynAuthOptionResolver}::new(#{StaticAuthOptionResolver}::new(
                             vec![#{SIGV4_SCHEME_ID}]
-                        );
+                        ));
                         ${section.newLayerName}.set_auth_option_resolver(auth_option_resolver);
                         """,
                         *codegenScope,

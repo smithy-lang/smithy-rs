@@ -207,7 +207,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
                 is ServiceConfig.BuilderBuild -> writable {
                     if (runtimeMode.defaultToOrchestrator) {
-                        rust("layer.put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                        rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     } else {
                         rust("app_name: self.app_name,")
                     }

@@ -130,18 +130,18 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let maybe_loaded_body = cfg.get::<LoadedRequestBody>();
+        let maybe_loaded_body = cfg.load::<LoadedRequestBody>();
         if let Some(LoadedRequestBody::Loaded(body)) = maybe_loaded_body {
             let content_sha256 = add_checksum_treehash(context.request_mut(), body)?;
 
             // Override the signing payload with this precomputed hash
             let mut signing_config = cfg
-                .get::<SigV4OperationSigningConfig>()
+                .load::<SigV4OperationSigningConfig>()
                 .ok_or("SigV4OperationSigningConfig not found")?
                 .clone();
             signing_config.signing_options.payload_override =
                 Some(SignableBody::Precomputed(content_sha256));
-            cfg.interceptor_state().put(signing_config);
+            cfg.interceptor_state().store_put(signing_config);
         } else {
             return Err(
                 "the request body wasn't loaded into memory before the retry loop, \
