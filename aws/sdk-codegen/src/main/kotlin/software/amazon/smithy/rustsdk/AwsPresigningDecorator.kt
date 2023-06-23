@@ -369,8 +369,7 @@ class AwsPresignedFluentBuilderMethod(
                         }
                         """,
                         "AlternateSerializer" to alternateSerializer(operationShape),
-                        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                            .resolve("client::orchestrator::ConfigBagAccessors"),
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),

@@ -25,6 +25,16 @@ import java.util.logging.Logger
 
 typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenContext>
 
+sealed interface AuthOption {
+    /** Auth scheme for the `StaticAuthOptionResolver` */
+    data class StaticAuthOption(
+        val schemeShapeId: ShapeId,
+        val constructor: Writable,
+    ) : AuthOption
+
+    class CustomResolver(/* unimplemented */) : AuthOption
+}
+
 /**
  * [ClientCodegenDecorator] allows downstream users to customize code generation.
  *
@@ -33,6 +43,12 @@ typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenConte
  * attributes to the generated classes.
  */
 interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
+    fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthOptions: List<AuthOption>,
+    ): List<AuthOption> = baseAuthOptions
+
     fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
@@ -89,6 +105,14 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
         get() = "CombinedClientCodegenDecorator"
     override val order: Byte
         get() = 0
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthOptions: List<AuthOption>,
+    ): List<AuthOption> = combineCustomizations(baseAuthOptions) { decorator, authOptions ->
+        decorator.authOptions(codegenContext, operationShape, authOptions)
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,

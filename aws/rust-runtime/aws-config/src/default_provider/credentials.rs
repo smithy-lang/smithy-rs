@@ -161,9 +161,9 @@ impl Builder {
     }
 
     /// Override the configuration used for this provider
-    pub fn configure(mut self, config: ProviderConfig) -> Self {
-        self.region_chain = self.region_chain.configure(&config);
-        self.conf = Some(config);
+    pub fn configure(mut self, config: &ProviderConfig) -> Self {
+        self.region_chain = self.region_chain.configure(config);
+        self.conf = Some(config.clone());
         self
     }
 
@@ -250,11 +250,14 @@ mod test {
                 .await
                 .unwrap()
                 .with_provider_config($provider_config_builder)
-                .$func(|conf| async {
-                    crate::default_provider::credentials::Builder::default()
-                        .configure(conf)
-                        .build()
-                        .await
+                .$func(|conf| {
+                    let conf = conf.clone();
+                    async move {
+                        crate::default_provider::credentials::Builder::default()
+                            .configure(&conf)
+                            .build()
+                            .await
+                    }
                 })
                 .await
             }
@@ -317,7 +320,7 @@ mod test {
                 .clone();
         let provider = DefaultCredentialsChain::builder()
             .profile_name("secondary")
-            .configure(conf)
+            .configure(&conf)
             .build()
             .await;
         let creds = provider
@@ -343,7 +346,7 @@ mod test {
             .with_time_source(TimeSource::default())
             .with_sleep(TokioSleep::new());
         let provider = DefaultCredentialsChain::builder()
-            .configure(conf)
+            .configure(&conf)
             .build()
             .await;
         let creds = provider

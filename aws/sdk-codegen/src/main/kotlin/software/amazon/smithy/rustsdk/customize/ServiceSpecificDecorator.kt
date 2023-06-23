@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
@@ -57,6 +58,14 @@ class ServiceSpecificDecorator(
 
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthOptions: List<AuthOption>,
+    ): List<AuthOption> = baseAuthOptions.maybeApply(codegenContext.serviceShape) {
+        delegateTo.authOptions(codegenContext, operationShape, baseAuthOptions)
+    }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,

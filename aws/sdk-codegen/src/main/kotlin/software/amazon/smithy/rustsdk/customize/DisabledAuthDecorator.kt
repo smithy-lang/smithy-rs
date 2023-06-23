@@ -8,7 +8,7 @@ package software.amazon.smithy.rustsdk.customize
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.traits.AuthTrait
+import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.util.shapeId
@@ -37,7 +37,7 @@ class DisabledAuthDecorator : ClientCodegenDecorator {
         val optionalOperations = optionalAuth[service.id]!!
         return ModelTransformer.create().mapShapes(model) {
             if (optionalOperations.contains(it.id) && it is OperationShape) {
-                it.toBuilder().addTrait(AuthTrait(setOf())).build()
+                it.toBuilder().addTrait(OptionalAuthTrait()).build()
             } else {
                 it
             }

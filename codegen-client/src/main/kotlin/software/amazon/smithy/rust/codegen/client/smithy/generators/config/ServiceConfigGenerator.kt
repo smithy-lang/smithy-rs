@@ -319,7 +319,7 @@ class ServiceConfigGenerator(
         "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
         "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
-        "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+        "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
         "Layer" to smithyTypes.resolve("config_bag::Layer"),

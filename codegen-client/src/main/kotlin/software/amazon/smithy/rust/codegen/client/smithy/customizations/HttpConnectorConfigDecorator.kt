@@ -204,11 +204,12 @@ private class HttpConnectorConfigCustomization(
                                 // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                                 connection
                             ));
-                            layer.set_connection(connection);
+                            #{ConfigBagAccessors}::set_connection(&mut layer, connection);
                         }
 
                         """,
                         *codegenScope,
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
                     )
                 } else {
