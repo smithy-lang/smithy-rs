@@ -214,10 +214,12 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                                    layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
-                                        #{SharedEndpointResolver}::new(#{FailingResolver})
-                                    ).clone()
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(
+                                        layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                            #{SharedEndpointResolver}::new(#{FailingResolver})
+                                        ).clone()
+                                    )
                                 );
                                 layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
