@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -94,6 +95,9 @@ class ServiceRuntimePluginGenerator(
         writer: RustWriter,
         customizations: List<ServiceRuntimePluginCustomization>,
     ) {
+        val additionalConfig = writable {
+            writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))
+        }
         writer.rustTemplate(
             """
             // TODO(enableNewSmithyRuntimeLaunch) Remove `allow(dead_code)` as well as a field `handle` when
@@ -112,16 +116,7 @@ class ServiceRuntimePluginGenerator(
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    use #{ConfigBagAccessors};
-                    let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
-
-                    // TODO(enableNewSmithyRuntimeLaunch): Make it possible to set retry classifiers at the service level.
-                    //     Retry classifiers can also be set at the operation level and those should be added to the
-                    //     list of classifiers defined here, rather than replacing them.
-
-                    #{additional_config}
-
-                    Some(cfg.freeze())
+                    #{config}
                 }
 
                 fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
@@ -131,8 +126,26 @@ class ServiceRuntimePluginGenerator(
             }
             """,
             *codegenScope,
-            "additional_config" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))
+            "config" to writable {
+                if (additionalConfig.isNotEmpty()) {
+                    writer.rustTemplate(
+                        """
+                        let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
+
+                        // TODO(enableNewSmithyRuntimeLaunch): Make it possible to set retry classifiers at the service level.
+                        //     Retry classifiers can also be set at the operation level and those should be added to the
+                        //     list of classifiers defined here, rather than replacing them.
+
+                        #{additional_config}
+
+                        Some(cfg.freeze())
+                        """,
+                        *codegenScope,
+                        "additional_config" to additionalConfig,
+                    )
+                } else {
+                    rust("None")
+                }
             },
             "additional_interceptors" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
