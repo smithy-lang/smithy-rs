@@ -611,7 +611,7 @@ mod loader {
                 CredentialsProviderOption::Set(provider) => Some(provider),
                 CredentialsProviderOption::NotSet => {
                     let mut builder =
-                        credentials::DefaultCredentialsChain::builder().configure(&conf);
+                        credentials::DefaultCredentialsChain::builder().configure(conf.clone());
                     builder.set_region(region.clone());
                     Some(SharedCredentialsProvider::new(builder.build().await))
                 }
