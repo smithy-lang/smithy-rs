@@ -15,8 +15,7 @@ use crate::client::orchestrator::{
     EndpointResolverParams, LoadedRequestBody, ResponseDeserializer, SharedRequestSerializer,
     NOT_NEEDED,
 };
-use crate::client::retries::RetryStrategy;
-use crate::client::retries::{DynRetryStrategy, RetryClassifiers};
+use crate::client::retries::{DynRetryStrategy, RetryClassifiers, RetryStrategy};
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_types::config_bag::{AppendItemIter, CloneableLayer, ConfigBag, FrozenLayer, Layer};
