@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -132,14 +131,15 @@ class OperationRuntimePluginGenerator(
                 val option = it as AuthOption.StaticAuthOption
                 option.schemeShapeId to option
             }
-            val authTrait: AuthTrait? = operationShape.getTrait() ?: codegenContext.serviceShape.getTrait()
             withBlockTemplate(
                 "cfg.set_auth_option_resolver(#{DynAuthOptionResolver}::new(#{StaticAuthOptionResolver}::new(vec![",
                 "])));",
                 *codegenScope,
             ) {
+                val authSchemes = ServiceIndex.of(codegenContext.model)
+                    .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
                 var atLeastOneScheme = false
-                for (schemeShapeId in authTrait?.valueSet ?: emptyList()) {
+                for (schemeShapeId in authSchemes.keys) {
                     val authOption = authOptionsMap[schemeShapeId]
                         ?: throw IllegalStateException("no auth scheme implementation available for $schemeShapeId")
                     authOption.constructor(this)
