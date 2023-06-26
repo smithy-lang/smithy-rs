@@ -155,7 +155,9 @@ class OperationRuntimePluginGenerator(
                     throw IllegalStateException(
                         "this client won't have any auth schemes " +
                             "(not even optional/no-auth auth), which means the generated client " +
-                            "won't work at all for the ${operationShape.id} operation",
+                            "won't work at all for the ${operationShape.id} operation. See " +
+                            "https://smithy.io/2.0/spec/authentication-traits.html for documentation " +
+                            "on Smithy authentication traits.",
                     )
                 }
             }
