@@ -79,8 +79,8 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                     rustTemplate(
                         """
                         /// Returns the credentials cache.
-                        pub fn credentials_cache(&self) -> #{SharedCredentialsCache} {
-                            self.inner.load::<#{SharedCredentialsCache}>().expect("credentials cache should be set").clone()
+                        pub fn credentials_cache(&self) -> #{Option}<#{SharedCredentialsCache}> {
+                            self.inner.load::<#{SharedCredentialsCache}>().cloned()
                         }
                         """,
                         *codegenScope,
@@ -145,9 +145,8 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """
-                        layer.store_put(
-                            layer.load::<#{CredentialsCache}>()
-                                .cloned()
+                        if let Some(credentials_provider) = layer.load::<#{SharedCredentialsProvider}>().cloned() {
+                            let cache_config = layer.load::<#{CredentialsCache}>().cloned()
                                 .unwrap_or_else({
                                     let sleep = layer.load::<#{SharedAsyncSleep}>().cloned();
                                     || match sleep {
@@ -158,11 +157,10 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                                         }
                                         None => #{CredentialsCache}::lazy(),
                                     }
-                                })
-                                .create_cache(layer.load::<#{SharedCredentialsProvider}>().cloned().unwrap_or_else(|| {
-                                    #{SharedCredentialsProvider}::new(#{DefaultProvider})
-                                }))
-                        );
+                                });
+                            let shared_credentials_cache = cache_config.create_cache(credentials_provider);
+                            layer.store_put(shared_credentials_cache);
+                        }
                         """,
                         *codegenScope,
                     )
