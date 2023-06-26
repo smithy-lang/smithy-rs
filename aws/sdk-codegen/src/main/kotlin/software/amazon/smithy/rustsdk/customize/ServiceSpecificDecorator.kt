@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientProtocolMap
@@ -138,9 +139,9 @@ class ServiceSpecificDecorator(
         delegateTo.structureCustomizations(codegenContext, baseCustomizations)
     }
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         model.maybeApply(service) {
-            delegateTo.transformModel(service, model)
+            delegateTo.transformModel(service, model, settings)
         }
 
     override fun serviceRuntimePluginCustomizations(

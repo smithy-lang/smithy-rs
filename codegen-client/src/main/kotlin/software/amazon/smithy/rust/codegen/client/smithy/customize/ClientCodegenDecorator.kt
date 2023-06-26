@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
@@ -42,7 +43,7 @@ sealed interface AuthOption {
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
+interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, ClientRustSettings> {
     fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
@@ -100,7 +101,7 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
 open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorator>) :
-    CombinedCoreCodegenDecorator<ClientCodegenContext, ClientCodegenDecorator>(decorators), ClientCodegenDecorator {
+    CombinedCoreCodegenDecorator<ClientCodegenContext, ClientRustSettings, ClientCodegenDecorator>(decorators), ClientCodegenDecorator {
     override val name: String
         get() = "CombinedClientCodegenDecorator"
     override val order: Byte
