@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.traits.HttpApiKeyAuthTrait
 import software.amazon.smithy.model.traits.HttpBasicAuthTrait
 import software.amazon.smithy.model.traits.HttpBearerAuthTrait
@@ -93,10 +92,11 @@ class HttpAuthDecorator : ClientCodegenDecorator {
         operationShape: OperationShape,
         baseAuthOptions: List<AuthOption>,
     ): List<AuthOption> {
-        val authTrait: AuthTrait? = operationShape.getTrait() ?: codegenContext.serviceShape.getTrait()
+        val serviceIndex = ServiceIndex.of(codegenContext.model)
+        val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
         val codegenScope = codegenScope(codegenContext.runtimeConfig)
         val options = ArrayList<AuthOption>()
-        for (authScheme in authTrait?.valueSet ?: emptySet()) {
+        for (authScheme in authSchemes.keys) {
             fun addOption(schemeShapeId: ShapeId, name: String) {
                 options.add(
                     StaticAuthOption(

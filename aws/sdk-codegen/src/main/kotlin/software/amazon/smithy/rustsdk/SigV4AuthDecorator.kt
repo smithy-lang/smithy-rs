@@ -7,12 +7,8 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.traits.AuthTrait
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -64,23 +60,6 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
             it + listOf(AuthOperationCustomization(codegenContext))
         }
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        // A lot of the AWS models don't specify the `@auth` trait, so
-        // add `@auth([sigv4])` to operations if the service model doesn't specify any auth
-        val operationShapes = service.allOperations.map { model.expectShape(it) }
-        return if (!service.hasTrait<AuthTrait>() && operationShapes.any { !it.hasTrait<AuthTrait>() }) {
-            ModelTransformer.create().mapShapes(model) { shape ->
-                if (shape is OperationShape && service.allOperations.contains(shape.id) && !shape.hasTrait<AuthTrait>()) {
-                    shape.toBuilder().addTrait(AuthTrait(setOf(SigV4Trait.ID))).build()
-                } else {
-                    shape
-                }
-            }
-        } else {
-            model
-        }
-    }
 }
 
 private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
