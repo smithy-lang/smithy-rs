@@ -11,16 +11,16 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyAsync
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
-class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val runtimeMode = codegenContext.smithyRuntimeMode
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
@@ -40,7 +40,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
         "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
         "TokenBucket" to retries.resolve("TokenBucket"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
-        "SharedTimeSource" to smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
+        "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
+        "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
+        "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
+        "RetryPartition" to retries.resolve("RetryPartition"),
+        "debug" to RuntimeType.Tracing.resolve("debug"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -76,6 +80,15 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             /// Return a reference to the timeout configuration contained in this config, if any.
                             pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
                                 self.inner.load::<#{TimeoutConfig}>()
+                            }
+
+                            ##[doc(hidden)]
+                            /// Returns a reference to the retry partition contained in this config, if any.
+                            ///
+                            /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
+                            /// method for anything!
+                            pub fn retry_partition(&self) -> #{Option}<&#{RetryPartition}> {
+                                self.inner.load::<#{RetryPartition}>()
                             }
                             """,
                             *codegenScope,
@@ -321,13 +334,47 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             *codegenScope,
                         )
                     }
+
+                    if (runtimeMode.defaultToOrchestrator) {
+                        Attribute.DocHidden.render(this)
+                        rustTemplate(
+                            """
+                            /// Set the partition for retry-related state. When clients share a retry partition, they will
+                            /// also share things like token buckets and client rate limiters. By default, all clients
+                            /// for the same service will share a partition.
+                            pub fn retry_partition(mut self, retry_partition: #{RetryPartition}) -> Self {
+                                self.set_retry_partition(Some(retry_partition));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+
+                        Attribute.DocHidden.render(this)
+                        rustTemplate(
+                            """
+                            /// Set the partition for retry-related state. When clients share a retry partition, they will
+                            /// also share things like token buckets and client rate limiters. By default, all clients
+                            /// for the same service will share a partition.
+                            pub fn set_retry_partition(&mut self, retry_partition: #{Option}<#{RetryPartition}>) -> &mut Self {
+                                retry_partition.map(|r| self.inner.store_put(r));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
                 ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
+                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.id.name}"));
                             let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                            if retry_config.has_retry() {
+                                #{debug}!("creating retry strategy with partition '{}'", retry_partition);
+                            }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
                                 if let Some(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
@@ -336,15 +383,17 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                                         .duration_since(#{SystemTime}::UNIX_EPOCH)
                                         .expect("the present takes place after the UNIX_EPOCH")
                                         .as_secs_f64();
-                                    let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(|| {
+                                    let client_rate_limiter_partition = #{ClientRateLimiterPartition}::new(retry_partition.clone());
+                                    let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(client_rate_limiter_partition, || {
                                         #{ClientRateLimiter}::new(seconds_since_unix_epoch)
-                                    }).clone();
+                                    });
                                     layer.put(client_rate_limiter);
                                 }
                             }
 
                             // The token bucket is used for both standard AND adaptive retries.
-                            let token_bucket = TOKEN_BUCKET.get_or_init(#{TokenBucket}::default).clone();
+                            let token_bucket_partition = #{TokenBucketPartition}::new(retry_partition);
+                            let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
                             layer.put(token_bucket);
                             layer.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
                             """,
@@ -383,6 +432,10 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                 "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
             )
+            rustTemplate(
+                "pub use #{RetryPartition};",
+                "RetryPartition" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::RetryPartition"),
+            )
         }
         rustCrate.withModule(ClientRustModule.Config.timeout) {
             rustTemplate(
@@ -398,9 +451,11 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
     private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
     private val retries = smithyRuntimeCrate.resolve("client::retries")
     private val codegenScope = arrayOf(
-        "OnceCell" to RuntimeType.OnceCell.resolve("sync::OnceCell"),
         "TokenBucket" to retries.resolve("TokenBucket"),
+        "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
+        "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
+        "KeyedPartition" to smithyRuntimeCrate.resolve("keyed_partition::KeyedPartition"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
@@ -410,8 +465,8 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
                 //    MSRV to 1.70
                 rustTemplate(
                     """
-                    static TOKEN_BUCKET: #{OnceCell}<#{TokenBucket}> = #{OnceCell}::new();
-                    static CLIENT_RATE_LIMITER: #{OnceCell}<#{ClientRateLimiter}> = #{OnceCell}::new();
+                    static TOKEN_BUCKET: #{KeyedPartition}<#{TokenBucketPartition}, #{TokenBucket}> = #{KeyedPartition}::new();
+                    static CLIENT_RATE_LIMITER: #{KeyedPartition}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{KeyedPartition}::new();
                     """,
                     *codegenScope,
                 )

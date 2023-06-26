@@ -17,7 +17,7 @@ use aws_smithy_runtime_api::client::retries::{
 };
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::debug;
@@ -110,7 +110,9 @@ impl StandardRetryStrategy {
             Some(RetryReason::Error(kind)) => {
                 update_rate_limiter_if_exists(cfg, kind == &ErrorKind::ThrottlingError);
                 if let Some(delay) = check_rate_limiter_for_delay(cfg, *kind) {
-                    Ok(delay.min(self.max_backoff))
+                    let delay = delay.min(self.max_backoff);
+                    debug!("rate limiter has requested a {delay:?} delay before retrying");
+                    Ok(delay)
                 } else {
                     if let Some(tb) = token_bucket {
                         match tb.acquire(kind) {
@@ -168,7 +170,7 @@ impl Default for StandardRetryStrategy {
 
 impl RetryStrategy for StandardRetryStrategy {
     fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
-        if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+        if let Some(crl) = cfg.get::<Arc<ClientRateLimiter>>() {
             let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
             if let Err(delay) = crl.acquire_permission_to_send_a_request(
                 seconds_since_unix_epoch,
@@ -247,14 +249,14 @@ impl RetryStrategy for StandardRetryStrategy {
 }
 
 fn update_rate_limiter_if_exists(cfg: &ConfigBag, is_throttling_error: bool) {
-    if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+    if let Some(crl) = cfg.get::<Arc<ClientRateLimiter>>() {
         let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
         crl.update_rate_limiter(seconds_since_unix_epoch, is_throttling_error);
     }
 }
 
 fn check_rate_limiter_for_delay(cfg: &ConfigBag, kind: ErrorKind) -> Option<Duration> {
-    if let Some(crl) = cfg.get::<ClientRateLimiter>() {
+    if let Some(crl) = cfg.get::<Arc<ClientRateLimiter>>() {
         let retry_reason = if kind == ErrorKind::ThrottlingError {
             RequestReason::RetryTimeout
         } else {

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::retries::RetryPartition;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
@@ -31,6 +32,19 @@ impl RuntimePlugin for TokenBucketRuntimePlugin {
         cfg.store_put(self.token_bucket.clone());
 
         Some(cfg.freeze())
+    }
+}
+
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct TokenBucketPartition {
+    retry_partition: RetryPartition,
+}
+
+impl TokenBucketPartition {
+    pub fn new(retry_partition: RetryPartition) -> Self {
+        Self { retry_partition }
     }
 }
 

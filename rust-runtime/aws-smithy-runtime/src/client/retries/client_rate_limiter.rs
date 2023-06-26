@@ -8,6 +8,7 @@
 
 #![allow(dead_code)]
 
+use crate::client::retries::RetryPartition;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::{builder, builder_methods, builder_struct};
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
@@ -36,6 +37,19 @@ impl RuntimePlugin for ClientRateLimiterRuntimePlugin {
         cfg.store_put(self.rate_limiter.clone());
 
         Some(cfg.freeze())
+    }
+}
+
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ClientRateLimiterPartition {
+    retry_partition: RetryPartition,
+}
+
+impl ClientRateLimiterPartition {
+    pub fn new(retry_partition: RetryPartition) -> Self {
+        Self { retry_partition }
     }
 }
 

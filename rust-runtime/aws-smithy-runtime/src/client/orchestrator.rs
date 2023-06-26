@@ -193,6 +193,7 @@ async fn try_op(
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
+    let mut retry_delay = None;
     for i in 1u32.. {
         debug!("beginning attempt #{i}");
         // Break from the loop if we can't rewind the request's state. This will always succeed the
@@ -205,6 +206,11 @@ async fn try_op(
         cfg.interceptor_state().put::<RequestAttempts>(i.into());
         let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
         let maybe_timeout = async {
+            // We must await this here or else timeouts won't work as expected
+            if let Some(delay) = retry_delay.take() {
+                delay.await;
+            }
+
             try_attempt(ctx, cfg, interceptors, stop_point).await;
             finally_attempt(ctx, cfg, interceptors).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
@@ -238,7 +244,7 @@ async fn try_op(
                 let sleep_impl = halt_on_err!([ctx] => cfg.sleep_impl().ok_or(OrchestratorError::other(
                     "the retry strategy requested a delay before sending the retry request, but no 'async sleep' implementation was set"
                 )));
-                sleep_impl.sleep(delay).await;
+                retry_delay = Some(sleep_impl.sleep(delay));
                 continue;
             }
         }

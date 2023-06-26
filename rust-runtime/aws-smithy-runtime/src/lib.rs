@@ -11,3 +11,5 @@
 )]
 
 pub mod client;
+
+pub mod keyed_partition;
