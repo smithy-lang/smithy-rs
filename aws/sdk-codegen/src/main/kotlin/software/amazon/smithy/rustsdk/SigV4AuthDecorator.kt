@@ -105,7 +105,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                     // enable the aws-runtime `sign-eventstream` feature
                     addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
-                section.registerHttpAuthScheme(this) {
+                section.registerHttpAuthScheme(this, runtimeConfig) {
                     rustTemplate("#{SharedHttpAuthScheme}::new(#{SigV4HttpAuthScheme}::new())", *codegenScope)
                 }
             }

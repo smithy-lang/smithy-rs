@@ -30,24 +30,28 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("$newLayerName.store_put(#T);", value)
         }
 
-        fun registerHttpAuthScheme(writer: RustWriter, authScheme: Writable) {
+        fun registerHttpAuthScheme(writer: RustWriter, runtimeConfig: RuntimeConfig, authScheme: Writable) {
             writer.rustTemplate(
                 """
-                $newLayerName.push_http_auth_scheme(
+                #{ConfigBagAccessors}::push_http_auth_scheme(
+                    &mut $newLayerName,
                     #{auth_scheme}
                 );
                 """,
+                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                 "auth_scheme" to authScheme,
             )
         }
 
-        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
+        fun registerIdentityResolver(writer: RustWriter, runtimeConfig: RuntimeConfig, identityResolver: Writable) {
             writer.rustTemplate(
                 """
-                $newLayerName.push_identity_resolver(
+                #{ConfigBagAccessors}::push_identity_resolver(
+                    &mut $newLayerName,
                     #{identity_resolver}
                 );
                 """,
+                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                 "identity_resolver" to identityResolver,
             )
         }
@@ -128,7 +132,7 @@ class ServiceRuntimePluginGenerator(
             *codegenScope,
             "config" to writable {
                 if (additionalConfig.isNotEmpty()) {
-                    writer.rustTemplate(
+                    rustTemplate(
                         """
                         let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
 

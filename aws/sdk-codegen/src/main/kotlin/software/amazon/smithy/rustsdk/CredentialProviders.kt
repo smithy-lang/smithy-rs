@@ -140,7 +140,7 @@ class CredentialsIdentityResolverRegistration(
         when (section) {
             is ServiceRuntimePluginSection.AdditionalConfig -> {
                 rustBlockTemplate("if let Some(credentials_cache) = self.handle.conf.credentials_cache()") {
-                    section.registerIdentityResolver(this) {
+                    section.registerIdentityResolver(this, runtimeConfig) {
                         rustTemplate(
                             """
                             #{SIGV4_SCHEME_ID},

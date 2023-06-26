@@ -155,7 +155,7 @@ class HttpAuthDecorator : ClientCodegenDecorator {
 }
 
 private class HttpAuthServiceRuntimePluginCustomization(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val authSchemes: HttpAuthSchemes,
 ) : ServiceRuntimePluginCustomization() {
     private val serviceShape = codegenContext.serviceShape
@@ -165,7 +165,7 @@ private class HttpAuthServiceRuntimePluginCustomization(
         when (section) {
             is ServiceRuntimePluginSection.AdditionalConfig -> {
                 fun registerAuthScheme(scheme: Writable) {
-                    section.registerHttpAuthScheme(this) {
+                    section.registerHttpAuthScheme(this, codegenContext.runtimeConfig) {
                         rustTemplate("#{SharedHttpAuthScheme}::new(#{Scheme})", *codegenScope, "Scheme" to scheme)
                     }
                 }
