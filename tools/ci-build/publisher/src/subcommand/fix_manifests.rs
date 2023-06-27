@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
+use toml::Value;
 use tracing::info;
 
 mod validate;
@@ -91,6 +92,15 @@ fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>>
             Some(package) => package,
             None => continue,
         };
+        // ignore non-publishable crates
+        if let Some(Value::Boolean(false)) = manifest
+            .metadata
+            .get("package")
+            .expect("checked above")
+            .get("publish")
+        {
+            continue;
+        }
         let name = package
             .get("name")
             .and_then(|name| name.as_str())
