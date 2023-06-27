@@ -15,13 +15,13 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::{
     disable_interceptor, Interceptor, InterceptorRegistrar, SharedInterceptor,
 };
-use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::retries::DynRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};

@@ -48,7 +48,7 @@ class EndpointParamsInterceptorGenerator(
             "BoxError" to RuntimeType.boxError(rc),
             "ConfigBag" to RuntimeType.configBag(rc),
             "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
-                .resolve("client::orchestrator::ConfigBagAccessors"),
+                .resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),

@@ -20,12 +20,11 @@ services_that_dont_compile=(\
 
 # TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_pass_tests` as more progress is made
 services_that_compile=(\
-    "aws-config"\
     "s3"\
-    "sts"\
 )
 
 services_that_pass_tests=(\
+    "aws-config"\
     "config"\
     "dynamodb"\
     "ec2"\
@@ -39,6 +38,7 @@ services_that_pass_tests=(\
     "route53"\
     "s3control"\
     "sso"\
+    "sts"\
     "transcribestreaming"\
 )
 

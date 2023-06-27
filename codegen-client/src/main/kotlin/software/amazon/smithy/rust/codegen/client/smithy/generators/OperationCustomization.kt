@@ -155,11 +155,11 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalRuntimePlugins") {
         fun addServiceRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_service_runtime_plugin(#{plugin})", "plugin" to plugin)
+            writer.rustTemplate(".with_service_plugin(#{plugin})", "plugin" to plugin)
         }
 
         fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_operation_runtime_plugin(#{plugin})", "plugin" to plugin)
+            writer.rustTemplate(".with_operation_plugin(#{plugin})", "plugin" to plugin)
         }
     }
 }

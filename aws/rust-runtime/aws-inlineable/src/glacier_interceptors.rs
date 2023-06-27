@@ -11,11 +11,12 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, LoadedRequestBody};
+use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
 use http::header::{HeaderName, HeaderValue};
