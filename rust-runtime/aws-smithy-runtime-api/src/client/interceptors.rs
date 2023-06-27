@@ -11,10 +11,10 @@ use crate::client::interceptors::context::{
     BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
     FinalizerInterceptorContextRef, InterceptorContext,
 };
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend};
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use context::{Error, Input, Output};
-use std::fmt::{Debug, Formatter};
+use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -53,7 +53,7 @@ macro_rules! interceptor_trait_fn {
 ///   of the SDK ’s request execution pipeline. Hooks are either "read" hooks, which make it possible
 ///   to read in-flight request or response messages, or "read/write" hooks, which make it possible
 ///   to modify in-flight request or output messages.
-pub trait Interceptor: std::fmt::Debug {
+pub trait Interceptor: fmt::Debug {
     interceptor_trait_fn!(
         read_before_execution,
         BeforeSerializationInterceptorContextRef,
@@ -583,8 +583,8 @@ pub struct SharedInterceptor {
     check_enabled: Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>,
 }
 
-impl Debug for SharedInterceptor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for SharedInterceptor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SharedInterceptor")
             .field("interceptor", &self.interceptor)
             .finish()
@@ -597,7 +597,7 @@ impl SharedInterceptor {
         Self {
             interceptor: Arc::new(interceptor),
             check_enabled: Arc::new(|conf: &ConfigBag| {
-                conf.get::<DisableInterceptor<T>>().is_none()
+                conf.load::<DisableInterceptor<T>>().is_none()
             }),
         }
     }
@@ -720,6 +720,13 @@ pub struct DisableInterceptor<T> {
     _t: PhantomData<T>,
     #[allow(unused)]
     cause: &'static str,
+}
+
+impl<T> Storable for DisableInterceptor<T>
+where
+    T: fmt::Debug + Send + Sync + 'static,
+{
+    type Storer = StoreReplace<Self>;
 }
 
 /// Disable an interceptor with a given cause
@@ -958,10 +965,10 @@ mod tests {
             2
         );
         interceptors
-            .read_before_transmit(&mut InterceptorContext::new(Input::new(5)), &mut cfg)
+            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &mut cfg)
             .expect_err("interceptor returns error");
         cfg.interceptor_state()
-            .put(disable_interceptor::<PanicInterceptor>("test"));
+            .store_put(disable_interceptor::<PanicInterceptor>("test"));
         assert_eq!(
             interceptors
                 .interceptors()
@@ -971,7 +978,7 @@ mod tests {
         );
         // shouldn't error because interceptors won't run
         interceptors
-            .read_before_transmit(&mut InterceptorContext::new(Input::new(5)), &mut cfg)
+            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &mut cfg)
             .expect("interceptor is now disabled");
     }
 }

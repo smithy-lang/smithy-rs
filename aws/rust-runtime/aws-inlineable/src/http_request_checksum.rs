@@ -132,13 +132,10 @@ fn add_checksum_for_request_body(
         // Body is streaming: wrap the body so it will emit a checksum as a trailer.
         None => {
             tracing::debug!("applying {checksum_algorithm:?} of the request body as a trailer");
-            if let Some(mut signing_config) = cfg.get::<SigV4OperationSigningConfig>().cloned() {
+            if let Some(mut signing_config) = cfg.load::<SigV4OperationSigningConfig>().cloned() {
                 signing_config.signing_options.payload_override =
                     Some(SignableBody::StreamingUnsignedPayloadTrailer);
-
-                let mut layer = Layer::new("http_body_checksum_sigv4_payload_override");
-                layer.put(signing_config);
-                cfg.push_layer(layer);
+                cfg.interceptor_state().store_put(signing_config);
             }
             wrap_streaming_request_body_in_checksum_calculating_body(request, checksum_algorithm)?;
         }

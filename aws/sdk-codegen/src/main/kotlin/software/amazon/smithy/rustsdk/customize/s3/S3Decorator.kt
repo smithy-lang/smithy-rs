@@ -18,6 +18,7 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -59,7 +60,7 @@ class S3Decorator : ClientCodegenDecorator {
         },
     )
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")

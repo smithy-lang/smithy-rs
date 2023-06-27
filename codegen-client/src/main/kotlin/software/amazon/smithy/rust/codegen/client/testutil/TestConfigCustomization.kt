@@ -129,6 +129,9 @@ fun stubConfigProject(codegenContext: ClientCodegenContext, customization: Confi
     val generator = ServiceConfigGenerator(codegenContext, customizations = customizations.toList())
     project.withModule(ClientRustModule.config) {
         generator.render(this)
+        if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+            generator.renderRuntimePluginImplForSelf(this)
+        }
         unitTest(
             "config_send_sync",
             """

@@ -124,6 +124,7 @@ class InlineDependency(
             "serialization_settings",
             CargoDependency.Http,
             CargoDependency.smithyHttp(runtimeConfig),
+            CargoDependency.smithyTypes(runtimeConfig),
         )
 
         fun constrained(): InlineDependency =

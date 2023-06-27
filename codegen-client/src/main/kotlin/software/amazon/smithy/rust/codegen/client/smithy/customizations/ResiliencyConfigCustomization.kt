@@ -31,6 +31,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
+        "DynRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::DynRetryStrategy"),
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "Sleep" to sleepModule.resolve("Sleep"),
@@ -387,15 +388,15 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                                     let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(client_rate_limiter_partition, || {
                                         #{ClientRateLimiter}::new(seconds_since_unix_epoch)
                                     });
-                                    layer.put(client_rate_limiter);
+                                    layer.store_put(client_rate_limiter);
                                 }
                             }
 
                             // The token bucket is used for both standard AND adaptive retries.
                             let token_bucket_partition = #{TokenBucketPartition}::new(retry_partition);
                             let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
-                            layer.put(token_bucket);
-                            layer.set_retry_strategy(#{StandardRetryStrategy}::new(&retry_config));
+                            layer.store_put(token_bucket);
+                            layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
                             """,
                             *codegenScope,
                         )

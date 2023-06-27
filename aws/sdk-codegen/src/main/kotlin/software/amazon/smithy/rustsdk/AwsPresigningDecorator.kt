@@ -17,6 +17,7 @@ import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -113,7 +114,7 @@ class AwsPresigningDecorator internal constructor(
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
-    override fun transformModel(service: ServiceShape, model: Model): Model {
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model {
         val modelWithSynthetics = addSyntheticOperations(model)
         val presignableTransforms = mutableListOf<PresignModelTransform>()
         val intermediate = ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
@@ -363,17 +364,18 @@ class AwsPresignedFluentBuilderMethod(
                             fn config(&self) -> Option<#{FrozenLayer}> {
                                 use #{ConfigBagAccessors};
                                 let mut cfg = #{Layer}::new("presigning_serializer");
-                                cfg.set_request_serializer(#{AlternateSerializer});
+                                cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
                                 Some(cfg.freeze())
                             }
                         }
                         """,
                         "AlternateSerializer" to alternateSerializer(operationShape),
-                        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                            .resolve("client::orchestrator::ConfigBagAccessors"),
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                            .resolve("client::orchestrator::SharedRequestSerializer"),
                     )
                 }
             },

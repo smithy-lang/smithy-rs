@@ -165,7 +165,7 @@ class PaginatorGenerator private constructor(
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
-                    #{runtime_plugin_init};
+                    #{runtime_plugin_init}
                     #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
