@@ -10,7 +10,7 @@
 //! version numbers in addition to the dependency path.
 
 use crate::fs::Fs;
-use crate::package::{discover_package_manifests, parse_version};
+use crate::package::{discover_manifests, parse_version};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -55,7 +55,7 @@ pub async fn subcommand_fix_manifests(
         true => Mode::Check,
         false => Mode::Execute,
     };
-    let manifest_paths = discover_package_manifests(location.into()).await?;
+    let manifest_paths = discover_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 
