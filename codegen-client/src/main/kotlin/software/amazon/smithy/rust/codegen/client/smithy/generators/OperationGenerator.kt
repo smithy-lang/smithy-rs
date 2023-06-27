@@ -59,6 +59,7 @@ open class OperationGenerator(
                         let mut runtime_plugins = runtime_plugins
                             .with_client_plugin(handle.conf.clone())
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
+                            .with_client_plugin(#{NoAuthRuntimePlugin}::new())
                             .with_operation_plugin(operation);
                         if let Some(config_override) = config_override {
                             runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
@@ -71,6 +72,8 @@ open class OperationGenerator(
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                         .resolve("client::runtime_plugin::RuntimePlugins"),
+                    "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
+                        .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
                 )
             }
     }
