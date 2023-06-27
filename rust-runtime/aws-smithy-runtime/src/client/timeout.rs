@@ -180,11 +180,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::future::never::Never;
-    use aws_smithy_async::rt::sleep::TokioSleep;
-    use aws_smithy_types::config_bag::Layer;
+    use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, TokioSleep};
+    use aws_smithy_async::test_util::{controlled_time_and_sleep, instant_time_and_sleep};
+    use aws_smithy_async::time::TimeSource;
+    use aws_smithy_http::result::SdkError;
+    use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
+    use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_smithy_types::timeout::TimeoutConfig;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime};
+    use tokio::task::yield_now;
 
     #[tokio::test]
     async fn test_no_timeout() {

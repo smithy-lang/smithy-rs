@@ -27,6 +27,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApi
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -74,6 +76,7 @@ class IntegrationTestDependencies(
     private val hasTests: Boolean,
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Body -> testDependenciesOnly {
             if (hasTests) {
@@ -92,6 +95,11 @@ class IntegrationTestDependencies(
                 addDependency(FuturesUtil)
                 addDependency(Tracing.toDevDependency())
                 addDependency(TracingSubscriber)
+
+                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                    addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
+                    addDependency(smithyRuntimeApi(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
+                }
             }
             if (hasBenches) {
                 addDependency(Criterion)
