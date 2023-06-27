@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.codegenScope
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -151,7 +152,7 @@ data class ConfigParam(
  * Therefore, primitive types, such as bool and String, need to be wrapped in newtypes to make them distinct.
  */
 fun configParamNewtype(newtypeName: String, inner: Symbol, runtimeConfig: RuntimeConfig) =
-    RuntimeType.forInlineFun(newtypeName, ClientRustModule.Config) {
+    RuntimeType.forInlineFun(newtypeName, ClientRustModule.config) {
         val codegenScope = arrayOf(
             "Storable" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Storable"),
             "StoreReplace" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::StoreReplace"),
@@ -159,14 +160,36 @@ fun configParamNewtype(newtypeName: String, inner: Symbol, runtimeConfig: Runtim
         rustTemplate(
             """
             ##[derive(Debug, Clone)]
-            pub(crate) struct $newtypeName($inner);
+            pub(crate) struct $newtypeName(pub(crate) $inner);
             impl #{Storable} for $newtypeName {
-                type Storer = #{StoreReplace}<$newtypeName>;
+                type Storer = #{StoreReplace}<Self>;
             }
             """,
             *codegenScope,
         )
     }
+
+/**
+ * Render an expression that loads a value from a config bag.
+ *
+ * The expression to be rendered handles a case where a newtype is stored in the config bag, but the user expects
+ * the underlying raw type after the newtype has been loaded from the bag.
+ */
+fun loadFromConfigBag(innerTypeName: String, newtype: RuntimeType): Writable = writable {
+    rustTemplate(
+        """
+        load::<#{newtype}>().map(#{f})
+        """,
+        "newtype" to newtype,
+        "f" to writable {
+            if (innerTypeName == "bool") {
+                rust("|ty| ty.0")
+            } else {
+                rust("|ty| ty.0.clone()")
+            }
+        },
+    )
+}
 
 /**
  * Config customization for a config param with no special behavior:
@@ -187,31 +210,6 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                         false -> param.type
                     }
                     rust("pub (crate) ${param.name}: #T,", t)
-                }
-            }
-
-            ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        pub(crate) fn ${param.name}(&self) -> #{output} {
-                            self.inner.load::<#{newtype}>().map(#{f})
-                        }
-                        """,
-                        "f" to writable {
-                            if (param.type.name == "bool") {
-                                rust("|ty| ty.0")
-                            } else {
-                                rust("|ty| ty.0.clone()")
-                            }
-                        },
-                        "newtype" to param.newtype!!,
-                        "output" to if (param.optional) {
-                            param.type.makeOptional()
-                        } else {
-                            param.type
-                        },
-                    )
                 }
             }
 
@@ -299,7 +297,7 @@ typealias ConfigCustomization = NamedCustomization<ServiceConfig>
  */
 
 class ServiceConfigGenerator(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val customizations: List<ConfigCustomization> = listOf(),
 ) {
     companion object {
@@ -318,10 +316,10 @@ class ServiceConfigGenerator(
     private val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
     val codegenScope = arrayOf(
-        "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
+        "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-        "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
-        "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+        "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+        "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
         "Layer" to smithyTypes.resolve("config_bag::Layer"),
@@ -430,6 +428,7 @@ class ServiceConfigGenerator(
                 rustBlock("pub fn build(mut self) -> Config") {
                     rustTemplate(
                         """
+                        ##[allow(unused_imports)]
                         use #{ConfigBagAccessors};
                         // The builder is being turned into a service config. While doing so, we'd like to avoid
                         // requiring that items created and stored _during_ the build method be `Clone`, since they
@@ -472,14 +471,17 @@ class ServiceConfigGenerator(
                     #{Some}(self.inner.clone())
                 }
 
-                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
-                    interceptors.extend(self.interceptors.iter().cloned());
+                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
+                    #{interceptors}
                 }
             }
 
             """,
             *codegenScope,
             "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+            "interceptors" to writable {
+                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors"))
+            },
         )
     }
 

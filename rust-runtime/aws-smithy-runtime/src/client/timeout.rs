@@ -6,7 +6,8 @@
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
 use aws_smithy_client::SdkError;
-use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, HttpResponse};
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::timeout::TimeoutConfig;
 use pin_project_lite::pin_project;
@@ -114,7 +115,7 @@ pub(super) trait ProvideMaybeTimeoutConfig {
 
 impl ProvideMaybeTimeoutConfig for ConfigBag {
     fn maybe_timeout_config(&self, timeout_kind: TimeoutKind) -> MaybeTimeoutConfig {
-        if let Some(timeout_config) = self.get::<TimeoutConfig>() {
+        if let Some(timeout_config) = self.load::<TimeoutConfig>() {
             let sleep_impl = self.sleep_impl();
             let timeout = match (sleep_impl.as_ref(), timeout_kind) {
                 (None, _) => None,
@@ -199,7 +200,7 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         let mut timeout_config = Layer::new("timeout");
-        timeout_config.put(TimeoutConfig::builder().build());
+        timeout_config.store_put(TimeoutConfig::builder().build());
         timeout_config.set_sleep_impl(Some(sleep_impl));
         cfg.push_layer(timeout_config);
 
@@ -225,7 +226,7 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         let mut timeout_config = Layer::new("timeout");
-        timeout_config.put(
+        timeout_config.store_put(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_millis(250))
                 .build(),

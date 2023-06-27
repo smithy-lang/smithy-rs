@@ -116,7 +116,7 @@ class RegionDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (usesRegion(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.Config) {
+            rustCrate.withModule(ClientRustModule.config) {
                 rust("pub use #T::Region;", region(codegenContext.runtimeConfig))
             }
         }
@@ -132,7 +132,10 @@ class RegionDecorator : ClientCodegenDecorator {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable {
                             if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                                rust("$configRef.region().as_ref().map(|r|r.as_ref().to_owned())")
+                                rustTemplate(
+                                    "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
+                                    "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                                )
                             } else {
                                 rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
                             }

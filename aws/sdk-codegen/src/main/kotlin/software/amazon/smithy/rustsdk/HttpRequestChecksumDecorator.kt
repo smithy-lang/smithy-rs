@@ -154,7 +154,7 @@ class HttpRequestChecksumCustomization(
                             })
                             """,
                             *preludeScope,
-                            "BoxError" to runtimeApi.resolve("client::interceptors::error::BoxError"),
+                            "BoxError" to RuntimeType.boxError(runtimeConfig),
                             "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
                             "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
                             "RequestChecksumInterceptor" to runtimeConfig.awsInlineableHttpRequestChecksum()

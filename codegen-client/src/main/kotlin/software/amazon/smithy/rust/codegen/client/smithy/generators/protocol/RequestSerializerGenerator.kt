@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -35,14 +34,14 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        val runtimeApi = CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType()
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
-        val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
+        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
-            "BoxError" to orchestrator.resolve("BoxError"),
-            "config" to ClientRustModule.Config,
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+            "config" to ClientRustModule.config,
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
             "http" to RuntimeType.Http,
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
@@ -73,7 +72,7 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
-                    let _header_serialization_settings = _cfg.get::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
+                    let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };

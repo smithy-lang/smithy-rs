@@ -8,9 +8,11 @@ use aws_smithy_http::endpoint::{
     apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint,
     SharedEndpointResolver,
 };
-use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, EndpointResolver, EndpointResolverParams, HttpRequest,
+    EndpointResolver, EndpointResolverParams, HttpRequest,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
@@ -99,7 +101,7 @@ pub(super) fn orchestrate_endpoint(
     cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
     let params = cfg.endpoint_resolver_params();
-    let endpoint_prefix = cfg.get::<EndpointPrefix>();
+    let endpoint_prefix = cfg.load::<EndpointPrefix>();
     let request = ctx.request_mut().expect("set during serialization");
 
     let endpoint_resolver = cfg.endpoint_resolver();
@@ -107,7 +109,7 @@ pub(super) fn orchestrate_endpoint(
     apply_endpoint(request, &endpoint, endpoint_prefix)?;
 
     // Make the endpoint config available to interceptors
-    cfg.interceptor_state().put(endpoint);
+    cfg.interceptor_state().store_put(endpoint);
     Ok(())
 }
 

@@ -3,29 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod context;
-pub mod error;
-
-use crate::client::interceptors::context::wrappers::{
-    FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
+use crate::box_error::BoxError;
+use crate::client::interceptors::context::{
+    AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
+    BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
+    BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
+    FinalizerInterceptorContextRef, InterceptorContext,
 };
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend};
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
 use aws_smithy_types::error::display::DisplayErrorContext;
-pub use context::{
-    wrappers::{
-        AfterDeserializationInterceptorContextMut, AfterDeserializationInterceptorContextRef,
-        BeforeDeserializationInterceptorContextMut, BeforeDeserializationInterceptorContextRef,
-        BeforeSerializationInterceptorContextMut, BeforeSerializationInterceptorContextRef,
-        BeforeTransmitInterceptorContextMut, BeforeTransmitInterceptorContextRef,
-    },
-    InterceptorContext,
-};
 use context::{Error, Input, Output};
-pub use error::{BoxError, InterceptorError};
+use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
+
+pub mod context;
+pub mod error;
+
+pub use error::InterceptorError;
 
 macro_rules! interceptor_trait_fn {
     ($name:ident, $phase:ident, $docs:tt) => {
@@ -600,7 +598,7 @@ impl SharedInterceptor {
         Self {
             interceptor: Arc::new(interceptor),
             check_enabled: Arc::new(|conf: &ConfigBag| {
-                conf.get::<DisableInterceptor<T>>().is_none()
+                conf.load::<DisableInterceptor<T>>().is_none()
             }),
         }
     }
@@ -723,6 +721,13 @@ pub struct DisableInterceptor<T> {
     _t: PhantomData<T>,
     #[allow(unused)]
     cause: &'static str,
+}
+
+impl<T> Storable for DisableInterceptor<T>
+where
+    T: fmt::Debug + Send + Sync + 'static,
+{
+    type Storer = StoreReplace<Self>;
 }
 
 /// Disable an interceptor with a given cause
@@ -964,7 +969,7 @@ mod tests {
             .read_before_transmit(&mut InterceptorContext::new(Input::new(5)), &mut cfg)
             .expect_err("interceptor returns error");
         cfg.interceptor_state()
-            .put(disable_interceptor::<PanicInterceptor>("test"));
+            .store_put(disable_interceptor::<PanicInterceptor>("test"));
         assert_eq!(
             interceptors
                 .interceptors()
