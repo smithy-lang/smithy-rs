@@ -15,17 +15,6 @@ fn test_client() -> (CaptureRequestReceiver, Client) {
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
-        /*
-        .credentials_provider(SharedCredentialsProvider::new(
-            Credentials::new(
-                "test",
-                "test",
-                Some("test".into()),
-                Some(UNIX_EPOCH + Duration::from_secs(1669257290 + 3600)),
-                "test",
-            )
-        ))
-         */
         .region(Region::new("us-west-2"))
         .http_connector(conn)
         .build();
