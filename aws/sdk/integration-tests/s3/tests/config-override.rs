@@ -4,13 +4,14 @@
  */
 
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::config::Config;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
 use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
 use aws_types::SdkConfig;
-use std::time::{Duration, UNIX_EPOCH};
 
+// TODO(enableNewSmithyRuntimeCleanup): Remove this attribute once #[cfg(aws_sdk_orchestrator_mode)]
+//  has been removed
+#[allow(dead_code)]
 fn test_client() -> (CaptureRequestReceiver, Client) {
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
@@ -32,7 +33,7 @@ async fn operation_overrides_force_path_style() {
         .customize()
         .await
         .unwrap()
-        .config_override(Config::builder().force_path_style(true))
+        .config_override(aws_sdk_s3::config::Config::builder().force_path_style(true))
         .send()
         .await;
     assert_eq!(
@@ -51,7 +52,7 @@ async fn operation_overrides_fips() {
         .customize()
         .await
         .unwrap()
-        .config_override(Config::builder().use_fips(true))
+        .config_override(aws_sdk_s3::config::Config::builder().use_fips(true))
         .send()
         .await;
     assert_eq!(
@@ -70,7 +71,7 @@ async fn operation_overrides_dual_stack() {
         .customize()
         .await
         .unwrap()
-        .config_override(Config::builder().use_dual_stack(true))
+        .config_override(aws_sdk_s3::config::Config::builder().use_dual_stack(true))
         .send()
         .await;
     assert_eq!(
@@ -93,14 +94,14 @@ async fn operation_overrides_credentials_provider() {
         .customize()
         .await
         .unwrap()
-        .config_override(Config::builder().credentials_provider(Credentials::new(
+        .config_override(aws_sdk_s3::config::Config::builder().credentials_provider(Credentials::new(
             "test",
             "test",
             Some("test".into()),
-            Some(UNIX_EPOCH + Duration::from_secs(1669257290 + 3600)),
+            Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1669257290 + 3600)),
             "test",
         )))
-        .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1669257290))
+        .request_time_for_tests(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1669257290))
         .send()
         .await;
 
