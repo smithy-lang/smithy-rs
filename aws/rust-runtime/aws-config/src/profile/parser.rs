@@ -114,6 +114,11 @@ impl ProfileSet {
         self.profiles.get(profile_name)
     }
 
+    /// Set a named profile in the profile set
+    pub fn set_profile(&mut self, profile: Profile) {
+        self.profiles.insert(profile.name().to_string(), profile);
+    }
+
     /// Returns the name of the currently selected profile
     pub fn selected_profile(&self) -> &str {
         self.selected_profile.as_ref()
@@ -170,6 +175,17 @@ impl Profile {
     /// Returns a reference to the property named `name`
     pub fn get(&self, name: &str) -> Option<&str> {
         self.properties.get(name).map(|prop| prop.value())
+    }
+
+    /// Sets the value of the property named `name`
+    pub fn set(&mut self, name: impl Into<String> + Clone, value: impl Into<String>) {
+        self.properties.insert(
+            name.clone().into(),
+            Property {
+                key: name.into(),
+                value: value.into(),
+            },
+        );
     }
 }
 
