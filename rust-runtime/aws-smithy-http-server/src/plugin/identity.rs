@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::Plugin;
+use super::{HttpPlugin, ModelPlugin, Plugin};
 
 /// A [`Plugin`] that maps a service to itself.
+#[derive(Debug)]
 pub struct IdentityPlugin;
 
 impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
@@ -15,3 +16,6 @@ impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
         svc
     }
 }
+
+impl ModelPlugin for IdentityPlugin {}
+impl HttpPlugin for IdentityPlugin {}

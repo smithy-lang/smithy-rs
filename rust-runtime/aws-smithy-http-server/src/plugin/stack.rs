@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::Plugin;
+use super::{HttpPlugin, ModelPlugin, Plugin};
 
 /// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
 ///
 /// The `Inner::map` is run _then_ the `Outer::map`.
 ///
-/// Note that the primary tool for composing plugins is [`PluginPipeline`](crate::plugin::PluginPipeline).
+/// Note that the primary tool for composing HTTP plugins is
+/// [`HttpPlugins`](crate::plugin::HttpPlugins), and the primary tool for composing HTTP plugins is
+/// [`ModelPlugins`](crate::plugin::ModelPlugins); if you are an application writer, you should
+/// prefer composing plugins using these.
 pub struct PluginStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,
@@ -33,4 +36,18 @@ where
         let svc = self.inner.apply(input);
         self.outer.apply(svc)
     }
+}
+
+impl<Inner, Outer> HttpPlugin for PluginStack<Inner, Outer>
+where
+    Inner: HttpPlugin,
+    Outer: HttpPlugin,
+{
+}
+
+impl<Inner, Outer> ModelPlugin for PluginStack<Inner, Outer>
+where
+    Inner: ModelPlugin,
+    Outer: ModelPlugin,
+{
 }

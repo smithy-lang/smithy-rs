@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{either::Either, IdentityPlugin};
+use super::{either::Either, IdentityPlugin, ModelPlugin};
 
 use crate::operation::OperationShape;
 use crate::service::ContainsOperation;
 
-use super::Plugin;
+use super::{HttpPlugin, Plugin};
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
@@ -41,11 +41,14 @@ where
     }
 }
 
+impl<Inner, F> HttpPlugin for FilterByOperation<Inner, F> where Inner: HttpPlugin {}
+impl<Inner, F> ModelPlugin for FilterByOperation<Inner, F> where Inner: ModelPlugin {}
+
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
 ///
-/// Users should prefer [`Scoped`](crate::plugin::Scoped) and fallback to [`filter_by_operation`] in cases where
-/// [`Plugin`] application must be decided at runtime.
+/// Users should prefer [`Scoped`](crate::plugin::Scoped) and fallback to [`filter_by_operation`]
+/// in cases where [`Plugin`] application must be decided at runtime.
 ///
 /// # Example
 ///
