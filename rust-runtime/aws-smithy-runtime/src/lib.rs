@@ -12,4 +12,4 @@
 
 pub mod client;
 
-pub mod keyed_partition;
+pub mod static_partition_map;

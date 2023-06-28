@@ -22,25 +22,6 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 
 sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
-     * Hook for adding HTTP auth schemes.
-     *
-     * Should emit code that looks like the following:
-     * ```
-     * .auth_scheme("name", path::to::MyAuthScheme::new())
-     * ```
-     */
-    data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
-
-    /**
-     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
-     *
-     * Should emit code that looks like the following:
-     ```
-     .with_classifier(AwsErrorCodeClassifier::new())
-     */
-    data class RetryClassifier(val configBagName: String) : ServiceRuntimePluginSection("RetryClassifier")
-
-    /**
      * Hook for declaring singletons that store cross-operation state.
      *
      * Examples include token buckets, ID generators, etc.

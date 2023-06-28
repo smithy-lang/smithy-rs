@@ -456,7 +456,7 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
         "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
-        "KeyedPartition" to smithyRuntimeCrate.resolve("keyed_partition::KeyedPartition"),
+        "StaticPartitionMap" to smithyRuntimeCrate.resolve("static_partition_map::StaticPartitionMap"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
@@ -466,8 +466,8 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
                 //    MSRV to 1.70
                 rustTemplate(
                     """
-                    static TOKEN_BUCKET: #{KeyedPartition}<#{TokenBucketPartition}, #{TokenBucket}> = #{KeyedPartition}::new();
-                    static CLIENT_RATE_LIMITER: #{KeyedPartition}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{KeyedPartition}::new();
+                    static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
+                    static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
                     """,
                     *codegenScope,
                 )
