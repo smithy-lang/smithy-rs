@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -45,6 +46,7 @@ class EndpointParamsInterceptorGenerator(
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
+            *preludeScope,
             "BoxError" to RuntimeType.boxError(rc),
             "ConfigBag" to RuntimeType.configBag(rc),
             "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
@@ -78,7 +80,7 @@ class EndpointParamsInterceptorGenerator(
                     &self,
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
                     cfg: &mut #{ConfigBag},
-                ) -> Result<(), #{BoxError}> {
+                ) -> #{Result}<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
                     let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
@@ -91,7 +93,7 @@ class EndpointParamsInterceptorGenerator(
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
                     cfg.interceptor_state().set_endpoint_resolver_params(#{EndpointResolverParams}::new(params));
-                    Ok(())
+                    #{Ok}(())
                 }
             }
             """,
