@@ -22,6 +22,13 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 
 sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
+     * Hook for declaring singletons that store cross-operation state.
+     *
+     * Examples include token buckets, ID generators, etc.
+     */
+    class DeclareSingletons : ServiceRuntimePluginSection("DeclareSingletons")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
     data class AdditionalConfig(val newLayerName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
@@ -128,6 +135,9 @@ class ServiceRuntimePluginGenerator(
                     #{additional_interceptors}
                 }
             }
+
+            /// Cross-operation shared-state singletons
+            #{declare_singletons}
             """,
             *codegenScope,
             "config" to writable {
@@ -153,6 +163,9 @@ class ServiceRuntimePluginGenerator(
             },
             "additional_interceptors" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
+            },
+            "declare_singletons" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())
             },
         )
     }
