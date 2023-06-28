@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -232,7 +233,8 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         rustWriter.rustBlock("impl ParamsBuilder") {
             docs("Consume this builder, creating [`Params`].")
             rustBlockTemplate(
-                "pub fn build(self) -> Result<#{Params}, #{ParamsError}>",
+                "pub fn build(self) -> #{Result}<#{Params}, #{ParamsError}>",
+                *preludeScope,
                 "Params" to paramsStruct(),
                 "ParamsError" to paramsError(),
             ) {

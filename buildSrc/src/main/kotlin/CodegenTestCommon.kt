@@ -18,6 +18,7 @@ data class CodegenTest(
     val service: String,
     val module: String,
     val extraConfig: String? = null,
+    val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
 )
 
@@ -38,6 +39,7 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                         "relativePath": "$projectDir/rust-runtime"
                     },
                     "codegen": {
+                        ${it.extraCodegenConfig ?: ""}
                     },
                     "service": "${it.service}",
                     "module": "${it.module}",
