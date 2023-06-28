@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// static TOKEN_BUCKET: #{OnceCell}<#{TokenBucket}> = #{OnceCell}::new();
 
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::{Mutex, MutexGuard};
 
+#[derive(Debug, Default)]
 pub struct KeyedPartition<K, V> {
     inner: OnceCell<Mutex<HashMap<K, V>>>,
 }

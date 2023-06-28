@@ -211,10 +211,10 @@ impl Inner {
         self.max_capacity = f64::max(new_fill_rate, MIN_CAPACITY);
 
         debug!(
-            self.fill_rate,
-            self.max_capacity,
-            self.current_capacity,
-            self.measured_tx_rate,
+            fill_rate = self.fill_rate,
+            max_capacity = self.max_capacity,
+            current_capacity = self.current_capacity,
+            measured_tx_rate = self.measured_tx_rate,
             "client rate limiter state has been updated"
         );
 

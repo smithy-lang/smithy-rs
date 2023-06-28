@@ -104,7 +104,7 @@ impl FromStr for RetryMode {
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
         } else if string.eq_ignore_ascii_case("adaptive") {
-            return Ok(RetryMode::Adaptive);
+           Ok(RetryMode::Adaptive)
         } else {
             Err(RetryModeParseError::new(string))
         }

@@ -107,9 +107,9 @@ impl StandardRetryStrategy {
 
         match retry_reason {
             Some(RetryReason::Explicit(backoff)) => Ok(*backoff),
-            Some(RetryReason::Error(kind)) => {
-                update_rate_limiter_if_exists(cfg, kind == &ErrorKind::ThrottlingError);
-                if let Some(delay) = check_rate_limiter_for_delay(cfg, *kind) {
+            Some(RetryReason::Error(&kind)) => {
+                update_rate_limiter_if_exists(cfg, kind == ErrorKind::ThrottlingError);
+                if let Some(delay) = check_rate_limiter_for_delay(cfg, kind) {
                     let delay = delay.min(self.max_backoff);
                     debug!("rate limiter has requested a {delay:?} delay before retrying");
                     Ok(delay)
