@@ -105,7 +105,10 @@ sealed class ServiceConfig(name: String) : Section(name) {
      */
     data class RuntimePluginConfig(val cfg: String) : ServiceConfig("ToRuntimePlugin")
 
-    data class RuntimePluginInterceptors(val interceptors: String) : ServiceConfig("ToRuntimePluginInterceptors")
+    /**
+     * A section for appending additional runtime plugins, stored in [interceptorsField], to [interceptors]
+     */
+    data class RuntimePluginInterceptors(val interceptors: String, val interceptorsField: String) : ServiceConfig("ToRuntimePluginInterceptors")
 
     /**
      * A section for extra functionality that needs to be defined with the config module
@@ -434,7 +437,10 @@ class ServiceConfigGenerator(
                         // requiring that items created and stored _during_ the build method be `Clone`, since they
                         // will soon be part of a `FrozenLayer` owned by the service config. So we will convert the
                         // current `CloneableLayer` into a `Layer` that does not impose the `Clone` requirement.
-                        let mut layer: #{Layer} = self.inner.into();
+                        let layer: #{Layer} = self
+                            .inner
+                            .into();
+                        let mut layer = layer.with_name("$moduleUseName::config::config");
                         """,
                         *codegenScope,
                     )
@@ -480,33 +486,7 @@ class ServiceConfigGenerator(
             *codegenScope,
             "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
             "interceptors" to writable {
-                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors"))
-            },
-        )
-    }
-
-    fun renderRuntimePluginImplForBuilder(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl #{RuntimePlugin} for Builder {
-                fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    // TODO(enableNewSmithyRuntimeLaunch): Put into `cfg` the fields in `self.config_override` that are not `None`
-                    ##[allow(unused_mut)]
-                    let mut cfg = #{CloneableLayer}::new("service config");
-                    #{config}
-                    #{Some}(cfg.freeze())
-                }
-
-                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
-                    #{interceptors}
-                }
-            }
-
-            """,
-            *codegenScope,
-            "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
-            "interceptors" to writable {
-                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors"))
+                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors", "self"))
             },
         )
     }

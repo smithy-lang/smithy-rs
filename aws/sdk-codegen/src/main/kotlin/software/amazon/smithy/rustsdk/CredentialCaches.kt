@@ -191,6 +191,48 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 }
             }
 
+            ServiceConfig.RuntimePluginConfig("layer") -> {
+                rustTemplate(
+                    """
+                    match (
+                        layer
+                            .load::<#{CredentialsCache}>()
+                            .cloned(),
+                        layer
+                            .load::<#{SharedCredentialsProvider}>()
+                            .cloned(),
+                    ) {
+                        (#{None}, #{None}) => {}
+                        (#{None}, #{Some}(credentials_provider)) => {
+                            // wrap it with a lazy credentials cache so it may benefit
+                            // in the case of retries.
+                            layer.store_put(
+                                #{CredentialsCache}::lazy()
+                                    .create_cache(credentials_provider),
+                            );
+                        }
+                        (#{Some}(credentials_cache), #{None}) => {
+                            layer.store_put(
+                                credentials_cache.create_cache(
+                                    self.client_config
+                                        .load::<#{SharedCredentialsProvider}>()
+                                        .cloned()
+                                        .unwrap(),
+                                ),
+                            );
+                        }
+                        (
+                            #{Some}(credentials_cache),
+                            #{Some}(credentials_provider),
+                        ) => {
+                            layer.store_put(credentials_cache.create_cache(credentials_provider));
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+
             else -> emptySection
         }
     }

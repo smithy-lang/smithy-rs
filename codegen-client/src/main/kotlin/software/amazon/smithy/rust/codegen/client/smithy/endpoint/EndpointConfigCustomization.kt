@@ -238,6 +238,24 @@ internal class EndpointConfigCustomization(
                     }
                 }
 
+                ServiceConfig.RuntimePluginConfig("layer") -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            if let #{Some}(resolver) = layer
+                                .load::<$sharedEndpointResolver>()
+                                .cloned()
+                            {
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(resolver));
+                                layer.set_endpoint_resolver(endpoint_resolver);
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
                 else -> emptySection
             }
         }

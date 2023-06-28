@@ -317,8 +317,23 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                            layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
+                            let retry_config = layer
+                                .load::<#{RetryConfig}>()
+                                .cloned()
+                                .unwrap_or_else(#{RetryConfig}::disabled);
+                            layer.set_retry_strategy(
+                                #{DynRetryStrategy}::new(
+                                    #{StandardRetryStrategy}::new(
+                                        &retry_config,
+                                    ),
+                                ),
+                            );
+
+                            // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
+                            //  is resolved
+                            if let None = layer.load::<#{TimeoutConfig}>() {
+                                layer.store_put(#{TimeoutConfig}::disabled());
+                            }
                             """,
                             *codegenScope,
                         )
@@ -331,6 +346,24 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             retry_config: self.retry_config,
                             sleep_impl: self.sleep_impl.clone(),
                             timeout_config: self.timeout_config,
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
+                ServiceConfig.RuntimePluginConfig("layer") -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            if let #{Some}(retry_config) = layer
+                                .load::<#{RetryConfig}>()
+                                .cloned()
+                            {
+                                layer.set_retry_strategy(
+                                    #{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config))
+                                );
+                            }
                             """,
                             *codegenScope,
                         )
