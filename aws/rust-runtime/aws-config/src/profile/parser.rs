@@ -5,10 +5,10 @@
 
 use crate::profile::parser::parse::parse_profile_file;
 use crate::profile::parser::source::Source;
-use crate::profile::profile_file::ProfileFiles;
+use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -132,6 +132,35 @@ impl ProfileSet {
     /// Returns the names of the profiles in this profile set
     pub fn profiles(&self) -> impl Iterator<Item = &str> {
         self.profiles.keys().map(String::as_ref)
+    }
+
+    /// Returns a string representation of the profiles, with syntax based on `kind`.
+    pub fn to_string(&self, kind: ProfileFileKind) -> String {
+        let mut str = String::new();
+
+        // Convert the maps to BTreeMaps so that the output is consistently ordered
+
+        for (name, profile) in BTreeMap::from_iter(&self.profiles) {
+            match (name.as_ref(), kind) {
+                (_, ProfileFileKind::Credentials)
+                | (normalize::DEFAULT, ProfileFileKind::Config) => {
+                    str.push_str(&format!("[{name}]\n"))
+                }
+                (_, ProfileFileKind::Config) => {
+                    str.push_str(&format!("[{} {}]\n", normalize::PROFILE_PREFIX, name))
+                }
+            }
+
+            for (key, Property { value, .. }) in BTreeMap::from_iter(&profile.properties) {
+                str.push_str(&format!("{key}={value}\n"));
+            }
+
+            str.push('\n');
+        }
+
+        str.pop();
+
+        str
     }
 
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
@@ -310,6 +339,73 @@ mod test {
         let mut profile_names: Vec<_> = profile_set.profiles().collect();
         profile_names.sort();
         assert_eq!(profile_names, vec!["bar", "foo"]);
+    }
+
+    #[test]
+    fn credentials_roundtrip_with_update() {
+        let source = make_source(ParserInput {
+            config_file: Some("[default]\nregion = us-east-1".to_string()),
+            credentials_file: Some(
+                r#"[example_sts]
+aws_access_key_id=ACCESS_KEY
+aws_secret_access_key=SECRET_ACCESS_KEY
+aws_session_token=SESSION_TOKEN
+bar=baz
+
+[example_static]
+aws_secret_access_key=SECRET_ACCESS_KEY
+aws_access_key_id=ACCESS_KEY
+foo=bar"#
+                    .to_string(),
+            ),
+        });
+
+        let mut profile_set = ProfileSet::parse(source).expect("profiles loaded");
+
+        let mut sts_profile = profile_set
+            .get_profile("example_sts")
+            .expect("profile not found")
+            .to_owned();
+        sts_profile.set("aws_access_key_id", "NEW_ACCESS_KEY");
+        sts_profile.set("aws_secret_access_key", "NEW_SECRET_ACCESS_KEY");
+        sts_profile.set("aws_session_token", "NEW_SESSION_TOKEN");
+        profile_set.set_profile(sts_profile);
+
+        assert_eq!(
+            profile_set.to_string(ProfileFileKind::Credentials),
+            r#"[default]
+region=us-east-1
+
+[example_static]
+aws_access_key_id=ACCESS_KEY
+aws_secret_access_key=SECRET_ACCESS_KEY
+foo=bar
+
+[example_sts]
+aws_access_key_id=NEW_ACCESS_KEY
+aws_secret_access_key=NEW_SECRET_ACCESS_KEY
+aws_session_token=NEW_SESSION_TOKEN
+bar=baz
+"#
+        );
+
+        assert_eq!(
+            profile_set.to_string(ProfileFileKind::Config),
+            r#"[default]
+region=us-east-1
+
+[profile example_static]
+aws_access_key_id=ACCESS_KEY
+aws_secret_access_key=SECRET_ACCESS_KEY
+foo=bar
+
+[profile example_sts]
+aws_access_key_id=NEW_ACCESS_KEY
+aws_secret_access_key=NEW_SECRET_ACCESS_KEY
+aws_session_token=NEW_SESSION_TOKEN
+bar=baz
+"#
+        );
     }
 
     /// Run all tests from the fuzzing corpus to validate coverage

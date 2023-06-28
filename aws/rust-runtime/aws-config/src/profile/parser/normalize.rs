@@ -9,8 +9,8 @@ use crate::profile::{Profile, ProfileSet, Property};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-const DEFAULT: &str = "default";
-const PROFILE_PREFIX: &str = "profile";
+pub(crate) const DEFAULT: &str = "default";
+pub(crate) const PROFILE_PREFIX: &str = "profile";
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 struct ProfileName<'a> {
