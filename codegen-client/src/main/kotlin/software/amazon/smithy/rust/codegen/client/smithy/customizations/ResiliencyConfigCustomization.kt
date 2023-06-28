@@ -331,7 +331,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
 
                             // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
                             //  is resolved
-                            if let None = layer.load::<#{TimeoutConfig}>() {
+                            if layer.load::<#{TimeoutConfig}>().is_none() {
                                 layer.store_put(#{TimeoutConfig}::disabled());
                             }
                             """,
