@@ -11,7 +11,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-no-auth = []
 test-util = ["dep:aws-smithy-protocol-test"]
 
 [dependencies]
