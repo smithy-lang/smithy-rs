@@ -9,7 +9,7 @@ use std::time::Duration;
 /// HTTP signing parameters
 pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
 
-const X_RAY_TRACE_HEADER: &str = "x-amzn-trace-id";
+const HEADER_NAME_X_RAY_TRACE_ID: &str = "x-amzn-trace-id";
 
 /// HTTP-specific signing settings
 #[derive(Debug, PartialEq)]
@@ -105,22 +105,24 @@ impl Default for SigningSettings {
         // Java SDK: <https://github.com/aws/aws-sdk-java-v2/blob/master/core/auth/src/main/java/software/amazon/awssdk/auth/signer/internal/AbstractAws4Signer.java#L70>
         // JS SDK: <https://github.com/aws/aws-sdk-js/blob/master/lib/signers/v4.js#L191>
         // There is no single source of truth for these available, so this uses the minimum common set of the excluded options.
-        let excluded_headers: Vec<HeaderName> = [
-            // This header is calculated as part of the signing process, so if it's present, discard it
-            AUTHORIZATION,
-            // Changes when sent by proxy
-            USER_AGENT,
-            // Changes based on the request from the client
-            HeaderName::from_static(X_RAY_TRACE_HEADER),
-        ]
-        .to_vec();
-
+        // Instantiate this every time, because SigningSettings takes a Vec (which cannot be const);
+        let excluded_headers = Some(
+            [
+                // This header is calculated as part of the signing process, so if it's present, discard it
+                AUTHORIZATION,
+                // Changes when sent by proxy
+                USER_AGENT,
+                // Changes based on the request from the client
+                HeaderName::from_static(HEADER_NAME_X_RAY_TRACE_ID),
+            ]
+            .to_vec(),
+        );
         Self {
             percent_encoding_mode: PercentEncodingMode::Double,
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
             expires_in: None,
-            excluded_headers: Some(excluded_headers),
+            excluded_headers,
             uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
             session_token_mode: SessionTokenMode::Include,
         }

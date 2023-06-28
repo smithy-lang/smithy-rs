@@ -12,9 +12,9 @@
 # author = "rcoh"
 
  [[aws-sdk-rust]]
- message = "Automatically exclude x-ray trace id headers and authorization headers from Sigv4 canonical request calculations."
- references = ["smithy-rs#2813"]
- meta = { "breaking" = false, "tada" = false, "bug" = false }
+ message = "Automatically exclude X-Ray trace ID headers and authorization headers from SigV4 canonical request calculations."
+ references = ["smithy-rs#2815"]
+ meta = { "breaking" = false, "tada" = false, "bug" = true }
  author = "relevantsam"
 
  [[aws-sdk-rust]]
