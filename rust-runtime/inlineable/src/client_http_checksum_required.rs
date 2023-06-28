@@ -29,7 +29,7 @@ impl Interceptor for HttpChecksumRequiredInterceptor {
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
-        cfg: &mut ConfigBag,
+        _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let request = context.request_mut();
         let body_bytes = request
