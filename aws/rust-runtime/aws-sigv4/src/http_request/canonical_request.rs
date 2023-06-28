@@ -774,14 +774,16 @@ mod tests {
         assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
-    // It should exclude user-agent and x-amz-user-agent headers from presigning
+    // It should exclude authorization, user-agent, x-amz-user-agent, x-amzn-trace-id headers from presigning
     #[test]
     fn presigning_header_exclusion() {
         let request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header("authorization", "test-authorization")
             .header("content-type", "application/xml")
             .header("content-length", "0")
             .header("user-agent", "test-user-agent")
+            .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
             .body("")
             .unwrap();
