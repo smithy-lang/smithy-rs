@@ -6,6 +6,8 @@
 #[allow(dead_code)]
 mod aws_query_compatible_errors;
 #[allow(unused)]
+mod client_http_checksum_required;
+#[allow(unused)]
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
