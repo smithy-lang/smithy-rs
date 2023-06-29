@@ -164,7 +164,7 @@ internal class BuilderGeneratorTest {
         project.generatedFiles().forEach {
             if (it.extension == "rs") {
                 val file = project.baseDir.resolve(it).toFile().readText()
-                val check = file.contains("derive(serde::Deserialize)") || file.contains("derive(serde::Serialize)")
+                assertFalse(file.contains("serde::"))
                 assert(!check)
             }
         }
