@@ -321,7 +321,7 @@ class AwsPresignedFluentBuilderMethod(
             #{alternate_presigning_serializer}
 
             let runtime_plugins = #{Operation}::operation_runtime_plugins(
-                self.handle.runtime_plugins,
+                self.handle.runtime_plugins.clone(),
                 self.config_override
             )
                 .with_client_plugin(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override}))
