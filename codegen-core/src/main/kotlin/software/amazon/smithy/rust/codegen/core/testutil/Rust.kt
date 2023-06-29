@@ -353,7 +353,7 @@ fun FileManifest.printGeneratedFiles() {
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
-    enableUnstableFlag: Boolean = false
+    enableUnstableFlag: Boolean = false,
 ): String {
     val stubModel = """
         namespace fake
@@ -405,7 +405,7 @@ fun RustWriter.compileAndTest(
     main: String = "",
     clippy: Boolean = false,
     expectFailure: Boolean = false,
-    enableUnstable: Boolean = false
+    enableUnstable: Boolean = false,
 ): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     val module = if (this.namespace.contains("::")) {
