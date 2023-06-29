@@ -47,13 +47,13 @@ private object Commands {
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
     fun func(s: String, add: String, flag: Boolean): String = if (flag) { "$s $add" } else { s }
 
-    fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
+    fun cargoEnvDenyWarnings(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
-            "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
+            "RUSTFLAGS" to func("-D warnings", cfgUnstable, enableUnstable),
         )
     }
 
-    fun cargoEnvDDeadCode(enableUnstable: Boolean): Map<String, String> {
+    fun cargoEnvAllowDeadCode(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
             "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
         )
