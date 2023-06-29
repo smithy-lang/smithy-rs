@@ -65,8 +65,16 @@ private object Commands {
         return func("cargo test", allFeature, enableAllFeatures)
     }
 
+    fun cargoTest(featuresToEnable: Array<String>): String {
+        return func("cargo test", featuresToEnable.joinToString(" "), true)
+    }
+
     fun cargoCheck(enableAllFeatures: Boolean): String {
         return func("cargo check", allFeature, enableAllFeatures)
+    }
+
+    fun cargoCheck(featuresToEnable: Array<String>): String {
+        return func("cargo test", featuresToEnable.joinToString(" "), true)
     }
 
     const val CargoFmt = "cargo fmt"
@@ -348,6 +356,8 @@ fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
     enableUnstableFlag: Boolean = true,
+    enableAllFeatures: Boolean = false,
+    featuresToEnable: Array<String>? = null,
 ): String {
     val stubModel = """
         namespace fake
@@ -370,7 +380,13 @@ fun TestWriterDelegator.compileAndTest(
     }
 
     val env = Commands.cargoEnvAllowDeadCode(enableUnstableFlag)
-    val testOutput = Commands.cargoTest(enableUnstableFlag).runCommand(baseDir, env)
+
+    var testCommand = Commands.cargoTest(enableUnstableFlag)
+    if (featuresToEnable != null) {
+        testCommand = Commands.cargoCheck(featuresToEnable)
+    }
+
+    val testOutput = testCommand.runCommand(baseDir, env)
     if (runClippy) {
         Commands.CargoClippy.runCommand(baseDir, env)
     }
