@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
@@ -164,8 +165,7 @@ internal class BuilderGeneratorTest {
         project.generatedFiles().forEach {
             if (it.extension == "rs") {
                 val file = project.baseDir.resolve(it).toFile().readText()
-                assertFalse(file.contains("serde::"))
-                assert(!check)
+                Assertions.assertFalse(file.contains("serde::"))
             }
         }
     }
