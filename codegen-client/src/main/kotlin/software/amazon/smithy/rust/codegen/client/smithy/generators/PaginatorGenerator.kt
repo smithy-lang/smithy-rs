@@ -240,15 +240,13 @@ class PaginatorGenerator private constructor(
                 if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """
-                        let runtime_plugins = #{operation}::register_runtime_plugins(
-                            #{RuntimePlugins}::new(),
-                            handle,
-                            None
+                        let runtime_plugins = #{operation}::operation_runtime_plugins(
+                            handle.runtime_plugins.clone(),
+                            None,
                         );
                         """,
                         *codegenScope,
-                        "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                            .resolve("client::runtime_plugin::RuntimePlugins"),
+                        "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                     )
                 }
             },

@@ -261,7 +261,7 @@ async fn try_attempt(
     stop_point: StopPoint,
 ) {
     halt_on_err!([ctx] => interceptors.read_before_attempt(ctx, cfg));
-    halt_on_err!([ctx] => orchestrate_endpoint(ctx, cfg).map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, cfg).await.map_err(OrchestratorError::other));
     halt_on_err!([ctx] => interceptors.modify_before_signing(ctx, cfg));
     halt_on_err!([ctx] => interceptors.read_before_signing(ctx, cfg));
 
