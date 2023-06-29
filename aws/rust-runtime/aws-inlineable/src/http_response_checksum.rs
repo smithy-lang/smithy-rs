@@ -9,11 +9,11 @@
 
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_http::body::{BoxBody, SdkBody};
-use aws_smithy_runtime_api::client::interceptors::context::Input;
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, BoxError,
-    Interceptor,
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
 use std::{fmt, mem};

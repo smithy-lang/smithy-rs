@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -105,6 +106,7 @@ open class OperationGenerator(
         renderOperationStruct(
             operationWriter,
             operationShape,
+            codegenDecorator.authOptions(codegenContext, operationShape, emptyList()),
             operationCustomizations,
         )
     }
@@ -112,6 +114,7 @@ open class OperationGenerator(
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
+        authOptions: List<AuthOption>,
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -191,7 +194,7 @@ open class OperationGenerator(
                     *codegenScope,
                     "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
                     "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
-                    "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::InterceptorContext"),
+                    "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                     "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),
@@ -219,6 +222,7 @@ open class OperationGenerator(
                 operationWriter,
                 operationShape,
                 operationName,
+                authOptions,
                 operationCustomizations,
             )
 

@@ -29,6 +29,7 @@ class FluentClientGeneratorTest {
             version: "1"
         }
 
+        @optionalAuth
         operation SayHello { input: TestInput }
         structure TestInput {
            foo: String,

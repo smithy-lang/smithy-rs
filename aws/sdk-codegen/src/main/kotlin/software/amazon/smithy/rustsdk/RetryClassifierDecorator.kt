@@ -64,7 +64,7 @@ class OperationRetryClassifiersFeature(
         "HttpStatusCodeClassifier" to smithyRuntime.resolve("client::retries::classifier::HttpStatusCodeClassifier"),
         // Other Types
         "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-        "InterceptorContext" to smithyRuntimeApi.resolve("client::interceptor::InterceptorContext"),
+        "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
         "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operation),
         "OrchestratorError" to smithyRuntimeApi.resolve("client::orchestrator::OrchestratorError"),
         "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),

@@ -45,42 +45,36 @@ import kotlin.io.path.absolutePathString
 // cargo commands and env values
 object Commands {
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
-    fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
-        var s = "-A dead_code "
-        if (enableUnstable) {
-            s += cfgUnstable
+    fun func(s: String, add: String, flag: Boolean): String {
+        if (flag) {
+            return s + " " + add
+        } else {
+            return s
         }
+    }
+    
+    fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
-            "RUSTFLAGS" to s,
+            "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
         )
     }
 
     fun cargoEnvDDeadCode(enableUnstable: Boolean): Map<String, String> {
-        var s = "-A dead_code "
-        if (enableUnstable) {
-            s += cfgUnstable
-        }
         return mapOf(
-            "RUSTFLAGS" to s,
+            "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
         )
     }
 
     private const val allFeature = "--all-features"
 
     fun cargoTest(enableUnstable: Boolean): String {
-        var s = "cargo test"
-        if (enableUnstable) {
-            s += allFeature
-        }
-        return s
+        return func("cargo test", allFeature, enableUnstable)
     }
+
     fun cargoCheck(enableUnstable: Boolean): String {
-        var s = "cargo check"
-        if (enableUnstable) {
-            s += allFeature
-        }
-        return s
+        return func("cargo check", allFeature, enableUnstable)
     }
+
     const val CargoFmt = "cargo fmt"
     const val CargoClippy = "cargo clippy"
 }

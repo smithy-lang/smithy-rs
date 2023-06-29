@@ -129,7 +129,7 @@ open class ServerCodegenVisitor(
                 .protocolFor(context.model, service)
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(service, baseModel, settings)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             settings,
