@@ -191,7 +191,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 }
             }
 
-            ServiceConfig.RuntimePluginConfig("layer") -> {
+            ServiceConfig.OperationConfigOverride("layer") -> {
                 rustTemplate(
                     """
                     match (

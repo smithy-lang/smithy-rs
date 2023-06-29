@@ -421,7 +421,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     }
                 }
 
-                ServiceConfig.RuntimePluginConfig("layer") -> {
+                ServiceConfig.OperationConfigOverride("layer") -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """

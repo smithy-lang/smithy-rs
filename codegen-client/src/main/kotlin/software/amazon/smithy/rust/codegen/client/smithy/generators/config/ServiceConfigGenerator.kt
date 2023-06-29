@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.codegenScope
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -101,9 +100,9 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuildExtras : ServiceConfig("BuilderBuildExtras")
 
     /**
-     * A section for setting up a field to be used by RuntimePlugin
+     * A section for setting up a field to be used by ConfigOverrideRuntimePlugin
      */
-    data class RuntimePluginConfig(val cfg: String) : ServiceConfig("ToRuntimePlugin")
+    data class OperationConfigOverride(val cfg: String) : ServiceConfig("ToRuntimePlugin")
 
     /**
      * A section for appending additional runtime plugins, stored in [interceptorsField], to [interceptors]
@@ -265,7 +264,7 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                 }
             }
 
-            is ServiceConfig.RuntimePluginConfig -> emptySection
+            is ServiceConfig.OperationConfigOverride -> emptySection
 
             else -> emptySection
         }
@@ -484,7 +483,7 @@ class ServiceConfigGenerator(
 
             """,
             *codegenScope,
-            "config" to writable { writeCustomizations(customizations, ServiceConfig.RuntimePluginConfig("cfg")) },
+            "config" to writable { writeCustomizations(customizations, ServiceConfig.OperationConfigOverride("cfg")) },
             "interceptors" to writable {
                 writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors", "self"))
             },

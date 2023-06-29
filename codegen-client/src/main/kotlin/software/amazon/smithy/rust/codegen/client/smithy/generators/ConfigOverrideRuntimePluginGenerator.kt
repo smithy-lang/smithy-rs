@@ -71,7 +71,7 @@ class ConfigOverrideRuntimePluginGenerator(
             "config" to writable {
                 writeCustomizations(
                     customizations,
-                    ServiceConfig.RuntimePluginConfig("layer"),
+                    ServiceConfig.OperationConfigOverride("layer"),
                 )
             },
             "interceptors" to writable {
