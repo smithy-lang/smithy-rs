@@ -320,9 +320,8 @@ class AwsPresignedFluentBuilderMethod(
             """
             #{alternate_presigning_serializer}
 
-            let runtime_plugins = #{Operation}::register_runtime_plugins(
-                #{RuntimePlugins}::new(),
-                self.handle.clone(),
+            let runtime_plugins = #{Operation}::operation_runtime_plugins(
+                self.handle.runtime_plugins,
                 self.config_override
             )
                 .with_client_plugin(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override}))
@@ -344,8 +343,7 @@ class AwsPresignedFluentBuilderMethod(
             *codegenScope,
             "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),
             "OperationError" to section.operationErrorType,
-            "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::RuntimePlugins"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
                 .resolve("SharedInterceptor"),
             "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
