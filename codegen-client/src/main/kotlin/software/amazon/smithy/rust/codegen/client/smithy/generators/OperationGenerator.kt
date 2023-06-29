@@ -147,7 +147,7 @@ open class OperationGenerator(
 
                     pub(crate) fn operation_runtime_plugins(
                         client_runtime_plugins: #{RuntimePlugins},
-                        config_override: #{Option}<crate::config::Builder>,
+                        config_override: #{Option}<crate::config::ConfigOverrideRuntimePlugin>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
                         if let Some(config_override) = config_override {

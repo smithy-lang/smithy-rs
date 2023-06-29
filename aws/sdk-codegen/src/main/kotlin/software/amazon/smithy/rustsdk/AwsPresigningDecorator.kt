@@ -322,7 +322,16 @@ class AwsPresignedFluentBuilderMethod(
 
             let runtime_plugins = #{Operation}::operation_runtime_plugins(
                 self.handle.runtime_plugins.clone(),
-                self.config_override
+                self.config_override.map(|config_override| {
+                    crate::config::ConfigOverrideRuntimePlugin {
+                        config_override,
+                        client_config:
+                            #{RuntimePlugin}::config(
+                                &self.handle.conf.clone(),
+                            )
+                            .expect("frozen layer should exist in client config"),
+                    }
+                }),
             )
                 .with_client_plugin(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override}))
                 #{alternate_presigning_serializer_registration};
@@ -343,6 +352,7 @@ class AwsPresignedFluentBuilderMethod(
             *codegenScope,
             "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),
             "OperationError" to section.operationErrorType,
+            "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
                 .resolve("SharedInterceptor"),
