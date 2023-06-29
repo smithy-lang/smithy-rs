@@ -52,7 +52,7 @@ object Commands {
             return s
         }
     }
-    
+
     fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
             "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
