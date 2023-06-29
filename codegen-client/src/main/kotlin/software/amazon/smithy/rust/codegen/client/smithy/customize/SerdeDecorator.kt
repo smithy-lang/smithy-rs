@@ -10,9 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
- * This class,
- * - Adds serde as a dependency
- *
+ * Decorator that adds the `serde-serialize` and `serde-deserialize` features.
  */
 class SerdeDecorator : ClientCodegenDecorator {
     override val name: String = "SerdeDecorator"
