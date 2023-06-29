@@ -45,13 +45,7 @@ import kotlin.io.path.absolutePathString
 // cargo commands and env values
 private object Commands {
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
-    fun func(s: String, add: String, flag: Boolean): String {
-        if (flag) {
-            return s + " " + add
-        } else {
-            return s
-        }
-    }
+    fun func(s: String, add: String, flag: Boolean): String = if (flag) { "$s $add" } else { s }
 
     fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
