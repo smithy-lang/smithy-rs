@@ -43,7 +43,7 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
 // cargo commands and env values
-object Commands {
+private object Commands {
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
     fun func(s: String, add: String, flag: Boolean): String {
         if (flag) {
