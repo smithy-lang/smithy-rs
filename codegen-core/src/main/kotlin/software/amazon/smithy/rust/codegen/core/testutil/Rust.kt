@@ -369,7 +369,7 @@ fun TestWriterDelegator.compileAndTest(
         // cargo fmt errors are useless, ignore
     }
 
-    val env = Commands.cargoEnvDDeadCode(enableUnstableFlag)
+    val env = Commands.cargoEnvAllowDeadCode(enableUnstableFlag)
     val testOutput = Commands.cargoTest(enableUnstableFlag).runCommand(baseDir, env)
     if (runClippy) {
         Commands.CargoClippy.runCommand(baseDir, env)
@@ -522,4 +522,4 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     return this
 }
 
-fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean = true) = this.runCommand(crate, Commands.cargoEnvDWarnings(enableUnstableFlag))
+fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean = true) = this.runCommand(crate, Commands.cargoEnvDenyWarnings(enableUnstableFlag))
