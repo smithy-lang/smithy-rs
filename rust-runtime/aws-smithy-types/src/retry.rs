@@ -277,6 +277,7 @@ pub struct RetryConfig {
     max_attempts: u32,
     initial_backoff: Duration,
     max_backoff: Duration,
+    // TODO(enableSmithyRuntimeLaunch) remove this field. It's now its own setting.
     reconnect_mode: ReconnectMode,
     use_static_exponential_base: bool,
 }
