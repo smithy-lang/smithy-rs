@@ -12,11 +12,9 @@ use aws_smithy_client::test_connection::wire_mock::{
 use aws_smithy_client::{ev, match_events};
 use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
 use aws_types::region::Region;
-use aws_types::SdkConfig;
 
 #[tokio::test]
-/// test that disabling reconnects on retry config disables them for the client
-async fn disable_reconnects() {
+async fn test_disable_reconnect_on_503() {
     let mock = WireLevelTestConnection::spinup(vec![
         ReplayedEvent::status(503),
         ReplayedEvent::status(503),
@@ -24,17 +22,16 @@ async fn disable_reconnects() {
     ])
     .await;
 
-    let sdk_config = SdkConfig::builder()
+    let config = aws_sdk_s3::Config::builder()
         .region(Region::from_static("us-east-2"))
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_connector(mock.http_connector())
-        .retry_config(
-            RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReuseAllConnections),
-        )
+        .retry_config(RetryConfig::standard())
+        .reconnect_mode(ReconnectMode::ReuseAllConnections)
         .build();
-    let client = aws_sdk_s3::Client::new(&sdk_config);
+    let client = aws_sdk_s3::Client::from_conf(config);
     let resp = client
         .get_object()
         .bucket("bucket")
@@ -56,7 +53,7 @@ async fn disable_reconnects() {
 }
 
 #[tokio::test]
-async fn reconnect_on_503() {
+async fn test_enabling_reconnect_on_503() {
     let mock = WireLevelTestConnection::spinup(vec![
         ReplayedEvent::status(503),
         ReplayedEvent::status(503),
@@ -64,15 +61,16 @@ async fn reconnect_on_503() {
     ])
     .await;
 
-    let sdk_config = SdkConfig::builder()
+    let config = aws_sdk_s3::Config::builder()
         .region(Region::from_static("us-east-2"))
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_connector(mock.http_connector())
         .retry_config(RetryConfig::standard())
+        .reconnect_mode(ReconnectMode::ReconnectOnTransientError)
         .build();
-    let client = aws_sdk_s3::Client::new(&sdk_config);
+    let client = aws_sdk_s3::Client::from_conf(config);
     let resp = client
         .get_object()
         .bucket("bucket")
