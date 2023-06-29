@@ -347,7 +347,7 @@ fun FileManifest.printGeneratedFiles() {
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
-    enableUnstableFlag: Boolean = false,
+    enableUnstableFlag: Boolean = true,
 ): String {
     val stubModel = """
         namespace fake
