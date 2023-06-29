@@ -61,12 +61,12 @@ private object Commands {
 
     private const val allFeature = "--all-features"
 
-    fun cargoTest(enableUnstable: Boolean): String {
-        return func("cargo test", allFeature, enableUnstable)
+    fun cargoTest(enableAllFeatures: Boolean): String {
+        return func("cargo test", allFeature, enableAllFeatures)
     }
 
-    fun cargoCheck(enableUnstable: Boolean): String {
-        return func("cargo check", allFeature, enableUnstable)
+    fun cargoCheck(enableAllFeatures: Boolean): String {
+        return func("cargo check", allFeature, enableAllFeatures)
     }
 
     const val CargoFmt = "cargo fmt"
