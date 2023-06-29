@@ -139,7 +139,7 @@ class CredentialsIdentityResolverRegistration(
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.AdditionalConfig -> {
-                rustBlockTemplate("if let Some(credentials_cache) = self.handle.conf.credentials_cache()") {
+                rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
                     section.registerIdentityResolver(this, runtimeConfig) {
                         rustTemplate(
                             """

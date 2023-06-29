@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
@@ -23,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -45,39 +43,6 @@ open class OperationGenerator(
     // TODO(enableNewSmithyRuntimeCleanup): Remove the `traitGenerator`
     private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
 ) {
-    companion object {
-        fun registerDefaultRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType.forInlineFun("register_default_runtime_plugins", ClientRustModule.Operation) {
-                rustTemplate(
-                    """
-                    pub(crate) fn register_default_runtime_plugins(
-                        runtime_plugins: #{RuntimePlugins},
-                        operation: impl #{RuntimePlugin} + 'static,
-                        handle: #{Arc}<crate::client::Handle>,
-                        config_override: #{Option}<crate::config::Builder>,
-                    ) -> #{RuntimePlugins} {
-                        let mut runtime_plugins = runtime_plugins
-                            .with_client_plugin(handle.conf.clone())
-                            .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))
-                            .with_client_plugin(#{NoAuthRuntimePlugin}::new())
-                            .with_operation_plugin(operation);
-                        if let Some(config_override) = config_override {
-                            runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
-                        }
-                        runtime_plugins
-                    }
-                    """,
-                    *preludeScope,
-                    "Arc" to RuntimeType.Arc,
-                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::runtime_plugin::RuntimePlugins"),
-                    "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                        .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-                )
-            }
-    }
-
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
@@ -180,18 +145,16 @@ open class OperationGenerator(
                         #{invoke_with_stop_point}(input, runtime_plugins, stop_point).await
                     }
 
-                    pub(crate) fn register_runtime_plugins(
-                        runtime_plugins: #{RuntimePlugins},
-                        handle: #{Arc}<crate::client::Handle>,
+                    pub(crate) fn operation_runtime_plugins(
+                        client_runtime_plugins: #{RuntimePlugins},
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
-                        #{register_default_runtime_plugins}(
-                            runtime_plugins,
-                            Self::new(),
-                            handle,
-                            config_override
-                        )
-                        #{additional_runtime_plugins}
+                        let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
+                        if let Some(config_override) = config_override {
+                            runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
+                        }
+                        runtime_plugins
+                            #{additional_runtime_plugins}
                     }
                     """,
                     *codegenScope,
@@ -200,10 +163,9 @@ open class OperationGenerator(
                     "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                     "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins"),
+                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                     "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
                     "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke_with_stop_point"),
-                    "register_default_runtime_plugins" to registerDefaultRuntimePluginsFn(runtimeConfig),
                     "additional_runtime_plugins" to writable {
                         writeCustomizations(
                             operationCustomizations,
