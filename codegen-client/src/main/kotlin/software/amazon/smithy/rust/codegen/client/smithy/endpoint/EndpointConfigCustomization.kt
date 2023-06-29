@@ -35,6 +35,7 @@ internal class EndpointConfigCustomization(
             val codegenScope = arrayOf(
                 *preludeScope,
                 "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
+                "DynEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::DynEndpointResolver"),
                 "SharedEndpointResolver" to types.sharedEndpointResolver,
                 "SmithyResolver" to types.resolveEndpoint,
                 "Params" to typesGenerator.paramsStruct(),
@@ -165,11 +166,15 @@ internal class EndpointConfigCustomization(
                     if (defaultResolver != null) {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
+                                // TODO(enableNewSmithyRuntimeCleanup): Simplify the endpoint resolvers
                                 """
-                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
-                                    #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
-                                ));
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(
+                                        layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                            #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
+                                        )
+                                    )
+                                );
                                 layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,
@@ -209,10 +214,13 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
-                                    #{SharedEndpointResolver}::new(#{FailingResolver})
-                                ).clone());
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(
+                                        layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                            #{SharedEndpointResolver}::new(#{FailingResolver})
+                                        ).clone()
+                                    )
+                                );
                                 layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,

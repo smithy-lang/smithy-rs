@@ -8,12 +8,16 @@ use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableBody,
     SignableRequest, SignatureLocation, SigningParams, SigningSettings, UriPathNormalizationMode,
 };
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
 };
-use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
-use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors, HttpRequest};
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::identity::{
+    Identity, IdentityResolvers, SharedIdentityResolver,
+};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
@@ -93,10 +97,10 @@ impl HttpAuthScheme for SigV4HttpAuthScheme {
         SCHEME_ID
     }
 
-    fn identity_resolver<'a>(
+    fn identity_resolver(
         &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver> {
+        identity_resolvers: &IdentityResolvers,
+    ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
@@ -166,6 +170,10 @@ pub struct SigV4OperationSigningConfig {
     pub service: Option<SigningService>,
     /// Signing options.
     pub signing_options: SigningOptions,
+}
+
+impl Storable for SigV4OperationSigningConfig {
+    type Storer = StoreReplace<Self>;
 }
 
 /// SigV4 HTTP request signer.
@@ -252,11 +260,11 @@ impl SigV4HttpRequestSigner {
         config_bag: &'a ConfigBag,
     ) -> Result<Cow<'a, SigV4OperationSigningConfig>, SigV4SigningError> {
         let operation_config = config_bag
-            .get::<SigV4OperationSigningConfig>()
+            .load::<SigV4OperationSigningConfig>()
             .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
 
-        let signing_region = config_bag.get::<SigningRegion>();
-        let signing_service = config_bag.get::<SigningService>();
+        let signing_region = config_bag.load::<SigningRegion>();
+        let signing_service = config_bag.load::<SigningService>();
 
         let EndpointAuthSchemeConfig {
             signing_region_override,
@@ -364,7 +372,7 @@ impl HttpRequestSigner for SigV4HttpRequestSigner {
             use aws_smithy_eventstream::frame::DeferredSignerSender;
             use event_stream::SigV4MessageSigner;
 
-            if let Some(signer_sender) = config_bag.get::<DeferredSignerSender>() {
+            if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
                 let time_source = config_bag.request_time().unwrap_or_default();
                 signer_sender
                     .send(Box::new(SigV4MessageSigner::new(
@@ -558,7 +566,7 @@ mod tests {
     #[test]
     fn endpoint_config_overrides_region_and_service() {
         let mut layer = Layer::new("test");
-        layer.put(SigV4OperationSigningConfig {
+        layer.store_put(SigV4OperationSigningConfig {
             region: Some(SigningRegion::from(Region::new("override-this-region"))),
             service: Some(SigningService::from_static("override-this-service")),
             signing_options: Default::default(),
@@ -596,7 +604,7 @@ mod tests {
     #[test]
     fn endpoint_config_supports_fallback_when_region_or_service_are_unset() {
         let mut layer = Layer::new("test");
-        layer.put(SigV4OperationSigningConfig {
+        layer.store_put(SigV4OperationSigningConfig {
             region: Some(SigningRegion::from(Region::new("us-east-1"))),
             service: Some(SigningService::from_static("qldb")),
             signing_options: Default::default(),

@@ -55,6 +55,10 @@ impl DeferredSignerSender {
     }
 }
 
+impl Storable for DeferredSignerSender {
+    type Storer = StoreReplace<Self>;
+}
+
 /// Deferred event stream signer to allow a signer to be wired up later.
 ///
 /// HTTP request signing takes place after serialization, and the event stream
@@ -389,6 +393,7 @@ mod value {
     }
 }
 
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 pub use value::HeaderValue;
 
 /// Event Stream header.
@@ -957,24 +962,20 @@ mod deferred_signer_tests {
         impl SignMessage for TestSigner {
             fn sign(
                 &mut self,
-                message: crate::frame::Message,
-            ) -> Result<crate::frame::Message, crate::frame::SignMessageError> {
+                message: Message,
+            ) -> Result<Message, crate::frame::SignMessageError> {
                 self.call_num += 1;
                 Ok(message.add_header(Header::new("call_num", HeaderValue::Int32(self.call_num))))
             }
 
-            fn sign_empty(
-                &mut self,
-            ) -> Option<Result<crate::frame::Message, crate::frame::SignMessageError>> {
+            fn sign_empty(&mut self) -> Option<Result<Message, crate::frame::SignMessageError>> {
                 None
             }
         }
 
         let (mut signer, sender) = check_send_sync(DeferredSigner::new());
 
-        sender
-            .send(Box::new(TestSigner::default()))
-            .expect("success");
+        sender.send(Box::<TestSigner>::default()).expect("success");
 
         let message = signer.sign(Message::new(Bytes::new())).expect("success");
         assert_eq!(1, message.headers()[0].value().as_int32().unwrap());

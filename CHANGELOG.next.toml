@@ -12,6 +12,12 @@
 # author = "rcoh"
 
  [[aws-sdk-rust]]
+ message = "Automatically exclude X-Ray trace ID headers and authorization headers from SigV4 canonical request calculations."
+ references = ["smithy-rs#2815"]
+ meta = { "breaking" = false, "tada" = false, "bug" = true }
+ author = "relevantsam"
+
+ [[aws-sdk-rust]]
  message = "Add accessors to Builders"
  references = ["smithy-rs#2791"]
  meta = { "breaking" = false, "tada" = false, "bug" = false }

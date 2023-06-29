@@ -12,12 +12,15 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Endpoint
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdentityConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -55,11 +58,15 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
         if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + InterceptorConfigCustomization(
-                codegenContext,
-            ) + TimeSourceCustomization(codegenContext)
+            baseCustomizations +
+                ResiliencyConfigCustomization(codegenContext) +
+                InterceptorConfigCustomization(codegenContext) +
+                TimeSourceCustomization(codegenContext) +
+                IdentityConfigCustomization(codegenContext)
         } else {
-            baseCustomizations + ResiliencyConfigCustomization(codegenContext) + TimeSourceCustomization(codegenContext)
+            baseCustomizations +
+                ResiliencyConfigCustomization(codegenContext) +
+                TimeSourceCustomization(codegenContext)
         }
 
     override fun libRsCustomizations(
@@ -89,5 +96,14 @@ class RequiredCustomizations : ClientCodegenDecorator {
                 CrateVersionCustomization.extras(rustCrate, metaModule)
             }
         }
+    }
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+        baseCustomizations + ResiliencyServiceRuntimePluginCustomization(codegenContext)
+    } else {
+        baseCustomizations
     }
 }
