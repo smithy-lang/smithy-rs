@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk.customize.timestream
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -53,6 +54,8 @@ class TimestreamDecorator : ClientCodegenDecorator {
             CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
         )
         val runtimeMode = codegenContext.smithyRuntimeMode
+        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
         rustCrate.lib {
             // helper function to resolve an endpoint given a base client
             rustTemplate(
@@ -77,7 +80,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     ///
                     /// This method MUST be called to construct a working client.
                     pub async fn enable_endpoint_discovery(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{ResolveEndpointError}> {
-                        let mut new_conf = self.conf().clone();
+                        let new_conf = self.conf().clone();
                         let sleep = self.conf().sleep_impl().expect("sleep impl must be provided");
                         let time = self.conf().time_source();
                         let (resolver, reloader) = #{endpoint_discovery}::create_cache(
@@ -89,7 +92,23 @@ class TimestreamDecorator : ClientCodegenDecorator {
                             time
                         )
                         .await?;
-                        new_conf.endpoint_resolver = #{SharedEndpointResolver}::new(resolver);
+                        ##[derive(Debug)]
+                        struct OverrideEndpointResolver { layer: #{FrozenLayer} }
+                        let mut layer = #{Layer}::new("endpoint-discovery");
+                        use #{ConfigBagAccessors};
+                        let endpoint_resolver = #{DynEndpointResolver}::new(
+                            #{DefaultEndpointResolver}::<#{Params}>::new(
+                                #{SharedEndpointResolver}::new(resolver)
+                            )
+                        );
+                        layer.set_endpoint_resolver(endpoint_resolver);
+                        let layer = layer.freeze();
+                        impl #{RuntimePlugin} for OverrideEndpointResolver {
+                            fn config(&self) -> Option<#{FrozenLayer}> {
+                                Some(self.layer.clone())
+                            }
+                        }
+                        let new_conf = new_conf.with_runtime_plugin(OverrideEndpointResolver { layer });
                         Ok((Self::from_conf(new_conf), reloader))
                     }
                 }
@@ -97,11 +116,18 @@ class TimestreamDecorator : ClientCodegenDecorator {
                 "endpoint_discovery" to endpointDiscovery.toType(),
                 "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
                 "Duration" to RuntimeType.std.resolve("time::Duration"),
+                "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
+                "DefaultEndpointResolver" to RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
+                    .resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
+                "DynEndpointResolver" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                    .resolve("client::orchestrator::DynEndpointResolver"),
                 "SharedEndpointResolver" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
                     .resolve("endpoint::SharedEndpointResolver"),
-                "SystemTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig)
-                    .resolve("time::SystemTimeSource"),
+                "Layer" to smithyTypes.resolve("config_bag::Layer"),
+                "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+                "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
                 *Types(codegenContext.runtimeConfig).toArray(),
+                "Params" to EndpointTypesGenerator.fromContext(codegenContext).paramsStruct(),
                 *preludeScope,
             )
         }

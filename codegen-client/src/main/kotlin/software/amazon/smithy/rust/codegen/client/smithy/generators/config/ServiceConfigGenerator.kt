@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.codegenScope
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -338,7 +337,9 @@ class ServiceConfigGenerator(
         writer.rustBlock("pub struct Config") {
             if (runtimeMode.defaultToOrchestrator) {
                 rustTemplate(
-                    "inner: #{FrozenLayer},",
+                    """
+                    inner: #{FrozenLayer},
+                    """,
                     *codegenScope,
                 )
             }

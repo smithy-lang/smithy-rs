@@ -51,11 +51,14 @@ open class OperationGenerator(
                 rustTemplate(
                     """
                     pub(crate) fn register_default_runtime_plugins(
-                        runtime_plugins: #{RuntimePlugins},
+                        mut runtime_plugins: #{RuntimePlugins},
                         operation: impl #{RuntimePlugin} + 'static,
                         handle: #{Arc}<crate::client::Handle>,
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
+                        for plugin in &handle.conf.runtime_plugins {
+                            runtime_plugins = runtime_plugins.with_operation_plugin(plugin.clone());
+                        }
                         let mut runtime_plugins = runtime_plugins
                             .with_client_plugin(handle.conf.clone())
                             .with_client_plugin(crate::config::ServiceRuntimePlugin::new(handle))

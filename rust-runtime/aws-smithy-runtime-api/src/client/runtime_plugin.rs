@@ -25,10 +25,10 @@ pub trait RuntimePlugin: Debug + Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
+pub struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
 
 impl SharedRuntimePlugin {
-    fn new(plugin: impl RuntimePlugin + 'static) -> Self {
+    pub fn new(plugin: impl RuntimePlugin + 'static) -> Self {
         Self(Arc::new(plugin))
     }
 }

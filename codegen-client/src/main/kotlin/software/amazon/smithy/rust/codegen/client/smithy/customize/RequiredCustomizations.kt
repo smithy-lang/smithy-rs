@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConfigRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
@@ -62,7 +63,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
                 ResiliencyConfigCustomization(codegenContext) +
                 InterceptorConfigCustomization(codegenContext) +
                 TimeSourceCustomization(codegenContext) +
-                IdentityConfigCustomization(codegenContext)
+                IdentityConfigCustomization(codegenContext) +
+                ConfigRuntimePluginCustomization(codegenContext)
         } else {
             baseCustomizations +
                 ResiliencyConfigCustomization(codegenContext) +
