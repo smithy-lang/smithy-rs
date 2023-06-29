@@ -42,16 +42,46 @@ import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
+// cargo commands and env values
 object Commands {
-    val CargoEnvDWarnings = mapOf(
-        "RUSTFLAGS" to "-D warnings --cfg aws_sdk_unstable",
-    )
-    val CargoEnvDDeadCode = mapOf(
-        "RUSTFLAGS" to "-A dead_code --cfg aws_sdk_unstable",
-    )
-    const val CargoTest = "cargo test --all-features"
-    const val CargoCheck = "cargo check --all-features"
-    const val CargoFmt = "cargo fmt "
+    private const val cfgUnstable = "--cfg aws_sdk_unstable"
+    fun cargoEnvDWarnings(enableUnstable: Boolean): Map<String, String> {
+        var s = "-A dead_code "
+        if (enableUnstable) {
+            s += cfgUnstable
+        }
+        return mapOf(
+            "RUSTFLAGS" to s,
+        )
+    }
+
+    fun cargoEnvDDeadCode(enableUnstable: Boolean): Map<String, String> {
+        var s = "-A dead_code "
+        if (enableUnstable) {
+            s += cfgUnstable
+        }
+        return mapOf(
+            "RUSTFLAGS" to s,
+        )
+    }
+
+    private const val allFeature = "--all-features"
+
+    fun cargoTest(enableUnstable: Boolean): String {
+        var s = "cargo test"
+        if (enableUnstable) {
+            s += allFeature
+        }
+        return s
+    }
+    fun cargoCheck(enableUnstable: Boolean): String {
+        var s = "cargo check"
+        if (enableUnstable) {
+            s += allFeature
+        }
+        return s
+    }
+    const val CargoFmt = "cargo fmt"
     const val CargoClippy = "cargo clippy"
 }
 
@@ -329,6 +359,7 @@ fun FileManifest.printGeneratedFiles() {
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
+    enableUnstableFlag: Boolean = false
 ): String {
     val stubModel = """
         namespace fake
@@ -349,8 +380,9 @@ fun TestWriterDelegator.compileAndTest(
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
-    val env = Commands.CargoEnvDDeadCode
-    val testOutput = Commands.CargoTest.runCommand(baseDir, env)
+
+    val env = Commands.cargoEnvDDeadCode(enableUnstableFlag)
+    val testOutput = Commands.cargoTest(enableUnstableFlag).runCommand(baseDir, env)
     if (runClippy) {
         Commands.CargoClippy.runCommand(baseDir, env)
     }
@@ -379,6 +411,7 @@ fun RustWriter.compileAndTest(
     main: String = "",
     clippy: Boolean = false,
     expectFailure: Boolean = false,
+    enableUnstable: Boolean = false
 ): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     val module = if (this.namespace.contains("::")) {
@@ -392,9 +425,9 @@ fun RustWriter.compileAndTest(
     val testModule = tempDir.resolve("src/$module.rs")
     try {
         val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-            Commands.CargoTest.runCommand(tempDir.toPath())
+            Commands.cargoTest(enableUnstable).runCommand(tempDir.toPath())
         } else {
-            Commands.CargoCheck.runCommand(tempDir.toPath())
+            Commands.cargoCheck(enableUnstable).runCommand(tempDir.toPath())
         }
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
@@ -501,4 +534,4 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     return this
 }
 
-fun String.runWithWarnings(crate: Path) = this.runCommand(crate, Commands.CargoEnvDWarnings)
+fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean) = this.runCommand(crate, Commands.cargoEnvDWarnings(enableUnstableFlag))
