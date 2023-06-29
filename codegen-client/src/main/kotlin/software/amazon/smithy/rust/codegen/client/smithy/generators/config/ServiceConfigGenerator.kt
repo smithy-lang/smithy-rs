@@ -91,12 +91,9 @@ sealed class ServiceConfig(name: String) : Section(name) {
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
-    // TODO(enableNewSmithyRuntimeLaunch): This is temporary until config builder is backed by a CloneableLayer.
-    //  It is needed because certain config fields appear explicitly regardless of the smithy runtime mode, e.g.
-    //  interceptors. The [BuilderBuild] section is bifurcated depending on the runtime mode (in the orchestrator mode,
-    //  storing a field into a frozen layer and in the middleware moving it into a corresponding service config field)
-    //  so we need a different temporary section to always move a field from a builder to service config within the
-    //  build method.
+    /**
+     * A section for customizing individual fields in the initializer of Config
+     */
     object BuilderBuildExtras : ServiceConfig("BuilderBuildExtras")
 
     /**
