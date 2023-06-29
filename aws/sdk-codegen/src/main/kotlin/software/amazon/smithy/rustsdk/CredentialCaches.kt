@@ -203,23 +203,11 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                             .cloned(),
                     ) {
                         (#{None}, #{None}) => {}
-                        (#{None}, #{Some}(credentials_provider)) => {
-                            // wrap it with a lazy credentials cache so it may benefit
-                            // in the case of retries.
-                            layer.store_put(
-                                #{CredentialsCache}::lazy()
-                                    .create_cache(credentials_provider),
-                            );
+                        (#{None}, _) => {
+                            panic!("also specify `.credentials_cache` when overriding credentials provider for the operation");
                         }
-                        (#{Some}(credentials_cache), #{None}) => {
-                            layer.store_put(
-                                credentials_cache.create_cache(
-                                    self.client_config
-                                        .load::<#{SharedCredentialsProvider}>()
-                                        .cloned()
-                                        .unwrap(),
-                                ),
-                            );
+                        (_, #{None}) => {
+                            panic!("also specify `.credentials_provider` when overriding credentials cache for the operation");
                         }
                         (
                             #{Some}(credentials_cache),

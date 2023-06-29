@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -52,12 +53,18 @@ internal class CredentialCacheConfigTest {
                 *RuntimeType.preludeScope,
                 "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig)
                     .resolve("Credentials"),
-                "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::CredentialsCache"),
-                "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin"),
-                "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::SharedCredentialsCache"),
+                "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                    .resolve("cache::CredentialsCache"),
+                "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                    .resolve("client::runtime_plugin::RuntimePlugin"),
+                "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                    .resolve("cache::SharedCredentialsCache"),
             )
             rustCrate.withModule(ClientRustModule.config) {
-                unitTest("test_overriding_credentials_provider_leads_to_shared_credentials_cache_in_layer") {
+                unitTest(
+                    "test_overriding_only_credentials_provider_should_panic",
+                    additionalAttributes = listOf(Attribute.shouldPanic("also specify `.credentials_cache` when overriding credentials provider for the operation")),
+                ) {
                     rustTemplate(
                         """
                         use #{RuntimePlugin};
@@ -78,16 +85,15 @@ internal class CredentialCacheConfigTest {
                     )
                 }
 
-                unitTest("test_overriding_credentials_cache_leads_to_shared_credentials_cache_in_layer") {
+                unitTest(
+                    "test_overriding_only_credentials_cache_should_panic",
+                    additionalAttributes = listOf(Attribute.shouldPanic("also specify `.credentials_provider` when overriding credentials cache for the operation")),
+                ) {
                     rustTemplate(
                         """
                         use #{RuntimePlugin};
 
-                        // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
-                        //  is resolved
-                        let client_config = Config::builder()
-                            .credentials_provider(#{Credentials}::for_tests())
-                            .build();
+                        let client_config = Config::builder().build();
                         let config_override = Config::builder()
                             .credentials_cache(#{CredentialsCache}::no_caching());
                         let sut = ConfigOverrideRuntimePlugin {
