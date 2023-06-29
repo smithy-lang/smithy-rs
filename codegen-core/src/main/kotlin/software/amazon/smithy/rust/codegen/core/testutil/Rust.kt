@@ -528,4 +528,4 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     return this
 }
 
-fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean) = this.runCommand(crate, Commands.cargoEnvDWarnings(enableUnstableFlag))
+fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean = true) = this.runCommand(crate, Commands.cargoEnvDWarnings(enableUnstableFlag))
