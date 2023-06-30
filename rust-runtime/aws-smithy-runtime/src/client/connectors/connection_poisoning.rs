@@ -82,7 +82,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
                 debug!("the connection was poisoned")
             } else {
                 error!(
-                    "no connection found! The underlying HTTP connector never set a connection."
+                    "unable to poison the connection because no connection was found! The underlying HTTP connector never set a connection."
                 );
             }
         }
