@@ -22,9 +22,16 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 
 sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
+     * Hook for declaring singletons that store cross-operation state.
+     *
+     * Examples include token buckets, ID generators, etc.
+     */
+    class DeclareSingletons : ServiceRuntimePluginSection("DeclareSingletons")
+
+    /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val newLayerName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val newLayerName: String, val serviceConfigName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$newLayerName.store_put(#T);", value)
@@ -100,27 +107,28 @@ class ServiceRuntimePluginGenerator(
         customizations: List<ServiceRuntimePluginCustomization>,
     ) {
         val additionalConfig = writable {
-            writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg"))
+            writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_service_config"))
         }
         writer.rustTemplate(
             """
-            // TODO(enableNewSmithyRuntimeLaunch) Remove `allow(dead_code)` as well as a field `handle` when
-            //  the field is no longer used.
-            ##[allow(dead_code)]
             ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
-                handle: #{Arc}<crate::client::Handle>,
+                config: #{Option}<#{FrozenLayer}>,
             }
 
             impl ServiceRuntimePlugin {
-                pub fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
-                    Self { handle }
+                pub fn new(_service_config: crate::config::Config) -> Self {
+                    Self {
+                        config: {
+                            #{config}
+                        },
+                    }
                 }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    #{config}
+                    self.config.clone()
                 }
 
                 fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
@@ -128,6 +136,9 @@ class ServiceRuntimePluginGenerator(
                     #{additional_interceptors}
                 }
             }
+
+            /// Cross-operation shared-state singletons
+            #{declare_singletons}
             """,
             *codegenScope,
             "config" to writable {
@@ -135,13 +146,7 @@ class ServiceRuntimePluginGenerator(
                     rustTemplate(
                         """
                         let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
-
-                        // TODO(enableNewSmithyRuntimeLaunch): Make it possible to set retry classifiers at the service level.
-                        //     Retry classifiers can also be set at the operation level and those should be added to the
-                        //     list of classifiers defined here, rather than replacing them.
-
                         #{additional_config}
-
                         Some(cfg.freeze())
                         """,
                         *codegenScope,
@@ -153,6 +158,9 @@ class ServiceRuntimePluginGenerator(
             },
             "additional_interceptors" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
+            },
+            "declare_singletons" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())
             },
         )
     }

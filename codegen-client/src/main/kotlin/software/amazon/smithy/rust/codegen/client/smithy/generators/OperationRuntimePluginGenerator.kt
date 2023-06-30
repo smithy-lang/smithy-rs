@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import java.util.logging.Logger
 
 /**
  * Generates operation-level runtime plugins
@@ -28,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 class OperationRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
+    private val logger: Logger = Logger.getLogger(javaClass.name)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
@@ -136,29 +138,25 @@ class OperationRuntimePluginGenerator(
                 "])));",
                 *codegenScope,
             ) {
+                var noSupportedAuthSchemes = true
                 val authSchemes = ServiceIndex.of(codegenContext.model)
                     .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
-                var atLeastOneScheme = false
                 for (schemeShapeId in authSchemes.keys) {
                     val authOption = authOptionsMap[schemeShapeId]
-                        ?: throw IllegalStateException("no auth scheme implementation available for $schemeShapeId")
-                    authOption.constructor(this)
-                    atLeastOneScheme = true
+                    if (authOption != null) {
+                        authOption.constructor(this)
+                        noSupportedAuthSchemes = false
+                    } else {
+                        logger.warning(
+                            "No auth scheme implementation available for $schemeShapeId. " +
+                                "The generated client will not attempt to use this auth scheme.",
+                        )
+                    }
                 }
-                if (operationShape.hasTrait<OptionalAuthTrait>()) {
+                if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
                     val authOption = authOptionsMap[noAuthSchemeShapeId]
-                        ?: throw IllegalStateException("missing 'no auth' implementation")
+                        ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
                     authOption.constructor(this)
-                    atLeastOneScheme = true
-                }
-                if (!atLeastOneScheme) {
-                    throw IllegalStateException(
-                        "this client won't have any auth schemes " +
-                            "(not even optional/no-auth auth), which means the generated client " +
-                            "won't work at all for the ${operationShape.id} operation. See " +
-                            "https://smithy.io/2.0/spec/authentication-traits.html for documentation " +
-                            "on Smithy authentication traits.",
-                    )
                 }
             }
         }

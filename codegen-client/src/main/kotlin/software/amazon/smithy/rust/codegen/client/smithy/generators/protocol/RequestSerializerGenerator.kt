@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -39,6 +40,7 @@ class RequestSerializerGenerator(
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
+            *preludeScope,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "config" to ClientRustModule.config,
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
@@ -70,7 +72,7 @@ class RequestSerializerGenerator(
             struct $serializerName;
             impl #{RequestSerializer} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
-                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
+                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
@@ -78,7 +80,7 @@ class RequestSerializerGenerator(
                     };
                     let body = #{generate_body};
                     #{add_content_length}
-                    Ok(request_builder.body(body).expect("valid request"))
+                    #{Ok}(request_builder.body(body).expect("valid request"))
                 }
             }
             """,
