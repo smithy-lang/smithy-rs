@@ -6,11 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class CredentialCacheConfigTest {
@@ -55,12 +56,16 @@ internal class CredentialCacheConfigTest {
                     .resolve("Credentials"),
                 "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::CredentialsCache"),
+                "ProvideCachedCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                    .resolve("cache::ProvideCachedCredentials"),
                 "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::runtime_plugin::RuntimePlugin"),
                 "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::SharedCredentialsCache"),
+                "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                    .resolve("provider::SharedCredentialsProvider"),
             )
-            rustCrate.withModule(ClientRustModule.config) {
+            rustCrate.testModule {
                 unitTest(
                     "test_overriding_only_credentials_provider_should_panic",
                     additionalAttributes = listOf(Attribute.shouldPanic("also specify `.credentials_cache` when overriding credentials provider for the operation")),
@@ -69,17 +74,16 @@ internal class CredentialCacheConfigTest {
                         """
                         use #{RuntimePlugin};
 
-                        let client_config = Config::builder().build();
+                        let client_config = crate::config::Config::builder().build();
                         let config_override =
-                            Config::builder().credentials_provider(#{Credentials}::for_tests());
-                        let sut = ConfigOverrideRuntimePlugin {
+                            crate::config::Config::builder().credentials_provider(#{Credentials}::for_tests());
+                        let sut = crate::config::ConfigOverrideRuntimePlugin {
                             client_config: client_config.config().unwrap(),
                             config_override,
                         };
-                        let sut_layer = sut.config().unwrap();
-                        assert!(sut_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .is_some());
+
+                        // this should cause `panic!`
+                        let _ = sut.config().unwrap();
                         """,
                         *codegenScope,
                     )
@@ -93,39 +97,67 @@ internal class CredentialCacheConfigTest {
                         """
                         use #{RuntimePlugin};
 
-                        let client_config = Config::builder().build();
-                        let config_override = Config::builder()
+                        let client_config = crate::config::Config::builder().build();
+                        let config_override = crate::config::Config::builder()
                             .credentials_cache(#{CredentialsCache}::no_caching());
-                        let sut = ConfigOverrideRuntimePlugin {
+                        let sut = crate::config::ConfigOverrideRuntimePlugin {
                             client_config: client_config.config().unwrap(),
                             config_override,
                         };
-                        let sut_layer = sut.config().unwrap();
-                        assert!(sut_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .is_some());
+
+                        // this should cause `panic!`
+                        let _ = sut.config().unwrap();
                         """,
                         *codegenScope,
                     )
                 }
 
-                unitTest("test_overriding_cache_and_provider_leads_to_shared_credentials_cache_in_layer") {
+                tokioTest("test_overriding_cache_and_provider_leads_to_shared_credentials_cache_in_layer") {
                     rustTemplate(
                         """
+                        use #{ProvideCachedCredentials};
                         use #{RuntimePlugin};
 
-                        let client_config = Config::builder().build();
-                        let config_override = Config::builder()
+                        let client_config = crate::config::Config::builder()
+                            .credentials_provider(#{Credentials}::for_tests())
+                            .build();
+                        let client_config_layer = client_config.config().unwrap();
+
+                        // make sure test credentials are set in the client config level
+                        assert_eq!(#{Credentials}::for_tests(),
+                            client_config_layer
+                            .load::<#{SharedCredentialsCache}>()
+                            .unwrap()
+                            .provide_cached_credentials()
+                            .await
+                            .unwrap()
+                        );
+
+                        let credentials = #{Credentials}::new(
+                            "test",
+                            "test",
+                            #{None},
+                            #{None},
+                            "test",
+                        );
+                        let config_override = crate::config::Config::builder()
                             .credentials_cache(#{CredentialsCache}::lazy())
-                            .credentials_provider(#{Credentials}::for_tests());
-                        let sut = ConfigOverrideRuntimePlugin {
-                            client_config: client_config.config().unwrap(),
+                            .credentials_provider(credentials.clone());
+                        let sut = crate::config::ConfigOverrideRuntimePlugin {
+                            client_config: client_config_layer,
                             config_override,
                         };
                         let sut_layer = sut.config().unwrap();
-                        assert!(sut_layer
+
+                        // make sure `.provide_cached_credentials` returns credentials set through `config_override`
+                        assert_eq!(credentials,
+                            sut_layer
                             .load::<#{SharedCredentialsCache}>()
-                            .is_some());
+                            .unwrap()
+                            .provide_cached_credentials()
+                            .await
+                            .unwrap()
+                        );
                         """,
                         *codegenScope,
                     )
@@ -136,9 +168,9 @@ internal class CredentialCacheConfigTest {
                         """
                         use #{RuntimePlugin};
 
-                        let client_config = Config::builder().build();
-                        let config_override = Config::builder();
-                        let sut = ConfigOverrideRuntimePlugin {
+                        let client_config = crate::config::Config::builder().build();
+                        let config_override = crate::config::Config::builder();
+                        let sut = crate::config::ConfigOverrideRuntimePlugin {
                             client_config: client_config.config().unwrap(),
                             config_override,
                         };
