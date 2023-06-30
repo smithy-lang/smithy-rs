@@ -304,7 +304,7 @@ async fn try_attempt(
     let response = halt_on_err!([ctx] => {
         let request = ctx.take_request().expect("set during serialization");
         trace!(request = ?request, "transmitting request");
-        cfg.connection().call(request).await.map_err(|err| {
+        cfg.connector().call(request).await.map_err(|err| {
             match err.downcast() {
                 Ok(connector_error) => OrchestratorError::connector(*connector_error),
                 Err(box_err) => OrchestratorError::other(box_err)
@@ -377,12 +377,12 @@ mod tests {
     };
     use crate::client::retries::strategy::NeverRetryStrategy;
     use crate::client::test_util::{
-        connector::OkConnector, deserializer::CannedResponseDeserializer,
-        serializer::CannedRequestSerializer,
+        deserializer::CannedResponseDeserializer, serializer::CannedRequestSerializer,
     };
     use ::http::{Request, Response, StatusCode};
     use aws_smithy_runtime_api::client::auth::option_resolver::StaticAuthOptionResolver;
     use aws_smithy_runtime_api::client::auth::{AuthOptionResolverParams, DynAuthOptionResolver};
+    use aws_smithy_runtime_api::client::connectors::{Connector, DynConnector};
     use aws_smithy_runtime_api::client::interceptors::context::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
         BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
@@ -394,7 +394,8 @@ mod tests {
         Interceptor, InterceptorRegistrar, SharedInterceptor,
     };
     use aws_smithy_runtime_api::client::orchestrator::{
-        DynConnection, DynEndpointResolver, DynResponseDeserializer, SharedRequestSerializer,
+        BoxFuture, DynEndpointResolver, DynResponseDeserializer, Future, HttpRequest,
+        SharedRequestSerializer,
     };
     use aws_smithy_runtime_api::client::retries::DynRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
@@ -422,6 +423,24 @@ mod tests {
         )
     }
 
+    #[derive(Debug, Default)]
+    struct OkConnector {}
+
+    impl OkConnector {
+        fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl Connector for OkConnector {
+        fn call(&self, _request: HttpRequest) -> BoxFuture<HttpResponse> {
+            Box::pin(Future::ready(Ok(::http::Response::builder()
+                .status(200)
+                .body(SdkBody::empty())
+                .expect("OK response is valid"))))
+        }
+    }
+
     #[derive(Debug)]
     struct TestOperationRuntimePlugin;
 
@@ -437,7 +456,7 @@ mod tests {
                 StaticUriEndpointResolver::http_localhost(8080),
             ));
             cfg.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
-            cfg.set_connection(DynConnection::new(OkConnector::new()));
+            cfg.set_connector(DynConnector::new(OkConnector::new()));
             cfg.set_auth_option_resolver_params(AuthOptionResolverParams::new("idontcare"));
             cfg.set_auth_option_resolver(DynAuthOptionResolver::new(
                 StaticAuthOptionResolver::new(vec![NO_AUTH_SCHEME_ID]),

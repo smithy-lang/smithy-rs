@@ -52,7 +52,6 @@ class TimestreamDecorator : ClientCodegenDecorator {
             Visibility.PUBLIC,
             CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
         )
-        val runtimeMode = codegenContext.smithyRuntimeMode
         rustCrate.lib {
             // helper function to resolve an endpoint given a base client
             rustTemplate(

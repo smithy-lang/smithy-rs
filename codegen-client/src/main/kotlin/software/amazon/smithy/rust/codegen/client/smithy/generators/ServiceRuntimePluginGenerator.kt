@@ -67,13 +67,12 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     data class RegisterInterceptor(val interceptorRegistrarName: String) : ServiceRuntimePluginSection("RegisterInterceptor") {
         /** Generates the code to register an interceptor */
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
                 $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
                 "interceptor" to interceptor,
-                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
+                "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
