@@ -16,6 +16,10 @@ struct Tee<W> {
     inner: W,
 }
 
+/// A guard that resets log capturing upon being dropped.
+#[derive(Debug)]
+pub struct LogCaptureGuard(DefaultGuard);
+
 /// Capture logs from this test.
 ///
 /// The logs will be captured until the `DefaultGuard` is dropped.
@@ -23,7 +27,7 @@ struct Tee<W> {
 /// *Why use this instead of traced_test?*
 /// This captures _all_ logs, not just logs produced by the current crate.
 #[must_use] // log capturing ceases the instant the `DefaultGuard` is dropped
-pub fn capture_test_logs() -> (DefaultGuard, Rx) {
+pub fn capture_test_logs() -> (LogCaptureGuard, Rx) {
     // it may be helpful to upstream this at some point
     let (mut writer, rx) = Tee::stdout();
     if env::var("VERBOSE_TEST_LOGS").is_ok() {
@@ -37,7 +41,7 @@ pub fn capture_test_logs() -> (DefaultGuard, Rx) {
         .with_writer(Mutex::new(writer))
         .finish();
     let guard = tracing::subscriber::set_default(subscriber);
-    (guard, rx)
+    (LogCaptureGuard(guard), rx)
 }
 
 pub struct Rx(Arc<Mutex<Vec<u8>>>);
