@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -134,8 +134,8 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val generator = EndpointTypesGenerator.fromContext(codegenContext)
-        rustCrate.withModule(ClientRustModule.Endpoint) {
-            withInlineModule(EndpointTests, rustCrate.moduleDocProvider) {
+        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+            withInlineModule(endpointTestsModule(codegenContext), rustCrate.moduleDocProvider) {
                 generator.testGenerator()(this)
             }
         }

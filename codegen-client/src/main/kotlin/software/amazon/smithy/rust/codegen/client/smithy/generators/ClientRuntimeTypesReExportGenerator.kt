@@ -33,6 +33,16 @@ class ClientRuntimeTypesReExportGenerator(
                 "Interceptor" to RuntimeType.interceptor(rc),
             )
         }
+        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+            rustTemplate(
+                """
+                pub use #{ResolveEndpoint};
+                pub use #{SharedEndpointResolver};
+                """,
+                "ResolveEndpoint" to RuntimeType.smithyHttp(rc).resolve("endpoint::ResolveEndpoint"),
+                "SharedEndpointResolver" to RuntimeType.smithyHttp(rc).resolve("endpoint::SharedEndpointResolver"),
+            )
+        }
         rustCrate.withModule(ClientRustModule.Config.retry) {
             rustTemplate(
                 """

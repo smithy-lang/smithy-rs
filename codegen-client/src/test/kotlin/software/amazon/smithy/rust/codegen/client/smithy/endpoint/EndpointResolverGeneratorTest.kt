@@ -53,15 +53,16 @@ class EndpointResolverGeneratorTest {
             // return
         }
         val project = TestWorkspace.testProject()
+        val context = testClientCodegenContext()
         suite.ruleSet().typecheck()
         project.lib {
             val ruleset = EndpointResolverGenerator(
+                context,
                 SmithyEndpointsStdLib + awsStandardLib(TestRuntimeConfig, partitionsJson),
-                TestRuntimeConfig,
             ).defaultEndpointResolver(suite.ruleSet())
             val testGenerator = EndpointTestGenerator(
                 suite.testSuite().testCases,
-                paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
+                paramsType = EndpointParamsGenerator(context, suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
                 codegenContext = testClientCodegenContext(model = Model.builder().build()),
@@ -79,15 +80,16 @@ class EndpointResolverGeneratorTest {
             testSuites().filter { it.ruleSet().sourceLocation.filename.endsWith("/uri-encode.json") }.findFirst()
                 .orElseThrow()
         val project = TestWorkspace.testProject()
+        val context = testClientCodegenContext()
         suite.ruleSet().typecheck()
         project.lib {
             val ruleset = EndpointResolverGenerator(
+                context,
                 SmithyEndpointsStdLib + awsStandardLib(TestRuntimeConfig, partitionsJson),
-                TestRuntimeConfig,
             ).defaultEndpointResolver(suite.ruleSet())
             val testGenerator = EndpointTestGenerator(
                 suite.testSuite().testCases,
-                paramsType = EndpointParamsGenerator(suite.ruleSet().parameters).paramsStruct(),
+                paramsType = EndpointParamsGenerator(context, suite.ruleSet().parameters).paramsStruct(),
                 resolverType = ruleset,
                 suite.ruleSet().parameters,
                 codegenContext = testClientCodegenContext(Model.builder().build()),
@@ -115,7 +117,8 @@ class EndpointResolverGeneratorTest {
         val scope = Scope<Type>()
         scope.insert("Region", Type.string())
         endpoint.typeCheck(scope)
-        val generator = EndpointResolverGenerator(listOf(), TestRuntimeConfig)
+        val context = testClientCodegenContext()
+        val generator = EndpointResolverGenerator(context, listOf())
         TestWorkspace.testProject().unitTest {
             rustTemplate(
                 """

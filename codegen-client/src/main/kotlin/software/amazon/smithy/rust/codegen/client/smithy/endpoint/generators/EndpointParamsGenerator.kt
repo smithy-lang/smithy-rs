@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 import software.amazon.smithy.rulesengine.language.eval.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -37,12 +38,12 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 // internals contains the actual resolver function
-val EndpointImpl = RustModule.private("internals", parent = ClientRustModule.Endpoint)
+fun endpointImplModule(codegenContext: ClientCodegenContext) = RustModule.private("internals", parent = ClientRustModule.endpoint(codegenContext))
 
-val EndpointTests = RustModule.new(
+fun endpointTestsModule(codegenContext: ClientCodegenContext) = RustModule.new(
     "test",
     visibility = Visibility.PRIVATE,
-    parent = ClientRustModule.Endpoint,
+    parent = ClientRustModule.endpoint(codegenContext),
     inline = true,
     documentationOverride = "",
 ).cfgTest()
@@ -108,22 +109,24 @@ val EndpointStdLib = RustModule.private("endpoint_lib")
  *  ```
  */
 
-internal class EndpointParamsGenerator(private val parameters: Parameters) {
-
+internal class EndpointParamsGenerator(
+    private val codegenContext: ClientCodegenContext,
+    private val parameters: Parameters,
+) {
     companion object {
         fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
     }
 
-    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.Endpoint) {
+    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.endpoint(codegenContext)) {
         generateEndpointsStruct(this)
     }
 
-    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Endpoint) {
+    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.endpoint(codegenContext)) {
         generateEndpointParamsBuilder(this)
     }
 
-    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Endpoint) {
+    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.endpoint(codegenContext)) {
         rust(
             """
             /// An error that occurred during endpoint resolution
