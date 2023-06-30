@@ -83,7 +83,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         rustCrate.mergeFeature(TestUtilFeature)
 
         // Re-export resiliency types
-        ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
+        ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Primitives) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)

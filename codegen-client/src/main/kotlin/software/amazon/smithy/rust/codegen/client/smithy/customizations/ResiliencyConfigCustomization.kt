@@ -461,7 +461,7 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
         "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
-        "StaticPartitionMap" to smithyRuntimeCrate.resolve("static_partition_map::StaticPartitionMap"),
+        "StaticPartitionMap" to smithyRuntime.resolve("static_partition_map::StaticPartitionMap"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
