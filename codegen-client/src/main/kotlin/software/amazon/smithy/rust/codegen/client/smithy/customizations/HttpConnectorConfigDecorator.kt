@@ -247,7 +247,7 @@ private class HttpConnectorConfigCustomization(
                                     // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                                     conn
                                     ));
-                                layer.set_connection(connection);
+                                layer.set_connector(connection);
                             }
                         }
                         """,
