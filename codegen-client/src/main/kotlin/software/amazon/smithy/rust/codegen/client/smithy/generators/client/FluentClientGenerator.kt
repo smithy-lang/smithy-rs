@@ -506,7 +506,6 @@ class FluentClientGenerator(
                     "Operation" to operationSymbol,
                     "OperationError" to errorType,
                     "OperationOutput" to outputType,
-                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                     "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                     "SendResult" to ClientRustModule.Client.customize.toType()
                         .resolve("internal::SendResult"),
@@ -519,16 +518,8 @@ class FluentClientGenerator(
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                         let runtime_plugins = #{Operation}::operation_runtime_plugins(
                             self.handle.runtime_plugins.clone(),
-                            self.config_override.map(|config_override| {
-                                crate::config::ConfigOverrideRuntimePlugin {
-                                    config_override,
-                                    client_config:
-                                        #{RuntimePlugin}::config(
-                                            &self.handle.conf.clone(),
-                                        )
-                                        .expect("frozen layer should exist in client config"),
-                                }
-                            }),
+                            &self.handle.conf,
+                            self.config_override,
                         );
                         #{Operation}::orchestrate(&runtime_plugins, input).await
                     }
