@@ -243,7 +243,7 @@ private class HttpConnectorConfigCustomization(
                                     timeout_config,
                                 );
                             if let #{Some}(conn) = http_connector.connector(&connector_settings, sleep_impl) {
-                                let connection: #{DynConnection} = #{DynConnection}::new(#{DynConnectorAdapter}::new(
+                                let connection: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
                                     // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
                                     conn
                                     ));
