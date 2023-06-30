@@ -367,7 +367,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     }
                 }
 
-                ServiceConfig.BuilderBuild -> {
+                is ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
@@ -430,12 +430,12 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
         }
         rustCrate.withModule(ClientRustModule.Config.retry) {
             rustTemplate(
-                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
+                """
+                pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode, ReconnectMode};
+                pub use #{runtime_types_retry}::RetryPartition;
+                """,
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
-            )
-            rustTemplate(
-                "pub use #{RetryPartition};",
-                "RetryPartition" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::RetryPartition"),
+                "runtime_types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
             )
         }
         rustCrate.withModule(ClientRustModule.Config.timeout) {
