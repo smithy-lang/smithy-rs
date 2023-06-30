@@ -159,6 +159,7 @@ declare_wrapper!(
 );
 
 impl<'a, I, O, E: Debug> BeforeDeserializationInterceptorContextMut<'a, I, O, E> {
+    #[doc(hidden)]
     /// Downgrade this helper struct, returning the underlying InterceptorContext. There's no good
     /// reason to use this unless you're writing tests or you have to interact with an API that
     /// doesn't support the helper structs.
