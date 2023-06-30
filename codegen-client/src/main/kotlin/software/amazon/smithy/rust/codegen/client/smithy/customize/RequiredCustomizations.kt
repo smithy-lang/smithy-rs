@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConnectionPoisoningRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
@@ -82,7 +83,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         rustCrate.mergeFeature(TestUtilFeature)
 
         // Re-export resiliency types
-        ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
+        ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Primitives) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
@@ -102,7 +103,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-        baseCustomizations + ResiliencyServiceRuntimePluginCustomization(codegenContext)
+        baseCustomizations +
+            ResiliencyServiceRuntimePluginCustomization(codegenContext) +
+            ConnectionPoisoningRuntimePluginCustomization(codegenContext)
     } else {
         baseCustomizations
     }

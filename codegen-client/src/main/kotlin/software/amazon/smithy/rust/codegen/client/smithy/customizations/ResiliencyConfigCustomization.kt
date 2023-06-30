@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -26,8 +25,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
     private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
-    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
-    private val retries = smithyRuntimeCrate.resolve("client::retries")
+    private val retries = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
@@ -367,7 +365,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     }
                 }
 
-                ServiceConfig.BuilderBuild -> {
+                is ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
@@ -444,7 +442,10 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
         }
 }
 
-class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
+class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
+
     fun extras(rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
@@ -454,13 +455,16 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
         }
         rustCrate.withModule(ClientRustModule.Config.retry) {
             rustTemplate(
-                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
+                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode, ReconnectMode};",
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
             )
-            rustTemplate(
-                "pub use #{RetryPartition};",
-                "RetryPartition" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::RetryPartition"),
-            )
+
+            if (runtimeMode.generateOrchestrator) {
+                rustTemplate(
+                    "pub use #{types_retry}::RetryPartition;",
+                    "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
+                )
+            }
         }
         rustCrate.withModule(ClientRustModule.Config.timeout) {
             rustTemplate(
@@ -473,30 +477,34 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
 
 class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
-    private val retries = smithyRuntimeCrate.resolve("client::retries")
+    private val runtimeMode = codegenContext.smithyRuntimeMode
+    private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
+    private val retries = smithyRuntime.resolve("client::retries")
     private val codegenScope = arrayOf(
         "TokenBucket" to retries.resolve("TokenBucket"),
         "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
-        "StaticPartitionMap" to smithyRuntimeCrate.resolve("static_partition_map::StaticPartitionMap"),
+        "StaticPartitionMap" to smithyRuntime.resolve("static_partition_map::StaticPartitionMap"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.DeclareSingletons -> {
-                // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
-                //    MSRV to 1.70
-                rustTemplate(
-                    """
-                    static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
-                    static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
-                    """,
-                    *codegenScope,
-                )
+        if (runtimeMode.generateOrchestrator) {
+            when (section) {
+                is ServiceRuntimePluginSection.DeclareSingletons -> {
+                    // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
+                    //    MSRV to 1.70
+                    rustTemplate(
+                        """
+                        static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
+                        static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> emptySection
             }
-            else -> emptySection
         }
     }
 }

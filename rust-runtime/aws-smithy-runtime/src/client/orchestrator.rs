@@ -281,7 +281,7 @@ async fn try_attempt(
     ctx.enter_transmit_phase();
     let call_result = halt_on_err!([ctx] => {
         let request = ctx.take_request().expect("set during serialization");
-        cfg.connection().call(request).await.map_err(|err| {
+        cfg.connector().call(request).await.map_err(|err| {
             match err.downcast() {
                 Ok(connector_error) => OrchestratorError::connector(*connector_error),
                 Err(box_err) => OrchestratorError::other(box_err)
@@ -349,6 +349,7 @@ mod tests {
         serializer::CannedRequestSerializer,
     };
     use ::http::{Request, Response, StatusCode};
+    use aws_smithy_runtime_api::client::connectors::Connector;
     use aws_smithy_runtime_api::client::interceptors::context::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
         BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
@@ -360,7 +361,7 @@ mod tests {
         Interceptor, InterceptorRegistrar, SharedInterceptor,
     };
     use aws_smithy_runtime_api::client::orchestrator::{
-        DynConnection, DynEndpointResolver, DynResponseDeserializer, SharedRequestSerializer,
+        DynConnector, DynEndpointResolver, DynResponseDeserializer, SharedRequestSerializer,
     };
     use aws_smithy_runtime_api::client::retries::DynRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
@@ -388,6 +389,24 @@ mod tests {
         )
     }
 
+    #[derive(Debug, Default)]
+    pub struct OkConnector {}
+
+    impl OkConnector {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl Connector for OkConnector {
+        fn call(&self, _request: HttpRequest) -> BoxFuture<HttpResponse> {
+            Box::pin(Future::ready(Ok(http::Response::builder()
+                .status(200)
+                .body(SdkBody::empty())
+                .expect("OK response is valid"))))
+        }
+    }
+
     #[derive(Debug)]
     struct TestOperationRuntimePlugin;
 
@@ -403,7 +422,7 @@ mod tests {
                 StaticUriEndpointResolver::http_localhost(8080),
             ));
             cfg.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
-            cfg.set_connection(DynConnection::new(OkConnector::new()));
+            cfg.set_connector(DynConnector::new(OkConnector::new()));
 
             Some(cfg.freeze())
         }

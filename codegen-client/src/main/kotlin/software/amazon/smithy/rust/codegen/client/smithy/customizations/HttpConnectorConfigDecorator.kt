@@ -40,8 +40,8 @@ private class HttpConnectorConfigCustomization(
         *preludeScope,
         "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
         "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
-        "DynConnection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::DynConnection"),
-        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connections::adapter::DynConnectorAdapter"),
+        "DynConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::DynConnector"),
+        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connectors::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
         "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
@@ -197,14 +197,14 @@ private class HttpConnectorConfigCustomization(
 
                         let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
 
-                        if let Some(connection) = layer.load::<#{HttpConnector}>()
+                        if let Some(connector) = layer.load::<#{HttpConnector}>()
                                 .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
                                 .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
-                            let connection: #{DynConnection} = #{DynConnection}::new(#{DynConnectorAdapter}::new(
+                            let connector: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
                                 // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
-                                connection
+                                connector
                             ));
-                            #{ConfigBagAccessors}::set_connection(&mut layer, connection);
+                            #{ConfigBagAccessors}::set_connector(&mut layer, connector);
                         }
 
                         """,
