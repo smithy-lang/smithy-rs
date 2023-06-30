@@ -135,17 +135,11 @@ fn apply_configuration(
     interceptors: &mut Interceptors,
     runtime_plugins: &RuntimePlugins,
 ) -> Result<(), BoxError> {
-    trace!("applying client runtime plugins");
     runtime_plugins.apply_client_configuration(cfg, interceptors.client_interceptors_mut())?;
-
-    trace!("running client_read_before_execution interceptors");
     continue_on_err!([ctx] => interceptors.client_read_before_execution(ctx, cfg));
 
-    trace!("applying operation runtime plugins");
     runtime_plugins
         .apply_operation_configuration(cfg, interceptors.operation_interceptors_mut())?;
-
-    trace!("running operation_read_before_execution interceptors");
     continue_on_err!([ctx] => interceptors.operation_read_before_execution(ctx, cfg));
 
     Ok(())
@@ -159,9 +153,7 @@ async fn try_op(
     stop_point: StopPoint,
 ) {
     // Before serialization
-    trace!("running read_before_serialization interceptors");
     halt_on_err!([ctx] => interceptors.read_before_serialization(ctx, cfg));
-    trace!("running modify_before_serialization interceptors");
     halt_on_err!([ctx] => interceptors.modify_before_serialization(ctx, cfg));
 
     // Serialization
@@ -188,9 +180,7 @@ async fn try_op(
 
     // Before transmit
     ctx.enter_before_transmit_phase();
-    trace!("running read_after_serialization interceptors");
     halt_on_err!([ctx] => interceptors.read_after_serialization(ctx, cfg));
-    trace!("running modify_before_retry_loop interceptors");
     halt_on_err!([ctx] => interceptors.modify_before_retry_loop(ctx, cfg));
 
     let retry_strategy = cfg.retry_strategy();
@@ -289,23 +279,17 @@ async fn try_attempt(
     interceptors: &Interceptors,
     stop_point: StopPoint,
 ) {
-    trace!("running read_before_attempt interceptors");
     halt_on_err!([ctx] => interceptors.read_before_attempt(ctx, cfg));
 
     halt_on_err!([ctx] => orchestrate_endpoint(ctx, cfg).await.map_err(OrchestratorError::other));
 
-    trace!("running modify_before_signing interceptors");
     halt_on_err!([ctx] => interceptors.modify_before_signing(ctx, cfg));
-    trace!("running read_before_signing interceptors");
     halt_on_err!([ctx] => interceptors.read_before_signing(ctx, cfg));
 
     halt_on_err!([ctx] => orchestrate_auth(ctx, cfg).await.map_err(OrchestratorError::other));
 
-    trace!("running read_after_signing interceptors");
     halt_on_err!([ctx] => interceptors.read_after_signing(ctx, cfg));
-    trace!("running modify_before_transmit interceptors");
     halt_on_err!([ctx] => interceptors.modify_before_transmit(ctx, cfg));
-    trace!("running read_before_transmit interceptors");
     halt_on_err!([ctx] => interceptors.read_before_transmit(ctx, cfg));
 
     // Return early if a stop point is set for before transmit
@@ -331,11 +315,8 @@ async fn try_attempt(
     ctx.set_response(response);
     ctx.enter_before_deserialization_phase();
 
-    trace!("running read_after_transmit interceptors");
     halt_on_err!([ctx] => interceptors.read_after_transmit(ctx, cfg));
-    trace!("running modify_before_deserialization interceptors");
     halt_on_err!([ctx] => interceptors.modify_before_deserialization(ctx, cfg));
-    trace!("running read_before_deserialization interceptors");
     halt_on_err!([ctx] => interceptors.read_before_deserialization(ctx, cfg));
 
     ctx.enter_deserialization_phase();
