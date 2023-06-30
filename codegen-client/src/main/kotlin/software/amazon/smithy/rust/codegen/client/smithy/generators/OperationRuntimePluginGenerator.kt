@@ -64,6 +64,7 @@ class OperationRuntimePluginGenerator(
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
                     use #{ConfigBagAccessors} as _;
+
                     cfg.set_request_serializer(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.set_response_deserializer(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 

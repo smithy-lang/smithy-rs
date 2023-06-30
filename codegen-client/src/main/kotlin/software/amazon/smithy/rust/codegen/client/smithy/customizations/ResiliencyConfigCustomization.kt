@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -369,10 +370,10 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.id.name}"));
+                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
                             let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
                             if retry_config.has_retry() {
-                                #{debug}!("creating retry strategy with partition '{}'", retry_partition);
+                                #{debug}!("using retry strategy with partition '{}'", retry_partition);
                             }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
