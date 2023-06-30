@@ -217,7 +217,7 @@ private class HttpConnectorConfigCustomization(
                 }
             }
 
-            ServiceConfig.OperationConfigOverride("layer") -> writable {
+            is ServiceConfig.OperationConfigOverride -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """

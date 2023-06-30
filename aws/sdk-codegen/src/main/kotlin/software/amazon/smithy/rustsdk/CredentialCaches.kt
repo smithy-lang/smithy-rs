@@ -191,7 +191,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 }
             }
 
-            ServiceConfig.OperationConfigOverride("layer") -> {
+            is ServiceConfig.OperationConfigOverride -> {
                 rustTemplate(
                     """
                     match (

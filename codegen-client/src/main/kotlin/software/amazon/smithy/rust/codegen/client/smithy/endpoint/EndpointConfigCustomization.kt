@@ -238,7 +238,7 @@ internal class EndpointConfigCustomization(
                     }
                 }
 
-                ServiceConfig.OperationConfigOverride("layer") -> {
+                is ServiceConfig.OperationConfigOverride -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
