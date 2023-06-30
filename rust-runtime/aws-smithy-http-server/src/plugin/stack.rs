@@ -10,6 +10,7 @@ use super::Plugin;
 /// The `Inner::map` is run _then_ the `Outer::map`.
 ///
 /// Note that the primary tool for composing plugins is [`PluginPipeline`](crate::plugin::PluginPipeline).
+#[derive(Debug)]
 pub struct PluginStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,

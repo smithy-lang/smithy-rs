@@ -73,6 +73,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGe
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
@@ -613,6 +614,14 @@ open class ServerCodegenVisitor(
             ).render(this)
 
             ScopeMacroGenerator(codegenContext).render(this)
+
+            // TODO Expose docs for `Config` and `config::Builder`.
+            //   Rename hierarchy: https://github.com/david-perez/smithy-rs-service-config/pull/1#discussion_r1202320199
+            ServiceConfigGenerator(
+                codegenContext,
+                // TODO Load from decorator
+                emptyList(),
+            ).render(this)
         }
     }
 

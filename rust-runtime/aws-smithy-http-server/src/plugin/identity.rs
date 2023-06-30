@@ -6,6 +6,7 @@
 use super::Plugin;
 
 /// A [`Plugin`] that maps a service to itself.
+#[derive(Debug)]
 pub struct IdentityPlugin;
 
 impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {

@@ -108,6 +108,7 @@ use super::LayerPlugin;
 ///     // Our custom method!
 ///     .with_auth();
 /// ```
+#[derive(Debug)]
 pub struct PluginPipeline<P>(pub(crate) P);
 
 impl Default for PluginPipeline<IdentityPlugin> {
