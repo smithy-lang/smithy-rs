@@ -27,8 +27,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 open class OperationGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -142,16 +144,26 @@ open class OperationGenerator(
                         stop_point: #{StopPoint},
                     ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
                         let input = #{TypedBox}::new(input).erase();
-                        #{invoke_with_stop_point}(input, runtime_plugins, stop_point).await
+                        #{invoke_with_stop_point}(
+                            ${codegenContext.serviceShape.sdkId().dq()},
+                            ${operationName.dq()},
+                            input,
+                            runtime_plugins,
+                            stop_point
+                        ).await
                     }
 
                     pub(crate) fn operation_runtime_plugins(
                         client_runtime_plugins: #{RuntimePlugins},
+                        client_config: &crate::config::Config,
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
                         if let Some(config_override) = config_override {
-                            runtime_plugins = runtime_plugins.with_operation_plugin(config_override);
+                            runtime_plugins = runtime_plugins.with_operation_plugin(crate::config::ConfigOverrideRuntimePlugin {
+                                config_override,
+                                client_config: #{RuntimePlugin}::config(client_config).expect("frozen layer should exist in client config"),
+                            })
                         }
                         runtime_plugins
                             #{additional_runtime_plugins}

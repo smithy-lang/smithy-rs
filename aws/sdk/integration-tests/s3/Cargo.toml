@@ -12,8 +12,8 @@ publish = false
 
 [dev-dependencies]
 async-std = "1.12.0"
-aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
@@ -21,6 +21,7 @@ aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
@@ -36,9 +37,9 @@ serde_json = "1"
 smol = "1.2"
 tempfile = "3"
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
-# If you're writing a test with this, take heed! `no-env-filter` means you'll be capturing
-# logs from everything that speaks, so be specific with your asserts.
-tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
+# If you're writing a test with this, take heed! `no-env-filter` means you'll be capturing
+# logs from everything that speaks, so be specific with your asserts.
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }

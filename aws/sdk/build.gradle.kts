@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import aws.sdk.AwsExamplesLayout
 import aws.sdk.AwsServices
 import aws.sdk.Membership
 import aws.sdk.discoverServices
@@ -201,6 +202,7 @@ tasks.register("relocateExamples") {
                 }
                 into(outputDir)
                 exclude("**/target")
+                exclude("**/rust-toolchain.toml")
                 filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
             }
         }
@@ -242,13 +244,22 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
-    arguments = listOf(
-        "use-path-and-version-dependencies",
-        "--isolate-crates",
-        "--sdk-path", "../../sdk",
-        "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-        outputDir.resolve("examples").absolutePath,
-    )
+    arguments = when (AwsExamplesLayout.detect(project)) {
+        AwsExamplesLayout.Flat -> listOf(
+            "use-path-and-version-dependencies",
+            "--isolate-crates",
+            "--sdk-path", "../../sdk",
+            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+            outputDir.resolve("examples").absolutePath,
+        )
+        AwsExamplesLayout.Workspaces -> listOf(
+            "use-path-and-version-dependencies",
+            "--isolate-crates",
+            "--sdk-path", sdkOutputDir.absolutePath,
+            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+            outputDir.resolve("examples").absolutePath,
+        )
+    }
 
     outputs.dir(outputDir)
     dependsOn("relocateExamples", "generateVersionManifest")

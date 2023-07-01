@@ -3,6 +3,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod deserializer;
-pub mod interceptors;
-pub mod serializer;
+/// Utility for capturing and displaying logs during a unit test.
+pub mod capture_test_logs;
