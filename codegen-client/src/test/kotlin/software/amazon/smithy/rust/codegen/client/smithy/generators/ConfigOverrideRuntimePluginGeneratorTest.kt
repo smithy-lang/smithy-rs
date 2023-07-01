@@ -70,7 +70,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let sut_layer = sut.config().unwrap();
                         let endpoint_resolver = sut_layer.endpoint_resolver();
                         let endpoint = endpoint_resolver
-                            .resolve_endpoint(&#{EndpointResolverParams}::new(crate::endpoint::Params {}))
+                            .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
                             .await
                             .unwrap();
 
