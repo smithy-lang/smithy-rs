@@ -217,6 +217,45 @@ private class HttpConnectorConfigCustomization(
                 }
             }
 
+            is ServiceConfig.OperationConfigOverride -> writable {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        if let #{Some}(http_connector) =
+                            layer.load::<#{HttpConnector}>()
+                        {
+                            let sleep_impl = layer
+                                .load::<#{SharedAsyncSleep}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{SharedAsyncSleep}>()
+                                })
+                                .cloned();
+                            let timeout_config = layer
+                                .load::<#{TimeoutConfig}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{TimeoutConfig}>()
+                                })
+                                .expect("timeout config should be set either in `config_override` or in the client config");
+                            let connector_settings =
+                                #{ConnectorSettings}::from_timeout_config(
+                                    timeout_config,
+                                );
+                            if let #{Some}(conn) = http_connector.connector(&connector_settings, sleep_impl) {
+                                let connection: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
+                                    // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                                    conn
+                                    ));
+                                layer.set_connector(connection);
+                            }
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+
             else -> emptySection
         }
     }

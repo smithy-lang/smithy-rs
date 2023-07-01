@@ -191,6 +191,36 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 }
             }
 
+            is ServiceConfig.OperationConfigOverride -> {
+                rustTemplate(
+                    """
+                    match (
+                        layer
+                            .load::<#{CredentialsCache}>()
+                            .cloned(),
+                        layer
+                            .load::<#{SharedCredentialsProvider}>()
+                            .cloned(),
+                    ) {
+                        (#{None}, #{None}) => {}
+                        (#{None}, _) => {
+                            panic!("also specify `.credentials_cache` when overriding credentials provider for the operation");
+                        }
+                        (_, #{None}) => {
+                            panic!("also specify `.credentials_provider` when overriding credentials cache for the operation");
+                        }
+                        (
+                            #{Some}(credentials_cache),
+                            #{Some}(credentials_provider),
+                        ) => {
+                            layer.store_put(credentials_cache.create_cache(credentials_provider));
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+
             else -> emptySection
         }
     }

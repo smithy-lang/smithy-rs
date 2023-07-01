@@ -377,7 +377,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
-                                if let Some(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
+                                if let #{Some}(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
                                     let seconds_since_unix_epoch = time_source
                                         .now()
                                         .duration_since(#{SystemTime}::UNIX_EPOCH)
@@ -396,6 +396,12 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
                             layer.store_put(token_bucket);
                             layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
+
+                            // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
+                            //  is resolved
+                            if layer.load::<#{TimeoutConfig}>().is_none() {
+                                layer.store_put(#{TimeoutConfig}::disabled());
+                            }
                             """,
                             *codegenScope,
                         )
@@ -408,6 +414,24 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             retry_config: self.retry_config,
                             sleep_impl: self.sleep_impl.clone(),
                             timeout_config: self.timeout_config,
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
+                is ServiceConfig.OperationConfigOverride -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            if let #{Some}(retry_config) = layer
+                                .load::<#{RetryConfig}>()
+                                .cloned()
+                            {
+                                layer.set_retry_strategy(
+                                    #{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config))
+                                );
+                            }
                             """,
                             *codegenScope,
                         )
