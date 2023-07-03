@@ -11,7 +11,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 use super::{LayerPlugin, ModelPlugin};
 
 /// A wrapper struct for composing [`ModelPlugin`]s.
-/// It operates identically to [`HttpPlugins`]; see its documentation.
+/// It operates identically to [`HttpPlugins`](crate::plugin::HttpPlugins); see its documentation.
 #[derive(Debug)]
 pub struct ModelPlugins<P>(pub(crate) P);
 
