@@ -20,14 +20,11 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         *RuntimeType.preludeScope,
         "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig)
             .resolve("user_agent::AwsUserAgent"),
-        "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
-        "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
-        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::orchestrator::ConfigBagAccessors"),
+        "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
+        "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
-        "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::InterceptorContext"),
+        "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
         "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
             .resolve("time::SharedTimeSource"),
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)

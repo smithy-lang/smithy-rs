@@ -40,7 +40,8 @@ private class HttpConnectorConfigCustomization(
         *preludeScope,
         "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
         "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
-        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connections::adapter::DynConnectorAdapter"),
+        "DynConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::DynConnector"),
+        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connectors::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
         "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
@@ -196,22 +197,62 @@ private class HttpConnectorConfigCustomization(
 
                         let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
 
-                        if let Some(connection) = layer.load::<#{HttpConnector}>()
+                        if let Some(connector) = layer.load::<#{HttpConnector}>()
                                 .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
                                 .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
-                            let connection: #{Box}<dyn #{Connection}> = #{Box}::new(#{DynConnectorAdapter}::new(
+                            let connector: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
                                 // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
-                                connection
-                            )) as _;
-                            layer.set_connection(connection);
+                                connector
+                            ));
+                            #{ConfigBagAccessors}::set_connector(&mut layer, connector);
                         }
 
                         """,
                         *codegenScope,
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
                     )
                 } else {
                     rust("http_connector: self.http_connector,")
+                }
+            }
+
+            is ServiceConfig.OperationConfigOverride -> writable {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        if let #{Some}(http_connector) =
+                            layer.load::<#{HttpConnector}>()
+                        {
+                            let sleep_impl = layer
+                                .load::<#{SharedAsyncSleep}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{SharedAsyncSleep}>()
+                                })
+                                .cloned();
+                            let timeout_config = layer
+                                .load::<#{TimeoutConfig}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{TimeoutConfig}>()
+                                })
+                                .expect("timeout config should be set either in `config_override` or in the client config");
+                            let connector_settings =
+                                #{ConnectorSettings}::from_timeout_config(
+                                    timeout_config,
+                                );
+                            if let #{Some}(conn) = http_connector.connector(&connector_settings, sleep_impl) {
+                                let connection: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
+                                    // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                                    conn
+                                    ));
+                                layer.set_connector(connection);
+                            }
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
             }
 

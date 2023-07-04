@@ -3,5 +3,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(feature = "anonymous-auth")]
-pub mod anonymous_auth;
+/// A boxed error that is `Send` and `Sync`.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

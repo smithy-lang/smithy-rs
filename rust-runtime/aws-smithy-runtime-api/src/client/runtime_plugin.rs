@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::box_error::BoxError;
 use crate::client::interceptors::InterceptorRegistrar;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
 use std::fmt::Debug;
 use std::sync::Arc;
-
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// RuntimePlugin Trait
 ///
@@ -71,6 +70,7 @@ impl RuntimePlugins {
         cfg: &mut ConfigBag,
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
+        tracing::trace!("applying client runtime plugins");
         for plugin in self.client_plugins.iter() {
             if let Some(layer) = plugin.config() {
                 cfg.push_shared_layer(layer);
@@ -86,6 +86,7 @@ impl RuntimePlugins {
         cfg: &mut ConfigBag,
         interceptors: &mut InterceptorRegistrar,
     ) -> Result<(), BoxError> {
+        tracing::trace!("applying operation runtime plugins");
         for plugin in self.operation_plugins.iter() {
             if let Some(layer) = plugin.config() {
                 cfg.push_shared_layer(layer);

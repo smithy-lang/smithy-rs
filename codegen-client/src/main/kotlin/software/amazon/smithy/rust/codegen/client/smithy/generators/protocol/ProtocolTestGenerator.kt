@@ -70,21 +70,34 @@ class DefaultProtocolTestGenerator(
     override val operationShape: OperationShape,
 
     private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
-        rustTemplate(
-            """
-            let smithy_client = #{Builder}::new()
-                .connector(${params.connectorName})
-                .middleware(#{MapRequestLayer}::for_mapper(#{SmithyEndpointStage}::new()))
-                .build();
-            let ${params.clientName} = #{Client}::with_config(smithy_client, ${params.configBuilderName}.build());
-            """,
-            "Client" to ClientRustModule.root.toType().resolve("Client"),
-            "Builder" to ClientRustModule.client.toType().resolve("Builder"),
-            "SmithyEndpointStage" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
-                .resolve("endpoint::middleware::SmithyEndpointStage"),
-            "MapRequestLayer" to RuntimeType.smithyHttpTower(codegenContext.runtimeConfig)
-                .resolve("map_request::MapRequestLayer"),
-        )
+        if (params.codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+            rustTemplate(
+                """
+                let smithy_client = #{Builder}::new()
+                    .connector(${params.connectorName})
+                    .middleware(#{MapRequestLayer}::for_mapper(#{SmithyEndpointStage}::new()))
+                    .build();
+                let ${params.clientName} = #{Client}::with_config(smithy_client, ${params.configBuilderName}.build());
+                """,
+                "Client" to ClientRustModule.root.toType().resolve("Client"),
+                "Builder" to ClientRustModule.client.toType().resolve("Builder"),
+                "SmithyEndpointStage" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
+                    .resolve("endpoint::middleware::SmithyEndpointStage"),
+                "MapRequestLayer" to RuntimeType.smithyHttpTower(codegenContext.runtimeConfig)
+                    .resolve("map_request::MapRequestLayer"),
+            )
+        } else {
+            rustTemplate(
+                """
+                let ${params.clientName} = #{Client}::from_conf(
+                    ${params.configBuilderName}
+                        .http_connector(${params.connectorName})
+                        .build()
+                );
+                """,
+                "Client" to ClientRustModule.root.toType().resolve("Client"),
+            )
+        }
     },
 ) : ProtocolTestGenerator {
     private val logger = Logger.getLogger(javaClass.name)
@@ -219,7 +232,7 @@ class DefaultProtocolTestGenerator(
                 .withFeature("test-util")
                 .toType()
                 .resolve("test_connection::capture_request"),
-            "config" to ClientRustModule.Config,
+            "config" to ClientRustModule.config,
             "customParams" to customParams,
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "conn", "config_builder", "client"))

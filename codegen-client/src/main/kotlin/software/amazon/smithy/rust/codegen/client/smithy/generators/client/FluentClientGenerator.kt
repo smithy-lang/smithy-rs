@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -125,6 +126,7 @@ class FluentClientGenerator(
                         }
                     },
                 "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
+                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                 "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
                 // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
                 "generics_decl" to generics.decl,
@@ -182,18 +184,13 @@ class FluentClientGenerator(
                     ##[derive(Debug)]
                     pub(crate) struct Handle {
                         pub(crate) conf: crate::Config,
+                        pub(crate) runtime_plugins: #{RuntimePlugins},
                     }
 
                     #{client_docs:W}
-                    ##[derive(::std::fmt::Debug)]
+                    ##[derive(#{Clone}, ::std::fmt::Debug)]
                     pub struct Client {
-                        handle: #{Arc}<Handle>
-                    }
-
-                    impl #{Clone} for Client {
-                        fn clone(&self) -> Self {
-                            Self { handle: self.handle.clone() }
-                        }
+                        handle: #{Arc}<Handle>,
                     }
 
                     impl Client {
@@ -215,7 +212,12 @@ class FluentClientGenerator(
                             }
 
                             Self {
-                                handle: #{Arc}::new(Handle { conf })
+                                handle: #{Arc}::new(
+                                    Handle {
+                                        conf: conf.clone(),
+                                        runtime_plugins: #{base_client_runtime_plugins}(conf),
+                                    }
+                                )
                             }
                         }
 
@@ -229,9 +231,7 @@ class FluentClientGenerator(
                         // This is currently kept around so the tests still compile in both modes
                         /// Creates a client with the given service configuration.
                         pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
-                            Self {
-                                handle: #{Arc}::new(Handle { conf })
-                            }
+                            Self::from_conf(conf)
                         }
 
                         ##[doc(hidden)]
@@ -244,6 +244,7 @@ class FluentClientGenerator(
                     }
                     """,
                     *clientScope,
+                    "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
                 )
             }
         }
@@ -505,8 +506,7 @@ class FluentClientGenerator(
                     "Operation" to operationSymbol,
                     "OperationError" to errorType,
                     "OperationOutput" to outputType,
-                    "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::runtime_plugin::RuntimePlugins"),
+                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                     "SendResult" to ClientRustModule.Client.customize.toType()
                         .resolve("internal::SendResult"),
                     "SdkError" to RuntimeType.sdkError(runtimeConfig),
@@ -516,10 +516,10 @@ class FluentClientGenerator(
                     ##[doc(hidden)]
                     pub async fn send_orchestrator(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        let runtime_plugins = #{Operation}::register_runtime_plugins(
-                            #{RuntimePlugins}::new(),
-                            self.handle,
-                            self.config_override
+                        let runtime_plugins = #{Operation}::operation_runtime_plugins(
+                            self.handle.runtime_plugins.clone(),
+                            &self.handle.conf,
+                            self.config_override,
                         );
                         #{Operation}::orchestrate(&runtime_plugins, input).await
                     }
@@ -646,6 +646,26 @@ class FluentClientGenerator(
         }
     }
 }
+
+private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+    RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        rustTemplate(
+            """
+            pub(crate) fn base_client_runtime_plugins(
+                config: crate::Config,
+            ) -> #{RuntimePlugins} {
+                #{RuntimePlugins}::new()
+                    .with_client_plugin(config.clone())
+                    .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
+                    .with_client_plugin(#{NoAuthRuntimePlugin}::new())
+            }
+            """,
+            *preludeScope,
+            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
+                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+        )
+    }
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.util
 
+import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -146,3 +147,7 @@ fun String.shapeId() = ShapeId.from(this)
 
 /** Returns the service name, or a default value if the service doesn't have a title trait */
 fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default
+
+/** Returns the SDK ID of the given service shape */
+fun ServiceShape.sdkId(): String =
+    getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)
