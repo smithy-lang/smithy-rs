@@ -44,9 +44,16 @@ import kotlin.io.path.absolutePathString
 
 // cargo commands and env values
 private object Commands {
+    const val CargoFmt = "cargo fmt"
+    const val CargoClippy = "cargo clippy"
+    
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
-    fun func(s: String, add: String, flag: Boolean): String = if (flag) { "$s $add" } else { s }
+    private const val allFeature = "--all-features"
 
+    // helper
+    private fun func(s: String, add: String, flag: Boolean): String = if (flag) { "$s $add" } else { s }
+
+    // unstable flag
     fun cargoEnvDenyWarnings(enableUnstable: Boolean): Map<String, String> {
         return mapOf(
             "RUSTFLAGS" to func("-D warnings", cfgUnstable, enableUnstable),
@@ -59,26 +66,14 @@ private object Commands {
         )
     }
 
-    private const val allFeature = "--all-features"
-
+    // --all-features
     fun cargoTest(enableAllFeatures: Boolean): String {
         return func("cargo test", allFeature, enableAllFeatures)
-    }
-
-    fun cargoTest(featuresToEnable: Array<String>): String {
-        return func("cargo test", featuresToEnable.joinToString(" "), true)
     }
 
     fun cargoCheck(enableAllFeatures: Boolean): String {
         return func("cargo check", allFeature, enableAllFeatures)
     }
-
-    fun cargoCheck(featuresToEnable: Array<String>): String {
-        return func("cargo test", featuresToEnable.joinToString(" "), true)
-    }
-
-    const val CargoFmt = "cargo fmt"
-    const val CargoClippy = "cargo clippy"
 }
 
 val TestModuleDocProvider = object : ModuleDocProvider {
