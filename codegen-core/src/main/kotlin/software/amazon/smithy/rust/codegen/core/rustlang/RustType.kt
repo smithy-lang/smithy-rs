@@ -491,7 +491,16 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     }
 
     public fun serdeDeserializeCompilationGuard(): Attribute {
-        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+        val comment = """
+            You must pass "aws_sdk_unstable" flag to RUSTFLAG.  
+            e.g.
+            ```bash
+            export RUSTFLAG="--cfg aws_sdk_unstable"
+            ```
+            
+            Learn more about this on this SDK's document.  
+        """.trimIndent()
+        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-deserialize")), attributeWithStringAsArgument(RuntimeType.CompileGuardAttr, comment)))
     }
 
     public fun serdeSkip(): Attribute {
@@ -600,6 +609,11 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
                 val writables = runtimeTypes.sortedBy { it.path }.map { it.writable }.join(", ")
                 rustInline("derive(#W)", writables)
             }
+        }
+
+        fun attributeWithStringAsArgument(runtimeType: RuntimeType, comment: String): Writable = {
+            // Sorted derives look nicer than unsorted, and it makes test output easier to predict
+            rustInline("#W(\"$comment\")", runtimeType.writable)
         }
 
         fun derive(runtimeTypes: Collection<RuntimeType>): Writable = derive(*runtimeTypes.toTypedArray())
