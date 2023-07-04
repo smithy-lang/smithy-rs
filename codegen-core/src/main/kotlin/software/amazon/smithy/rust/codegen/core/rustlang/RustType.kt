@@ -485,6 +485,15 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     public fun serdeDeserialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
     }
+
+    public fun serdeSerializeCompilationGuard(): Attribute {
+        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+    }
+
+    public fun serdeDeserializeCompilationGuard(): Attribute {
+        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+    }
+
     public fun serdeSkip(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
     }
