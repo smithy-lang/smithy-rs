@@ -486,11 +486,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
     }
 
-    public fun serdeSerializeCompilationGuard(): Attribute {
-        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
-    }
-
-    public fun serdeDeserializeCompilationGuard(): Attribute {
+    private fun compilationGuard(featureName: String): Attribute {
         val comment = """
             You must pass "aws_sdk_unstable" flag to RUSTFLAG.  
             e.g.
@@ -500,7 +496,16 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
             
             Learn more about this on this SDK's document.  
         """.trimIndent()
-        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature("serde-deserialize")), attributeWithStringAsArgument(RuntimeType.CompileGuardAttr, comment)))
+
+        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature(featureName)), attributeWithStringAsArgument(RuntimeType.CompileGuardAttr, comment)))
+    }
+
+    public fun serdeSerializeCompilationGuard(): Attribute {
+        return compilationGuard("serde-serialize")
+    }
+
+    public fun serdeDeserializeCompilationGuard(): Attribute {
+        return compilationGuard("serde-deserialize")
     }
 
     public fun serdeSkip(): Attribute {
