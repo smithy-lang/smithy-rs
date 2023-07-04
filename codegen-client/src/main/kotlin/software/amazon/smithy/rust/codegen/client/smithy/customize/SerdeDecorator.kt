@@ -24,8 +24,8 @@ class SerdeDecorator : ClientCodegenDecorator {
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        fun _feature(feature_name: String, crate_name: String): Feature {
-            return Feature(feature_name, false, listOf(crate_name + "/" + feature_name))
+        fun _feature(featureName: String, crateName: String): Feature {
+            return Feature(featureName, false, listOf("$crateName/$featureName"))
         }
         rustCrate.mergeFeature(_feature("serde-serialize", "aws-smithy-types"))
         rustCrate.mergeFeature(_feature("serde-deserialize", "aws-smithy-types"))
