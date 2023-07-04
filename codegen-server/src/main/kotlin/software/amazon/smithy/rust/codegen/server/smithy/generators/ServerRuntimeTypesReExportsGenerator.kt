@@ -9,14 +9,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 
 class ServerRuntimeTypesReExportsGenerator(
     codegenContext: CodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Router" to ServerRuntimeType.router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
 
@@ -30,8 +28,11 @@ class ServerRuntimeTypesReExportsGenerator(
                 pub use #{SmithyHttpServer}::operation::OperationShape;
             }
             pub mod plugin {
+                pub use #{SmithyHttpServer}::plugin::HttpPlugins;
+                pub use #{SmithyHttpServer}::plugin::ModelPlugins;
+                pub use #{SmithyHttpServer}::plugin::HttpMarker;
+                pub use #{SmithyHttpServer}::plugin::ModelMarker;
                 pub use #{SmithyHttpServer}::plugin::Plugin;
-                pub use #{SmithyHttpServer}::plugin::PluginPipeline;
                 pub use #{SmithyHttpServer}::plugin::PluginStack;
             }
             pub mod request {

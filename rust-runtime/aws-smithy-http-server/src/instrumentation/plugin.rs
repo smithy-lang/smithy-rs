@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::plugin::{PluginPipeline, PluginStack};
+use crate::plugin::{HttpMarker, HttpPlugins, PluginStack};
 use crate::{operation::OperationShape, plugin::Plugin};
 
 use super::sensitivity::Sensitivity;
@@ -27,17 +27,19 @@ where
     }
 }
 
+impl HttpMarker for InstrumentPlugin {}
+
 /// An extension trait for applying [`InstrumentPlugin`].
 pub trait InstrumentExt<CurrentPlugin> {
     /// Applies an [`InstrumentOperation`] to every operation, respecting the [@sensitive] trait given on the input and
     /// output models. See [`InstrumentOperation`](super::InstrumentOperation) for more information.
     ///
     /// [@sensitive]: https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait
-    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugin>>;
+    fn instrument(self) -> HttpPlugins<PluginStack<InstrumentPlugin, CurrentPlugin>>;
 }
 
-impl<CurrentPlugin> InstrumentExt<CurrentPlugin> for PluginPipeline<CurrentPlugin> {
-    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugin>> {
+impl<CurrentPlugin> InstrumentExt<CurrentPlugin> for HttpPlugins<CurrentPlugin> {
+    fn instrument(self) -> HttpPlugins<PluginStack<InstrumentPlugin, CurrentPlugin>> {
         self.push(InstrumentPlugin)
     }
 }

@@ -466,40 +466,40 @@ stateDiagram-v2
 The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
 
 You might find yourself wanting to apply _multiple_ plugins to your service.
-This can be accommodated via [`PluginPipeline`].
+This can be accommodated via [`HttpPlugins`] and [`ModelPlugins`].
 
 ```rust
 # extern crate aws_smithy_http_server;
-use aws_smithy_http_server::plugin::PluginPipeline;
+use aws_smithy_http_server::plugin::HttpPlugins;
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 
-let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+let http_plugins = HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
 ```
 
 The plugins' runtime logic is executed in registration order.
 In the example above, `LoggingPlugin` would run first, while `MetricsPlugin` is executed last.
 
-If you are vending a plugin, you can leverage `PluginPipeline` as an extension point: you can add custom methods to it using an extension trait.
+If you are vending a plugin, you can leverage `HttpPlugins` or `ModelPlugins` as an extension point: you can add custom methods to it using an extension trait.
 For example:
 
 ```rust
 # extern crate aws_smithy_http_server;
-use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
 # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 
 pub trait AuthPluginExt<CurrentPlugins> {
-    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>>;
+    fn with_auth(self) -> HttpPlugins<PluginStack<AuthPlugin, CurrentPlugins>>;
 }
 
-impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
-    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>> {
+impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for HttpPlugins<CurrentPlugins> {
+    fn with_auth(self) -> HttpPlugins<PluginStack<AuthPlugin, CurrentPlugins>> {
         self.push(AuthPlugin)
     }
 }
 
-let pipeline = PluginPipeline::new()
+let http_plugins = HttpPlugins::new()
     .push(LoggingPlugin)
     // Our custom method!
     .with_auth();
@@ -518,15 +518,15 @@ You can create an instance of a service builder by calling either `builder_witho
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder<Body, HttpPlugin, ModelPlugin> {
+pub struct PokemonServiceBuilder<Body, HttpPl, ModelPl> {
     capture_pokemon_operation: Option<Route<Body>>,
     empty_operation: Option<Route<Body>>,
     get_pokemon_species: Option<Route<Body>>,
     get_server_statistics: Option<Route<Body>>,
     get_storage: Option<Route<Body>>,
     health_check_operation: Option<Route<Body>>,
-    http_plugin: HttpPlugin,
-    model_plugin: ModelPlugin
+    http_plugin: HttpPl,
+    model_plugin: ModelPl,
 }
 ```
 
@@ -537,7 +537,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     where
         HandlerType:Handler<GetPokemonSpecies, HandlerExtractors>,
 
-        ModelPlugin: Plugin<
+        ModelPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             IntoService<GetPokemonSpecies, HandlerType>
@@ -547,7 +547,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
             GetPokemonSpecies,
             ModelPlugin::Output
         >,
-        HttpPlugin: Plugin<
+        HttpPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::<UpgradeExtractors>::Output
@@ -565,7 +565,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     where
         S: OperationService<GetPokemonSpecies, ServiceExtractors>,
 
-        ModelPlugin: Plugin<
+        ModelPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             Normalize<GetPokemonSpecies, S>
@@ -575,7 +575,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
             GetPokemonSpecies,
             ModelPlugin::Output
         >,
-        HttpPlugin: Plugin<
+        HttpPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::<UpgradeExtractors>::Output

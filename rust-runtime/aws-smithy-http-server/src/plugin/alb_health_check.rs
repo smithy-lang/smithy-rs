@@ -9,9 +9,9 @@
 //! # Example
 //!
 //! ```no_run
-//! # use aws_smithy_http_server::{body, plugin::{PluginPipeline, alb_health_check::AlbHealthCheckLayer}};
+//! # use aws_smithy_http_server::{body, plugin::{HttpPlugins, alb_health_check::AlbHealthCheckLayer}};
 //! # use hyper::{Body, Response, StatusCode};
-//! let plugins = PluginPipeline::new()
+//! let plugins = HttpPlugins::new()
 //!     // Handle all `/ping` health check requests by returning a `200 OK`.
 //!     .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
 //!         StatusCode::OK
