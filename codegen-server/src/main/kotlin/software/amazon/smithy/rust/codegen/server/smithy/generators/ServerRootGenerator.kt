@@ -106,8 +106,8 @@ open class ServerRootGenerator(
             //! #### Plugins
             //!
             //! The [`$serviceName::builder_with_plugins`] method, returning [`$builderName`],
-            //! accepts a [`HttpPlugin`](aws_smithy_http_server::plugin::HttpPlugin) and a 
-            //! [`ModelPlugin`](aws_smithy_http_server::plugin::HttpPlugin).
+            //! accepts a plugin marked with [`HttpMarker`](aws_smithy_http_server::plugin::HttpMarker) and a 
+            //! plugin marked with [`ModelPlugin`](aws_smithy_http_server::plugin::ModelMarker).
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
             //! ```rust

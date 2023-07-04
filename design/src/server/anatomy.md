@@ -518,15 +518,15 @@ You can create an instance of a service builder by calling either `builder_witho
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder<Body, HttpPlugin, ModelPlugin> {
+pub struct PokemonServiceBuilder<Body, HttpPl, ModelPl> {
     capture_pokemon_operation: Option<Route<Body>>,
     empty_operation: Option<Route<Body>>,
     get_pokemon_species: Option<Route<Body>>,
     get_server_statistics: Option<Route<Body>>,
     get_storage: Option<Route<Body>>,
     health_check_operation: Option<Route<Body>>,
-    http_plugin: HttpPlugin,
-    model_plugin: ModelPlugin
+    http_plugin: HttpPl,
+    model_plugin: ModelPl,
 }
 ```
 
@@ -537,7 +537,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     where
         HandlerType:Handler<GetPokemonSpecies, HandlerExtractors>,
 
-        ModelPlugin: Plugin<
+        ModelPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             IntoService<GetPokemonSpecies, HandlerType>
@@ -547,7 +547,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
             GetPokemonSpecies,
             ModelPlugin::Output
         >,
-        HttpPlugin: Plugin<
+        HttpPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::<UpgradeExtractors>::Output
@@ -565,7 +565,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     where
         S: OperationService<GetPokemonSpecies, ServiceExtractors>,
 
-        ModelPlugin: Plugin<
+        ModelPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             Normalize<GetPokemonSpecies, S>
@@ -575,7 +575,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
             GetPokemonSpecies,
             ModelPlugin::Output
         >,
-        HttpPlugin: Plugin<
+        HttpPl: Plugin<
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::<UpgradeExtractors>::Output

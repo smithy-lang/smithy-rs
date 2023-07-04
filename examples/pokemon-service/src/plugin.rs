@@ -7,7 +7,7 @@
 
 use aws_smithy_http_server::{
     operation::OperationShape,
-    plugin::{HttpPlugin, HttpPlugins, Plugin, PluginStack},
+    plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack},
     service::ServiceShape,
     shape_id::ShapeId,
 };
@@ -64,7 +64,7 @@ where
     }
 }
 
-impl HttpPlugin for PrintPlugin {}
+impl HttpMarker for PrintPlugin {}
 
 /// This provides a [`print`](PrintExt::print) method on [`HttpPlugins`].
 pub trait PrintExt<CurrentPlugin> {

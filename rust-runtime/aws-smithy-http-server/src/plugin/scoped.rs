@@ -5,7 +5,7 @@
 
 use std::marker::PhantomData;
 
-use super::{HttpPlugin, ModelPlugin, Plugin};
+use super::{HttpMarker, ModelPlugin, Plugin};
 
 /// Marker struct for `true`.
 ///
@@ -102,7 +102,7 @@ where
     }
 }
 
-impl<Scope, Pl> HttpPlugin for Scoped<Scope, Pl> where Pl: HttpPlugin {}
+impl<Scope, Pl> HttpMarker for Scoped<Scope, Pl> where Pl: HttpMarker {}
 impl<Scope, Pl> ModelPlugin for Scoped<Scope, Pl> where Pl: ModelPlugin {}
 
 /// A macro to help with scoping [plugins](crate::plugin) to a subset of all operations.

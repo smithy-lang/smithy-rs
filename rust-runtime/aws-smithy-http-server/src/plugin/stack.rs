@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{HttpPlugin, ModelPlugin, Plugin};
+use super::{HttpMarker, ModelPlugin, Plugin};
 
 /// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
 ///
@@ -38,10 +38,10 @@ where
     }
 }
 
-impl<Inner, Outer> HttpPlugin for PluginStack<Inner, Outer>
+impl<Inner, Outer> HttpMarker for PluginStack<Inner, Outer>
 where
-    Inner: HttpPlugin,
-    Outer: HttpPlugin,
+    Inner: HttpMarker,
+    Outer: HttpMarker,
 {
 }
 

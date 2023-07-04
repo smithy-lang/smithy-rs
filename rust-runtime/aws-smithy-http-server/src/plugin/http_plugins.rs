@@ -8,9 +8,9 @@
 
 use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 
-use super::{HttpPlugin, LayerPlugin};
+use super::{HttpMarker, LayerPlugin};
 
-/// A wrapper struct for composing [`HttpPlugin`]s.
+/// A wrapper struct for composing HTTP plugins.
 /// It can be used as input for the `builder_with_plugins` method on the generated service struct
 /// (e.g. `PokemonService::builder_with_plugins`).
 ///
@@ -76,8 +76,9 @@ use super::{HttpPlugin, LayerPlugin};
 /// `HttpPlugins` is a good way to bundle together multiple plugins, ensuring they are all
 /// registered in the correct order.
 ///
-/// Since `HttpPlugins` is itself a [`HttpPlugin`], you can use the [`push`](HttpPlugins::push) to
-/// append, at once, all the HTTP plugins in another `HttpPlugins` to the current `HttpPlugins`:
+/// Since `HttpPlugins` is itself a HTTP plugin (it implements the `HttpMarker` trait), you can use
+/// the [`push`](HttpPlugins::push) to append, at once, all the HTTP plugins in another
+/// `HttpPlugins` to the current `HttpPlugins`:
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins, PluginStack};
@@ -176,9 +177,9 @@ impl<P> HttpPlugins<P> {
     ///     }
     /// }
     /// ```
-    // We eagerly require `NewPlugin: HttpPlugin`, despite not really needing it, because compiler
+    // We eagerly require `NewPlugin: HttpMarker`, despite not really needing it, because compiler
     // errors get _substantially_ better if the user makes a mistake.
-    pub fn push<NewPlugin: HttpPlugin>(self, new_plugin: NewPlugin) -> HttpPlugins<PluginStack<NewPlugin, P>> {
+    pub fn push<NewPlugin: HttpMarker>(self, new_plugin: NewPlugin) -> HttpPlugins<PluginStack<NewPlugin, P>> {
         HttpPlugins(PluginStack::new(new_plugin, self.0))
     }
 
@@ -199,4 +200,4 @@ where
     }
 }
 
-impl<InnerPlugin> HttpPlugin for HttpPlugins<InnerPlugin> where InnerPlugin: HttpPlugin {}
+impl<InnerPlugin> HttpMarker for HttpPlugins<InnerPlugin> where InnerPlugin: HttpMarker {}

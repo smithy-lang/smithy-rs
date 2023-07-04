@@ -8,7 +8,7 @@ use super::{either::Either, IdentityPlugin, ModelPlugin};
 use crate::operation::OperationShape;
 use crate::service::ContainsOperation;
 
-use super::{HttpPlugin, Plugin};
+use super::{HttpMarker, Plugin};
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<Inner, F> HttpPlugin for FilterByOperation<Inner, F> where Inner: HttpPlugin {}
+impl<Inner, F> HttpMarker for FilterByOperation<Inner, F> where Inner: HttpMarker {}
 impl<Inner, F> ModelPlugin for FilterByOperation<Inner, F> where Inner: ModelPlugin {}
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the

@@ -5,10 +5,10 @@
 
 //! The plugin system allows you to build middleware with an awareness of the operation it is applied to.
 //!
-//! The system centers around the [`Plugin`], [`HttpPlugin`], and [`ModelPlugin`] traits. In
+//! The system centers around the [`Plugin`], [`HttpMarker`], and [`ModelPlugin`] traits. In
 //! addition, this module provides helpers for composing and combining [`Plugin`]s.
 //!
-//! # [`HttpPlugin`] vs [`ModelPlugin`]
+//! # [`HttpMarker`] vs [`ModelPlugin`]
 //!
 //! Plugins come in two flavors: _HTTP_ plugins and _model_ plugins. The key difference between
 //! them is _when_ they run:
@@ -21,8 +21,8 @@
 //! See the relevant section in [the book], which contains an illustrative diagram.
 //!
 //! Both kinds of plugins implement the [`Plugin`] trait, but only HTTP plugins implement the
-//! [`HttpPlugin`] trait and only model plugins implement the [`ModelPlugin`]. There is no
-//! difference in how an HTTP plugin or a model plugin is applied, so both the [`HttpPlugin`] trait
+//! [`HttpMarker`] trait and only model plugins implement the [`ModelPlugin`]. There is no
+//! difference in how an HTTP plugin or a model plugin is applied, so both the [`HttpMarker`] trait
 //! and the [`ModelPlugin`] trait are _marker traits_, they carry no behavior. Their only purpose
 //! is to mark a plugin, at the type system leve, as allowed to run at a certain time. A plugin can be
 //! _both_ a HTTP plugin and a model plugin by implementing both traits; in this case, when the
@@ -110,9 +110,9 @@
 //! ```no_run
 //! # use aws_smithy_http_server::plugin::*;
 //! # struct Foo;
-//! # impl HttpPlugin for Foo { }
+//! # impl HttpMarker for Foo { }
 //! # let a = Foo; let b = Foo;
-//! // Combine `Plugin`s `a` and `b`. Both need to be `HttpPlugin`s.
+//! // Combine `Plugin`s `a` and `b`. Both need to implement `HttpMarker`.
 //! let plugin = HttpPlugins::new()
 //!     .push(a)
 //!     .push(b);
@@ -135,7 +135,7 @@
 //! use aws_smithy_http_server::{
 //!     operation::OperationShape,
 //!     service::ServiceShape,
-//!     plugin::{Plugin, HttpPlugin, HttpPlugins, ModelPlugin},
+//!     plugin::{Plugin, HttpMarker, HttpPlugins, ModelPlugin},
 //!     shape_id::ShapeId,
 //! };
 //! # use tower::{layer::util::Stack, Layer, Service};
@@ -190,7 +190,7 @@
 //! // This plugin could be registered as an HTTP plugin and a model plugin, so we implement both
 //! // marker traits.
 //!
-//! impl HttpPlugin for PrintPlugin { }
+//! impl HttpMarker for PrintPlugin { }
 //! impl ModelPlugin for PrintPlugin { }
 //! ```
 
@@ -252,8 +252,8 @@ where
 ///
 /// Compare with [`ModelPlugin`] in the [module](crate::plugin) documentation, which contains an
 /// example implementation too.
-pub trait HttpPlugin {}
-impl<'a, Pl> HttpPlugin for &'a Pl where Pl: HttpPlugin {}
+pub trait HttpMarker {}
+impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 
 /// A model plugin is a plugin that acts on the modeled operation input after it is deserialized,
 /// and acts on the modeled operation output or the modeled operation error before it is
@@ -261,7 +261,7 @@ impl<'a, Pl> HttpPlugin for &'a Pl where Pl: HttpPlugin {}
 ///
 /// This trait is a _marker_ trait to indicate that a plugin can be registered as a model plugin.
 ///
-/// Compare with [`HttpPlugin`] in the [module](crate::plugin) documentation.
+/// Compare with [`HttpMarker`] in the [module](crate::plugin) documentation.
 ///
 /// # Example implementation of a [`ModelPlugin`]
 ///

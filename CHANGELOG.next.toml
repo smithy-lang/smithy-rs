@@ -210,7 +210,7 @@ message = """The middleware system has been reworked as we push for a unified, s
 
 - A `ServiceShape` trait has been added.
 - The `Plugin` trait has been simplified.
-- The `HttpPlugin` and `ModelPlugin` marker traits have been added to better distinguish when plugins run and what they have access to.
+- The `HttpMarker` and `ModelPlugin` marker traits have been added to better distinguish when plugins run and what they have access to.
 - The `Operation` structure has been removed.
 - A `Scoped` `Plugin` has been added.
 
@@ -373,7 +373,7 @@ where
     }
 }
 
-impl HttpPlugin for PrintPlugin { }
+impl HttpMarker for PrintPlugin { }
 ```
 
 Alternatively, using the new `ServiceShape`, implemented on `Ser`:
@@ -400,7 +400,7 @@ let app = PokemonService::builder_with_plugins(/* HTTP plugins */, /* model plug
     .unwrap();
 ```
 
-To better distinguish when a plugin runs and what it has access to, `Plugin`s now have to additionally implement the `HttpPlugin` marker trait, the `ModelPlugin` marker trait, or both:
+To better distinguish when a plugin runs and what it has access to, `Plugin`s now have to additionally implement the `HttpMarker` marker trait, the `ModelPlugin` marker trait, or both:
 
 - A HTTP plugin acts on the HTTP request before it is deserialized, and acts on the HTTP response after it is serialized.
 - A model plugin acts on the modeled operation input after it is deserialized, and acts on the modeled operation output or the modeled operation error before it is serialized.
@@ -423,7 +423,7 @@ let layer = LayerPlugin::new::<SomeProtocol, SomeOperation>(plugin);
 
 ## Removal of `PluginPipeline`
 
-Since plugins now come in two flavors (`HttpPlugin` and `ModelPlugin`) that shouldn't be mixed in a collection of plugins, the primary way of concatenating plugins, `PluginPipeline` has been removed in favor of the `HttpPlugins` and `ModelPlugins` types, which eagerly check that whenever a plugin is pushed, it is of the expected type.
+Since plugins now come in two flavors (those marked with `HttpMarker` and those marked with `ModelPlugin`) that shouldn't be mixed in a collection of plugins, the primary way of concatenating plugins, `PluginPipeline` has been removed in favor of the `HttpPlugins` and `ModelPlugins` types, which eagerly check that whenever a plugin is pushed, it is of the expected type.
 
 This worked before, but you wouldn't be able to do apply this collection of plugins anywhere; if you tried to, the compilation error messages would not be very helpful:
 
@@ -447,7 +447,7 @@ let model_plugins = ModelPlugins::new()
     .push(&http_and_model_plugin);
 ```
 
-In the above example, `&http_and_model_plugin` implements both `HttpPlugin` and `ModelPlugin`, so we can add it to both collections.
+In the above example, `&http_and_model_plugin` implements both `HttpMarker` and `ModelPlugin`, so we can add it to both collections.
 
 ## Removal of `Operation`
 

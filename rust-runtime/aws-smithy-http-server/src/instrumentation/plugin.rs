@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::plugin::{HttpPlugin, HttpPlugins, PluginStack};
+use crate::plugin::{HttpMarker, HttpPlugins, PluginStack};
 use crate::{operation::OperationShape, plugin::Plugin};
 
 use super::sensitivity::Sensitivity;
@@ -27,7 +27,7 @@ where
     }
 }
 
-impl HttpPlugin for InstrumentPlugin {}
+impl HttpMarker for InstrumentPlugin {}
 
 /// An extension trait for applying [`InstrumentPlugin`].
 pub trait InstrumentExt<CurrentPlugin> {

@@ -11,7 +11,7 @@ use std::{
 };
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http_server::plugin::{HttpPlugin, HttpPlugins, IdentityPlugin, Plugin};
+use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, Plugin};
 use tower::{Layer, Service};
 
 use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
@@ -79,7 +79,7 @@ impl<Ser, Op, T> Plugin<Ser, Op, T> for SentinelPlugin {
     }
 }
 
-impl HttpPlugin for SentinelPlugin {}
+impl HttpMarker for SentinelPlugin {}
 
 /// A [`Service`] that adds a print log.
 #[derive(Clone, Debug)]

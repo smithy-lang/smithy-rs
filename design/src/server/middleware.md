@@ -352,7 +352,7 @@ You can provide a custom method to add your plugin to a collection of  `HttpPlug
 ```rust
 # extern crate aws_smithy_http_server;
 # pub struct PrintPlugin;
-# impl aws_smithy_http_server::plugin::HttpPlugin for PrintPlugin { }
+# impl aws_smithy_http_server::plugin::HttpMarker for PrintPlugin { }
 use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
 
 /// This provides a [`print`](PrintExt::print) method on [`HttpPlugins`].
@@ -378,7 +378,7 @@ This allows for:
 # use aws_smithy_http_server::plugin::{PluginStack, Plugin};
 # struct PrintPlugin;
 # impl<Ser, Op, T> Plugin<Ser, Op, T> for PrintPlugin { type Output = T; fn apply(&self, svc: T) -> Self::Output { svc }}
-# impl aws_smithy_http_server::plugin::HttpPlugin for PrintPlugin { }
+# impl aws_smithy_http_server::plugin::HttpMarker for PrintPlugin { }
 # trait PrintExt<EP> { fn print(self) -> HttpPlugins<PluginStack<PrintPlugin, EP>>; }
 # impl<EP> PrintExt<EP> for HttpPlugins<EP> { fn print(self) -> HttpPlugins<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};

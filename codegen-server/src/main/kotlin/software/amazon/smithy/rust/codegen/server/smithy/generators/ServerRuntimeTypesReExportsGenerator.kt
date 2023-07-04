@@ -30,7 +30,7 @@ class ServerRuntimeTypesReExportsGenerator(
             pub mod plugin {
                 pub use #{SmithyHttpServer}::plugin::HttpPlugins;
                 pub use #{SmithyHttpServer}::plugin::ModelPlugins;
-                pub use #{SmithyHttpServer}::plugin::HttpPlugin;
+                pub use #{SmithyHttpServer}::plugin::HttpMarker;
                 pub use #{SmithyHttpServer}::plugin::ModelPlugin;
                 pub use #{SmithyHttpServer}::plugin::Plugin;
                 pub use #{SmithyHttpServer}::plugin::PluginStack;

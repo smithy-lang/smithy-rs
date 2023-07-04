@@ -28,7 +28,7 @@ use thiserror::Error;
 use tower::Service;
 
 use crate::operation::OperationShape;
-use crate::plugin::{HttpPlugin, HttpPlugins, Plugin, PluginStack};
+use crate::plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack};
 use crate::shape_id::ShapeId;
 
 pub use crate::request::extension::{Extension, MissingExtension};
@@ -128,7 +128,7 @@ where
     }
 }
 
-impl HttpPlugin for OperationExtensionPlugin {}
+impl HttpMarker for OperationExtensionPlugin {}
 
 /// An extension trait on [`HttpPlugins`] allowing the application of [`OperationExtensionPlugin`].
 ///
