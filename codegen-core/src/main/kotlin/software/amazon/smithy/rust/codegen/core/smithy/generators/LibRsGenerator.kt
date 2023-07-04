@@ -66,8 +66,8 @@ class LibRsGenerator(
             // Unstable Feature
             docSection(ModuleDocSection.UnstableFeature).also { docs ->
                 if (docs.isNotEmpty()) {
-                    containerDocs("\n## Unstable Features")
                     val awsSdkUnstable = """
+                    # Unstable Features
                     Some highly experimental features requires passing `aws_sdk_unstable` to RUSTFLAGS.
                     e.g.
                     ```bash
@@ -75,7 +75,7 @@ class LibRsGenerator(
                     cargo build --features serde-serialize
                     ```
 
-                    If you enable unstable features without enabling `RUSTFLAGS="--cfg aws_sdk_unstable"`, compilation will fail with a message detailing the reason.
+                    If you enable unstable features without enabling `RUSTFLAGS="--cfg aws_sdk_unstable"`, compilation will fail with a message describing the reason.
                     """.trimIndent()
                     containerDocs(awsSdkUnstable)
                     docs.forEach { writeTo ->
