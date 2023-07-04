@@ -42,12 +42,12 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
         return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
             writable {
                 """
-                    ## How to enable `Serialize` and `Deserialize`
-                    This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
-                    but those traits are behind feature gate.
-    
-                    As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
-                    """.trimIndent()
+                ## How to enable `Serialize` and `Deserialize`
+                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
+                but those traits are behind feature gate.
+
+                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
+                """.trimIndent()
             }
         } else {
             emptySection
