@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+set -xe
+
+cd smithy-rs
+DIR=$PWD
+
+function log_time() {
+    cargo clean
+    echo "$1"
+    cargo build
+    { time $1; } &> tmp_time_log.txt
+    cat tmp_time_log.txt
+    cat tmp_time_log.txt | grep real >> /tmp/compiletime-benchmark.txt
+}
+
+function compile() {
+    cd $1 &&
+        export RUSTFLAGS="" &&
+        cargo build && # this is for downloading crates
+        cargo clean &&
+        log_time "cargo build" &&
+        log_time "cargo build --release" &&
+        export RUSTFLAGS="--cfg aws_sdk_unstable" &&
+        log_time "cargo build --all-features" &&
+        log_time "cargo build --release --all-features"
+}
+
+./gradlew :aws:sdk:assemble
+
+for variable in $(dir "aws/sdk/build/aws-sdk/sdk"); do
+    echo $variable
+    if [[ $variable != *"aws-"* ]]; then
+        echo "START" &>>/tmp/compiletime-benchmark.txt
+        echo "$variable" &>>/tmp/compiletime-benchmark.txt
+        compile "$DIR/aws/sdk/build/aws-sdk/sdk/$variable"
+        echo "END" &>> /tmp/compiletime-benchmark.txt
+    fi
+done
+
+cd $DIR
+python3 tools/compiletime-benchmark/format.py
