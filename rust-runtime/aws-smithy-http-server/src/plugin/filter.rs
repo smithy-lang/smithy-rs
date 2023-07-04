@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{either::Either, IdentityPlugin, ModelPlugin};
+use super::{either::Either, IdentityPlugin, ModelMarker};
 
 use crate::operation::OperationShape;
 use crate::service::ContainsOperation;
@@ -42,7 +42,7 @@ where
 }
 
 impl<Inner, F> HttpMarker for FilterByOperation<Inner, F> where Inner: HttpMarker {}
-impl<Inner, F> ModelPlugin for FilterByOperation<Inner, F> where Inner: ModelPlugin {}
+impl<Inner, F> ModelMarker for FilterByOperation<Inner, F> where Inner: ModelMarker {}
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).

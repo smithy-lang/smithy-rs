@@ -31,7 +31,7 @@ class ServerRuntimeTypesReExportsGenerator(
                 pub use #{SmithyHttpServer}::plugin::HttpPlugins;
                 pub use #{SmithyHttpServer}::plugin::ModelPlugins;
                 pub use #{SmithyHttpServer}::plugin::HttpMarker;
-                pub use #{SmithyHttpServer}::plugin::ModelPlugin;
+                pub use #{SmithyHttpServer}::plugin::ModelMarker;
                 pub use #{SmithyHttpServer}::plugin::Plugin;
                 pub use #{SmithyHttpServer}::plugin::PluginStack;
             }

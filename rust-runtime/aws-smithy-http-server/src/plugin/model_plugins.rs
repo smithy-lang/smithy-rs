@@ -8,9 +8,9 @@
 
 use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 
-use super::{LayerPlugin, ModelPlugin};
+use super::{LayerPlugin, ModelMarker};
 
-/// A wrapper struct for composing [`ModelPlugin`]s.
+/// A wrapper struct for composing model plugins.
 /// It operates identically to [`HttpPlugins`](crate::plugin::HttpPlugins); see its documentation.
 #[derive(Debug)]
 pub struct ModelPlugins<P>(pub(crate) P);
@@ -68,9 +68,9 @@ impl<P> ModelPlugins<P> {
     ///     }
     /// }
     /// ```
-    // We eagerly require `NewPlugin: ModelPlugin`, despite not really needing it, because compiler
+    // We eagerly require `NewPlugin: ModelMarker`, despite not really needing it, because compiler
     // errors get _substantially_ better if the user makes a mistake.
-    pub fn push<NewPlugin: ModelPlugin>(self, new_plugin: NewPlugin) -> ModelPlugins<PluginStack<NewPlugin, P>> {
+    pub fn push<NewPlugin: ModelMarker>(self, new_plugin: NewPlugin) -> ModelPlugins<PluginStack<NewPlugin, P>> {
         ModelPlugins(PluginStack::new(new_plugin, self.0))
     }
 
@@ -91,4 +91,4 @@ where
     }
 }
 
-impl<InnerPlugin> ModelPlugin for ModelPlugins<InnerPlugin> where InnerPlugin: ModelPlugin {}
+impl<InnerPlugin> ModelMarker for ModelPlugins<InnerPlugin> where InnerPlugin: ModelMarker {}

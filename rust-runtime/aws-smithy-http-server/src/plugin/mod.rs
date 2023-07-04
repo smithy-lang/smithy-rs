@@ -5,10 +5,10 @@
 
 //! The plugin system allows you to build middleware with an awareness of the operation it is applied to.
 //!
-//! The system centers around the [`Plugin`], [`HttpMarker`], and [`ModelPlugin`] traits. In
+//! The system centers around the [`Plugin`], [`HttpMarker`], and [`ModelMarker`] traits. In
 //! addition, this module provides helpers for composing and combining [`Plugin`]s.
 //!
-//! # [`HttpMarker`] vs [`ModelPlugin`]
+//! # HTTP plugins vs model plugins
 //!
 //! Plugins come in two flavors: _HTTP_ plugins and _model_ plugins. The key difference between
 //! them is _when_ they run:
@@ -21,9 +21,9 @@
 //! See the relevant section in [the book], which contains an illustrative diagram.
 //!
 //! Both kinds of plugins implement the [`Plugin`] trait, but only HTTP plugins implement the
-//! [`HttpMarker`] trait and only model plugins implement the [`ModelPlugin`]. There is no
+//! [`HttpMarker`] trait and only model plugins implement the [`ModelMarker`] trait. There is no
 //! difference in how an HTTP plugin or a model plugin is applied, so both the [`HttpMarker`] trait
-//! and the [`ModelPlugin`] trait are _marker traits_, they carry no behavior. Their only purpose
+//! and the [`ModelMarker`] trait are _marker traits_, they carry no behavior. Their only purpose
 //! is to mark a plugin, at the type system leve, as allowed to run at a certain time. A plugin can be
 //! _both_ a HTTP plugin and a model plugin by implementing both traits; in this case, when the
 //! plugin runs is decided by you when you register it in your application. [`IdentityPlugin`],
@@ -135,7 +135,7 @@
 //! use aws_smithy_http_server::{
 //!     operation::OperationShape,
 //!     service::ServiceShape,
-//!     plugin::{Plugin, HttpMarker, HttpPlugins, ModelPlugin},
+//!     plugin::{Plugin, HttpMarker, HttpPlugins, ModelMarker},
 //!     shape_id::ShapeId,
 //! };
 //! # use tower::{layer::util::Stack, Layer, Service};
@@ -191,7 +191,7 @@
 //! // marker traits.
 //!
 //! impl HttpMarker for PrintPlugin { }
-//! impl ModelPlugin for PrintPlugin { }
+//! impl ModelMarker for PrintPlugin { }
 //! ```
 
 pub mod alb_health_check;
@@ -250,7 +250,7 @@ where
 ///
 /// This trait is a _marker_ trait to indicate that a plugin can be registered as an HTTP plugin.
 ///
-/// Compare with [`ModelPlugin`] in the [module](crate::plugin) documentation, which contains an
+/// Compare with [`ModelMarker`] in the [module](crate::plugin) documentation, which contains an
 /// example implementation too.
 pub trait HttpMarker {}
 impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
@@ -263,7 +263,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///
 /// Compare with [`HttpMarker`] in the [module](crate::plugin) documentation.
 ///
-/// # Example implementation of a [`ModelPlugin`]
+/// # Example implementation of a model plugin
 ///
 /// Model plugins are most useful when you really need to rely on the actual shape of your
 /// modeled operation input, operation output, and/or operation errors. For this reason, most
@@ -279,7 +279,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 /// ```no_run
 /// use std::marker::PhantomData;
 ///
-/// use aws_smithy_http_server::{operation::OperationShape, plugin::{ModelPlugin, Plugin}};
+/// use aws_smithy_http_server::{operation::OperationShape, plugin::{ModelMarker, Plugin}};
 /// use tower::Service;
 /// # pub struct SimpleService;
 /// # pub struct CheckHealth;
@@ -320,7 +320,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///     }
 /// }
 ///
-/// impl<Exts> ModelPlugin for CheckHealthPlugin<Exts> { }
+/// impl<Exts> ModelMarker for CheckHealthPlugin<Exts> { }
 ///
 /// #[derive(Clone)]
 /// pub struct CheckHealthService<S, Exts> {
@@ -461,5 +461,5 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///     let scoped_plugin = Scoped::new::<OnlyCheckHealth>(model_plugin);
 /// }
 /// ```
-pub trait ModelPlugin {}
-impl<'a, Pl> ModelPlugin for &'a Pl where Pl: ModelPlugin {}
+pub trait ModelMarker {}
+impl<'a, Pl> ModelMarker for &'a Pl where Pl: ModelMarker {}

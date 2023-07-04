@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 
 use tower::Layer;
 
-use super::{HttpMarker, ModelPlugin, Plugin};
+use super::{HttpMarker, ModelMarker, Plugin};
 
 /// A [`Plugin`] which acts as a [`Layer`] `L`.
 pub struct LayerPlugin<L>(pub L);
@@ -27,7 +27,7 @@ where
 // to run this plugin as a HTTP plugin or a model plugin, so we implement both marker traits.
 
 impl<L> HttpMarker for LayerPlugin<L> {}
-impl<L> ModelPlugin for LayerPlugin<L> {}
+impl<L> ModelMarker for LayerPlugin<L> {}
 
 /// A [`Layer`] which acts as a [`Plugin`] `Pl` for specific protocol `P` and operation `Op`.
 pub struct PluginLayer<Ser, Op, Pl> {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{HttpMarker, ModelPlugin, Plugin};
+use super::{HttpMarker, ModelMarker, Plugin};
 
 /// A [`Plugin`] that maps a service to itself.
 #[derive(Debug)]
@@ -17,5 +17,5 @@ impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
     }
 }
 
-impl ModelPlugin for IdentityPlugin {}
+impl ModelMarker for IdentityPlugin {}
 impl HttpMarker for IdentityPlugin {}

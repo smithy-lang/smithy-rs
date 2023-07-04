@@ -476,7 +476,7 @@ class ServerServiceGenerator(
                 /// Check out [`HttpPlugins`](#{SmithyHttpServer}::plugin::HttpPlugins) and
                 /// [`ModelPlugins`](#{SmithyHttpServer}::plugin::ModelPlugins) if you need to apply
                 /// multiple plugins.
-                pub fn builder_with_plugins<Body, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelPlugin>(http_plugin: HttpPl, model_plugin: ModelPl) -> $builderName<Body, HttpPl, ModelPl> {
+                pub fn builder_with_plugins<Body, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(http_plugin: HttpPl, model_plugin: ModelPl) -> $builderName<Body, HttpPl, ModelPl> {
                     $builderName {
                         #{NotSetFields:W},
                         http_plugin,
