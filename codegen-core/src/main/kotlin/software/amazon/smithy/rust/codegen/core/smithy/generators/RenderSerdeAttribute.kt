@@ -23,7 +23,7 @@ public object RenderSerdeAttribute {
     private const val skipFieldMessage = "/// This field will note be serialized or deserialized because it's a stream type.\n"
 
     // guards to check if you want to add serde attributes
-    private fun isApplicable(shape: Shape, model: Model): Boolean {
+    fun isApplicable(shape: Shape, model: Model): Boolean {
         return !shape.hasTrait<ErrorTrait>() && shape.members().none { it.isEventStream(model) }
     }
 
@@ -34,8 +34,8 @@ public object RenderSerdeAttribute {
     }
 
     public fun addSerdeWithoutShapeModel(writer: RustWriter) {
-        Attribute("").SerdeSerialize().render(writer)
-        Attribute("").SerdeDeserialize().render(writer)
+        Attribute("").serdeSerialize().render(writer)
+        Attribute("").serdeDeserialize().render(writer)
     }
 
     public fun addSerde(writer: RustWriter, shape: Shape, model: Model) {
@@ -47,7 +47,7 @@ public object RenderSerdeAttribute {
     public fun skipIfStream(writer: RustWriter, member: MemberShape, model: Model, shape: Shape) {
         if (isApplicable(shape, model) && member.isStreaming(model)) {
             writer.writeInline(skipFieldMessage)
-            Attribute("").SerdeSkip().render(writer)
+            Attribute("").serdeSkip().render(writer)
         }
     }
 
@@ -55,7 +55,7 @@ public object RenderSerdeAttribute {
         if (isApplicable(shape, model)) {
             // we need this for skip serde to work
             Attribute.AllowUnusedImports.render(writer)
-            Attribute("").SerdeSerializeOrDeserialize().render(writer)
+            Attribute("").serdeSerializeOrDeserialize().render(writer)
             writer.raw("use serde;")
         }
     }

@@ -478,17 +478,17 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
     // You can find the discussion here.
     // https://github.com/awslabs/smithy-rs/discussions/2248
-    public fun SerdeSerialize(): Attribute {
+    public fun serdeSerialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
     }
-    public fun SerdeDeserialize(): Attribute {
+    public fun serdeDeserialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
     }
-    public fun SerdeSkip(): Attribute {
+    public fun serdeSkip(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
     }
 
-    public fun SerdeSerializeOrDeserialize(): Attribute {
+    public fun serdeSerializeOrDeserialize(): Attribute {
         return Attribute(cfg(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize")))))
     }
 

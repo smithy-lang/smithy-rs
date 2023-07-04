@@ -13,8 +13,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.RenderSerdeAttribute
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 /**
  * This class,
@@ -35,37 +33,36 @@ class SerdeDecorator : ClientCodegenDecorator {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations + SerdeDocGenerator(codegenContext)
 }
 
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
-        val isApplicable = RenderSerdeAttribute.isApplicable(codegenContext.serviceShape, codegenContext.model)
-        val isServiceDoc = section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs
-        if (isApplicable && isServiceDoc) {
+        if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs) {
             return writable {
                 """
                 # How to enable `Serialize` and `Deserialize`
-                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,    
+                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
                 but those traits are behind feature gate.
-                 
-                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.                     
-                Furthermore, implementation of serde is still unstable, and implementation may change anytime in future.  
-                
+
+                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
+                Furthermore, implementation of serde is still unstable, and implementation may change anytime in future.
+
                 To enable traits, you must pass `aws_sdk_unstable` to RUSTFLAGS and enable `serde-serialize` or `serde-deserialize` feature.
-                
-                e.g. 
+
+                e.g.
                 ```bash
                 export RUSTFLAGS="--cfg aws_sdk_unstable"
                 cargo build --features serde-serialize serde-deserialize
                 ```
-                
-                If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,   
+
+                If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
                 compilation will fail with warning.
                 """.trimIndent()
             }
+        } else {
+            return emptySection
         }
-        return emptySection
     }
 }
