@@ -7,20 +7,62 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 
 /**
- * Decorator that adds the `serde-serialize` and `serde-deserialize` features.
+ * This class,
+ * - Adds serde as a dependency
+ *
  */
 class SerdeDecorator : ClientCodegenDecorator {
     override val name: String = "SerdeDecorator"
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        fun _feature(feature_name: String, crate_name: String): Feature {
-            return Feature(feature_name, false, listOf(crate_name + "/" + feature_name))
+        fun _feature(featureName: String, crateName: String): Feature {
+            return Feature(featureName, false, listOf("$crateName/$featureName"))
         }
         rustCrate.mergeFeature(_feature("serde-serialize", "aws-smithy-types"))
         rustCrate.mergeFeature(_feature("serde-deserialize", "aws-smithy-types"))
+    }
+
+    override fun libRsCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
+    ): List<LibRsCustomization> = baseCustomizations + SerdeDocGenerator(codegenContext)
+}
+
+class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable {
+        if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs) {
+            return writable {
+                """
+                # How to enable `Serialize` and `Deserialize`
+                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
+                but those traits are behind feature gate.
+
+                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
+                Furthermore, implementation of serde is still unstable, and implementation may change anytime in future.
+
+                To enable traits, you must pass `aws_sdk_unstable` to RUSTFLAGS and enable `serde-serialize` or `serde-deserialize` feature.
+
+                e.g.
+                ```bash
+                export RUSTFLAGS="--cfg aws_sdk_unstable"
+                cargo build --features serde-serialize serde-deserialize
+                ```
+
+                If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
+                compilation will fail with warning.
+                """.trimIndent()
+            }
+        } else {
+            return emptySection
+        }
     }
 }
