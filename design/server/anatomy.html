@@ -88,11 +88,33 @@
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
@@ -556,38 +578,38 @@ parameterized them and change behavior depending on the context in which it's ap
 </pre>
 <p>The service builder API requires plugins to be specified upfront - they must be passed as an argument to <code>builder_with_plugins</code> and cannot be modified afterwards.</p>
 <p>You might find yourself wanting to apply <em>multiple</em> plugins to your service.
-This can be accommodated via [<code>PluginPipeline</code>].</p>
+This can be accommodated via [<code>HttpPlugins</code>] and [<code>ModelPlugins</code>].</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span>use aws_smithy_http_server::plugin::PluginPipeline;
+</span>use aws_smithy_http_server::plugin::HttpPlugins;
 <span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 </span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 </span>
-let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+let http_plugins = HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
 <span class="boring">}</span></code></pre></pre>
 <p>The plugins' runtime logic is executed in registration order.
 In the example above, <code>LoggingPlugin</code> would run first, while <code>MetricsPlugin</code> is executed last.</p>
-<p>If you are vending a plugin, you can leverage <code>PluginPipeline</code> as an extension point: you can add custom methods to it using an extension trait.
+<p>If you are vending a plugin, you can leverage <code>HttpPlugins</code> or <code>ModelPlugins</code> as an extension point: you can add custom methods to it using an extension trait.
 For example:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span>use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+</span>use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
 <span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 </span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 </span>
 pub trait AuthPluginExt&lt;CurrentPlugins&gt; {
-    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt;;
+    fn with_auth(self) -&gt; HttpPlugins&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt;;
 }
 
-impl&lt;CurrentPlugins&gt; AuthPluginExt&lt;CurrentPlugins&gt; for PluginPipeline&lt;CurrentPlugins&gt; {
-    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt; {
+impl&lt;CurrentPlugins&gt; AuthPluginExt&lt;CurrentPlugins&gt; for HttpPlugins&lt;CurrentPlugins&gt; {
+    fn with_auth(self) -&gt; HttpPlugins&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt; {
         self.push(AuthPlugin)
     }
 }
 
-let pipeline = PluginPipeline::new()
+let http_plugins = HttpPlugins::new()
     .push(LoggingPlugin)
     // Our custom method!
     .with_auth();
@@ -603,15 +625,15 @@ At a high-level, the service builder takes as input a function for each Smithy O
 </span>/// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
+pub struct PokemonServiceBuilder&lt;Body, HttpPl, ModelPl&gt; {
     capture_pokemon_operation: Option&lt;Route&lt;Body&gt;&gt;,
     empty_operation: Option&lt;Route&lt;Body&gt;&gt;,
     get_pokemon_species: Option&lt;Route&lt;Body&gt;&gt;,
     get_server_statistics: Option&lt;Route&lt;Body&gt;&gt;,
     get_storage: Option&lt;Route&lt;Body&gt;&gt;,
     health_check_operation: Option&lt;Route&lt;Body&gt;&gt;,
-    http_plugin: HttpPlugin,
-    model_plugin: ModelPlugin
+    http_plugin: HttpPl,
+    model_plugin: ModelPl,
 }
 <span class="boring">}</span></code></pre></pre>
 <p>The builder has two setter methods for each <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> in the <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a>:</p>
@@ -619,7 +641,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
     where
         HandlerType:Handler&lt;GetPokemonSpecies, HandlerExtractors&gt;,
 
-        ModelPlugin: Plugin&lt;
+        ModelPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             IntoService&lt;GetPokemonSpecies, HandlerType&gt;
@@ -629,7 +651,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
             GetPokemonSpecies,
             ModelPlugin::Output
         &gt;,
-        HttpPlugin: Plugin&lt;
+        HttpPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::&lt;UpgradeExtractors&gt;::Output
@@ -647,7 +669,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
     where
         S: OperationService&lt;GetPokemonSpecies, ServiceExtractors&gt;,
 
-        ModelPlugin: Plugin&lt;
+        ModelPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             Normalize&lt;GetPokemonSpecies, S&gt;
@@ -657,7 +679,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
             GetPokemonSpecies,
             ModelPlugin::Output
         &gt;,
-        HttpPlugin: Plugin&lt;
+        HttpPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::&lt;UpgradeExtractors&gt;::Output

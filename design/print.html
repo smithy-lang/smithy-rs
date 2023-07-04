@@ -89,11 +89,33 @@
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
@@ -1390,7 +1412,7 @@ scope! {
 // Construct `LoggingLayer`.
 let logging_plugin = LayerPlugin(LoggingLayer::new());
 let logging_plugin = Scoped::new::&lt;LoggingScope&gt;(logging_plugin);
-let http_plugins = PluginPipeline::new().push(logging_plugin);
+let http_plugins = HttpPlugins::new().push(logging_plugin);
 
 let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
     .get_pokemon_species(handler)
@@ -1426,7 +1448,7 @@ scope! {
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
 let buffer_plugin = Scoped::new::&lt;BufferScope&gt;(buffer_plugin);
-let model_plugins = PluginPipeline::new().push(buffer_plugin);
+let model_plugins = ModelPlugins::new().push(buffer_plugin);
 
 let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
     .get_pokemon_species(handler)
@@ -1501,23 +1523,24 @@ where
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<p>You can provide a custom method to add your plugin to a <code>PluginPipeline</code> via an extension trait:</p>
+<p>You can provide a custom method to add your plugin to a collection of  <code>HttpPlugins</code> or <code>ModelPlugins</code> via an extension trait. For example, for <code>HttpPlugins</code>:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">pub struct PrintPlugin;
-</span>use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+</span><span class="boring">impl aws_smithy_http_server::plugin::HttpMarker for PrintPlugin { }
+</span>use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
 
-/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+/// This provides a [`print`](PrintExt::print) method on [`HttpPlugins`].
 pub trait PrintExt&lt;ExistingPlugins&gt; {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt;;
+    fn print(self) -&gt; HttpPlugins&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt;;
 }
 
-impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for PluginPipeline&lt;ExistingPlugins&gt; {
-    fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt; {
+impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for HttpPlugins&lt;ExistingPlugins&gt; {
+    fn print(self) -&gt; HttpPlugins&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt; {
         self.push(PrintPlugin)
     }
 }
@@ -1530,14 +1553,15 @@ impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for PluginPipeline&l
 </span><span class="boring">use aws_smithy_http_server::plugin::{PluginStack, Plugin};
 </span><span class="boring">struct PrintPlugin;
 </span><span class="boring">impl&lt;Ser, Op, T&gt; Plugin&lt;Ser, Op, T&gt; for PrintPlugin { type Output = T; fn apply(&amp;self, svc: T) -&gt; Self::Output { svc }}
-</span><span class="boring">trait PrintExt&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt;; }
-</span><span class="boring">impl&lt;EP&gt; PrintExt&lt;EP&gt; for PluginPipeline&lt;EP&gt; { fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt; { self.push(PrintPlugin) }}
+</span><span class="boring">impl aws_smithy_http_server::plugin::HttpMarker for PrintPlugin { }
+</span><span class="boring">trait PrintExt&lt;EP&gt; { fn print(self) -&gt; HttpPlugins&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt;; }
+</span><span class="boring">impl&lt;EP&gt; PrintExt&lt;EP&gt; for HttpPlugins&lt;EP&gt; { fn print(self) -&gt; HttpPlugins&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt; { self.push(PrintPlugin) }}
 </span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
-</span>use aws_smithy_http_server::plugin::{IdentityPlugin, PluginPipeline};
+</span>use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins};
 use pokemon_service_server_sdk::PokemonService;
 
-let http_plugins = PluginPipeline::new()
+let http_plugins = HttpPlugins::new()
     // [..other plugins..]
     // The custom method!
     .print();
@@ -1549,7 +1573,7 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 <span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
 </span><span class="boring">}</span></code></pre></pre>
 <p>The custom <code>print</code> method hides the details of the <code>Plugin</code> trait from the average consumer.
-They interact with the utility methods on <code>PluginPipeline</code> and enjoy the self-contained documentation.</p>
+They interact with the utility methods on <code>HttpPlugins</code> and enjoy the self-contained documentation.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="instrumentation"><a class="header" href="#instrumentation">Instrumentation</a></h1>
 <p>A Smithy Rust server uses the <a href="https://github.com/tokio-rs/tracing"><code>tracing</code></a> crate to provide instrumentation. The customer is responsible for setting up a <a href="https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html"><code>Subscriber</code></a> in order to ingest and process <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html">events</a> - Smithy Rust makes no prescription on the choice of <code>Subscriber</code>. Common choices might include:</p>
 <ul>
@@ -1624,11 +1648,11 @@ They interact with the utility methods on <code>PluginPipeline</code> and enjoy 
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
 </span>use aws_smithy_http_server::{
   instrumentation::InstrumentExt,
-  plugin::{IdentityPlugin, PluginPipeline}
+  plugin::{IdentityPlugin, HttpPlugins}
 };
 use pokemon_service_server_sdk::PokemonService;
 
-let http_plugins = PluginPipeline::new().instrument();
+let http_plugins = HttpPlugins::new().instrument();
 let app = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
   .get_pokemon_species(handler)
   /* ... */
@@ -2179,38 +2203,38 @@ parameterized them and change behavior depending on the context in which it's ap
 </pre>
 <p>The service builder API requires plugins to be specified upfront - they must be passed as an argument to <code>builder_with_plugins</code> and cannot be modified afterwards.</p>
 <p>You might find yourself wanting to apply <em>multiple</em> plugins to your service.
-This can be accommodated via [<code>PluginPipeline</code>].</p>
+This can be accommodated via [<code>HttpPlugins</code>] and [<code>ModelPlugins</code>].</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span>use aws_smithy_http_server::plugin::PluginPipeline;
+</span>use aws_smithy_http_server::plugin::HttpPlugins;
 <span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 </span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 </span>
-let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+let http_plugins = HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
 <span class="boring">}</span></code></pre></pre>
 <p>The plugins' runtime logic is executed in registration order.
 In the example above, <code>LoggingPlugin</code> would run first, while <code>MetricsPlugin</code> is executed last.</p>
-<p>If you are vending a plugin, you can leverage <code>PluginPipeline</code> as an extension point: you can add custom methods to it using an extension trait.
+<p>If you are vending a plugin, you can leverage <code>HttpPlugins</code> or <code>ModelPlugins</code> as an extension point: you can add custom methods to it using an extension trait.
 For example:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span>use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+</span>use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
 <span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 </span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 </span>
 pub trait AuthPluginExt&lt;CurrentPlugins&gt; {
-    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt;;
+    fn with_auth(self) -&gt; HttpPlugins&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt;;
 }
 
-impl&lt;CurrentPlugins&gt; AuthPluginExt&lt;CurrentPlugins&gt; for PluginPipeline&lt;CurrentPlugins&gt; {
-    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt; {
+impl&lt;CurrentPlugins&gt; AuthPluginExt&lt;CurrentPlugins&gt; for HttpPlugins&lt;CurrentPlugins&gt; {
+    fn with_auth(self) -&gt; HttpPlugins&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt; {
         self.push(AuthPlugin)
     }
 }
 
-let pipeline = PluginPipeline::new()
+let http_plugins = HttpPlugins::new()
     .push(LoggingPlugin)
     // Our custom method!
     .with_auth();
@@ -2226,15 +2250,15 @@ At a high-level, the service builder takes as input a function for each Smithy O
 </span>/// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
+pub struct PokemonServiceBuilder&lt;Body, HttpPl, ModelPl&gt; {
     capture_pokemon_operation: Option&lt;Route&lt;Body&gt;&gt;,
     empty_operation: Option&lt;Route&lt;Body&gt;&gt;,
     get_pokemon_species: Option&lt;Route&lt;Body&gt;&gt;,
     get_server_statistics: Option&lt;Route&lt;Body&gt;&gt;,
     get_storage: Option&lt;Route&lt;Body&gt;&gt;,
     health_check_operation: Option&lt;Route&lt;Body&gt;&gt;,
-    http_plugin: HttpPlugin,
-    model_plugin: ModelPlugin
+    http_plugin: HttpPl,
+    model_plugin: ModelPl,
 }
 <span class="boring">}</span></code></pre></pre>
 <p>The builder has two setter methods for each <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> in the <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a>:</p>
@@ -2242,7 +2266,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
     where
         HandlerType:Handler&lt;GetPokemonSpecies, HandlerExtractors&gt;,
 
-        ModelPlugin: Plugin&lt;
+        ModelPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             IntoService&lt;GetPokemonSpecies, HandlerType&gt;
@@ -2252,7 +2276,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
             GetPokemonSpecies,
             ModelPlugin::Output
         &gt;,
-        HttpPlugin: Plugin&lt;
+        HttpPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::&lt;UpgradeExtractors&gt;::Output
@@ -2270,7 +2294,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
     where
         S: OperationService&lt;GetPokemonSpecies, ServiceExtractors&gt;,
 
-        ModelPlugin: Plugin&lt;
+        ModelPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             Normalize&lt;GetPokemonSpecies, S&gt;
@@ -2280,7 +2304,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPlugin, ModelPlugin&gt; {
             GetPokemonSpecies,
             ModelPlugin::Output
         &gt;,
-        HttpPlugin: Plugin&lt;
+        HttpPl: Plugin&lt;
             PokemonService,
             GetPokemonSpecies,
             UpgradePlugin::&lt;UpgradeExtractors&gt;::Output
