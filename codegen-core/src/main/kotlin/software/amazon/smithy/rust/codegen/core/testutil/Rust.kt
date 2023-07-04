@@ -351,7 +351,7 @@ fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
     enableUnstableFlag: Boolean = true,
-    enableAllFeatures: Boolean = false,
+    enableAllFeatures: Boolean = true,
     featuresToEnable: Array<String>? = null,
 ): String {
     val stubModel = """
